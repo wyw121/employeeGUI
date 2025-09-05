@@ -1,5 +1,5 @@
+import { LogOut, Minimize2, Settings, Square, User, X } from 'lucide-react';
 import React from 'react';
-import { Minimize2, Square, X, Settings, User, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -53,7 +53,7 @@ export const AppHeader: React.FC<HeaderProps> = ({
             )}
             <span className="text-sm">{user.name}</span>
           </button>
-          
+
           <div className="flex items-center space-x-1">
             <button
               onClick={onSettings}

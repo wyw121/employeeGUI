@@ -1,5 +1,5 @@
+import { Mail, MessageCircle, Phone, Tag, User } from 'lucide-react';
 import React from 'react';
-import { Phone, Mail, MessageCircle, User, Tag } from 'lucide-react';
 import { Contact, Platform } from '../../types';
 
 interface ContactListProps {
@@ -84,7 +84,7 @@ export const ContactList: React.FC<ContactListProps> = ({
                 className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
             )}
-            
+
             <div className="flex-shrink-0">
               <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
                 <span className="text-lg">
@@ -110,21 +110,21 @@ export const ContactList: React.FC<ContactListProps> = ({
                     <span>{contact.phone}</span>
                   </div>
                 )}
-                
+
                 {contact.email && (
                   <div className="flex items-center text-sm text-gray-600">
                     <Mail className="w-3 h-3 mr-1" />
                     <span>{contact.email}</span>
                   </div>
                 )}
-                
+
                 {contact.wechat && (
                   <div className="flex items-center text-sm text-gray-600">
                     <MessageCircle className="w-3 h-3 mr-1" />
                     <span>微信: {contact.wechat}</span>
                   </div>
                 )}
-                
+
                 {contact.qq && (
                   <div className="flex items-center text-sm text-gray-600">
                     <MessageCircle className="w-3 h-3 mr-1" />

@@ -1,5 +1,5 @@
+import { Eye, EyeOff, Lock, LogIn, User } from 'lucide-react';
 import React, { useState } from 'react';
-import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { LoginCredentials } from '../../types';
 
 interface LoginPageProps {
@@ -48,7 +48,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             社交平台自动化操作系统
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             {/* 用户名输入 */}

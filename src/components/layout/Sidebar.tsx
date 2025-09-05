@@ -23,6 +23,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: '管理连接设备'
     },
     {
+      name: 'ADB测试',
+      id: 'adb-test',
+      icon: '🔧',
+      description: '测试雷电模拟器连接'
+    },
+    {
       name: '通讯录管理',
       id: 'contacts',
       icon: '📇',

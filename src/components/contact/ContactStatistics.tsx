@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { BarChart3, CheckCircle, Clock, TrendingUp, Users, XCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { ContactStatistics as ContactStatsType, Platform } from '../../types';
 
 export const ContactStatistics: React.FC = () => {
@@ -141,7 +141,7 @@ export const ContactStatistics: React.FC = () => {
           {Object.entries(statistics.platformBreakdown).map(([platform, data]) => {
             const platformKey = platform as Platform;
             const successRate = data ? (data.successful / data.total) * 100 : 0;
-            
+
             return (
               <div key={platform} className="flex items-center justify-between">
                 <div className="flex items-center flex-1">

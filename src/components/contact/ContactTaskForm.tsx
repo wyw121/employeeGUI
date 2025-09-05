@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { Play, Settings, Smartphone } from 'lucide-react';
+import React, { useState } from 'react';
 import { Contact, ContactTask, ContactTaskSettings, Platform, TaskStatus } from '../../types';
 
 interface ContactTaskFormProps {
@@ -60,7 +60,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
     }
 
     const selectedContactsData = contacts.filter(c => selectedContacts.includes(c.id));
-    
+
     const newTask: ContactTask = {
       id: Date.now().toString(),
       documentId: 'current-selection',
@@ -79,7 +79,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
     };
 
     onTaskCreate(newTask);
-    
+
     // 重置表单
     setSelectedContacts([]);
     setSelectedDevice('');
@@ -100,7 +100,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
             {selectedContacts.length === contacts.length ? '取消全选' : '全选'}
           </button>
         </div>
-        
+
         <div className="border border-gray-200 rounded-md max-h-48 overflow-y-auto">
           {contacts.length === 0 ? (
             <div className="p-4 text-center text-gray-500">
@@ -199,7 +199,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
           <Settings className="w-5 h-5 text-gray-400 mr-2" />
           <h4 className="text-sm font-medium text-gray-900">任务设置</h4>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -214,7 +214,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               联系间隔 (秒)
@@ -228,7 +228,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
-          
+
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               联系消息模板
@@ -241,7 +241,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
-          
+
           <div className="md:col-span-2 space-y-2">
             <label className="flex items-center">
               <input
@@ -252,7 +252,7 @@ export const ContactTaskForm: React.FC<ContactTaskFormProps> = ({
               />
               <span className="text-sm text-gray-700">跳过已联系的用户</span>
             </label>
-            
+
             <label className="flex items-center">
               <input
                 type="checkbox"

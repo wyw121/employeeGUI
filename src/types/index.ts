@@ -1,16 +1,8 @@
-export * from './Employee';
-export * from './Contact';
 export * from './Auth';
+export * from './Contact';
+export * from './Employee';
 
 // 重新导出为更合适的名称
 export type {
-  Device,
-  Platform,
-  TaskType,
-  TaskStatus,
-  ContactTask,
-  PreciseAcquisitionTask,
-  UserBalance,
-  FollowStatistics,
-  TaskProgress
+    ContactTask, Device, FollowStatistics, Platform, PreciseAcquisitionTask, TaskProgress, TaskStatus, TaskType, UserBalance
 } from './Employee';

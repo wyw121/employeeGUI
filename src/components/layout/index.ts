@@ -1,5 +1,5 @@
-export { MainLayout } from './MainLayout';
-export { Sidebar } from './Sidebar';
 export { AppHeader } from './AppHeader';
-export { StatusBar } from './StatusBar';
+export { MainLayout } from './MainLayout';
 export { PageWrapper } from './PageWrapper';
+export { Sidebar } from './Sidebar';
+export { StatusBar } from './StatusBar';

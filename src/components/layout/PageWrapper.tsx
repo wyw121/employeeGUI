@@ -1,5 +1,5 @@
-import React from 'react';
 import { ArrowLeft, MoreHorizontal, RefreshCw } from 'lucide-react';
+import React from 'react';
 
 interface PageWrapperProps {
   title: string;
@@ -41,7 +41,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
-            
+
             <div className="flex items-center space-x-3">
               {icon && (
                 <div className="flex-shrink-0">
@@ -68,9 +68,9 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
             )}
-            
+
             {actions}
-            
+
             <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
               <MoreHorizontal className="w-4 h-4" />
             </button>

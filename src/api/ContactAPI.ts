@@ -1,11 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import { 
-  Contact, 
-  ContactDocument, 
-  ContactTask, 
-  ContactStatistics,
-  AdbOperation,
-  AdbOperationType 
+import {
+    AdbOperation,
+    AdbOperationType,
+    Contact,
+    ContactDocument,
+    ContactStatistics,
+    ContactTask
 } from '../types';
 
 /**
@@ -177,20 +177,20 @@ export class AdbAPI {
    * 滑动屏幕
    */
   static async swipeScreen(
-    deviceId: string, 
-    startX: number, 
-    startY: number, 
-    endX: number, 
+    deviceId: string,
+    startX: number,
+    startY: number,
+    endX: number,
     endY: number,
     duration?: number
   ): Promise<void> {
-    await invoke('adb_swipe', { 
-      deviceId, 
-      startX, 
-      startY, 
-      endX, 
-      endY, 
-      duration: duration || 1000 
+    await invoke('adb_swipe', {
+      deviceId,
+      startX,
+      startY,
+      endX,
+      endY,
+      duration: duration || 1000
     });
   }
 
@@ -254,8 +254,8 @@ export class AdbAPI {
    * 创建ADB操作记录
    */
   static async createAdbOperation(
-    deviceId: string, 
-    type: AdbOperationType, 
+    deviceId: string,
+    type: AdbOperationType,
     command: string
   ): Promise<AdbOperation> {
     return await invoke<AdbOperation>('create_adb_operation', { deviceId, type, command });

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Smartphone, Plus } from 'lucide-react';
+import { Plus, Smartphone } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { DeviceList } from '../../components/device';
 import { PageWrapper } from '../../components/layout';
 import type { Device } from '../../types';

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { AlertCircle, FileText, Upload } from 'lucide-react';
+import React, { useRef, useState } from 'react';
 import { ContactDocument, DocumentFormat } from '../../types';
 
 interface ContactDocumentUploaderProps {
@@ -15,7 +15,7 @@ export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = (
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supportedFormats: DocumentFormat[] = ['txt', 'csv', 'excel', 'vcf', 'json'];
-  
+
   const formatDescriptions = {
     txt: '纯文本文件，每行一个联系人',
     csv: 'CSV格式，包含姓名、电话等字段',
@@ -37,7 +37,7 @@ export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = (
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       handleFileUpload(files[0]);
@@ -141,7 +141,7 @@ export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = (
             支持 TXT, CSV, Excel, VCF, JSON 格式
           </p>
         </div>
-        
+
         {isUploading && (
           <div className="mt-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>

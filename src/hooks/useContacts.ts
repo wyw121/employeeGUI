@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  Contact, 
-  ContactDocument, 
-  ContactTask, 
-  ContactStatistics 
-} from '../types';
+import { useCallback, useEffect, useState } from 'react';
 import { ContactAPI } from '../api';
+import {
+    Contact,
+    ContactDocument,
+    ContactStatistics,
+    ContactTask
+} from '../types';
 
 /**
  * 通讯录文档管理Hook
@@ -115,7 +115,7 @@ export const useContacts = (documentId?: string) => {
     setError(null);
     try {
       await ContactAPI.updateContact(contact);
-      setContacts(prev => 
+      setContacts(prev =>
         prev.map(c => c.id === contact.id ? contact : c)
       );
     } catch (err) {
@@ -210,9 +210,9 @@ export const useContactTasks = () => {
     setError(null);
     try {
       await ContactAPI.startContactTask(taskId);
-      setTasks(prev => 
-        prev.map(task => 
-          task.id === taskId 
+      setTasks(prev =>
+        prev.map(task =>
+          task.id === taskId
             ? { ...task, status: 'running' as any, startedAt: new Date() }
             : task
         )
@@ -229,9 +229,9 @@ export const useContactTasks = () => {
     setError(null);
     try {
       await ContactAPI.pauseContactTask(taskId);
-      setTasks(prev => 
-        prev.map(task => 
-          task.id === taskId 
+      setTasks(prev =>
+        prev.map(task =>
+          task.id === taskId
             ? { ...task, status: 'paused' as any }
             : task
         )
@@ -248,9 +248,9 @@ export const useContactTasks = () => {
     setError(null);
     try {
       await ContactAPI.stopContactTask(taskId);
-      setTasks(prev => 
-        prev.map(task => 
-          task.id === taskId 
+      setTasks(prev =>
+        prev.map(task =>
+          task.id === taskId
             ? { ...task, status: 'cancelled' as any, completedAt: new Date() }
             : task
         )

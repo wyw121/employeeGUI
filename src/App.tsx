@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
-import { MainLayout, Sidebar, AppHeader, StatusBar } from "./components/layout";
-import { 
-  DeviceManagementPage, 
-  TaskManagementPage, 
-  StatisticsPage,
-  ContactManagementPage
-} from "./pages";
+import { useEffect, useState } from "react";
+import { AppHeader, MainLayout, Sidebar, StatusBar } from "./components/layout";
 import { useDevices } from "./hooks";
+import {
+    ContactManagementPage,
+    DeviceManagementPage,
+    StatisticsPage,
+    TaskManagementPage
+} from "./pages";
+import { AdbTestPage } from "./pages/AdbTestPage";
 import "./style.css";
 
 function App() {
@@ -55,6 +56,8 @@ function App() {
         return <TaskManagementPage />;
       case 'statistics':
         return <StatisticsPage />;
+      case 'adb-test':
+        return <AdbTestPage />;
       default:
         return <DeviceManagementPage />;
     }
@@ -105,9 +108,10 @@ function App() {
 function getCurrentPageName(pageId: string): string {
   const pageNames: Record<string, string> = {
     devices: '设备管理',
-    contacts: '通讯录管理', 
+    contacts: '通讯录管理',
     tasks: '任务管理',
-    statistics: '关注统计'
+    statistics: '关注统计',
+    'adb-test': 'ADB测试'
   };
   return pageNames[pageId] || '未知页面';
 }

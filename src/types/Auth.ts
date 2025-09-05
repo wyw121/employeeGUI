@@ -18,7 +18,7 @@ export interface Employee {
 }
 
 // 员工角色
-export type EmployeeRole = 
+export type EmployeeRole =
   | 'admin'        // 管理员
   | 'supervisor'   // 主管
   | 'operator'     // 操作员
@@ -34,7 +34,7 @@ export interface Permission {
 }
 
 // 权限资源
-export type PermissionResource = 
+export type PermissionResource =
   | 'devices'      // 设备管理
   | 'tasks'        // 任务管理
   | 'contacts'     // 通讯录管理
@@ -44,7 +44,7 @@ export type PermissionResource =
   | 'logs';        // 日志查看
 
 // 权限动作
-export type PermissionAction = 
+export type PermissionAction =
   | 'read'         // 查看
   | 'create'       // 创建
   | 'update'       // 更新

@@ -1,5 +1,5 @@
+import { Activity, Clock, Wifi, WifiOff } from 'lucide-react';
 import React from 'react';
-import { Wifi, WifiOff, Activity, Clock } from 'lucide-react';
 
 interface StatusBarProps {
   isConnected?: boolean;
@@ -39,14 +39,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           )}
           <span>{isConnected ? '已连接' : '未连接'}</span>
         </div>
-        
+
         <div className="flex items-center space-x-1">
           <Activity className="w-3 h-3 text-blue-400" />
           <span>设备: {activeDevices}/{totalDevices}</span>
         </div>
-        
+
         <div className="text-gray-400">|</div>
-        
+
         <span>{status}</span>
       </div>
 

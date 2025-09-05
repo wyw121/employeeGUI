@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Users, 
-  Play, 
-  Settings,
-  RefreshCw,
-  Trash2,
-  AlertCircle,
-  CheckCircle,
-  BookOpen
+import {
+    AlertCircle,
+    BookOpen,
+    CheckCircle,
+    FileText,
+    Play,
+    RefreshCw,
+    Settings,
+    Trash2,
+    Users
 } from 'lucide-react';
-import { ContactDocument, Contact, ContactTask, DocumentStatus } from '../../types';
+import React, { useEffect, useState } from 'react';
 import { ContactDocumentUploader } from '../../components/contact/ContactDocumentUploader';
 import { ContactList } from '../../components/contact/ContactList';
-import { ContactTaskForm } from '../../components/contact/ContactTaskForm';
 import { ContactStatistics } from '../../components/contact/ContactStatistics';
+import { ContactTaskForm } from '../../components/contact/ContactTaskForm';
 import { PageWrapper } from '../../components/layout';
+import { Contact, ContactDocument, ContactTask, DocumentStatus } from '../../types';
 
 /**
  * 通讯录管理页面
@@ -42,7 +42,7 @@ export const ContactManagementPage: React.FC = () => {
         format: 'txt'
       },
       {
-        id: '2', 
+        id: '2',
         filename: '潜在客户.csv',
         filepath: 'C:\\Documents\\潜在客户.csv',
         uploadTime: new Date(),
@@ -65,7 +65,7 @@ export const ContactManagementPage: React.FC = () => {
       },
       {
         id: '2',
-        name: '李四', 
+        name: '李四',
         phone: '13800138002',
         qq: '123456789',
         platform: 'qq',
@@ -187,8 +187,8 @@ export const ContactManagementPage: React.FC = () => {
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${(document.processedContacts / document.totalContacts) * 100}%` 
+                      style={{
+                        width: `${(document.processedContacts / document.totalContacts) * 100}%`
                       }}
                     />
                   </div>
@@ -214,7 +214,7 @@ export const ContactManagementPage: React.FC = () => {
     <div className="space-y-6">
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">创建联系任务</h3>
-        <ContactTaskForm 
+        <ContactTaskForm
           contacts={contacts}
           onTaskCreate={(task) => {
             setTasks(prev => [task, ...prev]);

@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
-import { 
-  Employee, 
-  LoginCredentials, 
-  LoginResponse, 
-  AuthState 
-} from '../types';
 import { invoke } from '@tauri-apps/api/core';
+import { useCallback, useState } from 'react';
+import {
+    AuthState,
+    Employee,
+    LoginCredentials,
+    LoginResponse
+} from '../types';
 
 /**
  * 认证相关的Hook
@@ -26,8 +26,8 @@ export const useAuth = () => {
 
     try {
       // 调用Tauri后端登录接口
-      const response = await invoke<LoginResponse>('employee_login', { 
-        credentials 
+      const response = await invoke<LoginResponse>('employee_login', {
+        credentials
       });
 
       if (response.success && response.employee && response.token) {
@@ -66,11 +66,11 @@ export const useAuth = () => {
     try {
       // 调用后端登出接口
       await invoke('employee_logout');
-      
+
       // 清除本地存储
       localStorage.removeItem('authToken');
       localStorage.removeItem('employee');
-      
+
       // 重置状态
       setAuthState({
         isAuthenticated: false,
@@ -95,7 +95,7 @@ export const useAuth = () => {
 
         // 验证token是否有效
         const isValid = await invoke<boolean>('verify_token', { token });
-        
+
         if (isValid) {
           const employee = JSON.parse(employeeStr) as Employee;
           setAuthState({
@@ -145,7 +145,7 @@ export const useAuth = () => {
 
   // 修改密码
   const changePassword = useCallback(async (
-    currentPassword: string, 
+    currentPassword: string,
     newPassword: string
   ): Promise<void> => {
     if (!authState.employee) return;
@@ -164,13 +164,13 @@ export const useAuth = () => {
 
   // 检查权限
   const hasPermission = useCallback((
-    resource: string, 
+    resource: string,
     action: string
   ): boolean => {
     if (!authState.employee) return false;
 
-    return authState.employee.permissions.some(permission => 
-      permission.resource === resource && 
+    return authState.employee.permissions.some(permission =>
+      permission.resource === resource &&
       permission.actions.includes(action as any)
     );
   }, [authState.employee]);

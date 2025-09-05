@@ -2,8 +2,8 @@
 export { EmployeePage } from './EmployeePage';
 
 // 新的业务页面
-export * from './device-management';
-export * from './task-management';
-export * from './statistics';
-export * from './contact-management';
 export * from './auth';
+export * from './contact-management';
+export * from './device-management';
+export * from './statistics';
+export * from './task-management';

@@ -30,7 +30,7 @@ export interface ContactDocument {
 }
 
 // 文档状态
-export type DocumentStatus = 
+export type DocumentStatus =
   | 'uploading'
   | 'parsing'
   | 'parsed'
@@ -39,7 +39,7 @@ export type DocumentStatus =
   | 'error';
 
 // 文档格式
-export type DocumentFormat = 
+export type DocumentFormat =
   | 'txt'
   | 'csv'
   | 'excel'
@@ -85,7 +85,7 @@ export interface AdbOperation {
 }
 
 // ADB操作类型
-export type AdbOperationType = 
+export type AdbOperationType =
   | 'tap'
   | 'swipe'
   | 'input'
@@ -98,7 +98,7 @@ export type AdbOperationType =
 // 平台类型 (与Employee.ts保持一致)
 export type Platform = 'xiaohongshu' | 'douyin' | 'kuaishou' | 'bilibili' | 'wechat' | 'qq' | 'weibo';
 
-// 任务状态 (重用Employee.ts中的定义)  
+// 任务状态 (重用Employee.ts中的定义)
 export type TaskStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 // 任务进度 (重用Employee.ts中的定义)

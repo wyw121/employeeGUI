@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { AuthGuard } from "./components/auth/AuthGuard";
 import { AppHeader, MainLayout, Sidebar, StatusBar } from "./components/layout";
-import { useDevices } from "./hooks";
+import { useAuth, useDevices } from "./hooks";
 import {
     ContactManagementPage,
     DeviceManagementPage,
@@ -15,6 +16,7 @@ function App() {
   const [balance] = useState(1000);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const { devices } = useDevices();
+  const { employee, logout } = useAuth();
 
   // 更新时间
   useEffect(() => {
@@ -67,15 +69,15 @@ function App() {
     <AppHeader
       title="社交平台自动化操作系统"
       user={{
-        name: "操作员001",
-        avatar: undefined
+        name: employee?.displayName || "未登录用户",
+        avatar: employee?.avatar
       }}
       onMinimize={handleMinimize}
       onMaximize={handleMaximize}
       onClose={handleClose}
       onSettings={() => console.log('打开设置')}
       onProfile={() => console.log('打开个人资料')}
-      onLogout={() => console.log('退出登录')}
+      onLogout={logout}
     />
   );
 
@@ -98,9 +100,11 @@ function App() {
   );
 
   return (
-    <MainLayout sidebar={sidebar} header={header} statusBar={statusBar}>
-      {renderCurrentPage()}
-    </MainLayout>
+    <AuthGuard>
+      <MainLayout sidebar={sidebar} header={header} statusBar={statusBar}>
+        {renderCurrentPage()}
+      </MainLayout>
+    </AuthGuard>
   );
 }
 

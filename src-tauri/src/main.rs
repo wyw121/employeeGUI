@@ -4,6 +4,7 @@
 mod services;
 
 use services::adb_service::AdbService;
+use services::auth_service::*;
 use services::employee_service::{Employee, EmployeeService};
 use std::sync::Mutex;
 use tauri::{Manager, State};
@@ -156,7 +157,13 @@ fn main() {
             connect_adb_device,
             disconnect_adb_device,
             start_adb_server,
-            kill_adb_server
+            kill_adb_server,
+            employee_login,
+            verify_token,
+            get_current_user,
+            employee_logout,
+            refresh_token,
+            change_password
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

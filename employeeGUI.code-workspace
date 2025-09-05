@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../Flow_Farm/server-backend"
+			"path": "../Flow_Farm"
 		}
 	],
 	"settings": {}

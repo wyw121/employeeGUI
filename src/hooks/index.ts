@@ -5,3 +5,4 @@ export {
     useContacts, useContactStatistics, useContactTasks
 } from './useContacts';
 export { useDevices } from './useDevices';
+export { usePermissions } from './usePermissions';

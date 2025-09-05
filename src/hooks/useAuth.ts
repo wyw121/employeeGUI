@@ -1,10 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useState } from 'react';
+import AuthService from '../services/authService';
 import {
     AuthState,
     Employee,
-    LoginCredentials,
-    LoginResponse
+    LoginCredentials
 } from '../types';
 
 /**
@@ -25,10 +24,8 @@ export const useAuth = () => {
     setAuthState(prev => ({ ...prev, isLoading: true, error: undefined }));
 
     try {
-      // 调用Tauri后端登录接口
-      const response = await invoke<LoginResponse>('employee_login', {
-        credentials
-      });
+      // 使用AuthService进行登录
+      const response = await AuthService.login(credentials);
 
       if (response.success && response.employee && response.token) {
         setAuthState({
@@ -64,8 +61,8 @@ export const useAuth = () => {
   // 登出
   const logout = useCallback(async (): Promise<void> => {
     try {
-      // 调用后端登出接口
-      await invoke('employee_logout');
+      // 调用AuthService进行登出
+      await AuthService.logout(authState.token);
 
       // 清除本地存储
       localStorage.removeItem('authToken');
@@ -82,7 +79,7 @@ export const useAuth = () => {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  }, []);
+  }, [authState.token]);
 
   // 检查认证状态
   const checkAuthStatus = useCallback(async (): Promise<void> => {
@@ -93,8 +90,8 @@ export const useAuth = () => {
       try {
         setAuthState(prev => ({ ...prev, isLoading: true }));
 
-        // 验证token是否有效
-        const isValid = await invoke<boolean>('verify_token', { token });
+        // 使用AuthService验证token是否有效
+        const isValid = await AuthService.verifyToken(token);
 
         if (isValid) {
           const employee = JSON.parse(employeeStr) as Employee;
@@ -125,11 +122,9 @@ export const useAuth = () => {
     if (!authState.employee) return;
 
     try {
-      const updatedEmployee = await invoke<Employee>('update_employee_profile', {
-        employeeId: authState.employee.id,
-        updates
-      });
-
+      // 暂时只更新本地状态，待后续实现服务器端更新接口
+      const updatedEmployee = { ...authState.employee, ...updates };
+      
       setAuthState(prev => ({
         ...prev,
         employee: updatedEmployee
@@ -148,19 +143,23 @@ export const useAuth = () => {
     currentPassword: string,
     newPassword: string
   ): Promise<void> => {
-    if (!authState.employee) return;
+    if (!authState.employee || !authState.token) return;
 
     try {
-      await invoke('change_employee_password', {
-        employeeId: authState.employee.id,
+      const success = await AuthService.changePassword(
+        authState.token,
         currentPassword,
         newPassword
-      });
+      );
+
+      if (!success) {
+        throw new Error('修改密码失败');
+      }
     } catch (error) {
       console.error('Change password error:', error);
       throw error;
     }
-  }, [authState.employee]);
+  }, [authState.employee, authState.token]);
 
   // 检查权限
   const hasPermission = useCallback((

@@ -7,3 +7,5 @@ export * from './common';
 export * from './device';
 export * from './task';
 export * from './layout';
+export * from './contact';
+export * from './auth';

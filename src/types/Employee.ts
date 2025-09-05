@@ -9,26 +9,13 @@ export interface Device {
 }
 
 // 平台类型
-export type Platform = 'xiaohongshu' | 'douyin' | 'kuaishou' | 'bilibili';
+export type Platform = 'xiaohongshu' | 'douyin' | 'kuaishou' | 'bilibili' | 'wechat' | 'qq' | 'weibo';
 
 // 任务类型
 export type TaskType = 'contact_follow' | 'precise_acquisition';
 
 // 任务状态
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'paused';
-
-// 通讯录管理任务
-export interface ContactTask {
-  id?: number;
-  platform: Platform;
-  file_path: string;
-  total_contacts: number;
-  processed_contacts: number;
-  assigned_devices: number[];
-  status: TaskStatus;
-  cost_per_follow: number;
-  created_at?: string;
-}
 
 // 精准获客任务
 export interface PreciseAcquisitionTask {

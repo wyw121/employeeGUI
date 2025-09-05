@@ -23,6 +23,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: '管理连接设备'
     },
     {
+      name: '通讯录管理',
+      id: 'contacts',
+      icon: '📇',
+      description: '通讯录联系 & ADB自动化'
+    },
+    {
       name: '任务管理',
       id: 'tasks',
       icon: '📋',

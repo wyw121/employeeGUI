@@ -3,7 +3,8 @@ import { MainLayout, Sidebar } from "./components/layout";
 import { 
   DeviceManagementPage, 
   TaskManagementPage, 
-  StatisticsPage 
+  StatisticsPage,
+  ContactManagementPage
 } from "./pages";
 import "./style.css";
 
@@ -15,6 +16,8 @@ function App() {
     switch (currentPage) {
       case 'devices':
         return <DeviceManagementPage />;
+      case 'contacts':
+        return <ContactManagementPage />;
       case 'tasks':
         return <TaskManagementPage />;
       case 'statistics':

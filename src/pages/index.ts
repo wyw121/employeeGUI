@@ -5,3 +5,5 @@ export { EmployeePage } from './EmployeePage';
 export * from './device-management';
 export * from './task-management';
 export * from './statistics';
+export * from './contact-management';
+export * from './auth';

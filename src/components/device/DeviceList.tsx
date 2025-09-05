@@ -26,10 +26,10 @@ export const DeviceList: React.FC<DeviceListProps> = ({
 }) => {
   const handleSelectAll = () => {
     if (!onDeviceSelect) return;
-    
+
     const connectedDevices = devices.filter(d => d.status === 'connected').map(d => d.id);
     const allSelected = connectedDevices.every(id => selectedDevices.includes(id));
-    
+
     if (allSelected) {
       onDeviceSelect([]);
     } else {
@@ -39,11 +39,11 @@ export const DeviceList: React.FC<DeviceListProps> = ({
 
   const handleDeviceToggle = (deviceId: number) => {
     if (!onDeviceSelect) return;
-    
+
     const newSelection = selectedDevices.includes(deviceId)
       ? selectedDevices.filter(id => id !== deviceId)
       : [...selectedDevices, deviceId];
-    
+
     onDeviceSelect(newSelection);
   };
 
@@ -70,7 +70,7 @@ export const DeviceList: React.FC<DeviceListProps> = ({
           )}
         </div>
       </div>
-      
+
       <div className="divide-y divide-gray-200">
         {devices.map((device) => (
           <div
@@ -87,7 +87,7 @@ export const DeviceList: React.FC<DeviceListProps> = ({
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50"
                 />
               )}
-              
+
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="font-medium text-gray-900">设备 {device.id}</span>
@@ -111,7 +111,7 @@ export const DeviceList: React.FC<DeviceListProps> = ({
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               {device.status === 'connected' ? (
                 <button
@@ -132,7 +132,7 @@ export const DeviceList: React.FC<DeviceListProps> = ({
           </div>
         ))}
       </div>
-      
+
       {devices.length === 0 && (
         <div className="px-6 py-8 text-center text-gray-500">
           暂无设备

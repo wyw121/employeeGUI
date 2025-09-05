@@ -20,7 +20,7 @@ export const DeviceManagementPage: React.FC = () => {
         status: 'disconnected' as const,
         last_connected: undefined
       }));
-      
+
       setDevices(initialDevices);
       setIsLoading(false);
     };
@@ -33,8 +33,8 @@ export const DeviceManagementPage: React.FC = () => {
     try {
       // 这里应该调用后端API连接设备
       // 暂时模拟连接成功
-      setDevices(prev => prev.map(device => 
-        device.id === deviceId 
+      setDevices(prev => prev.map(device =>
+        device.id === deviceId
           ? { ...device, status: 'connected', last_connected: new Date().toISOString() }
           : device
       ));
@@ -49,8 +49,8 @@ export const DeviceManagementPage: React.FC = () => {
     try {
       // 这里应该调用后端API断开设备
       // 暂时模拟断开成功
-      setDevices(prev => prev.map(device => 
-        device.id === deviceId 
+      setDevices(prev => prev.map(device =>
+        device.id === deviceId
           ? { ...device, status: 'disconnected' }
           : device
       ));

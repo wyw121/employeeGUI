@@ -35,10 +35,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: '通讯录联系 & ADB自动化'
     },
     {
-      name: '任务管理',
-      id: 'tasks',
-      icon: '📋',
-      description: '通讯录关注 & 精准获客'
+      name: '精准获客',
+      id: 'precise-acquisition',
+      icon: '🎯',
+      description: '精准获客功能'
     },
     {
       name: '关注统计',

@@ -1,10 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { AlertCircle, FileText, Upload } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import { ContactDocument, DocumentFormat } from '../../types';
+import { Contact, ContactDocument, DocumentFormat } from '../../types';
 
 interface ContactDocumentUploaderProps {
-  onUploadSuccess: (document: ContactDocument) => void;
+  onUploadSuccess: (document: ContactDocument, contacts: Contact[]) => void;
 }
 
 export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = ({
@@ -121,7 +121,16 @@ export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = (
             format: getFileFormat(file.name)
           };
 
-          onUploadSuccess(document);
+          // 转换联系人数据
+          const contacts: Contact[] = parsed.document.contacts.map(c => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            email: c.email,
+            notes: c.notes
+          }));
+
+          onUploadSuccess(document, contacts);
         } else {
           throw new Error(parsed.error || '解析失败');
         }

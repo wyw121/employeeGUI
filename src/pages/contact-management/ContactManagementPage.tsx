@@ -3,30 +3,35 @@ import {
     BookOpen,
     CheckCircle,
     FileText,
+    Mail,
+    MessageCircle,
+    Phone,
     Play,
     RefreshCw,
-    Settings,
+    Tag,
     Trash2,
+    User,
     Users
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { ContactDocumentUploader } from '../../components/contact/ContactDocumentUploader';
+import { ContactFollowTask } from '../../components/contact/ContactFollowTask';
 import { ContactList } from '../../components/contact/ContactList';
 import { ContactStatistics } from '../../components/contact/ContactStatistics';
-import { ContactTaskForm } from '../../components/contact/ContactTaskForm';
 import { PageWrapper } from '../../components/layout';
-import { Contact, ContactDocument, ContactTask, DocumentStatus } from '../../types';
+import { Contact, ContactDocument, DocumentStatus } from '../../types';
 
 /**
  * 通讯录管理页面
  * 功能：上传通讯录文档、解析联系人信息、创建联系任务
  */
 export const ContactManagementPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'documents' | 'contacts' | 'tasks' | 'statistics'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'contacts' | 'follow' | 'statistics'>('documents');
   const [documents, setDocuments] = useState<ContactDocument[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [tasks, setTasks] = useState<ContactTask[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<ContactDocument | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [showContactDetail, setShowContactDetail] = useState(false);
 
   // 模拟数据
   useEffect(() => {
@@ -78,7 +83,7 @@ export const ContactManagementPage: React.FC = () => {
   const tabs = [
     { key: 'documents', label: '文档管理', icon: FileText, count: documents.length },
     { key: 'contacts', label: '联系人', icon: Users, count: contacts.length },
-    { key: 'tasks', label: '联系任务', icon: Play, count: tasks.length },
+    { key: 'follow', label: '关注任务', icon: Play, count: undefined },
     { key: 'statistics', label: '联系统计', icon: RefreshCw, count: undefined }
   ];
 
@@ -108,21 +113,11 @@ export const ContactManagementPage: React.FC = () => {
     return statusMap[status] || status;
   };
 
-  const getTaskStatusClass = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'running':
-        return 'bg-blue-100 text-blue-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const handleUploadSuccess = (document: ContactDocument) => {
+  const handleUploadSuccess = (document: ContactDocument, contacts: Contact[]) => {
     setDocuments(prev => [document, ...prev]);
+    // 将解析的联系人添加到联系人列表中
+    setContacts(prev => [...contacts, ...prev]);
+    console.log(`成功导入文档：${document.filename}，包含 ${contacts.length} 个联系人`);
   };
 
   const handleDeleteDocument = (documentId: string) => {
@@ -201,65 +196,22 @@ export const ContactManagementPage: React.FC = () => {
     </div>
   );
 
+  const handleContactSelect = (contact: Contact) => {
+    setSelectedContact(contact);
+    setShowContactDetail(true);
+  };
+
   const renderContactsTab = () => (
     <div className="bg-white rounded-lg border border-gray-200">
       <div className="px-6 py-4 border-b border-gray-200">
         <h3 className="text-lg font-medium text-gray-900">联系人列表</h3>
       </div>
-      <ContactList contacts={contacts} onContactSelect={(contact) => console.log('Selected:', contact)} />
+      <ContactList contacts={contacts} onContactSelect={handleContactSelect} />
     </div>
   );
 
-  const renderTasksTab = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">创建联系任务</h3>
-        <ContactTaskForm
-          contacts={contacts}
-          onTaskCreate={(task) => {
-            setTasks(prev => [task, ...prev]);
-          }}
-        />
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">任务列表</h3>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {tasks.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
-              还没有创建任何联系任务
-            </div>
-          ) : (
-            tasks.map((task) => (
-              <div key={task.id} className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-900">
-                      联系任务 #{task.id}
-                    </h4>
-                    <p className="text-sm text-gray-500">
-                      {task.contacts.length} 个联系人 • {task.platform}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      getTaskStatusClass(task.status)
-                    }`}>
-                      {task.status}
-                    </span>
-                    <button className="text-blue-600 hover:text-blue-700">
-                      <Settings className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+  const renderFollowTab = () => (
+    <ContactFollowTask contacts={contacts} />
   );
 
   const renderStatisticsTab = () => (
@@ -272,8 +224,8 @@ export const ContactManagementPage: React.FC = () => {
         return renderDocumentsTab();
       case 'contacts':
         return renderContactsTab();
-      case 'tasks':
-        return renderTasksTab();
+      case 'follow':
+        return renderFollowTab();
       case 'statistics':
         return renderStatisticsTab();
       default:
@@ -328,6 +280,92 @@ export const ContactManagementPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 联系人详情弹窗 */}
+      {showContactDetail && selectedContact && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">联系人详情</h3>
+                <button
+                  onClick={() => setShowContactDetail(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <User className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-medium text-gray-900">{selectedContact.name}</h4>
+                  </div>
+                </div>
+
+                {selectedContact.phone && (
+                  <div className="flex items-center space-x-3 text-gray-600">
+                    <Phone className="w-5 h-5" />
+                    <span>{selectedContact.phone}</span>
+                  </div>
+                )}
+
+                {selectedContact.email && (
+                  <div className="flex items-center space-x-3 text-gray-600">
+                    <Mail className="w-5 h-5" />
+                    <span>{selectedContact.email}</span>
+                  </div>
+                )}
+
+                {selectedContact.wechat && (
+                  <div className="flex items-center space-x-3 text-gray-600">
+                    <MessageCircle className="w-5 h-5" />
+                    <span>微信: {selectedContact.wechat}</span>
+                  </div>
+                )}
+
+                {selectedContact.notes && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">备注</div>
+                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                      {selectedContact.notes}
+                    </p>
+                  </div>
+                )}
+
+                {selectedContact.tags && selectedContact.tags.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">标签</div>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedContact.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                        >
+                          <Tag className="w-3 h-3 mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowContactDetail(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 };

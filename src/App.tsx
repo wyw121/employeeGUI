@@ -5,8 +5,8 @@ import { useAuth, useDevices } from "./hooks";
 import {
     ContactManagementPage,
     DeviceManagementPage,
-    StatisticsPage,
-    TaskManagementPage
+    PreciseAcquisitionPage,
+    StatisticsPage
 } from "./pages";
 import { AdbTestPage } from "./pages/AdbTestPage";
 import "./style.css";
@@ -54,8 +54,8 @@ function App() {
         return <DeviceManagementPage />;
       case 'contacts':
         return <ContactManagementPage />;
-      case 'tasks':
-        return <TaskManagementPage />;
+      case 'precise-acquisition':
+        return <PreciseAcquisitionPage />;
       case 'statistics':
         return <StatisticsPage />;
       case 'adb-test':
@@ -113,7 +113,7 @@ function getCurrentPageName(pageId: string): string {
   const pageNames: Record<string, string> = {
     devices: '设备管理',
     contacts: '通讯录管理',
-    tasks: '任务管理',
+    'precise-acquisition': '精准获客',
     statistics: '关注统计',
     'adb-test': 'ADB测试'
   };

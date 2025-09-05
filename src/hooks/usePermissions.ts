@@ -87,12 +87,12 @@ export const usePermissions = () => {
   return {
     employee,
     hasPermission,
-    
+
     // 角色检查
     isAdmin,
     isSupervisor,
     isOperator,
-    
+
     // 功能权限检查
     canManageDevices,
     canManageUsers,

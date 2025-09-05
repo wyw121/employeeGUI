@@ -1,7 +1,6 @@
 use rusqlite::{Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::api::path::app_data_dir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Employee {
@@ -20,14 +19,12 @@ pub struct EmployeeService {
 
 impl EmployeeService {
     pub fn new() -> SqliteResult<Self> {
-        // 获取应用数据目录
-        let app_data_dir = app_data_dir(&tauri::Config::default()).unwrap_or_else(|| {
-            PathBuf::from("./data")
-        });
-        
+        // 使用当前目录下的 data 文件夹作为数据目录
+        let app_data_dir = PathBuf::from("./data");
+
         // 确保目录存在
         std::fs::create_dir_all(&app_data_dir).unwrap_or_default();
-        
+
         let db_path = app_data_dir.join("employees.db");
         let conn = Connection::open(db_path)?;
 
@@ -50,9 +47,9 @@ impl EmployeeService {
 
     pub fn get_all(&self) -> SqliteResult<Vec<Employee>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, email, department, position, salary, hire_date FROM employees"
+            "SELECT id, name, email, department, position, salary, hire_date FROM employees",
         )?;
-        
+
         let employee_iter = stmt.query_map([], |row| {
             Ok(Employee {
                 id: Some(row.get(0)?),
@@ -69,13 +66,13 @@ impl EmployeeService {
         for employee in employee_iter {
             employees.push(employee?);
         }
-        
+
         Ok(employees)
     }
 
     pub fn create(&mut self, mut employee: Employee) -> SqliteResult<Employee> {
         self.conn.execute(
-            "INSERT INTO employees (name, email, department, position, salary, hire_date) 
+            "INSERT INTO employees (name, email, department, position, salary, hire_date)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             [
                 &employee.name,
@@ -97,7 +94,7 @@ impl EmployeeService {
         })?;
 
         self.conn.execute(
-            "UPDATE employees SET name = ?1, email = ?2, department = ?3, position = ?4, salary = ?5, hire_date = ?6 
+            "UPDATE employees SET name = ?1, email = ?2, department = ?3, position = ?4, salary = ?5, hire_date = ?6
              WHERE id = ?7",
             [
                 &employee.name,
@@ -114,7 +111,8 @@ impl EmployeeService {
     }
 
     pub fn delete(&mut self, id: i32) -> SqliteResult<()> {
-        self.conn.execute("DELETE FROM employees WHERE id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM employees WHERE id = ?1", [id])?;
         Ok(())
     }
 

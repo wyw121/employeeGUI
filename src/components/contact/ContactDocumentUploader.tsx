@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { AlertCircle, FileText, Upload } from 'lucide-react';
 import React, { useRef, useState } from 'react';
 import { ContactDocument, DocumentFormat } from '../../types';
@@ -75,31 +76,62 @@ export const ContactDocumentUploader: React.FC<ContactDocumentUploaderProps> = (
     setUploadError(null);
 
     try {
-      // 模拟文件上传和解析过程
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // 读取文件内容
+      const text = await file.text();
 
-      // 创建文档记录
-      const document: ContactDocument = {
-        id: Date.now().toString(),
-        filename: file.name,
-        filepath: `C:\\Documents\\${file.name}`,
-        uploadTime: new Date(),
-        totalContacts: Math.floor(Math.random() * 200) + 50,
-        processedContacts: 0,
-        status: 'parsing',
-        format: getFileFormat(file.name)
-      };
+      // 调用 Rust 后端解析联系人
+      const result = await invoke('parse_contact_file', {
+        fileName: file.name,
+        content: text
+      });
 
-      onUploadSuccess(document);
+      if (result && typeof result === 'object') {
+        const parsed = result as {
+          success: boolean;
+          document?: {
+            id: string;
+            filename: string;
+            filepath: string;
+            upload_time: string;
+            total_contacts: number;
+            processed_contacts: number;
+            status: string;
+            format: string;
+            contacts: Array<{
+              id: string;
+              name: string;
+              phone?: string;
+              email?: string;
+              notes?: string;
+            }>;
+          };
+          error?: string;
+        };
 
-      // 模拟解析过程
-      setTimeout(() => {
-        document.status = 'completed';
-        document.processedContacts = document.totalContacts;
-      }, 3000);
+        if (parsed.success && parsed.document) {
+          // 创建文档记录
+          const document: ContactDocument = {
+            id: parsed.document.id,
+            filename: parsed.document.filename,
+            filepath: parsed.document.filepath,
+            uploadTime: new Date(parsed.document.upload_time),
+            totalContacts: parsed.document.total_contacts,
+            processedContacts: parsed.document.processed_contacts,
+            status: 'completed',
+            format: getFileFormat(file.name)
+          };
+
+          onUploadSuccess(document);
+        } else {
+          throw new Error(parsed.error || '解析失败');
+        }
+      } else {
+        throw new Error('解析结果格式错误');
+      }
 
     } catch (error) {
-      setUploadError('文件上传失败，请重试');
+      console.error('文件上传失败:', error);
+      setUploadError(`文件上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {

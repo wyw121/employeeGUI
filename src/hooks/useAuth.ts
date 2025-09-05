@@ -124,7 +124,7 @@ export const useAuth = () => {
     try {
       // 暂时只更新本地状态，待后续实现服务器端更新接口
       const updatedEmployee = { ...authState.employee, ...updates };
-      
+
       setAuthState(prev => ({
         ...prev,
         employee: updatedEmployee

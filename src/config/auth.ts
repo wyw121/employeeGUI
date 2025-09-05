@@ -34,27 +34,27 @@ export const API_ENDPOINTS = {
   REFRESH_TOKEN: '/auth/refresh',
   GET_CURRENT_USER: '/auth/me',
   CHANGE_PASSWORD: '/auth/change-password',
-  
+
   // 用户管理
   GET_USERS: '/users',
   CREATE_USER: '/users',
   UPDATE_USER: '/users',
   DELETE_USER: '/users',
-  
+
   // 设备管理
   GET_DEVICES: '/devices',
   UPDATE_DEVICE: '/devices',
-  
+
   // 任务管理
   GET_TASKS: '/tasks',
   CREATE_TASK: '/tasks',
   UPDATE_TASK: '/tasks',
   DELETE_TASK: '/tasks',
-  
+
   // 统计数据
   GET_STATISTICS: '/statistics',
   GET_REPORTS: '/reports',
-  
+
   // 系统配置
   GET_SETTINGS: '/settings',
   UPDATE_SETTINGS: '/settings',

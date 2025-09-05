@@ -1,13 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
-import { LoginCredentials, LoginResponse, Employee } from '../types';
+import { Employee, LoginCredentials, LoginResponse } from '../types';
 
 /**
  * 认证服务类
  * 处理与Flow_Farm管理服务器的认证通信
  */
 export class AuthService {
-  private static readonly SERVER_BASE_URL = 'http://localhost:8000/api';
-  
+  private static readonly SERVER_BASE_URL = 'http://localhost:8000/api/v1';
+
   /**
    * 员工登录
    */
@@ -39,7 +39,7 @@ export class AuthService {
         }
 
         const data = await response.json();
-        
+
         if (data.success) {
           return {
             success: true,

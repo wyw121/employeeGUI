@@ -1,0 +1,5 @@
+张小美,13812345678,北京市朝阳区,美妆博主,xiaomei@example.com
+李时尚,15987654321,上海市浦东新区,时尚达人,shishang@example.com
+王健身,18666888999,广州市天河区,健身教练,jianshen@example.com
+陈美食,13555666777,深圳市南山区,美食探店,meishi@example.com
+刘旅行,15299887766,杭州市西湖区,旅行博主,lvxing@example.com

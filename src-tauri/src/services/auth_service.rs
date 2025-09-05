@@ -44,12 +44,7 @@ pub async fn employee_login(
     println!("Attempting login to: {}", login_url);
     println!("Request body: {}", request_body);
 
-    match client
-        .post(&login_url)
-        .json(&request_body)
-        .send()
-        .await
-    {
+    match client.post(&login_url).json(&request_body).send().await {
         Ok(response) => {
             let status = response.status();
             println!("Response status: {}", status);
@@ -60,14 +55,18 @@ pub async fn employee_login(
                         if let Some(data) = api_response.data {
                             return Ok(LoginResponse {
                                 success: true,
-                                token: data.get("token").and_then(|v| v.as_str().map(|s| s.to_string())),
+                                token: data
+                                    .get("token")
+                                    .and_then(|v| v.as_str().map(|s| s.to_string())),
                                 user: data.get("user").cloned(),
                                 error: None,
-                                expires_at: data.get("expires_at").and_then(|v| v.as_str().map(|s| s.to_string())),
+                                expires_at: data
+                                    .get("expires_at")
+                                    .and_then(|v| v.as_str().map(|s| s.to_string())),
                             });
                         }
                     }
-                    
+
                     Ok(LoginResponse {
                         success: false,
                         token: None,
@@ -107,12 +106,7 @@ pub async fn verify_token(server_url: String, token: String) -> Result<bool, Str
     let client = reqwest::Client::new();
     let verify_url = format!("{}/auth/me", server_url);
 
-    match client
-        .get(&verify_url)
-        .bearer_auth(&token)
-        .send()
-        .await
-    {
+    match client.get(&verify_url).bearer_auth(&token).send().await {
         Ok(response) => Ok(response.status().is_success()),
         Err(e) => {
             println!("Token verification error: {}", e);
@@ -130,23 +124,16 @@ pub async fn get_current_user(
     let client = reqwest::Client::new();
     let user_url = format!("{}/auth/me", server_url);
 
-    match client
-        .get(&user_url)
-        .bearer_auth(&token)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<ApiResponse<serde_json::Value>>().await {
-                Ok(api_response) => Ok(api_response),
-                Err(e) => Ok(ApiResponse {
-                    success: false,
-                    data: None,
-                    message: None,
-                    error: Some(format!("解析用户信息失败: {}", e)),
-                }),
-            }
-        }
+    match client.get(&user_url).bearer_auth(&token).send().await {
+        Ok(response) => match response.json::<ApiResponse<serde_json::Value>>().await {
+            Ok(api_response) => Ok(api_response),
+            Err(e) => Ok(ApiResponse {
+                success: false,
+                data: None,
+                message: None,
+                error: Some(format!("解析用户信息失败: {}", e)),
+            }),
+        },
         Err(e) => Ok(ApiResponse {
             success: false,
             data: None,
@@ -163,12 +150,7 @@ pub async fn employee_logout(server_url: String, token: Option<String>) -> Resul
         let client = reqwest::Client::new();
         let logout_url = format!("{}/auth/logout", server_url);
 
-        match client
-            .post(&logout_url)
-            .bearer_auth(&token)
-            .send()
-            .await
-        {
+        match client.post(&logout_url).bearer_auth(&token).send().await {
             Ok(_) => Ok(true),
             Err(e) => {
                 println!("Logout error: {}", e);
@@ -189,23 +171,16 @@ pub async fn refresh_token(
     let client = reqwest::Client::new();
     let refresh_url = format!("{}/auth/refresh", server_url);
 
-    match client
-        .post(&refresh_url)
-        .bearer_auth(&token)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<ApiResponse<String>>().await {
-                Ok(api_response) => Ok(api_response),
-                Err(e) => Ok(ApiResponse {
-                    success: false,
-                    data: None,
-                    message: None,
-                    error: Some(format!("解析刷新Token响应失败: {}", e)),
-                }),
-            }
-        }
+    match client.post(&refresh_url).bearer_auth(&token).send().await {
+        Ok(response) => match response.json::<ApiResponse<String>>().await {
+            Ok(api_response) => Ok(api_response),
+            Err(e) => Ok(ApiResponse {
+                success: false,
+                data: None,
+                message: None,
+                error: Some(format!("解析刷新Token响应失败: {}", e)),
+            }),
+        },
         Err(e) => Ok(ApiResponse {
             success: false,
             data: None,
@@ -238,17 +213,15 @@ pub async fn change_password(
         .send()
         .await
     {
-        Ok(response) => {
-            match response.json::<ApiResponse<String>>().await {
-                Ok(api_response) => Ok(api_response),
-                Err(e) => Ok(ApiResponse {
-                    success: false,
-                    data: None,
-                    message: None,
-                    error: Some(format!("解析修改密码响应失败: {}", e)),
-                }),
-            }
-        }
+        Ok(response) => match response.json::<ApiResponse<String>>().await {
+            Ok(api_response) => Ok(api_response),
+            Err(e) => Ok(ApiResponse {
+                success: false,
+                data: None,
+                message: None,
+                error: Some(format!("解析修改密码响应失败: {}", e)),
+            }),
+        },
         Err(e) => Ok(ApiResponse {
             success: false,
             data: None,

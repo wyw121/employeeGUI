@@ -5,9 +5,10 @@ mod services;
 
 use services::adb_service::AdbService;
 use services::auth_service::*;
+use services::contact_service::*;
 use services::employee_service::{Employee, EmployeeService};
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::State;
 
 // Tauri命令：获取所有员工
 #[tauri::command]
@@ -163,7 +164,9 @@ fn main() {
             get_current_user,
             employee_logout,
             refresh_token,
-            change_password
+            change_password,
+            parse_contact_file,
+            get_contact_file_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

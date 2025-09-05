@@ -123,7 +123,7 @@ sequenceDiagram
     participant AS as AuthService
     participant Tauri as Tauri后端
     participant Server as Flow_Farm服务器
-    
+
     UI->>AS: login(credentials)
     AS->>Tauri: employee_login(username, password)
     Tauri->>Server: POST /auth/login
@@ -139,7 +139,7 @@ sequenceDiagram
     participant Component as 组件
     participant Hook as usePermissions
     participant Auth as useAuth
-    
+
     Component->>Hook: canManageUsers()
     Hook->>Auth: hasPermission('users', 'create')
     Auth->>Auth: 检查employee.permissions
@@ -214,7 +214,7 @@ import { useAuth, usePermissions } from './hooks';
 const MyComponent = () => {
   const { employee, logout } = useAuth();
   const { canManageUsers, isAdmin } = usePermissions();
-  
+
   return (
     <div>
       <h1>欢迎, {employee?.displayName}</h1>
@@ -247,7 +247,7 @@ const checkAuth = async () => {
 
 ### 常见问题
 
-1. **登录失败**: 
+1. **登录失败**:
    - 检查Flow_Farm服务器是否运行
    - 确认服务器地址配置正确
    - 检查用户凭据是否有效

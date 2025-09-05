@@ -7,13 +7,15 @@ import {
   RefreshCw,
   Trash2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  BookOpen
 } from 'lucide-react';
 import { ContactDocument, Contact, ContactTask, DocumentStatus } from '../../types';
 import { ContactDocumentUploader } from '../../components/contact/ContactDocumentUploader';
 import { ContactList } from '../../components/contact/ContactList';
 import { ContactTaskForm } from '../../components/contact/ContactTaskForm';
 import { ContactStatistics } from '../../components/contact/ContactStatistics';
+import { PageWrapper } from '../../components/layout';
 
 /**
  * 通讯录管理页面
@@ -280,48 +282,52 @@ export const ContactManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">通讯录管理</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          上传通讯录文档，管理联系人信息，创建自动联系任务
-        </p>
-      </div>
+    <PageWrapper
+      title="通讯录管理"
+      subtitle="上传通讯录文档，管理联系人信息，创建自动联系任务"
+      icon={<BookOpen className="w-6 h-6 text-indigo-600" />}
+      onRefresh={() => window.location.reload()}
+    >
+      <div className="space-y-6">
+        {/* 选项卡导航 */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key as any)}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
+                      activeTab === tab.key
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                    {tab.count !== undefined && (
+                      <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                        activeTab === tab.key
+                          ? 'bg-indigo-100 text-indigo-600'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-      {/* 选项卡导航 */}
-      <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === tab.key
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
-                    activeTab === tab.key
-                      ? 'bg-indigo-100 text-indigo-600'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+          {/* 选项卡内容 */}
+          <div className="p-6">
+            {renderTabContent()}
+          </div>
+        </div>
       </div>
-
-      {/* 选项卡内容 */}
-      {renderTabContent()}
-    </div>
+    </PageWrapper>
   );
 };

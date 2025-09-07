@@ -5,6 +5,7 @@ mod services;
 
 use services::adb_service::AdbService;
 use services::auth_service::*;
+use services::contact_automation::*;
 use services::contact_service::*;
 use services::employee_service::{Employee, EmployeeService};
 use std::sync::Mutex;
@@ -166,7 +167,15 @@ fn main() {
             refresh_token,
             change_password,
             parse_contact_file,
-            get_contact_file_info
+            get_contact_file_info,
+            // 新增的VCF导入和小红书自动关注功能
+            generate_vcf_file,
+            import_vcf_contacts,
+            verify_vcf_import,
+            check_xiaohongshu_app_status,
+            navigate_to_xiaohongshu_contacts,
+            xiaohongshu_auto_follow,
+            import_and_follow_xiaohongshu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

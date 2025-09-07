@@ -1,11 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
-    AdbOperation,
-    AdbOperationType,
-    Contact,
-    ContactDocument,
-    ContactStatistics,
-    ContactTask
+  AdbOperation,
+  AdbOperationType,
+  Contact,
+  ContactDocument,
+  ContactStatistics,
+  ContactTask
 } from '../types';
 
 /**
@@ -266,5 +266,86 @@ export class AdbAPI {
    */
   static async getAdbOperations(deviceId?: string): Promise<AdbOperation[]> {
     return await invoke<AdbOperation[]>('get_adb_operations', { deviceId });
+  }
+
+  /**
+   * VCF通讯录导入到Android设备
+   */
+  static async importVcfContacts(
+    deviceId: string,
+    contactsFilePath: string
+  ): Promise<VcfImportResult> {
+    return await invoke<VcfImportResult>('import_vcf_contacts', {
+      deviceId,
+      contactsFilePath
+    });
+  }
+
+  /**
+   * 生成VCF文件从联系人列表
+   */
+  static async generateVcfFile(
+    contacts: Contact[],
+    outputPath: string
+  ): Promise<string> {
+    return await invoke<string>('generate_vcf_file', {
+      contacts,
+      outputPath
+    });
+  }
+
+  /**
+   * 验证VCF导入结果
+   */
+  static async verifyVcfImport(
+    deviceId: string,
+    expectedContacts: Contact[]
+  ): Promise<VcfVerifyResult> {
+    return await invoke<VcfVerifyResult>('verify_vcf_import', {
+      deviceId,
+      expectedContacts
+    });
+  }
+
+  /**
+   * 小红书自动关注通讯录好友
+   */
+  static async xiaohongshuAutoFollow(
+    deviceId: string,
+    options?: XiaohongshuFollowOptions
+  ): Promise<XiaohongshuFollowResult> {
+    return await invoke<XiaohongshuFollowResult>('xiaohongshu_auto_follow', {
+      deviceId,
+      options
+    });
+  }
+
+  /**
+   * 完整的VCF导入+小红书自动关注流程
+   */
+  static async importAndFollowXiaohongshu(
+    deviceId: string,
+    contactsFilePath: string,
+    options?: XiaohongshuFollowOptions
+  ): Promise<ImportAndFollowResult> {
+    return await invoke<ImportAndFollowResult>('import_and_follow_xiaohongshu', {
+      deviceId,
+      contactsFilePath,
+      options
+    });
+  }
+
+  /**
+   * 检查小红书应用状态
+   */
+  static async checkXiaohongshuAppStatus(deviceId: string): Promise<AppStatusResult> {
+    return await invoke<AppStatusResult>('check_xiaohongshu_app_status', { deviceId });
+  }
+
+  /**
+   * 导航到小红书通讯录页面
+   */
+  static async navigateToXiaohongshuContacts(deviceId: string): Promise<NavigationResult> {
+    return await invoke<NavigationResult>('navigate_to_xiaohongshu_contacts', { deviceId });
   }
 }

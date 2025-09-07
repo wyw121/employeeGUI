@@ -124,3 +124,80 @@ export interface ContactStatistics {
     };
   };
 }
+
+// VCF导入结果
+export interface VcfImportResult {
+  success: boolean;
+  totalContacts: number;
+  importedContacts: number;
+  failedContacts: number;
+  message: string;
+  details?: string;
+  duration?: number; // 执行时间（秒）
+}
+
+// VCF导入验证结果
+export interface VcfVerifyResult {
+  success: boolean;
+  verifiedContacts: number;
+  totalExpected: number;
+  verificationRate: number;
+  details: ContactVerification[];
+}
+
+export interface ContactVerification {
+  contactName: string;
+  found: boolean;
+  method: 'phone' | 'email' | 'ui_structure';
+}
+
+// 小红书自动关注选项
+export interface XiaohongshuFollowOptions {
+  maxPages?: number;        // 最大滚动页数
+  followInterval?: number;  // 关注间隔（毫秒）
+  skipExisting?: boolean;   // 跳过已关注用户
+  takeScreenshots?: boolean; // 是否截图
+  returnToHome?: boolean;   // 完成后是否返回主页
+}
+
+// 小红书自动关注结果
+export interface XiaohongshuFollowResult {
+  success: boolean;
+  totalFollowed: number;
+  pagesProcessed: number;
+  duration: number; // 执行时间（秒）
+  details: FollowDetail[];
+  message: string;
+}
+
+export interface FollowDetail {
+  userPosition: { x: number; y: number };
+  followSuccess: boolean;
+  buttonTextBefore?: string;
+  buttonTextAfter?: string;
+  error?: string;
+}
+
+// 完整导入+关注结果
+export interface ImportAndFollowResult {
+  importResult: VcfImportResult;
+  followResult: XiaohongshuFollowResult;
+  totalDuration: number;
+  success: boolean;
+}
+
+// 应用状态检查结果
+export interface AppStatusResult {
+  appInstalled: boolean;
+  appRunning: boolean;
+  appVersion?: string;
+  packageName?: string;
+}
+
+// 导航结果
+export interface NavigationResult {
+  success: boolean;
+  currentPage: string;
+  message: string;
+  attempts: number;
+}

@@ -739,6 +739,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 name = "employee-gui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "csv",
  "encoding_rs",
@@ -750,6 +751,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -4139,7 +4141,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]

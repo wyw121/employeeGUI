@@ -1,17 +1,13 @@
 import {
     AimOutlined,
     BarChartOutlined,
-    CheckCircleOutlined,
-    DisconnectOutlined,
     MobileOutlined,
-    PauseCircleOutlined,
-    PlayCircleOutlined,
     SyncOutlined,
     ThunderboltOutlined,
     UserOutlined
 } from '@ant-design/icons';
 import {
-    Alert,
+    App,
     Avatar,
     Badge,
     Button,
@@ -23,99 +19,22 @@ import {
     Progress,
     Space,
     Statistic,
-    Table,
-    Tag,
     theme,
     Typography
 } from 'antd';
 import React, { useState } from 'react';
+import RealDeviceManager from './device/RealDeviceManager';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-// 模拟设备数据
-const deviceData = [
-  {
-    key: '1',
-    name: '雷电模拟器 1',
-    id: '127.0.0.1:5555',
-    status: 'online',
-    platform: 'Android 7.1',
-    tasks: 15,
-    lastActive: '2分钟前'
-  },
-  {
-    key: '2',
-    name: '雷电模拟器 2',
-    id: '127.0.0.1:5556',
-    status: 'offline',
-    platform: 'Android 9.0',
-    tasks: 8,
-    lastActive: '1小时前'
-  }
-];
-
-const deviceColumns = [
-  {
-    title: '设备名称',
-    dataIndex: 'name',
-    key: 'name',
-    render: (text: string, record: any) => (
-      <Space>
-        <Avatar icon={<MobileOutlined />} style={{ backgroundColor: record.status === 'online' ? '#52c41a' : '#ff4d4f' }} />
-        <div>
-          <div style={{ color: 'var(--text-primary)' }}>{text}</div>
-          <Text type="secondary">{record.id}</Text>
-        </div>
-      </Space>
-    ),
-  },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-    render: (status: string) => (
-      <Tag color={status === 'online' ? 'success' : 'error'} icon={status === 'online' ? <CheckCircleOutlined /> : <DisconnectOutlined />}>
-        {status === 'online' ? '在线' : '离线'}
-      </Tag>
-    ),
-  },
-  {
-    title: '平台',
-    dataIndex: 'platform',
-    key: 'platform',
-  },
-  {
-    title: '任务数',
-    dataIndex: 'tasks',
-    key: 'tasks',
-    render: (tasks: number) => (
-      <Badge count={tasks} style={{ backgroundColor: '#722ed1' }} />
-    ),
-  },
-  {
-    title: '最后活跃',
-    dataIndex: 'lastActive',
-    key: 'lastActive',
-  },
-  {
-    title: '操作',
-    key: 'action',
-    render: (_: any, record: any) => (
-      <Space>
-        <Button size="small" icon={<PlayCircleOutlined />} type="primary">
-          启动
-        </Button>
-        <Button size="small" icon={<PauseCircleOutlined />}>
-          停止
-        </Button>
-      </Space>
-    ),
-  },
-];
-
 export const AntDesignIntegrationDemo: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState('dashboard');
+  const [selectedDevice, setSelectedDevice] = useState<string>('');
+
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDevice(deviceId);
+  };
 
   const menuItems = [
     {
@@ -177,16 +96,15 @@ export const AntDesignIntegrationDemo: React.FC = () => {
         },
         components: {
           Layout: {
-            colorBgHeader: '#161b22',
-            colorBgSider: '#161b22',
-            colorBgBody: '#0d1117',
+            headerBg: '#161b22',
+            bodyBg: '#0d1117',
           },
           Menu: {
             colorBgContainer: '#161b22',
-            colorItemBg: 'transparent',
-            colorItemBgSelected: 'rgba(255, 107, 138, 0.1)',
-            colorItemTextSelected: '#ff6b8a',
-            colorItemBgHover: 'rgba(255, 255, 255, 0.05)',
+            itemBg: 'transparent',
+            itemSelectedBg: 'rgba(255, 107, 138, 0.1)',
+            itemSelectedColor: '#ff6b8a',
+            itemHoverBg: 'rgba(255, 255, 255, 0.05)',
           },
           Card: {
             colorBgContainer: 'rgba(255, 255, 255, 0.05)',
@@ -204,7 +122,8 @@ export const AntDesignIntegrationDemo: React.FC = () => {
         }
       }}
     >
-      <Layout style={{ minHeight: '100vh' }}>
+      <App>
+        <Layout style={{ minHeight: '100vh' }}>
         {/* 侧边栏 */}
         <Sider width={240} style={{ background: '#161b22' }}>
           <div className="p-4">
@@ -323,31 +242,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             )}
 
             {selectedKey === 'devices' && (
-              <Card title="设备管理" extra={
-                <Space>
-                  <Button type="primary" icon={<SyncOutlined />}>
-                    刷新设备
-                  </Button>
-                  <Button icon={<PlayCircleOutlined />}>
-                    批量启动
-                  </Button>
-                </Space>
-              }>
-                <Alert
-                  message="设备连接状态"
-                  description="当前有 1 台设备在线，1 台设备离线。请检查ADB连接。"
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-
-                <Table
-                  dataSource={deviceData}
-                  columns={deviceColumns}
-                  pagination={false}
-                  size="middle"
-                />
-              </Card>
+              <RealDeviceManager 
+                selectedDevice={selectedDevice}
+                onDeviceSelect={handleDeviceSelect}
+              />
             )}
 
             {['adb-test', 'contacts', 'acquisition'].includes(selectedKey) && (
@@ -370,6 +268,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
           </Content>
         </Layout>
       </Layout>
+      </App>
     </ConfigProvider>
   );
 };

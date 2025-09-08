@@ -47,7 +47,30 @@ impl AdbService {
 
     /// 检测雷电模拟器ADB路径
     pub fn detect_ldplayer_adb(&self) -> Option<String> {
+        // 预先生成格式化路径以避免生命周期问题
+        let user_profile = std::env::var("USERPROFILE").unwrap_or_default();
+        let temp_dir = std::env::var("TEMP").unwrap_or_default();
+
+        let user_adb_path = format!("{}\\ADB\\adb.exe", user_profile);
+        let temp_platform_tools_path = format!("{}\\platform-tools\\adb.exe", temp_dir);
+        let android_sdk_path = format!("{}\\Android\\Sdk\\platform-tools\\adb.exe", user_profile);
+        let local_android_sdk_path = format!(
+            "{}\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+            user_profile
+        );
+
         let common_paths = vec![
+            // Android SDK Platform Tools (系统安装)
+            "adb.exe", // 系统PATH中的ADB
+            "adb",     // Unix系统中的ADB
+            // 用户ADB目录
+            user_adb_path.as_str(),
+            // 用户临时目录中的Platform Tools
+            temp_platform_tools_path.as_str(),
+            // Android SDK 标准路径
+            android_sdk_path.as_str(),
+            local_android_sdk_path.as_str(),
+            // 旧版雷电模拟器路径（仍保留以向后兼容）
             "C:\\LDPlayer\\LDPlayer9\\adb.exe",
             "C:\\LDPlayer\\LDPlayer4\\adb.exe",
             "D:\\LDPlayer\\LDPlayer9\\adb.exe",
@@ -57,8 +80,16 @@ impl AdbService {
         ];
 
         for path in common_paths {
-            if self.check_file_exists(path) {
-                println!("Found LDPlayer ADB at: {}", path);
+            if path == "adb.exe" || path == "adb" {
+                // 测试系统PATH中的ADB
+                if let Ok(output) = std::process::Command::new(path).arg("version").output() {
+                    if output.status.success() {
+                        println!("Found system ADB: {}", path);
+                        return Some(path.to_string());
+                    }
+                }
+            } else if self.check_file_exists(path) {
+                println!("Found ADB at: {}", path);
                 return Some(path.to_string());
             }
         }

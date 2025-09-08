@@ -13,12 +13,12 @@
   --bg-secondary: #161b22;
   --bg-tertiary: #21262d;
   --bg-hover: rgba(255, 255, 255, 0.05);
-
+  
   /* 文字色彩 */
   --text-primary: #f0f6fc;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
-
+  
   /* 渐变色系 - 参考Sindre网站 */
   --gradient-brand: linear-gradient(135deg, #ff6b8a 0%, #4ecdc4 50%, #a8e6cf 100%);
   --gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -26,15 +26,15 @@
   --gradient-cyan: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   --gradient-green: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
   --gradient-orange: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-
+  
   /* 专用渐变 - Sindre风格 */
   --gradient-hero: linear-gradient(135deg, #ff6b8a 0%, #4ecdc4 30%, #a8e6cf 60%, #ffd93d 100%);
   --gradient-text: linear-gradient(135deg, #ff6b8a 0%, #4ecdc4 50%, #a8e6cf 100%);
-
+  
   /* 边框和分割线 */
   --border-primary: #30363d;
   --border-secondary: rgba(255, 255, 255, 0.1);
-
+  
   /* 阴影系统 - 深色适配 */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.4);
@@ -43,7 +43,7 @@
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 20px rgba(255, 107, 138, 0.3);
   --shadow-glow-cyan: 0 0 20px rgba(78, 205, 196, 0.3);
-
+  
   /* 特殊效果 */
   --blur-bg: rgba(13, 17, 23, 0.8);
   --glass-bg: rgba(255, 255, 255, 0.05);
@@ -96,7 +96,6 @@ body {
   box-shadow: var(--shadow-lg);
   position: relative;
   overflow: hidden;
-  cursor: pointer;
 }
 
 .btn-primary:hover {
@@ -106,12 +105,6 @@ body {
 
 .btn-primary:active {
   transform: translateY(0);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 /* 玻璃拟态卡片 */
@@ -142,151 +135,177 @@ body {
   background: linear-gradient(45deg, #ff8fa3, #6dd5ce);
 }
 
-/* 代码字体 */
 code {
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
   font-feature-settings: 'liga' 1, 'calt' 1;
 }
 
+/* 现代化滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg,
+    hsl(var(--primary) / 0.6),
+    hsl(var(--primary) / 0.8)
+  );
+  border-radius: 3px;
+  border: 1px solid hsl(var(--border));
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg,
+    hsl(var(--primary) / 0.8),
+    hsl(var(--primary))
+  );
+}
+
 /* 表单输入框现代化样式 */
-input, select, textarea {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+input, select {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
   font-family: inherit;
-  color: var(--text-primary);
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus, select:focus {
   outline: none;
-  border-color: var(--border-secondary);
-  box-shadow: var(--shadow-md), 0 0 0 2px rgba(255, 107, 138, 0.1);
+  border-color: hsl(var(--ring));
+  box-shadow: var(--shadow-md), 0 0 0 2px hsl(var(--ring) / 0.1);
   transform: translateY(-1px);
 }
 
-input::placeholder, textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-/* 通用按钮样式增强 */
+/* 按钮增强动画 */
 button {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-weight: 500;
   font-family: inherit;
-  cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+button:hover {
   transform: translateY(-1px);
 }
 
-button:active:not(:disabled) {
-  transform: translateY(0);
+button:active {
+  transform: translateY(0px);
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 卡片样式 */
+/* 卡片组件基础样式 */
 .card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 12px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: hsl(var(--border) / 0.8);
+}
+
+/* 现代按钮样式 */
+.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.1));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-secondary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary:hover {
+  background: hsl(var(--secondary) / 0.8);
+  box-shadow: var(--shadow-md);
+}
+
+/* 玻璃态效果 */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: var(--shadow-lg);
 }
 
-/* 链接样式 */
-a {
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: color 0.2s ease;
+/* 渐变文本效果 */
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
 }
 
-a:hover {
-  color: #ff6b8a;
+/* 现代化加载动画 */
+@keyframes modernPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
 }
 
-/* 选择文本的颜色 */
-::selection {
-  background: rgba(255, 107, 138, 0.3);
-  color: var(--text-primary);
+.loading-modern {
+  animation: modernPulse 1.5s ease-in-out infinite;
 }
 
-/* 隐藏元素动画 */
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
+/* 现代化过渡效果 */
+.transition-modern {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+/* 暗色主题支持 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 加载动画 */
-.loading-spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: #ff6b8a;
-  animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 成功状态颜色 */
-.text-success {
-  color: #43e97b;
-}
-
-.bg-success {
-  background: var(--gradient-green);
-}
-
-/* 错误状态颜色 */
-.text-error {
-  color: #f5576c;
-}
-
-.bg-error {
-  background: var(--gradient-pink);
-}
-
-/* 警告状态颜色 */
-.text-warning {
-  color: #fee140;
-}
-
-.bg-warning {
-  background: var(--gradient-orange);
-}
-
-/* 信息状态颜色 */
-.text-info {
-  color: #4facfe;
-}
-
-.bg-info {
-  background: var(--gradient-cyan);
 }

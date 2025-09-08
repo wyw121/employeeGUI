@@ -7,5 +7,7 @@
 			"path": "../Flow_Farm"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"powershell.cwd": "employeeGUI"
+	}
 }

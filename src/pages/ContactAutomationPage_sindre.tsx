@@ -1,5 +1,5 @@
-import { AlertCircle, CheckCircle, FileDown, Heart, Smartphone, Users, Sparkles, Zap, Target, BarChart3 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { AlertCircle, FileDown, Heart, Smartphone, Zap } from 'lucide-react';
+import React, { useState } from 'react';
 import { ImportAndFollow, VcfImporter, XiaohongshuAutoFollow } from '../components/contact';
 import { useAdbDevices } from '../hooks/useAdbDevices';
 import { Contact, ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
@@ -104,9 +104,9 @@ export const ContactAutomationPage: React.FC = () => {
 
             {devicesError && (
               <div className="flex items-center space-x-3 p-4 rounded-xl mb-4"
-                   style={{ 
-                     background: 'rgba(239, 68, 68, 0.1)', 
-                     border: '1px solid rgba(239, 68, 68, 0.2)' 
+                   style={{
+                     background: 'rgba(239, 68, 68, 0.1)',
+                     border: '1px solid rgba(239, 68, 68, 0.2)'
                    }}>
                 <AlertCircle className="w-5 h-5 text-red-400" />
                 <span className="text-red-400 text-sm">{devicesError}</span>
@@ -140,10 +140,10 @@ export const ContactAutomationPage: React.FC = () => {
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
                           device.status === 'online' ? 'animate-pulse' : ''
                         }`}
-                             style={{ 
-                               background: device.status === 'online' 
-                                 ? 'var(--gradient-green)' 
-                                 : 'var(--bg-tertiary)' 
+                             style={{
+                               background: device.status === 'online'
+                                 ? 'var(--gradient-green)'
+                                 : 'var(--bg-tertiary)'
                              }}>
                           {device.status === 'online' ? '📱' : '📴'}
                         </div>
@@ -178,7 +178,7 @@ export const ContactAutomationPage: React.FC = () => {
             {tabOptions.map((tab) => {
               const IconComponent = tab.icon;
               const isActive = activeTab === tab.id;
-              
+
               return (
                 <button
                   key={tab.id}
@@ -278,10 +278,10 @@ export const ContactAutomationPage: React.FC = () => {
               </div>
               <h3 className="font-semibold gradient-text">Automation Results</h3>
             </div>
-            
+
             <div className="grid gap-4 md:grid-cols-3">
               {results.completeFlow && (
-                <div className="p-4 rounded-xl" 
+                <div className="p-4 rounded-xl"
                      style={{ background: 'var(--bg-secondary)' }}>
                   <div className="flex items-center space-x-2 mb-2">
                     <Zap className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
@@ -297,9 +297,9 @@ export const ContactAutomationPage: React.FC = () => {
                   </p>
                 </div>
               )}
-              
+
               {results.vcfImport && (
-                <div className="p-4 rounded-xl" 
+                <div className="p-4 rounded-xl"
                      style={{ background: 'var(--bg-secondary)' }}>
                   <div className="flex items-center space-x-2 mb-2">
                     <FileDown className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
@@ -312,9 +312,9 @@ export const ContactAutomationPage: React.FC = () => {
                   </p>
                 </div>
               )}
-              
+
               {results.autoFollow && (
-                <div className="p-4 rounded-xl" 
+                <div className="p-4 rounded-xl"
                      style={{ background: 'var(--bg-secondary)' }}>
                   <div className="flex items-center space-x-2 mb-2">
                     <Heart className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />

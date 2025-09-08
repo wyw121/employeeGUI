@@ -1,4 +1,5 @@
 import {
+    AimOutlined,
     BarChartOutlined,
     CheckCircleOutlined,
     DisconnectOutlined,
@@ -6,7 +7,6 @@ import {
     PauseCircleOutlined,
     PlayCircleOutlined,
     SyncOutlined,
-    TargetOutlined,
     ThunderboltOutlined,
     UserOutlined
 } from '@ant-design/icons';
@@ -140,7 +140,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
     },
     {
       key: 'acquisition',
-      icon: <TargetOutlined />,
+      icon: <AimOutlined />,
       label: '精准获客',
     }
   ];
@@ -279,7 +279,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
                       title="今日任务"
                       value={23}
                       valueStyle={{ color: '#ff6b8a', fontSize: '2rem' }}
-                      prefix={<TargetOutlined />}
+                      prefix={<AimOutlined />}
                     />
                   </Card>
                   <Card>

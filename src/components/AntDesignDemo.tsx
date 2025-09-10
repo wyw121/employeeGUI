@@ -23,6 +23,7 @@ import {
     Typography
 } from 'antd';
 import React, { useState } from 'react';
+import ContactManagementPage from '../pages/ContactManagementPage';
 import RealDeviceManager from './device/RealDeviceManager';
 
 const { Header, Sider, Content } = Layout;
@@ -179,7 +180,12 @@ export const AntDesignIntegrationDemo: React.FC = () => {
           </Header>
 
           {/* 主内容区域 */}
-          <Content style={{ margin: '24px', background: '#0d1117' }}>
+          <Content style={{ 
+            margin: '0', 
+            background: '#0d1117',
+            height: 'calc(100vh - 64px)',
+            overflow: 'auto'
+          }}>
             {selectedKey === 'dashboard' && (
               <div className="space-y-6">
                 {/* 统计卡片 */}
@@ -248,7 +254,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               />
             )}
 
-            {['adb-test', 'contacts', 'acquisition'].includes(selectedKey) && (
+            {selectedKey === 'contacts' && (
+              <ContactManagementPage />
+            )}
+
+            {['adb-test', 'acquisition'].includes(selectedKey) && (
               <Card title={`${menuItems.find(item => item.key === selectedKey)?.label} 功能`}>
                 <div className="text-center py-16">
                   <div className="text-6xl mb-4">🚧</div>

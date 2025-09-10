@@ -7,6 +7,7 @@ import {
     SettingOutlined,
     UserOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import {
     Alert,
     Button,
@@ -59,38 +60,134 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [adbPath, setAdbPath] = useState<string>('');
 
-  // 初始化时获取设备列表
-  useEffect(() => {
-    loadDevices();
+  // 初始化ADB路径
+  const initializeAdb = useCallback(async () => {
+    try {
+      // 检测雷电模拟器ADB路径
+      const detectedPath = await invoke<string | null>('detect_ldplayer_adb');
+      if (detectedPath) {
+        setAdbPath(detectedPath);
+        console.log('已检测到雷电模拟器ADB路径:', detectedPath);
+      } else {
+        setAdbPath('adb'); // 使用系统默认ADB
+        console.log('未检测到雷电模拟器，使用系统默认ADB');
+      }
+    } catch (error) {
+      console.error('初始化ADB失败:', error);
+      setAdbPath('adb');
+    }
   }, []);
 
-  // 获取可用设备
+  // 初始化时获取ADB路径和设备列表
+  useEffect(() => {
+    initializeAdb();
+  }, [initializeAdb]);
+
+  // 当ADB路径初始化完成后，自动获取设备列表
+  useEffect(() => {
+    if (adbPath) {
+      loadDevices();
+    }
+  }, [adbPath]); // 移除 loadDevices 依赖，避免循环引用
+
+  // 解析ADB设备输出 - 与RealDeviceManager保持一致
+  const parseDevicesOutput = useCallback((output: string): Device[] => {
+    const lines = output.split('\n').filter(line => 
+      line.trim() && !line.includes('List of devices')
+    );
+
+    const devices: Device[] = [];
+
+    lines.forEach((line, index) => {
+      const parts = line.trim().split(/\s+/);
+      const deviceId = parts[0];
+      const status = parts[1];
+
+      // 只处理已连接的设备
+      if (status !== 'device') {
+        return;
+      }
+
+      // 检测是否为雷电模拟器
+      const isEmulator = deviceId.includes('127.0.0.1') || deviceId.includes('emulator');
+
+      // 解析设备信息
+      let model = '';
+      let product = '';
+      
+      for (let i = 2; i < parts.length; i++) {
+        const part = parts[i];
+        if (part.startsWith('model:')) {
+          model = part.split(':')[1];
+        } else if (part.startsWith('product:')) {
+          product = part.split(':')[1];
+        }
+      }
+
+      // 生成友好的设备名称
+      let deviceName = '';
+      if (isEmulator) {
+        if (deviceId.includes('127.0.0.1')) {
+          deviceName = `雷电模拟器 (${deviceId})`;
+        } else {
+          deviceName = `模拟器 (${deviceId})`;
+        }
+      } else {
+        deviceName = model || product || `设备 ${index + 1}`;
+      }
+
+      devices.push({
+        id: devices.length + 1, // 使用当前设备数量+1作为ID
+        name: deviceName,
+        phone_name: deviceId,
+        status: 'connected'
+      });
+    });
+
+    return devices;
+  }, []);
+
+  // 获取可用设备 - 与RealDeviceManager保持一致
   const loadDevices = useCallback(async () => {
+    if (!adbPath) {
+      console.log('ADB路径未初始化，跳过设备检测');
+      return;
+    }
+
     setLoading(true);
     try {
-      // 模拟设备数据，实际使用时替换为真实API调用
-      const mockDevices: Device[] = [
-        { id: 1, name: '设备1', phone_name: 'Device1', status: 'connected' },
-        { id: 2, name: '设备2', phone_name: 'Device2', status: 'connected' },
-        { id: 3, name: '设备3', phone_name: 'Device3', status: 'connected' }
-      ];
+      // 使用与RealDeviceManager相同的方法获取设备
+      const output = await invoke<string>('get_adb_devices', { adbPath });
+      const devices = parseDevicesOutput(output);
       
-      setAvailableDevices(mockDevices);
+      setAvailableDevices(devices);
       
-      // 默认选中所有已连接的设备，使用设备ID
-      const connectedDeviceIds = mockDevices
-        .filter(device => device.status === 'connected')
-        .map(device => device.id.toString());
+      // 默认选中所有已连接的设备
+      const connectedDeviceIds = devices.map(device => device.id.toString());
       setSelectedDevices(connectedDeviceIds);
+      
+      if (devices.length === 0) {
+        message.info('未检测到连接的设备，请确保：\n1. 设备已通过USB连接\n2. 启用了USB调试\n3. ADB驱动已正确安装');
+      } else {
+        message.success(`检测到 ${devices.length} 台设备`);
+        console.log('检测到的设备:', devices);
+      }
       
     } catch (error) {
       console.error('获取设备列表失败:', error);
-      onError?.('获取设备列表失败');
+      const errorMsg = `获取设备列表失败: ${error instanceof Error ? error.message : String(error)}`;
+      onError?.(errorMsg);
+      message.error(errorMsg);
+      
+      // 设置空设备列表，但不阻塞用户操作
+      setAvailableDevices([]);
+      setSelectedDevices([]);
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, [adbPath, parseDevicesOutput, onError]);
 
   // 选择联系人
   const handleContactSelection = useCallback((selectedKeys: React.Key[]) => {
@@ -100,11 +197,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
 
   // 全选/取消全选联系人
   const handleSelectAllContacts = useCallback((checked: boolean) => {
-    if (checked) {
-      setSelectedContacts([...contacts]);
-    } else {
-      setSelectedContacts([]);
-    }
+    setSelectedContacts(checked ? [...contacts] : []);
   }, [contacts]);
 
   // 平均分配联系人到设备
@@ -315,22 +408,61 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
         />
 
         <div className="mt-4">
-          <Space>
-            <Text>设备选择:</Text>
-            <Select
-              mode="multiple"
-              style={{ width: 300 }}
-              placeholder="选择目标设备"
-              value={selectedDevices}
-              onChange={setSelectedDevices}
-              options={availableDevices
-                .filter(device => device.status === 'connected')
-                .map(device => ({
-                  label: `${device.name} (${device.phone_name})`,
-                  value: device.id.toString()
-                }))}
+          <Row justify="space-between" align="middle">
+            <Col>
+              <Space>
+                <Text>设备选择:</Text>
+                <Select
+                  mode="multiple"
+                  style={{ width: 300 }}
+                  placeholder={availableDevices.length === 0 ? "未检测到设备" : "选择目标设备"}
+                  value={selectedDevices}
+                  onChange={setSelectedDevices}
+                  disabled={availableDevices.length === 0}
+                  options={availableDevices
+                    .filter(device => device.status === 'connected')
+                    .map(device => ({
+                      label: `${device.name} (${device.phone_name})`,
+                      value: device.id.toString()
+                    }))}
+                />
+              </Space>
+            </Col>
+            <Col>
+              <Button 
+                type="default"
+                icon={<MobileOutlined />}
+                onClick={loadDevices}
+                loading={loading}
+                size="small"
+              >
+                刷新设备
+              </Button>
+            </Col>
+          </Row>
+          
+          {availableDevices.length === 0 && (
+            <Alert
+              type="warning"
+              message="未检测到设备"
+              description={
+                <div>
+                  <p>请确保：</p>
+                  <ul style={{ paddingLeft: '20px', margin: '8px 0' }}>
+                    <li>设备已通过USB连接到电脑</li>
+                    <li>设备已启用"USB调试"选项</li>
+                    <li>ADB驱动已正确安装</li>
+                    <li>设备已授权此电脑进行调试</li>
+                  </ul>
+                  <Button type="link" onClick={loadDevices} loading={loading}>
+                    重新检测设备
+                  </Button>
+                </div>
+              }
+              showIcon
+              style={{ marginTop: '8px' }}
             />
-          </Space>
+          )}
         </div>
 
         <div className="mt-6">

@@ -350,8 +350,8 @@ export class AdbAPI {
     contactsFilePath: string
   ): Promise<VcfImportResult> {
     return await invoke<VcfImportResult>("import_vcf_contacts", {
-      deviceId,
-      contactsFilePath,
+      deviceId: deviceId,
+      contactsFilePath: contactsFilePath,
     });
   }
 

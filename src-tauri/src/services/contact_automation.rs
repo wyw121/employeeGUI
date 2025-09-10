@@ -5,6 +5,7 @@ use crate::services::vcf_importer::{
     Contact, ImportAndFollowResult, VcfImportResult, VcfImporter, VcfVerifyResult,
 };
 use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
+use serde::Deserialize;
 use tauri::command;
 use tracing::{error, info};
 
@@ -34,18 +35,22 @@ pub async fn generate_vcf_file(
 
 /// VCF通讯录导入到Android设备
 #[command]
+#[allow(non_snake_case)]
 pub async fn import_vcf_contacts(
-    device_id: String,
-    contacts_file_path: String,
+    deviceId: String,
+    contactsFilePath: String,
 ) -> Result<VcfImportResult, String> {
+    info!("开始VCF导入: 设备 {} 文件 {}", deviceId, contactsFilePath);
+
+    // 添加详细的参数日志
     info!(
-        "开始VCF导入: 设备 {} 文件 {}",
-        device_id, contacts_file_path
+        "接收到的参数 - deviceId: '{}', contactsFilePath: '{}'",
+        deviceId, contactsFilePath
     );
 
-    let importer = VcfImporter::new(device_id);
+    let importer = VcfImporter::new(deviceId);
 
-    match importer.import_vcf_contacts(&contacts_file_path).await {
+    match importer.import_vcf_contacts(&contactsFilePath).await {
         Ok(result) => {
             info!(
                 "VCF导入完成: 成功={} 总数={} 导入={}",

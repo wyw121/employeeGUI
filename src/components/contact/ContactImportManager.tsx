@@ -217,9 +217,9 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
       
       const device = availableDevices.find(d => d.id.toString() === deviceId);
       
-      if (deviceContacts.length > 0) {
+      if (deviceContacts.length > 0 && device) {
         groups.push({
-          deviceId: deviceId,
+          deviceId: device.phone_name, // 使用真实的ADB设备ID而不是数字ID
           deviceName: device?.name || `设备 ${deviceId}`,
           contacts: deviceContacts,
           status: 'pending'
@@ -268,15 +268,21 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
         ));
 
         try {
+          console.log(`开始处理设备: ${group.deviceName} (${group.deviceId})`);
+          
           // 生成临时VCF文件
           const vcfContent = VcfImportService.convertContactsToVcfContent(group.contacts);
           const tempPath = VcfImportService.generateTempVcfPath();
           
+          console.log(`生成VCF文件: ${tempPath}, 内容:`, vcfContent);
+          
           await VcfImportService.writeVcfFile(tempPath, vcfContent);
           
-          // 执行导入
+          // 执行导入 - 现在传递的是真实的ADB设备ID
           const result = await VcfImportService.importVcfFile(tempPath, group.deviceId);
           results.push(result);
+
+          console.log(`设备 ${group.deviceName} (${group.deviceId}) 导入结果:`, result);
 
           // 更新设备导入结果
           setDeviceGroups(prev => prev.map(g => 

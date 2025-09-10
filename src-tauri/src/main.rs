@@ -140,6 +140,28 @@ async fn kill_adb_server(
     service.kill_server(&adb_path).map_err(|e| e.to_string())
 }
 
+// 写入文件
+#[tauri::command]
+async fn write_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {}", e))
+}
+
+// 删除文件
+#[tauri::command]
+async fn delete_file(path: String) -> Result<(), String> {
+    match std::fs::remove_file(&path) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // 如果文件不存在，不算错误
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(())
+            } else {
+                Err(format!("删除文件失败: {}", e))
+            }
+        }
+    }
+}
+
 fn main() {
     let employee_service = EmployeeService::new().expect("Failed to initialize employee service");
     let adb_service = AdbService::new();
@@ -160,6 +182,8 @@ fn main() {
             disconnect_adb_device,
             start_adb_server,
             kill_adb_server,
+            write_file,
+            delete_file,
             employee_login,
             verify_token,
             get_current_user,

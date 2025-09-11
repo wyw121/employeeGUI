@@ -7,6 +7,43 @@ import { VcfImportResult } from "../types";
  */
 export class VcfImportService {
   /**
+   * 执行VCF文件导入到指定设备（异步安全版本）
+   * @param vcfFilePath VCF文件路径
+   * @param deviceId 目标设备ID
+   * @returns 导入结果
+   */
+  static async importVcfFileAsync(
+    vcfFilePath: string,
+    deviceId: string
+  ): Promise<VcfImportResult> {
+    try {
+      console.log("开始VCF导入（异步安全版）:", { vcfFilePath, deviceId });
+
+      // 调用新的异步安全命令
+      const result = await invoke<VcfImportResult>("import_vcf_contacts_async_safe", {
+        deviceId: deviceId,
+        contactsFilePath: vcfFilePath,
+      });
+
+      console.log("VCF导入完成（异步安全版）:", result);
+      return result;
+    } catch (error) {
+      console.error("VCF导入执行失败（异步安全版）:", error);
+
+      return {
+        success: false,
+        totalContacts: 0,
+        importedContacts: 0,
+        failedContacts: 0,
+        message: `导入失败: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        details: error instanceof Error ? error.stack : undefined,
+      };
+    }
+  }
+
+  /**
    * 执行VCF文件导入到指定设备
    * @param vcfFilePath VCF文件路径
    * @param deviceId 目标设备ID

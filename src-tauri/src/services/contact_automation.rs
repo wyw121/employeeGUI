@@ -2,9 +2,12 @@ use crate::services::vcf_importer::{
     AppStatusResult, NavigationResult, XiaohongshuFollowOptions, XiaohongshuFollowResult,
 };
 use crate::services::vcf_importer::{
-    Contact, ImportAndFollowResult, VcfImportResult, VcfImporter, VcfVerifyResult,
+    Contact, ImportAndFollowResult, VcfVerifyResult,
 };
+use crate::services::vcf_importer::VcfImportResult as OriginalVcfImportResult;
+use crate::services::vcf_importer::VcfImporter;
 use crate::services::vcf_importer_optimized::VcfImporterOptimized;
+use crate::services::vcf_importer_async::{VcfImporterAsync, VcfImportResult};
 use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
 use tauri::command;
 use tracing::{error, info, warn};
@@ -33,13 +36,42 @@ pub async fn generate_vcf_file(
     }
 }
 
+/// VCF通讯录导入到Android设备 (异步安全版本 - 修复闪退问题)
+#[command]
+#[allow(non_snake_case)]
+pub async fn import_vcf_contacts_async_safe(
+    deviceId: String,
+    contactsFilePath: String,
+) -> Result<VcfImportResult, String> {
+    info!(
+        "开始VCF导入（异步安全版）: 设备 {} 文件 {}",
+        deviceId, contactsFilePath
+    );
+
+    let importer = VcfImporterAsync::new(deviceId);
+
+    match importer.import_vcf_contacts_simple(&contactsFilePath).await {
+        Ok(result) => {
+            info!(
+                "VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
+                result.success, result.total_contacts, result.imported_contacts
+            );
+            Ok(result)
+        }
+        Err(e) => {
+            error!("VCF导入失败（异步安全版）: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
 /// VCF通讯录导入到Android设备 (Python移植版本 - 完全重新实现)
 #[command]
 #[allow(non_snake_case)]
 pub async fn import_vcf_contacts_python_version(
     deviceId: String,
     contactsFilePath: String,
-) -> Result<VcfImportResult, String> {
+) -> Result<OriginalVcfImportResult, String> {
     info!(
         "开始VCF导入（Python移植版）: 设备 {} 文件 {}",
         deviceId, contactsFilePath
@@ -68,7 +100,7 @@ pub async fn import_vcf_contacts_python_version(
 pub async fn import_vcf_contacts_optimized(
     deviceId: String,
     contactsFilePath: String,
-) -> Result<VcfImportResult, String> {
+) -> Result<OriginalVcfImportResult, String> {
     info!(
         "开始VCF导入（优化版本）: 设备 {} 文件 {}",
         deviceId, contactsFilePath
@@ -108,7 +140,7 @@ pub async fn import_vcf_contacts_optimized(
 pub async fn import_vcf_contacts(
     deviceId: String,
     contactsFilePath: String,
-) -> Result<VcfImportResult, String> {
+) -> Result<OriginalVcfImportResult, String> {
     info!("开始VCF导入: 设备 {} 文件 {}", deviceId, contactsFilePath);
 
     // 添加详细的参数日志

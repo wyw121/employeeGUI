@@ -196,6 +196,7 @@ fn main() {
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts,
+            import_vcf_contacts_async_safe,      // 新增异步安全版本
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             verify_vcf_import,

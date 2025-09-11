@@ -278,8 +278,8 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
           
           await VcfImportService.writeVcfFile(tempPath, vcfContent);
           
-          // 执行导入 - 现在传递的是真实的ADB设备ID
-          const result = await VcfImportService.importVcfFile(tempPath, group.deviceId);
+          // 执行导入 - 使用异步安全版本
+          const result = await VcfImportService.importVcfFileAsync(tempPath, group.deviceId);
           results.push(result);
 
           console.log(`设备 ${group.deviceName} (${group.deviceId}) 导入结果:`, result);

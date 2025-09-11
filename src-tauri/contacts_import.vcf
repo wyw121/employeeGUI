@@ -1,16 +1,24 @@
 BEGIN:VCARD
 VERSION:2.1
-FN:陈美食
-N:陈美食;;
-TEL;CELL:+86 135 5566 6777
-TEL;TYPE=CELL:+86 135 5566 6777
-ADR:;;meishi@example.com;;;;
+FN:张小美
+N:张小美;;
+TEL;CELL:+86 138 1234 5678
+TEL;TYPE=CELL:+86 138 1234 5678
+ADR:;;xiaomei@example.com;;;;
 END:VCARD
 BEGIN:VCARD
 VERSION:2.1
-FN:刘旅行
-N:刘旅行;;
-TEL;CELL:+86 152 9988 7766
-TEL;TYPE=CELL:+86 152 9988 7766
-ADR:;;lvxing@example.com;;;;
+FN:李时尚
+N:李时尚;;
+TEL;CELL:+86 159 8765 4321
+TEL;TYPE=CELL:+86 159 8765 4321
+ADR:;;shishang@example.com;;;;
+END:VCARD
+BEGIN:VCARD
+VERSION:2.1
+FN:王健身
+N:王健身;;
+TEL;CELL:+86 186 6688 8999
+TEL;TYPE=CELL:+86 186 6688 8999
+ADR:;;jianshen@example.com;;;;
 END:VCARD

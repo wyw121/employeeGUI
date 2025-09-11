@@ -407,8 +407,8 @@ export class ContactImporter {
     });
 
     try {
-      // 调用后端导入
-      const result = await invoke<ImportResult>("import_vcf_contacts", {
+      // 调用后端导入 - 使用 Python 移植版本（优化版）
+      const result = await invoke<ImportResult>("import_vcf_contacts_python_version", {
         deviceId: group.deviceId,
         contactsFilePath: tempFilePath,
       });

@@ -20,6 +20,21 @@ impl VcfImporterOptimized {
         }
     }
 
+    /// 检查设备连接状态
+    async fn check_device_connection(&self) -> Result<bool> {
+        let output = Command::new(&self.adb_path)
+            .args(&["devices"])
+            .output()
+            .context("检查设备连接失败")?;
+
+        if !output.status.success() {
+            return Ok(false);
+        }
+
+        let device_list = String::from_utf8_lossy(&output.stdout);
+        Ok(device_list.contains(&self.device_id))
+    }
+
     /// 执行ADB点击操作
     async fn adb_tap(&self, x: i32, y: i32, description: &str) -> Result<()> {
         info!("🖱️ 点击坐标 ({}, {}) - {}", x, y, description);
@@ -83,9 +98,22 @@ impl VcfImporterOptimized {
         info!("📁 传输VCF文件到设备...");
 
         // 检查本地VCF文件是否存在
-        if !std::path::Path::new(local_path).exists() {
-            return Err(anyhow::anyhow!("本地VCF文件不存在: {}", local_path));
+        let full_path = if std::path::Path::new(local_path).is_absolute() {
+            local_path.to_string()
+        } else {
+            // 如果是相对路径，转换为绝对路径
+            std::env::current_dir()
+                .context("获取当前目录失败")?
+                .join(local_path)
+                .to_string_lossy()
+                .to_string()
+        };
+
+        if !std::path::Path::new(&full_path).exists() {
+            return Err(anyhow::anyhow!("本地VCF文件不存在: {}", full_path));
         }
+
+        info!("使用VCF文件路径: {}", full_path);
 
         // 传输到多个位置
         let locations = vec![
@@ -97,7 +125,7 @@ impl VcfImporterOptimized {
         let mut success_count = 0;
         for location in &locations {
             let output = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "push", local_path, location])
+                .args(&["-s", &self.device_id, "push", &full_path, location])
                 .output()
                 .context("文件传输失败")?;
 
@@ -235,17 +263,71 @@ impl VcfImporterOptimized {
             self.device_id
         );
 
-        // 步骤1: 传输VCF文件
-        if !self.transfer_vcf_file(contacts_file_path).await? {
+        // 检查ADB路径
+        if !std::path::Path::new(&self.adb_path).exists() {
             return Ok(VcfImportResult {
                 success: false,
                 total_contacts: 0,
                 imported_contacts: 0,
                 failed_contacts: 0,
-                message: "VCF文件传输失败".to_string(),
+                message: format!("ADB路径不存在: {}", self.adb_path),
                 details: None,
                 duration: None,
             });
+        }
+
+        // 检查设备连接
+        match self.check_device_connection().await {
+            Ok(false) => {
+                return Ok(VcfImportResult {
+                    success: false,
+                    total_contacts: 0,
+                    imported_contacts: 0,
+                    failed_contacts: 0,
+                    message: format!("设备 {} 未连接", self.device_id),
+                    details: None,
+                    duration: None,
+                });
+            }
+            Err(e) => {
+                return Ok(VcfImportResult {
+                    success: false,
+                    total_contacts: 0,
+                    imported_contacts: 0,
+                    failed_contacts: 0,
+                    message: format!("检查设备连接失败: {}", e),
+                    details: None,
+                    duration: None,
+                });
+            }
+            Ok(true) => {} // 继续
+        }
+
+        // 步骤1: 传输VCF文件
+        match self.transfer_vcf_file(contacts_file_path).await {
+            Ok(success) if !success => {
+                return Ok(VcfImportResult {
+                    success: false,
+                    total_contacts: 0,
+                    imported_contacts: 0,
+                    failed_contacts: 0,
+                    message: "VCF文件传输失败".to_string(),
+                    details: None,
+                    duration: None,
+                });
+            }
+            Err(e) => {
+                return Ok(VcfImportResult {
+                    success: false,
+                    total_contacts: 0,
+                    imported_contacts: 0,
+                    failed_contacts: 0,
+                    message: format!("VCF文件传输错误: {}", e),
+                    details: None,
+                    duration: None,
+                });
+            }
+            Ok(_) => {} // 继续
         }
 
         // 步骤2: 导航到联系人应用的导入界面

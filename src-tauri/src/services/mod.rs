@@ -3,5 +3,6 @@ pub mod auth_service;
 pub mod contact_automation;
 pub mod contact_service;
 pub mod employee_service;
+pub mod permission_test;
 pub mod vcf_importer;
 pub mod xiaohongshu_automator;

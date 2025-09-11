@@ -8,6 +8,7 @@ use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::employee_service::{Employee, EmployeeService};
+use services::permission_test::*;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -199,7 +200,10 @@ fn main() {
             check_xiaohongshu_app_status,
             navigate_to_xiaohongshu_contacts,
             xiaohongshu_auto_follow,
-            import_and_follow_xiaohongshu
+            import_and_follow_xiaohongshu,
+            // 权限处理测试功能
+            test_permission_handling,
+            test_vcf_import_with_permission
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

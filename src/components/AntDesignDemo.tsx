@@ -2,6 +2,7 @@ import {
     AimOutlined,
     BarChartOutlined,
     MobileOutlined,
+    SecurityScanOutlined,
     SyncOutlined,
     ThunderboltOutlined,
     UserOutlined
@@ -24,6 +25,7 @@ import {
 } from 'antd';
 import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
+import PermissionTestPage from '../pages/PermissionTestPage';
 import RealDeviceManager from './device/RealDeviceManager';
 
 const { Header, Sider, Content } = Layout;
@@ -57,6 +59,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'contacts',
       icon: <UserOutlined />,
       label: '通讯录管理',
+    },
+    {
+      key: 'permission-test',
+      icon: <SecurityScanOutlined />,
+      label: '权限测试',
     },
     {
       key: 'acquisition',
@@ -256,6 +263,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'contacts' && (
               <ContactManagementPage />
+            )}
+
+            {selectedKey === 'permission-test' && (
+              <PermissionTestPage />
             )}
 
             {['adb-test', 'acquisition'].includes(selectedKey) && (

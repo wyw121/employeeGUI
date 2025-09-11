@@ -297,6 +297,9 @@ impl VcfImporter {
         self.open_contacts_app().await?;
         sleep(Duration::from_secs(3)).await;
 
+        // 检查权限对话框
+        self.handle_permission_dialog().await?;
+
         // 2. 点击抽屉菜单按钮
         self.adb_tap(49, 98).await?;
         sleep(Duration::from_secs(2)).await;
@@ -308,6 +311,9 @@ impl VcfImporter {
         // 4. 点击导入选项
         self.adb_tap(960, 817).await?;
         sleep(Duration::from_secs(3)).await;
+
+        // 再次检查权限对话框
+        self.handle_permission_dialog().await?;
 
         // 5. 点击VCF文件选项
         self.adb_tap(959, 509).await?;
@@ -385,6 +391,9 @@ impl VcfImporter {
             self.adb_tap(208, 613).await?;
         }
 
+        // 检查并处理权限对话框
+        self.handle_permission_dialog().await?;
+
         Ok(())
     }
 
@@ -429,6 +438,130 @@ impl VcfImporter {
             Some((208, 613))
         } else {
             None
+        }
+    }
+
+    /// 处理权限对话框
+    async fn handle_permission_dialog(&self) -> Result<()> {
+        info!("检查是否出现权限对话框");
+
+        // 等待可能的权限对话框出现
+        sleep(Duration::from_secs(2)).await;
+
+        // 获取当前UI状态
+        let ui_content = self.get_current_ui_dump().await?;
+
+        // 检查是否有权限对话框
+        if self.has_permission_dialog(&ui_content) {
+            info!("检测到权限对话框，正在处理");
+
+            // 点击"允许"按钮
+            // 根据XML分析，"允许"按钮位于 bounds="[1299,584][1411,668]"
+            // 中心点坐标: (1355, 626)
+            self.adb_tap(1355, 626).await?;
+
+            info!("已点击允许按钮");
+            sleep(Duration::from_secs(2)).await;
+
+            // 再次检查是否权限对话框已消失
+            let new_ui_content = self.get_current_ui_dump().await?;
+            if !self.has_permission_dialog(&new_ui_content) {
+                info!("权限对话框已处理完成");
+            } else {
+                warn!("权限对话框可能仍然存在");
+            }
+        } else {
+            info!("未检测到权限对话框");
+        }
+
+        Ok(())
+    }
+
+    /// 获取当前UI dump
+    async fn get_current_ui_dump(&self) -> Result<String> {
+        let output = Command::new(&self.adb_path)
+            .args(&[
+                "-s",
+                &self.device_id,
+                "shell",
+                "uiautomator",
+                "dump",
+                "/sdcard/current_ui.xml",
+            ])
+            .output()
+            .context("获取当前UI失败")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("UI dump失败"));
+        }
+
+        // 读取UI文件内容
+        let output = Command::new(&self.adb_path)
+            .args(&[
+                "-s",
+                &self.device_id,
+                "shell",
+                "cat",
+                "/sdcard/current_ui.xml",
+            ])
+            .output()
+            .context("读取UI文件失败")?;
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    /// 检查UI中是否存在权限对话框
+    fn has_permission_dialog(&self, ui_content: &str) -> bool {
+        // 根据分析的XML结构，权限对话框的特征:
+        // 1. 包含 com.android.packageinstaller 包名
+        // 2. 包含权限相关的文本
+        // 3. 包含 "允许" 和 "拒绝" 按钮
+
+        let permission_indicators = vec![
+            "com.android.packageinstaller",
+            "permission_allow_button",
+            "permission_deny_button",
+            "允许\"通讯录\"访问您设备上的照片、媒体内容和文件吗？",
+            "允许",
+            "拒绝",
+        ];
+
+        let found_indicators: Vec<bool> = permission_indicators
+            .iter()
+            .map(|indicator| ui_content.contains(indicator))
+            .collect();
+
+        // 如果找到多个指标，认为是权限对话框
+        let found_count = found_indicators.iter().filter(|&&x| x).count();
+        let is_permission_dialog = found_count >= 3; // 至少匹配3个指标
+
+        if is_permission_dialog {
+            info!("权限对话框检测结果: 找到 {} 个匹配指标", found_count);
+        }
+
+        is_permission_dialog
+    }
+
+    /// 测试权限对话框检测和处理（用于调试）
+    pub async fn test_permission_dialog_detection(&self) -> Result<String> {
+        info!("开始权限对话框检测测试");
+
+        // 获取当前UI状态
+        let ui_content = self.get_current_ui_dump().await?;
+
+        // 检查是否存在权限对话框
+        let has_permission = self.has_permission_dialog(&ui_content);
+
+        if has_permission {
+            info!("✅ 检测到权限对话框，正在处理");
+
+            // 处理权限对话框
+            self.handle_permission_dialog().await?;
+
+            Ok("权限对话框已检测并处理".to_string())
+        } else {
+            info!("ℹ️ 当前未检测到权限对话框");
+            Ok("当前没有权限对话框".to_string())
         }
     }
 

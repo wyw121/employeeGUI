@@ -27,3 +27,103 @@ dist-ssr
 src-tauri/target
 *.db
 data/
+
+# 项目特定文件
+# ===============
+
+# Android UI调试文件
+*.xml
+debug_*.xml
+debug_*.py
+ui_current*.xml
+current_ui*.xml
+current_state.xml
+after_permission.xml
+contacts_*.xml
+file_picker_*.xml
+
+# 临时和测试文件
+temp_*.txt
+temp_contacts_*.txt
+test_contacts_emulator_*.vcf
+*.tmp
+*.cache
+*.bak
+*.orig
+
+# Python调试脚本
+debug_*.py
+*_debug.py
+file_picker_navigation_test.py
+fix_file_picker_navigation.py
+vcf_import_diagnosis.py
+
+# ADB和设备相关临时文件
+screenshot.png
+ui_hierarchy.json
+
+# 构建和编译产物
+target/
+.cargo/
+Cargo.lock
+
+# 开发环境配置
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE 特定文件
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 测试输出
+coverage/
+.nyc_output
+junit.xml
+
+# 依赖目录
+node_modules/
+jspm_packages/
+
+# 缓存目录
+.npm
+.eslintcache
+.cache/
+
+# 运行时数据
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity

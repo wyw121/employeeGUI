@@ -5,4 +5,5 @@ pub mod contact_service;
 pub mod employee_service;
 pub mod permission_test;
 pub mod vcf_importer;
+pub mod vcf_importer_optimized;
 pub mod xiaohongshu_automator;

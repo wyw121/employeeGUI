@@ -4,10 +4,10 @@ use crate::services::vcf_importer::{
 use crate::services::vcf_importer::{
     Contact, ImportAndFollowResult, VcfImportResult, VcfImporter, VcfVerifyResult,
 };
+use crate::services::vcf_importer_optimized::VcfImporterOptimized;
 use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
-use serde::Deserialize;
 use tauri::command;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// 生成VCF文件从联系人列表
 #[command]
@@ -28,6 +28,75 @@ pub async fn generate_vcf_file(
         }
         Err(e) => {
             error!("生成VCF文件失败: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+/// VCF通讯录导入到Android设备 (Python移植版本 - 完全重新实现)
+#[command]
+#[allow(non_snake_case)]
+pub async fn import_vcf_contacts_python_version(
+    deviceId: String,
+    contactsFilePath: String,
+) -> Result<VcfImportResult, String> {
+    info!(
+        "开始VCF导入（Python移植版）: 设备 {} 文件 {}",
+        deviceId, contactsFilePath
+    );
+
+    let importer = VcfImporterOptimized::new(deviceId);
+
+    match importer.run_complete_vcf_import(&contactsFilePath).await {
+        Ok(result) => {
+            info!(
+                "VCF导入完成（Python移植版）: 成功={} 总数={} 导入={}",
+                result.success, result.total_contacts, result.imported_contacts
+            );
+            Ok(result)
+        }
+        Err(e) => {
+            error!("VCF导入失败（Python移植版）: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+/// VCF通讯录导入到Android设备 (优化版本 - 从Python脚本移植)
+#[command]
+#[allow(non_snake_case)]
+pub async fn import_vcf_contacts_optimized(
+    deviceId: String,
+    contactsFilePath: String,
+) -> Result<VcfImportResult, String> {
+    info!(
+        "开始VCF导入（优化版本）: 设备 {} 文件 {}",
+        deviceId, contactsFilePath
+    );
+
+    let importer = VcfImporter::new(deviceId);
+
+    // 使用优化的导入流程
+    match importer.import_vcf_contacts(&contactsFilePath).await {
+        Ok(mut result) => {
+            // 使用Python移植的验证方法
+            match importer.verify_import_success_optimized().await {
+                Ok(success) => {
+                    result.success = success;
+                    info!(
+                        "VCF导入完成（优化验证）: 成功={} 总数={} 导入={}",
+                        result.success, result.total_contacts, result.imported_contacts
+                    );
+                    Ok(result)
+                }
+                Err(e) => {
+                    warn!("验证过程出错，但导入可能成功: {}", e);
+                    Ok(result) // 返回原始结果
+                }
+            }
+        }
+        Err(e) => {
+            error!("VCF导入失败: {}", e);
             Err(e.to_string())
         }
     }

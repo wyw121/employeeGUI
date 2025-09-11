@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
@@ -250,7 +249,7 @@ impl XiaohongshuAutomator {
             info!("找到 {} 个关注按钮", follow_buttons.len());
 
             // 逐个点击关注按钮
-            for (i, (x, y)) in follow_buttons.iter().enumerate() {
+            for (_i, (x, y)) in follow_buttons.iter().enumerate() {
                 let button_text_before = self
                     .get_button_text_at(*x, *y)
                     .await

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python移植版VCF导入测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        .test-button:hover {
+            background: #40a9ff;
+        }
+        .test-button:disabled {
+            background: #d9d9d9;
+            cursor: not-allowed;
+        }
+        .result-area {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        .warning { color: #ffc107; }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Python移植版VCF导入测试工具</h1>
+        
+        <div class="input-group">
+            <label for="deviceId">设备ID:</label>
+            <select id="deviceId">
+                <option value="emulator-5554">emulator-5554</option>
+                <option value="emulator-5556">emulator-5556</option>
+                <option value="127.0.0.1:5555">127.0.0.1:5555</option>
+            </select>
+        </div>
+        
+        <div class="input-group">
+            <label for="filePath">VCF文件路径:</label>
+            <input type="text" id="filePath" value="src-tauri/contacts_import.vcf" />
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <button class="test-button" onclick="testPythonVersion()">
+                🚀 测试Python移植版
+            </button>
+            <button class="test-button" onclick="testOriginalVersion()">
+                📱 测试原始版本
+            </button>
+            <button class="test-button" onclick="compareAllVersions()">
+                ⚖️ 对比所有版本
+            </button>
+            <button class="test-button" onclick="clearResults()">
+                🗑️ 清空结果
+            </button>
+        </div>
+        
+        <div class="result-area" id="results">
+等待测试结果...
+
+📋 使用说明:
+1. 确保Android模拟器正在运行
+2. 确认VCF文件路径正确
+3. 点击相应按钮开始测试
+4. 查看下方的详细日志
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            results.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            results.scrollTop = results.scrollTop + 1000;
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '准备开始新的测试...\n';
+        }
+        
+        function setRunning(running) {
+            isRunning = running;
+            const buttons = document.querySelectorAll('.test-button');
+            buttons.forEach(btn => {
+                if (btn.textContent.includes('清空')) return;
+                btn.disabled = running;
+            });
+        }
+        
+        async function testPythonVersion() {
+            if (isRunning) return;
+            
+            setRunning(true);
+            log('🧪 开始测试Python移植版VCF导入...', 'info');
+            
+            try {
+                const deviceId = document.getElementById('deviceId').value;
+                const filePath = document.getElementById('filePath').value;
+                
+                log(`📱 设备: ${deviceId}`, 'info');
+                log(`📄 文件: ${filePath}`, 'info');
+                
+                const startTime = Date.now();
+                
+                // 检查Tauri API是否可用
+                if (!window.__TAURI__) {
+                    throw new Error('Tauri API 不可用，请在Tauri应用中运行此测试');
+                }
+                
+                const { invoke } = window.__TAURI__.core;
+                
+                log('📡 调用 import_vcf_contacts_python_version...', 'info');
+                
+                const result = await invoke('import_vcf_contacts_python_version', {
+                    deviceId: deviceId,
+                    contactsFilePath: filePath
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                log(`✅ Python移植版测试完成 (耗时: ${duration}ms)`, 'success');
+                log(`📊 结果: ${JSON.stringify(result, null, 2)}`, 'info');
+                
+                if (result.success) {
+                    log(`🎉 导入成功! 总数: ${result.totalContacts}, 成功: ${result.importedContacts}, 失败: ${result.failedContacts}`, 'success');
+                } else {
+                    log(`❌ 导入失败: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`🚨 测试过程出错: ${error.message}`, 'error');
+                console.error('详细错误:', error);
+            } finally {
+                setRunning(false);
+            }
+        }
+        
+        async function testOriginalVersion() {
+            if (isRunning) return;
+            
+            setRunning(true);
+            log('📱 开始测试原始版本VCF导入...', 'info');
+            
+            try {
+                const deviceId = document.getElementById('deviceId').value;
+                const filePath = document.getElementById('filePath').value;
+                
+                const startTime = Date.now();
+                const { invoke } = window.__TAURI__.core;
+                
+                log('📡 调用 import_vcf_contacts...', 'info');
+                
+                const result = await invoke('import_vcf_contacts', {
+                    deviceId: deviceId,
+                    contactsFilePath: filePath
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                log(`✅ 原始版本测试完成 (耗时: ${duration}ms)`, 'success');
+                log(`📊 结果: ${JSON.stringify(result, null, 2)}`, 'info');
+                
+                if (result.success) {
+                    log(`🎉 导入成功! 总数: ${result.totalContacts}, 成功: ${result.importedContacts}`, 'success');
+                } else {
+                    log(`❌ 导入失败: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`🚨 测试过程出错: ${error.message}`, 'error');
+            } finally {
+                setRunning(false);
+            }
+        }
+        
+        async function compareAllVersions() {
+            if (isRunning) return;
+            
+            setRunning(true);
+            log('⚖️ 开始对比所有版本...', 'info');
+            
+            const versions = [
+                { name: 'Python移植版', command: 'import_vcf_contacts_python_version' },
+                { name: '原始版本', command: 'import_vcf_contacts' },
+                { name: '优化版本', command: 'import_vcf_contacts_optimized' }
+            ];
+            
+            const results = [];
+            
+            for (const version of versions) {
+                try {
+                    log(`\n🔄 测试 ${version.name}...`, 'info');
+                    
+                    const deviceId = document.getElementById('deviceId').value;
+                    const filePath = document.getElementById('filePath').value;
+                    
+                    const startTime = Date.now();
+                    const { invoke } = window.__TAURI__.core;
+                    
+                    const result = await invoke(version.command, {
+                        deviceId: deviceId,
+                        contactsFilePath: filePath
+                    });
+                    
+                    const endTime = Date.now();
+                    const duration = endTime - startTime;
+                    
+                    results.push({
+                        version: version.name,
+                        success: result.success,
+                        duration,
+                        totalContacts: result.totalContacts,
+                        importedContacts: result.importedContacts,
+                        message: result.message
+                    });
+                    
+                    log(`✅ ${version.name}: ${result.success ? '成功' : '失败'} (${duration}ms)`, 
+                         result.success ? 'success' : 'error');
+                    
+                } catch (error) {
+                    log(`❌ ${version.name}: 执行失败 - ${error.message}`, 'error');
+                    results.push({
+                        version: version.name,
+                        success: false,
+                        error: error.message
+                    });
+                }
+                
+                // 版本之间等待5秒
+                if (version !== versions[versions.length - 1]) {
+                    log('⏳ 等待5秒后测试下一个版本...', 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+            }
+            
+            // 输出对比结果
+            log('\n📈 对比结果总结:', 'info');
+            log('=====================================', 'info');
+            
+            results.forEach(result => {
+                if (result.success) {
+                    log(`${result.version}: ✅ 成功 (${result.duration}ms) - ${result.importedContacts}/${result.totalContacts}`, 'success');
+                } else {
+                    log(`${result.version}: ❌ 失败 - ${result.error || result.message}`, 'error');
+                }
+            });
+            
+            setRunning(false);
+        }
+        
+        // 页面加载时检查环境
+        window.addEventListener('load', () => {
+            if (!window.__TAURI__) {
+                log('⚠️ 警告: 未检测到Tauri环境，请在Tauri应用中运行此测试', 'warning');
+                log('💡 启动方法: npm run tauri dev', 'info');
+            } else {
+                log('✅ Tauri环境检测成功，可以开始测试', 'success');
+            }
+        });
+    </script>
+</body>
+</html>

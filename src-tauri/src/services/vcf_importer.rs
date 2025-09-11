@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
@@ -375,7 +374,6 @@ impl VcfImporter {
         let output = Command::new(&self.adb_path)
             .args(&["-s", &self.device_id, "shell", "ls", "-la", device_path])
             .output()
-            .await
             .context("验证设备文件失败")?;
 
         if output.status.success() {
@@ -917,7 +915,7 @@ impl VcfImporter {
 
             // 查找包含文件名的节点的bounds属性
             let before_filename = &ui_content[..start_pos];
-            let after_filename = &ui_content[start_pos..];
+            let _after_filename = &ui_content[start_pos..];
 
             // 向前查找最近的bounds属性
             if let Some(bounds_start) = before_filename.rfind("bounds=\"[") {

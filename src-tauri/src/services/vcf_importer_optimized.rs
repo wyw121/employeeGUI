@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-use super::vcf_importer::{Contact, VcfImportResult};
+use super::vcf_importer::VcfImportResult;
 
 /// 基于Python脚本优化的VCF导入器
 pub struct VcfImporterOptimized {

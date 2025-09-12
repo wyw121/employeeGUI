@@ -28,6 +28,26 @@ import {
 } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
 import { VcfImportService } from '../../services/VcfImportService';
+
+// 详细的VCF导入结果类型
+interface DetailedVcfImportResult {
+  success: boolean;
+  totalContacts: number;
+  importedContacts: number;
+  failedContacts: number;
+  message: string;
+  details?: string;
+  duration?: number;
+  stepLogs: ImportStepLog[];
+}
+
+// 导入步骤日志类型
+interface ImportStepLog {
+  step: string;
+  status: 'success' | 'warning' | 'error' | 'info';
+  message: string;
+  timestamp: string;
+}
 import { Contact, Device, VcfImportResult } from '../../types';
 
 const { Text } = Typography;
@@ -61,6 +81,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
   const [importProgress, setImportProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [adbPath, setAdbPath] = useState<string>('');
+  const [currentImportLogs, setCurrentImportLogs] = useState<ImportStepLog[]>([]);
 
   // 初始化ADB路径
   const initializeAdb = useCallback(async () => {
@@ -282,26 +303,49 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
           
           await VcfImportService.writeVcfFile(tempPath, contactsContent);
           
-          // 执行导入 - 使用权限测试中的成功方法
-          console.log(`使用权限测试中的可靠导入方法处理设备: ${group.deviceId}`);
+          // 执行导入 - 使用带详细日志的方法
+          console.log(`使用带详细日志的导入方法处理设备: ${group.deviceId}`);
           
-          // 使用与PermissionTestPage完全相同的调用方式
-          const permissionTestResult = await invoke<string>("test_vcf_import_with_permission", {
+          // 清空之前的日志
+          setCurrentImportLogs([]);
+          
+          // 使用新的详细日志命令
+          const detailedResult = await invoke<DetailedVcfImportResult>("test_vcf_import_with_detailed_logs", {
             deviceId: group.deviceId,
             contactsFile: tempPath,
           });
           
-          // 解析权限测试返回的字符串结果
-          const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
-          const parts = regex.exec(permissionTestResult) || [];
+          // 更新日志状态
+          setCurrentImportLogs(detailedResult.stepLogs);
+          
+          // 显示详细步骤日志
+          console.log(`设备 ${group.deviceName} 详细导入日志:`, detailedResult.stepLogs);
+          detailedResult.stepLogs.forEach(log => {
+            const logPrefix = `[${log.timestamp}] ${log.step}:`;
+            switch (log.status) {
+              case 'success':
+                console.log(`✅ ${logPrefix}`, log.message);
+                break;
+              case 'warning':
+                console.warn(`⚠️ ${logPrefix}`, log.message);
+                break;
+              case 'error':
+                console.error(`❌ ${logPrefix}`, log.message);
+                break;
+              default:
+                console.info(`ℹ️ ${logPrefix}`, log.message);
+            }
+          });
           
           const result: VcfImportResult = {
-            success: parts[1] === 'true',
-            totalContacts: parseInt(parts[2]) || 0,
-            importedContacts: parseInt(parts[3]) || 0,
-            failedContacts: parseInt(parts[4]) || 0,
-            message: parts[5] || permissionTestResult,
-            details: permissionTestResult
+            success: detailedResult.success,
+            totalContacts: detailedResult.totalContacts,
+            importedContacts: detailedResult.importedContacts,
+            failedContacts: detailedResult.failedContacts,
+            message: detailedResult.message,
+            details: `导入耗时: ${detailedResult.duration}秒\n\n步骤日志:\n${detailedResult.stepLogs.map(log => 
+              `[${log.timestamp}] ${log.step}: ${log.message}`
+            ).join('\n')}`
           };
           
           results.push(result);
@@ -615,6 +659,48 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
             </Card>
           </Col>
         </Row>
+
+        {/* 实时导入日志 */}
+        {currentImportLogs.length > 0 && (
+          <Card 
+            size="small" 
+            title="实时导入日志" 
+            className="mb-4"
+            style={{ maxHeight: '200px', overflow: 'auto' }}
+          >
+            <div className="space-y-1">
+              {currentImportLogs.map((log, index) => {
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case 'success': return 'text-green-600';
+                    case 'warning': return 'text-yellow-600';
+                    case 'error': return 'text-red-600';
+                    default: return 'text-blue-600';
+                  }
+                };
+                
+                const getStatusIcon = (status: string) => {
+                  switch (status) {
+                    case 'success': return '✅';
+                    case 'warning': return '⚠️';
+                    case 'error': return '❌';
+                    default: return 'ℹ️';
+                  }
+                };
+                
+                return (
+                  <div key={`${log.timestamp}-${index}`} className="text-xs">
+                    <span className="text-gray-500">[{log.timestamp}]</span>
+                    <span className={`ml-2 font-medium ${getStatusColor(log.status)}`}>
+                      {getStatusIcon(log.status)} {log.step}:
+                    </span>
+                    <span className="ml-1 text-gray-700">{log.message}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         <div className="space-y-3">
           {deviceGroups.map(group => (

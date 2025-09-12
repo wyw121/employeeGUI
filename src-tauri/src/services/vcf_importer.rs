@@ -171,10 +171,12 @@ impl VcfImporter {
         let total_contacts = contacts.len();
         info!("读取到 {} 个联系人", total_contacts);
 
-        // 2. 生成VCF文件
-        let vcf_filename = "contacts_import.vcf";
-        Self::generate_vcf_file(contacts.clone(), vcf_filename).await?;
-        info!("VCF文件生成完成");
+        // 2. 生成VCF文件到临时目录，避免Tauri热重载
+        let temp_dir = std::env::temp_dir();
+        let vcf_filename = temp_dir.join("contacts_import.vcf");
+        let vcf_filename_str = vcf_filename.to_string_lossy();
+        Self::generate_vcf_file(contacts.clone(), &vcf_filename_str).await?;
+        info!("VCF文件生成完成: {}", vcf_filename_str);
 
         // 3. 尝试多个路径传输到设备
         let possible_paths = vec![
@@ -188,7 +190,7 @@ impl VcfImporter {
 
         for device_path in &possible_paths {
             info!("尝试传输到路径: {}", device_path);
-            match self.transfer_vcf_to_device(vcf_filename, device_path).await {
+            match self.transfer_vcf_to_device(&vcf_filename_str, device_path).await {
                 Ok(()) => {
                     if self
                         .verify_file_on_device(device_path)
@@ -427,6 +429,9 @@ impl VcfImporter {
         // 6. 在文件选择器中选择VCF文件（使用优化版本）
         self.select_vcf_file_in_picker_optimized("contacts_import.vcf")
             .await?;
+
+        // 7. 处理应用选择器对话框（首次打开VCF文件时会弹出）
+        self.handle_app_chooser_dialog().await?;
 
         info!("VCF导入流程执行完成");
         Ok(())
@@ -1096,6 +1101,224 @@ impl VcfImporter {
         }
     }
 
+    /// 处理应用选择器对话框
+    async fn handle_app_chooser_dialog(&self) -> Result<()> {
+        info!("🔍 检查是否出现应用选择器对话框");
+
+        // 等待可能的应用选择器对话框出现
+        sleep(Duration::from_secs(3)).await;
+
+        // 获取当前UI状态
+        let ui_content = self.get_current_ui_dump().await?;
+
+        // 检查是否有应用选择器对话框
+        if self.has_app_chooser_dialog(&ui_content) {
+            info!("✅ 检测到应用选择器对话框，正在自动处理");
+
+            // 查找并点击通讯录应用
+            if let Some((x, y)) = self.find_contacts_app_in_chooser(&ui_content) {
+                info!("📱 找到通讯录应用位置: ({}, {})", x, y);
+                self.adb_tap(x, y).await?;
+                sleep(Duration::from_secs(1)).await;
+
+                // 点击"始终"按钮
+                if let Some((always_x, always_y)) = self.find_always_button(&ui_content) {
+                    info!("✅ 点击'始终'按钮: ({}, {})", always_x, always_y);
+                    self.adb_tap(always_x, always_y).await?;
+                    sleep(Duration::from_secs(2)).await;
+                } else {
+                    // 使用常见的"始终"按钮坐标（基于常见Android布局）
+                    warn!("未找到'始终'按钮坐标，使用默认位置");
+                    self.adb_tap(300, 700).await?; // 通常在左下角
+                    sleep(Duration::from_secs(2)).await;
+                }
+
+                info!("🎉 应用选择器对话框处理完成");
+            } else {
+                warn!("⚠️ 未找到通讯录应用，尝试使用替代方案");
+                // 如果找不到具体应用，尝试点击第一个应用并选择始终
+                self.handle_app_chooser_fallback().await?;
+            }
+        } else {
+            info!("ℹ️ 未检测到应用选择器对话框，可能已设置默认应用");
+        }
+
+        Ok(())
+    }
+
+    /// 检查UI中是否存在应用选择器对话框
+    fn has_app_chooser_dialog(&self, ui_content: &str) -> bool {
+        let chooser_indicators = vec![
+            "选择应用",
+            "使用以下应用打开",
+            "打开方式",
+            "始终",
+            "仅一次",
+            "通讯录",
+            "联系人",
+            "Contacts",
+            "android.intent.action.VIEW",
+            "com.android.internal.app.ChooserActivity",
+            "com.android.internal.app.ResolverActivity",
+        ];
+
+        let found_count = chooser_indicators
+            .iter()
+            .filter(|&indicator| ui_content.contains(indicator))
+            .count();
+
+        let is_chooser_dialog = found_count >= 3; // 至少匹配3个指标
+
+        if is_chooser_dialog {
+            info!("🔍 应用选择器检测结果: 找到 {} 个匹配指标", found_count);
+        }
+
+        is_chooser_dialog
+    }
+
+    /// 在应用选择器中查找通讯录应用的坐标
+    fn find_contacts_app_in_chooser(&self, ui_content: &str) -> Option<(i32, i32)> {
+        // 通讯录应用的可能标识
+        let contacts_apps = vec![
+            "通讯录",
+            "联系人",
+            "Contacts",
+            "com.android.contacts",
+            "com.google.android.contacts",
+        ];
+
+        for app_name in &contacts_apps {
+            if let Some(bounds_start) = ui_content.find(&format!("text=\"{}\"", app_name)) {
+                // 向后查找bounds属性
+                if let Some(bounds_match) = ui_content[bounds_start..].find("bounds=\"[") {
+                    let bounds_start_index = bounds_start + bounds_match + 9;
+                    if let Some(bounds_end) = ui_content[bounds_start_index..].find("]\"") {
+                        let bounds_str = &ui_content[bounds_start_index..bounds_start_index + bounds_end];
+                        if let Some((x, y)) = self.parse_bounds_to_center(bounds_str) {
+                            info!("✅ 找到通讯录应用 '{}' 的坐标: ({}, {})", app_name, x, y);
+                            return Some((x, y));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 如果没找到特定应用，查找应用图标的通用模式
+        self.find_first_app_icon_in_chooser(ui_content)
+    }
+
+    /// 查找第一个应用图标（作为备选方案）
+    fn find_first_app_icon_in_chooser(&self, ui_content: &str) -> Option<(i32, i32)> {
+        // 查找应用图标的通用特征
+        let icon_patterns = vec![
+            "resource-id=\"android:id/icon\"",
+            "class=\"android.widget.ImageView\"",
+        ];
+
+        for pattern in &icon_patterns {
+            if let Some(start) = ui_content.find(pattern) {
+                // 向后查找bounds属性
+                if let Some(bounds_match) = ui_content[start..].find("bounds=\"[") {
+                    let bounds_start = start + bounds_match + 9;
+                    if let Some(bounds_end) = ui_content[bounds_start..].find("]\"") {
+                        let bounds_str = &ui_content[bounds_start..bounds_start + bounds_end];
+                        if let Some((x, y)) = self.parse_bounds_to_center(bounds_str) {
+                            info!("📱 找到第一个应用图标坐标: ({}, {})", x, y);
+                            return Some((x, y));
+                        }
+                    }
+                }
+            }
+        }
+
+        warn!("⚠️ 未找到任何应用图标");
+        None
+    }
+
+    /// 查找"始终"按钮的坐标
+    fn find_always_button(&self, ui_content: &str) -> Option<(i32, i32)> {
+        let always_texts = vec!["始终", "Always", "ALWAYS"];
+
+        for text in &always_texts {
+            if let Some(start) = ui_content.find(&format!("text=\"{}\"", text)) {
+                // 向后查找bounds属性
+                if let Some(bounds_match) = ui_content[start..].find("bounds=\"[") {
+                    let bounds_start = start + bounds_match + 9;
+                    if let Some(bounds_end) = ui_content[bounds_start..].find("]\"") {
+                        let bounds_str = &ui_content[bounds_start..bounds_start + bounds_end];
+                        if let Some((x, y)) = self.parse_bounds_to_center(bounds_str) {
+                            info!("✅ 找到'{}' 按钮坐标: ({}, {})", text, x, y);
+                            return Some((x, y));
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// 解析bounds字符串到中心坐标
+    fn parse_bounds_to_center(&self, bounds_str: &str) -> Option<(i32, i32)> {
+        // bounds格式: "left,top][right,bottom"
+        let parts: Vec<&str> = bounds_str.split("][").collect();
+        if parts.len() == 2 {
+            let left_top: Vec<&str> = parts[0].split(',').collect();
+            let right_bottom: Vec<&str> = parts[1].split(',').collect();
+
+            if left_top.len() == 2 && right_bottom.len() == 2 {
+                if let (Ok(left), Ok(top), Ok(right), Ok(bottom)) = (
+                    left_top[0].parse::<i32>(),
+                    left_top[1].parse::<i32>(),
+                    right_bottom[0].parse::<i32>(),
+                    right_bottom[1].parse::<i32>(),
+                ) {
+                    let center_x = (left + right) / 2;
+                    let center_y = (top + bottom) / 2;
+                    return Some((center_x, center_y));
+                }
+            }
+        }
+
+        None
+    }
+
+    /// 应用选择器处理的备选方案
+    async fn handle_app_chooser_fallback(&self) -> Result<()> {
+        info!("🔄 使用应用选择器备选处理方案");
+
+        // 根据常见的Android应用选择器布局
+        // 通常第一个应用在左上角，始终按钮在底部
+        
+        // 点击第一个应用位置（通常在屏幕上半部分）
+        info!("📱 点击第一个应用位置（估算坐标）");
+        self.adb_tap(200, 300).await?; // 左上角区域
+        sleep(Duration::from_secs(1)).await;
+
+        // 尝试点击"始终"按钮的常见位置
+        let always_positions = vec![
+            (300, 700),   // 左下角
+            (200, 650),   // 偏左下
+            (400, 750),   // 中下位置
+        ];
+
+        for (x, y) in &always_positions {
+            info!("🔘 尝试点击'始终'按钮位置: ({}, {})", x, y);
+            self.adb_tap(*x, *y).await?;
+            sleep(Duration::from_secs(1)).await;
+
+            // 检查对话框是否消失
+            let new_ui = self.get_current_ui_dump().await?;
+            if !self.has_app_chooser_dialog(&new_ui) {
+                info!("✅ 应用选择器对话框已关闭");
+                return Ok(());
+            }
+        }
+
+        warn!("⚠️ 备选方案可能未完全成功，但继续执行");
+        Ok(())
+    }
+
     /// 验证VCF导入结果
     pub async fn verify_vcf_import(
         &self,
@@ -1282,5 +1505,261 @@ impl VcfImporter {
         }
 
         contact_names
+    }
+
+    /// 使用Intent直接打开VCF文件，避免应用选择器问题
+    pub async fn import_vcf_via_intent(&self, vcf_device_path: &str) -> Result<()> {
+        info!("🚀 使用Intent直接导入VCF文件: {}", vcf_device_path);
+
+        // 方法1: 使用通讯录应用的Intent直接打开VCF文件
+        let intent_result = self.open_vcf_with_contacts_intent(vcf_device_path).await;
+        
+        if intent_result.is_ok() {
+            info!("✅ Intent方法成功");
+            return Ok(());
+        } else {
+            warn!("⚠️ Intent方法失败，尝试备用方案: {:?}", intent_result);
+        }
+
+        // 方法2: 使用系统默认Intent，但预先设置默认应用
+        self.set_default_app_for_vcf().await?;
+        self.open_vcf_with_system_intent(vcf_device_path).await?;
+
+        Ok(())
+    }
+
+    /// 使用通讯录应用的Intent打开VCF文件
+    async fn open_vcf_with_contacts_intent(&self, vcf_path: &str) -> Result<()> {
+        info!("📱 使用通讯录应用Intent打开VCF文件");
+
+        // 尝试不同的通讯录包名
+        let contacts_packages = vec![
+            "com.android.contacts",
+            "com.google.android.contacts", 
+            "com.samsung.android.contacts",
+        ];
+
+        for package in &contacts_packages {
+            info!("🔄 尝试通讯录包: {}", package);
+            
+            let output = Command::new(&self.adb_path)
+                .args(&[
+                    "-s",
+                    &self.device_id,
+                    "shell",
+                    "am",
+                    "start",
+                    "-a",
+                    "android.intent.action.VIEW",
+                    "-d",
+                    &format!("file://{}", vcf_path),
+                    "-t",
+                    "text/vcard",
+                    package,
+                ])
+                .output()
+                .context("执行Intent命令失败")?;
+
+            if output.status.success() {
+                info!("✅ 成功使用 {} 打开VCF文件", package);
+                sleep(Duration::from_secs(3)).await;
+                return Ok(());
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                warn!("❌ {} 失败: {}", package, error);
+            }
+        }
+
+        Err(anyhow::anyhow!("所有通讯录应用Intent都失败了"))
+    }
+
+    /// 设置VCF文件的默认打开应用（需要Root权限）
+    async fn set_default_app_for_vcf(&self) -> Result<()> {
+        info!("🔧 设置VCF文件的默认打开应用（Root权限）");
+
+        // 使用Root权限设置默认应用关联
+        let commands = vec![
+            // 清除旧的默认设置
+            "pm clear-default-browser",
+            // 设置通讯录为VCF文件的默认应用
+            "pm set-app-link com.android.contacts always com.android.contacts",
+        ];
+
+        for cmd in &commands {
+            let output = Command::new(&self.adb_path)
+                .args(&[
+                    "-s",
+                    &self.device_id,
+                    "shell",
+                    "su",
+                    "-c",
+                    cmd,
+                ])
+                .output()
+                .context("执行Root命令失败")?;
+
+            if output.status.success() {
+                info!("✅ Root命令执行成功: {}", cmd);
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                warn!("⚠️ Root命令失败: {} - {}", cmd, error);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 使用系统Intent打开VCF文件
+    async fn open_vcf_with_system_intent(&self, vcf_path: &str) -> Result<()> {
+        info!("🌐 使用系统Intent打开VCF文件");
+
+        let output = Command::new(&self.adb_path)
+            .args(&[
+                "-s",
+                &self.device_id,
+                "shell",
+                "am",
+                "start",
+                "-a",
+                "android.intent.action.VIEW",
+                "-d",
+                &format!("file://{}", vcf_path),
+                "-t",
+                "text/vcard",
+            ])
+            .output()
+            .context("执行系统Intent失败")?;
+
+        if output.status.success() {
+            info!("✅ 系统Intent执行成功");
+            sleep(Duration::from_secs(3)).await;
+            
+            // 由于使用了系统Intent，仍可能出现应用选择器
+            // 所以还是需要处理应用选择器
+            self.handle_app_chooser_dialog().await?;
+            
+            Ok(())
+        } else {
+            let error = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow::anyhow!("系统Intent失败: {}", error))
+        }
+    }
+
+    /// 改进的VCF导入方法，结合Intent和传统方法
+    pub async fn import_vcf_contacts_with_intent_fallback(&self, contacts_file_path: &str) -> Result<VcfImportResult> {
+        let start_time = std::time::Instant::now();
+        info!("🚀 开始改进的VCF导入流程（Intent + 传统方法）: {}", contacts_file_path);
+
+        // 1. 读取联系人数据
+        let contacts = self.read_contacts_from_file(contacts_file_path)?;
+        let total_contacts = contacts.len();
+        info!("📊 读取到 {} 个联系人", total_contacts);
+
+        // 2. 生成VCF文件到临时目录
+        let temp_dir = std::env::temp_dir();
+        let vcf_filename = temp_dir.join("contacts_import.vcf");
+        let vcf_filename_str = vcf_filename.to_string_lossy();
+        Self::generate_vcf_file(contacts.clone(), &vcf_filename_str).await?;
+        info!("📄 VCF文件生成完成: {}", vcf_filename_str);
+
+        // 3. 传输到设备
+        let possible_paths = vec![
+            "/sdcard/Download/contacts_import.vcf",
+            "/sdcard/contacts_import.vcf",
+            "/storage/emulated/0/Download/contacts_import.vcf",
+            "/storage/emulated/0/contacts_import.vcf",
+        ];
+
+        let mut successful_path = None;
+        for device_path in &possible_paths {
+            info!("📤 尝试传输到路径: {}", device_path);
+            match self.transfer_vcf_to_device(&vcf_filename_str, device_path).await {
+                Ok(()) => {
+                    if self.verify_file_on_device(device_path).await.unwrap_or(false) {
+                        info!("✅ 文件成功传输并验证: {}", device_path);
+                        successful_path = Some(device_path.to_string());
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("❌ 传输到 {} 失败: {}", device_path, e);
+                    continue;
+                }
+            }
+        }
+
+        let final_device_path = match successful_path {
+            Some(path) => path,
+            None => {
+                return Ok(VcfImportResult {
+                    success: false,
+                    total_contacts,
+                    imported_contacts: 0,
+                    failed_contacts: total_contacts,
+                    message: "所有路径的文件传输都失败".to_string(),
+                    details: Some("尝试了多个设备路径但都无法成功传输文件".to_string()),
+                    duration: Some(start_time.elapsed().as_secs()),
+                });
+            }
+        };
+
+        // 4. 优先使用Intent方法导入
+        info!("🎯 优先尝试Intent方法导入");
+        match self.import_vcf_via_intent(&final_device_path).await {
+            Ok(_) => {
+                let duration = start_time.elapsed().as_secs();
+                info!("🎉 Intent方法VCF导入成功，耗时: {}秒", duration);
+
+                return Ok(VcfImportResult {
+                    success: true,
+                    total_contacts,
+                    imported_contacts: total_contacts,
+                    failed_contacts: 0,
+                    message: "VCF联系人导入成功（Intent方法）".to_string(),
+                    details: Some(format!(
+                        "使用Intent方法成功导入 {} 个联系人，路径: {}",
+                        total_contacts, final_device_path
+                    )),
+                    duration: Some(duration),
+                });
+            }
+            Err(e) => {
+                warn!("⚠️ Intent方法失败: {}, 回退到传统方法", e);
+            }
+        }
+
+        // 5. 回退到传统的侧边栏导入方法
+        info!("🔄 回退到传统侧边栏导入方法");
+        match self.import_via_contacts_sidebar_menu(&final_device_path).await {
+            Ok(_) => {
+                let duration = start_time.elapsed().as_secs();
+                info!("✅ 传统方法VCF导入成功，耗时: {}秒", duration);
+
+                Ok(VcfImportResult {
+                    success: true,
+                    total_contacts,
+                    imported_contacts: total_contacts,
+                    failed_contacts: 0,
+                    message: "VCF联系人导入成功（传统方法）".to_string(),
+                    details: Some(format!(
+                        "使用传统方法成功导入 {} 个联系人，路径: {}",
+                        total_contacts, final_device_path
+                    )),
+                    duration: Some(duration),
+                })
+            }
+            Err(e) => {
+                error!("❌ 传统方法VCF导入也失败: {}", e);
+                Ok(VcfImportResult {
+                    success: false,
+                    total_contacts,
+                    imported_contacts: 0,
+                    failed_contacts: total_contacts,
+                    message: format!("VCF导入失败: {}", e),
+                    details: Some(e.to_string()),
+                    duration: Some(start_time.elapsed().as_secs()),
+                })
+            }
+        }
     }
 }

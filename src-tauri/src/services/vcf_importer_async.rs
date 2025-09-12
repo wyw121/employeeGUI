@@ -112,12 +112,14 @@ impl VcfImporterAsync {
             };
             let total_contacts = contacts.len();
 
-            // 2. 生成VCF文件
+            // 2. 生成VCF文件到临时目录
             info!("📝 步骤2: 生成VCF文件...");
-            let vcf_filename = "contacts_import.vcf";
-            match self.generate_vcf_file(contacts.clone(), vcf_filename).await {
+            let temp_dir = std::env::temp_dir();
+            let vcf_filename = temp_dir.join("contacts_import.vcf");
+            let vcf_filename_str = vcf_filename.to_string_lossy();
+            match self.generate_vcf_file(contacts.clone(), &vcf_filename_str).await {
                 Ok(_) => {
-                    info!("✅ VCF文件生成完成: {}", vcf_filename);
+                    info!("✅ VCF文件生成完成: {}", vcf_filename_str);
                 }
                 Err(e) => {
                     error!("❌ VCF文件生成失败: {}", e);
@@ -129,7 +131,7 @@ impl VcfImporterAsync {
             info!("📤 步骤3: 传输VCF文件到设备...");
             let device_path = "/sdcard/Download/contacts_import.vcf";
             match self
-                .transfer_vcf_to_device_async(vcf_filename, device_path)
+                .transfer_vcf_to_device_async(&vcf_filename_str, device_path)
                 .await
             {
                 Ok(_) => {

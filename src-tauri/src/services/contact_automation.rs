@@ -306,6 +306,31 @@ pub async fn import_vcf_contacts(
     }
 }
 
+/// VCF导入（Intent方法 + 传统方法回退）
+#[command]
+pub async fn import_vcf_contacts_with_intent_fallback(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<OriginalVcfImportResult, String> {
+    info!(
+        "🚀 开始Intent + 回退方法VCF导入: 设备 {} 文件 {}",
+        device_id, contacts_file_path
+    );
+
+    let importer = VcfImporter::new(device_id);
+
+    match importer.import_vcf_contacts_with_intent_fallback(&contacts_file_path).await {
+        Ok(result) => {
+            info!("✅ Intent + 回退方法VCF导入完成: {}", result.message);
+            Ok(result)
+        }
+        Err(e) => {
+            error!("❌ Intent + 回退方法VCF导入失败: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
 /// 验证VCF导入结果
 #[command]
 pub async fn verify_vcf_import(

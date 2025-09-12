@@ -17,7 +17,7 @@ export class VcfImportService {
     deviceId: string
   ): Promise<VcfImportResult> {
     try {
-      console.log("🚀 开始VCF导入（异步安全版）:", { vcfFilePath, deviceId });
+      console.log("🚀 开始VCF导入（带应用选择器自动化）:", { vcfFilePath, deviceId });
 
       // 参数验证
       if (!vcfFilePath || vcfFilePath.trim() === "") {
@@ -29,9 +29,9 @@ export class VcfImportService {
 
       console.log("✅ 参数验证通过，调用Tauri命令...");
 
-      // 使用Promise.race添加超时保护
+      // 使用带自动化功能的导入方法
       const importPromise = invoke<VcfImportResult>(
-        "import_vcf_contacts_async_safe",
+        "import_vcf_contacts_with_intent_fallback",
         {
           deviceId: deviceId,
           contactsFilePath: vcfFilePath,
@@ -44,10 +44,10 @@ export class VcfImportService {
 
       const result = await Promise.race([importPromise, timeoutPromise]);
 
-      console.log("🎉 VCF导入完成（异步安全版）:", result);
+      console.log("🎉 VCF导入完成（带应用选择器自动化）:", result);
       return result;
     } catch (error) {
-      console.error("💥 VCF导入执行失败（异步安全版）:", error);
+      console.error("💥 VCF导入执行失败（带应用选择器自动化）:", error);
       console.error(
         "🔍 错误堆栈:",
         error instanceof Error ? error.stack : "无堆栈信息"
@@ -89,15 +89,15 @@ export class VcfImportService {
     deviceId: string
   ): Promise<VcfImportResult> {
     try {
-      console.log("开始VCF导入:", { vcfFilePath, deviceId });
+      console.log("开始VCF导入（带应用选择器自动化）:", { vcfFilePath, deviceId });
 
-      // 调用Tauri后端执行VCF导入 - 确保参数名称与后端完全匹配
-      const result = await invoke<VcfImportResult>("import_vcf_contacts", {
+      // 调用Tauri后端执行VCF导入 - 使用带自动化功能的方法
+      const result = await invoke<VcfImportResult>("import_vcf_contacts_with_intent_fallback", {
         deviceId: deviceId,
         contactsFilePath: vcfFilePath,
       });
 
-      console.log("VCF导入完成:", result);
+      console.log("VCF导入完成（带应用选择器自动化）:", result);
       return result;
     } catch (error) {
       console.error("VCF导入执行失败:", error);

@@ -270,16 +270,40 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
         try {
           console.log(`开始处理设备: ${group.deviceName} (${group.deviceId})`);
           
-          // 生成临时VCF文件
-          const vcfContent = VcfImportService.convertContactsToVcfContent(group.contacts);
-          const tempPath = VcfImportService.generateTempVcfPath();
+          // 生成临时联系人文本文件（CSV格式，与PermissionTestPage相同）
+          // 格式：姓名,电话,地址,职业,邮箱
+          const contactsContent = group.contacts.map(contact => 
+            `${contact.name},${contact.phone || ''},${contact.notes || ''},,${contact.email || ''}`
+          ).join('\n');
           
-          console.log(`生成VCF文件: ${tempPath}, 内容:`, vcfContent);
+          const tempPath = VcfImportService.generateTempVcfPath().replace('.vcf', '_contacts.txt');
           
-          await VcfImportService.writeVcfFile(tempPath, vcfContent);
+          console.log(`生成联系人文件: ${tempPath}, 联系人数量: ${group.contacts.length}`);
           
-          // 执行导入 - 使用异步安全版本
-          const result = await VcfImportService.importVcfFileAsync(tempPath, group.deviceId);
+          await VcfImportService.writeVcfFile(tempPath, contactsContent);
+          
+          // 执行导入 - 使用权限测试中的成功方法
+          console.log(`使用权限测试中的可靠导入方法处理设备: ${group.deviceId}`);
+          
+          // 使用与PermissionTestPage完全相同的调用方式
+          const permissionTestResult = await invoke<string>("test_vcf_import_with_permission", {
+            deviceId: group.deviceId,
+            contactsFile: tempPath,
+          });
+          
+          // 解析权限测试返回的字符串结果
+          const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
+          const parts = regex.exec(permissionTestResult) || [];
+          
+          const result: VcfImportResult = {
+            success: parts[1] === 'true',
+            totalContacts: parseInt(parts[2]) || 0,
+            importedContacts: parseInt(parts[3]) || 0,
+            failedContacts: parseInt(parts[4]) || 0,
+            message: parts[5] || permissionTestResult,
+            details: permissionTestResult
+          };
+          
           results.push(result);
 
           console.log(`设备 ${group.deviceName} (${group.deviceId}) 导入结果:`, result);
@@ -292,7 +316,11 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
           ));
 
           // 清理临时文件
-          await VcfImportService.deleteTempFile(tempPath);
+          try {
+            await VcfImportService.deleteTempFile(tempPath);
+          } catch (cleanupError) {
+            console.warn('清理临时文件失败:', cleanupError);
+          }
 
           message.success(`设备 ${group.deviceName} 导入完成`);
 

@@ -19,14 +19,22 @@ pub struct EmployeeService {
 
 impl EmployeeService {
     pub fn new() -> SqliteResult<Self> {
-        // 使用当前目录下的 data 文件夹作为数据目录
-        let app_data_dir = PathBuf::from("./data");
+        // 使用当前工作目录下的 data 文件夹作为数据目录
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let app_data_dir = current_dir.join("data");
 
         // 确保目录存在
-        std::fs::create_dir_all(&app_data_dir).unwrap_or_default();
+        if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
+            eprintln!("警告：无法创建数据目录 {:?}: {}", app_data_dir, e);
+        }
 
         let db_path = app_data_dir.join("employees.db");
-        let conn = Connection::open(db_path)?;
+        println!("尝试打开数据库: {:?}", db_path);
+        
+        let conn = Connection::open(&db_path).map_err(|e| {
+            eprintln!("数据库连接失败: {:?} - {}", db_path, e);
+            e
+        })?;
 
         // 创建员工表
         conn.execute(

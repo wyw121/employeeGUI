@@ -1,3 +1,0 @@
-张小美,13812345678,xiaomei@example.com
-李时尚,15987654321,shishang@example.com
-王健身,18666888999,jianshen@example.com

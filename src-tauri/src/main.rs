@@ -204,6 +204,7 @@ fn main() {
             import_vcf_contacts_async_safe,     // 新增异步安全版本
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
+            import_vcf_contacts_with_intent_fallback, // 新增Intent方法
             verify_vcf_import,
             test_vcf_import_crash_fix,             // 崩溃测试修复命令
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令

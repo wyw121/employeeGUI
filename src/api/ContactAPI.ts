@@ -356,6 +356,19 @@ export class AdbAPI {
   }
 
   /**
+   * VCF通讯录导入到Android设备（Intent方法 + 传统方法回退）
+   */
+  static async importVcfContactsWithIntentFallback(
+    deviceId: string,
+    contactsFilePath: string
+  ): Promise<VcfImportResult> {
+    return await invoke<VcfImportResult>("import_vcf_contacts_with_intent_fallback", {
+      deviceId: deviceId,
+      contactsFilePath: contactsFilePath,
+    });
+  }
+
+  /**
    * 生成VCF文件从联系人列表
    */
   static async generateVcfFile(
@@ -432,5 +445,42 @@ export class AdbAPI {
     return await invoke<NavigationResult>("navigate_to_xiaohongshu_contacts", {
       deviceId,
     });
+  }
+
+  /**
+   * 使用权限测试中的可靠导入方法（直接调用基础VCF导入）
+   */
+  static async importVcfContactsReliable(
+    deviceId: string,
+    contactsFilePath: string
+  ): Promise<VcfImportResult> {
+    try {
+      const result = await invoke<string>("test_vcf_import_with_permission", {
+        device_id: deviceId,
+        contacts_file: contactsFilePath,
+      });
+      
+      // 解析权限测试返回的字符串结果
+      const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
+      const parts = regex.exec(result) || [];
+      
+      return {
+        success: parts[1] === 'true',
+        totalContacts: parseInt(parts[2]) || 0,
+        importedContacts: parseInt(parts[3]) || 0,
+        failedContacts: parseInt(parts[4]) || 0,
+        message: parts[5] || result,
+        details: result
+      };
+    } catch (error) {
+      return {
+        success: false,
+        totalContacts: 0,
+        importedContacts: 0,
+        failedContacts: 0,
+        message: `导入失败: ${String(error)}`,
+        details: String(error)
+      };
+    }
   }
 }

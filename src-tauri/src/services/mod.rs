@@ -11,6 +11,6 @@ pub mod safe_adb_manager;
 pub mod smart_vcf_opener;
 pub mod ui_reader_service;
 pub mod vcf_importer;
-pub mod vcf_importer_optimized;
 pub mod vcf_importer_async;
+pub mod vcf_importer_optimized;
 pub mod xiaohongshu_automator;

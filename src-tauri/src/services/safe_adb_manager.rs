@@ -15,16 +15,13 @@ impl SafeAdbManager {
             fallback_paths: vec![
                 // 1. 优先使用项目内的官方Google Platform Tools (最安全)
                 r"D:\repositories\employeeGUI\platform-tools\adb.exe".to_string(),
-                
                 // 2. 系统PATH中的ADB
                 "adb.exe".to_string(),
                 "adb".to_string(),
-                
                 // 3. 标准Android SDK安装路径
                 r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe".to_string(),
                 r"C:\Android\Sdk\platform-tools\adb.exe".to_string(),
                 r"D:\Android\Sdk\platform-tools\adb.exe".to_string(),
-                
                 // 注意：故意不包含雷电模拟器的ADB路径，因为它有崩溃问题
                 // r"D:\leidian\LDPlayer9\adb.exe" - 已知不稳定，不使用
             ],
@@ -44,7 +41,7 @@ impl SafeAdbManager {
         // 测试每个候选路径
         for path in &self.fallback_paths {
             info!("🧪 测试ADB路径: {}", path);
-            
+
             match self.test_adb_path(path) {
                 Ok(true) => {
                     // 检查是否是雷电模拟器的ADB (已知有问题)
@@ -52,7 +49,7 @@ impl SafeAdbManager {
                         warn!("⚠️ 跳过雷电模拟器ADB (已知崩溃问题): {}", path);
                         continue;
                     }
-                    
+
                     info!("✅ 找到可用的ADB: {}", path);
                     self.preferred_adb_path = Some(path.clone());
                     return Ok(path.clone());
@@ -72,11 +69,8 @@ impl SafeAdbManager {
     /// 测试ADB路径是否可用且安全
     fn test_adb_path(&self, path: &str) -> Result<bool> {
         info!("📋 测试ADB命令: {} version", path);
-        
-        match Command::new(path)
-            .arg("version")
-            .output()
-        {
+
+        match Command::new(path).arg("version").output() {
             Ok(output) => {
                 if output.status.success() {
                     let version_output = String::from_utf8_lossy(&output.stdout);
@@ -97,7 +91,8 @@ impl SafeAdbManager {
 
     /// 安全地执行ADB命令
     pub fn execute_adb_command(&self, args: &[&str]) -> Result<String> {
-        let adb_path = self.preferred_adb_path
+        let adb_path = self
+            .preferred_adb_path
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("未找到有效的ADB路径，请先调用find_safe_adb_path()"))?;
 
@@ -121,14 +116,15 @@ impl SafeAdbManager {
 
     /// 异步安全地执行ADB命令
     pub async fn execute_adb_command_async(&self, args: &[&str]) -> Result<String> {
-        let adb_path = self.preferred_adb_path
+        let adb_path = self
+            .preferred_adb_path
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("未找到有效的ADB路径，请先调用find_safe_adb_path()"))?;
 
         info!("🔧 异步执行ADB命令: {} {}", adb_path, args.join(" "));
 
         use tokio::process::Command as AsyncCommand;
-        
+
         let output = AsyncCommand::new(adb_path)
             .args(args)
             .output()
@@ -149,7 +145,7 @@ impl SafeAdbManager {
     /// 获取连接的设备列表（使用安全的ADB）
     pub fn get_devices(&self) -> Result<Vec<String>> {
         let output = self.execute_adb_command(&["devices"])?;
-        
+
         let mut devices = Vec::new();
         for line in output.lines() {
             if line.contains("\tdevice") {
@@ -158,7 +154,7 @@ impl SafeAdbManager {
                 }
             }
         }
-        
+
         info!("📱 发现设备: {:?}", devices);
         Ok(devices)
     }
@@ -175,9 +171,9 @@ impl SafeAdbManager {
 #[allow(non_snake_case)]
 pub async fn get_adb_devices_safe() -> Result<Vec<String>, String> {
     info!("🚀 开始安全的ADB设备检测...");
-    
+
     let mut adb_manager = SafeAdbManager::new();
-    
+
     // 查找安全的ADB路径
     match adb_manager.find_safe_adb_path() {
         Ok(adb_path) => {
@@ -188,7 +184,7 @@ pub async fn get_adb_devices_safe() -> Result<Vec<String>, String> {
             return Err(format!("未找到安全的ADB路径: {}", e));
         }
     }
-    
+
     // 获取设备列表
     match adb_manager.get_devices() {
         Ok(devices) => {
@@ -210,15 +206,18 @@ pub async fn safe_adb_push(
     localPath: String,
     remotePath: String,
 ) -> Result<String, String> {
-    info!("📤 开始安全的文件传输: {} -> {} (设备: {})", localPath, remotePath, deviceId);
-    
+    info!(
+        "📤 开始安全的文件传输: {} -> {} (设备: {})",
+        localPath, remotePath, deviceId
+    );
+
     let mut adb_manager = SafeAdbManager::new();
-    
+
     // 确保ADB路径可用
     if let Err(e) = adb_manager.find_safe_adb_path() {
         return Err(format!("未找到安全的ADB路径: {}", e));
     }
-    
+
     // 检查设备是否在线
     match adb_manager.is_device_online(&deviceId) {
         Ok(true) => {
@@ -231,7 +230,7 @@ pub async fn safe_adb_push(
             return Err(format!("检查设备状态失败: {}", e));
         }
     }
-    
+
     // 执行文件传输
     let args = vec!["-s", &deviceId, "push", &localPath, &remotePath];
     match adb_manager.execute_adb_command(&args.iter().map(|s| *s).collect::<Vec<_>>()) {

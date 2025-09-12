@@ -201,20 +201,20 @@ fn main() {
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts,
-            import_vcf_contacts_async_safe,      // 新增异步安全版本
+            import_vcf_contacts_async_safe,     // 新增异步安全版本
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             verify_vcf_import,
-            test_vcf_import_crash_fix,          // 崩溃测试修复命令
+            test_vcf_import_crash_fix,             // 崩溃测试修复命令
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
             // 雷电模拟器专用VCF打开功能
-            open_vcf_file_ldplayer,             // 打开已存在的VCF文件
-            import_and_open_vcf_ldplayer,       // 完整的传输+打开流程
+            open_vcf_file_ldplayer,       // 打开已存在的VCF文件
+            import_and_open_vcf_ldplayer, // 完整的传输+打开流程
             // UI状态读取功能
-            read_device_ui_state,               // 实时读取设备UI状态
-            find_ui_elements,                   // 查找特定UI元素
+            read_device_ui_state, // 实时读取设备UI状态
+            find_ui_elements,     // 查找特定UI元素
             // 智能VCF打开器
-            smart_vcf_opener,                   // 基于UI状态的智能VCF打开
+            smart_vcf_opener, // 基于UI状态的智能VCF打开
             check_xiaohongshu_app_status,
             navigate_to_xiaohongshu_contacts,
             xiaohongshu_auto_follow,
@@ -223,8 +223,8 @@ fn main() {
             test_permission_handling,
             test_vcf_import_with_permission,
             // 安全ADB管理功能
-            get_adb_devices_safe,               // 使用安全ADB检测设备
-            safe_adb_push                       // 使用安全ADB传输文件
+            get_adb_devices_safe, // 使用安全ADB检测设备
+            safe_adb_push         // 使用安全ADB传输文件
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -17,28 +17,63 @@ export class VcfImportService {
     deviceId: string
   ): Promise<VcfImportResult> {
     try {
-      console.log("开始VCF导入（异步安全版）:", { vcfFilePath, deviceId });
+      console.log("🚀 开始VCF导入（异步安全版）:", { vcfFilePath, deviceId });
 
-      // 调用新的异步安全命令
-      const result = await invoke<VcfImportResult>("import_vcf_contacts_async_safe", {
-        deviceId: deviceId,
-        contactsFilePath: vcfFilePath,
+      // 参数验证
+      if (!vcfFilePath || vcfFilePath.trim() === "") {
+        throw new Error("VCF文件路径不能为空");
+      }
+      if (!deviceId || deviceId.trim() === "") {
+        throw new Error("设备ID不能为空");
+      }
+
+      console.log("✅ 参数验证通过，调用Tauri命令...");
+
+      // 使用Promise.race添加超时保护
+      const importPromise = invoke<VcfImportResult>(
+        "import_vcf_contacts_async_safe",
+        {
+          deviceId: deviceId,
+          contactsFilePath: vcfFilePath,
+        }
+      );
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("导入操作超时（60秒）")), 60000);
       });
 
-      console.log("VCF导入完成（异步安全版）:", result);
+      const result = await Promise.race([importPromise, timeoutPromise]);
+
+      console.log("🎉 VCF导入完成（异步安全版）:", result);
       return result;
     } catch (error) {
-      console.error("VCF导入执行失败（异步安全版）:", error);
+      console.error("💥 VCF导入执行失败（异步安全版）:", error);
+      console.error(
+        "🔍 错误堆栈:",
+        error instanceof Error ? error.stack : "无堆栈信息"
+      );
+
+      // 创建详细的错误信息
+      let errorMessage = "导入失败";
+      let errorDetails = undefined;
+
+      if (error instanceof Error) {
+        errorMessage = `导入失败: ${error.message}`;
+        errorDetails = error.stack;
+      } else if (typeof error === "string") {
+        errorMessage = `导入失败: ${error}`;
+      } else {
+        errorMessage = `导入失败: ${String(error)}`;
+        errorDetails = JSON.stringify(error, null, 2);
+      }
 
       return {
         success: false,
         totalContacts: 0,
         importedContacts: 0,
         failedContacts: 0,
-        message: `导入失败: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        details: error instanceof Error ? error.stack : undefined,
+        message: errorMessage,
+        details: errorDetails,
       };
     }
   }

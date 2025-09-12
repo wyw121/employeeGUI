@@ -6,6 +6,8 @@ use tokio::process::Command;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::{error, info, warn};
 
+use crate::services::safe_adb_manager::SafeAdbManager;
+
 // 重用现有的数据结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Contact {
@@ -55,90 +57,137 @@ impl VcfImporterAsync {
         info!("🚀 开始简化VCF导入流程: {}", contacts_file_path);
         info!("📱 目标设备: {}", self.device_id);
 
-        // 1. 读取联系人数据
-        info!("📖 步骤1: 读取联系人文件...");
-        let contacts = match self.read_contacts_from_file(contacts_file_path) {
-            Ok(contacts) => {
-                info!("✅ 成功读取 {} 个联系人", contacts.len());
-                contacts
-            }
-            Err(e) => {
-                error!("❌ 读取联系人文件失败: {}", e);
-                return Err(e);
-            }
-        };
-        let total_contacts = contacts.len();
-
-        // 2. 生成VCF文件
-        info!("📝 步骤2: 生成VCF文件...");
-        let vcf_filename = "contacts_import.vcf";
-        match self.generate_vcf_file(contacts.clone(), vcf_filename).await {
-            Ok(_) => {
-                info!("✅ VCF文件生成完成: {}", vcf_filename);
-            }
-            Err(e) => {
-                error!("❌ VCF文件生成失败: {}", e);
-                return Err(e);
-            }
+        // 参数验证
+        if contacts_file_path.is_empty() {
+            let error_msg = "联系人文件路径不能为空";
+            error!("❌ {}", error_msg);
+            return Err(anyhow::anyhow!(error_msg));
         }
 
-        // 3. 传输VCF文件到设备
-        info!("📤 步骤3: 传输VCF文件到设备...");
-        let device_path = "/sdcard/Download/contacts_import.vcf";
-        match self
-            .transfer_vcf_to_device_async(vcf_filename, device_path)
-            .await
-        {
-            Ok(_) => {
-                info!("✅ 文件成功传输到设备: {}", device_path);
-            }
-            Err(e) => {
-                error!("❌ 文件传输失败: {}", e);
-                return Ok(VcfImportResult {
-                    success: false,
-                    total_contacts,
-                    imported_contacts: 0,
-                    failed_contacts: total_contacts,
-                    message: format!("文件传输失败: {}", e),
-                    details: Some(e.to_string()),
-                    duration: Some(start_time.elapsed().as_secs()),
-                });
-            }
+        if self.device_id.is_empty() {
+            let error_msg = "设备ID不能为空";
+            error!("❌ {}", error_msg);
+            return Err(anyhow::anyhow!(error_msg));
         }
 
-        // 4. 使用Intent直接打开VCF文件（简化方案）
-        info!("🎯 步骤4: 使用Intent打开VCF文件...");
-        match self.open_vcf_with_intent(device_path).await {
-            Ok(_) => {
-                let duration = start_time.elapsed().as_secs();
-                info!("🎉 VCF导入完成，耗时: {}秒", duration);
-
-                Ok(VcfImportResult {
-                    success: true,
-                    total_contacts,
-                    imported_contacts: total_contacts,
-                    failed_contacts: 0,
-                    message: "VCF文件已成功传输到设备，请在设备上手动确认导入".to_string(),
-                    details: Some(format!(
-                        "文件位置: {}\\n请在设备上打开文件管理器导入联系人",
-                        device_path
-                    )),
-                    duration: Some(duration),
-                })
-            }
-            Err(e) => {
-                warn!("Intent打开失败，但文件已传输: {}", e);
-                Ok(VcfImportResult {
-                    success: true,
-                    total_contacts,
-                    imported_contacts: 0,
-                    failed_contacts: 0,
-                    message: "文件已传输到设备，请手动导入".to_string(),
-                    details: Some(format!("文件位置: {}", device_path)),
-                    duration: Some(start_time.elapsed().as_secs()),
-                })
-            }
+        // 检查文件是否存在
+        if !std::path::Path::new(contacts_file_path).exists() {
+            let error_msg = format!("联系人文件不存在: {}", contacts_file_path);
+            error!("❌ {}", error_msg);
+            return Err(anyhow::anyhow!(error_msg));
         }
+
+        info!("✅ 参数验证通过");
+
+        // 添加 panic hook 捕获任何未处理的panic
+        let original_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|panic_info| {
+            error!("🔥 PANIC in import_vcf_contacts_simple: {:?}", panic_info);
+        }));
+
+        let result = async {
+            // 1. 读取联系人数据
+            info!("📖 步骤1: 读取联系人文件...");
+            let contacts = match self.read_contacts_from_file(contacts_file_path) {
+                Ok(contacts) => {
+                    if contacts.is_empty() {
+                        warn!("⚠️ 联系人文件为空或没有有效联系人");
+                        return Ok(VcfImportResult {
+                            success: true,
+                            total_contacts: 0,
+                            imported_contacts: 0,
+                            failed_contacts: 0,
+                            message: "联系人文件为空，没有需要导入的联系人".to_string(),
+                            details: None,
+                            duration: Some(start_time.elapsed().as_secs()),
+                        });
+                    }
+                    info!("✅ 成功读取 {} 个联系人", contacts.len());
+                    contacts
+                }
+                Err(e) => {
+                    error!("❌ 读取联系人文件失败: {}", e);
+                    return Err(e);
+                }
+            };
+            let total_contacts = contacts.len();
+
+            // 2. 生成VCF文件
+            info!("📝 步骤2: 生成VCF文件...");
+            let vcf_filename = "contacts_import.vcf";
+            match self.generate_vcf_file(contacts.clone(), vcf_filename).await {
+                Ok(_) => {
+                    info!("✅ VCF文件生成完成: {}", vcf_filename);
+                }
+                Err(e) => {
+                    error!("❌ VCF文件生成失败: {}", e);
+                    return Err(e);
+                }
+            }
+
+            // 3. 传输VCF文件到设备
+            info!("📤 步骤3: 传输VCF文件到设备...");
+            let device_path = "/sdcard/Download/contacts_import.vcf";
+            match self
+                .transfer_vcf_to_device_async(vcf_filename, device_path)
+                .await
+            {
+                Ok(_) => {
+                    info!("✅ 文件成功传输到设备: {}", device_path);
+                }
+                Err(e) => {
+                    error!("❌ 文件传输失败: {}", e);
+                    return Ok(VcfImportResult {
+                        success: false,
+                        total_contacts,
+                        imported_contacts: 0,
+                        failed_contacts: total_contacts,
+                        message: format!("文件传输失败: {}", e),
+                        details: Some(e.to_string()),
+                        duration: Some(start_time.elapsed().as_secs()),
+                    });
+                }
+            }
+
+            // 4. 使用Intent直接打开VCF文件（简化方案）
+            info!("🎯 步骤4: 使用Intent打开VCF文件...");
+            match self.open_vcf_with_intent(device_path).await {
+                Ok(_) => {
+                    let duration = start_time.elapsed().as_secs();
+                    info!("🎉 VCF导入完成，耗时: {}秒", duration);
+
+                    Ok(VcfImportResult {
+                        success: true,
+                        total_contacts,
+                        imported_contacts: total_contacts,
+                        failed_contacts: 0,
+                        message: "VCF文件已成功传输到设备，请在设备上手动确认导入".to_string(),
+                        details: Some(format!(
+                            "文件位置: {}\\n请在设备上打开文件管理器导入联系人",
+                            device_path
+                        )),
+                        duration: Some(duration),
+                    })
+                }
+                Err(e) => {
+                    warn!("Intent打开失败，但文件已传输: {}", e);
+                    Ok(VcfImportResult {
+                        success: true,
+                        total_contacts,
+                        imported_contacts: 0,
+                        failed_contacts: 0,
+                        message: "文件已传输到设备，请手动导入".to_string(),
+                        details: Some(format!("文件位置: {}", device_path)),
+                        duration: Some(start_time.elapsed().as_secs()),
+                    })
+                }
+            }
+        }.await;
+
+        // 恢复原来的 panic hook
+        std::panic::set_hook(original_hook);
+
+        result
     }
 
     /// 异步生成VCF文件
@@ -278,28 +327,43 @@ impl VcfImporterAsync {
 
     /// 核心的异步ADB命令执行方法
     async fn execute_adb_command_async(&self, args: Vec<&str>) -> Result<String> {
+        info!("🔧 使用安全ADB管理器执行命令: {:?}", args);
+
+        // 创建安全的ADB管理器
+        let mut adb_manager = SafeAdbManager::new();
+        
+        // 确保有可用的安全ADB路径
+        match adb_manager.find_safe_adb_path() {
+            Ok(adb_path) => {
+                info!("✅ 使用安全ADB路径: {}", adb_path);
+            }
+            Err(e) => {
+                error!("❌ 未找到安全的ADB路径: {}", e);
+                return Err(anyhow::anyhow!("未找到安全的ADB路径: {}", e));
+            }
+        }
+
+        // 构建完整的命令参数
         let mut full_args = vec!["-s", &self.device_id];
         full_args.extend(args);
 
-        info!("🔧 执行ADB命令: {} {:?}", self.adb_path, full_args);
-
         for attempt in 1..=self.max_retries {
-            info!("🔄 尝试 {}/{}: 开始执行命令", attempt, self.max_retries);
+            info!("🔄 尝试 {}/{}: 开始执行安全ADB命令", attempt, self.max_retries);
             
             match timeout(
                 self.timeout_duration,
-                self.run_command_with_output(&full_args),
+                adb_manager.execute_adb_command_async(&full_args.iter().map(|s| *s).collect::<Vec<_>>()),
             )
             .await
             {
                 Ok(Ok(output)) => {
-                    info!("✅ ADB命令执行成功 (尝试 {}/{})", attempt, self.max_retries);
+                    info!("✅ 安全ADB命令执行成功 (尝试 {}/{})", attempt, self.max_retries);
                     info!("📄 命令输出: {}", output.trim());
                     return Ok(output);
                 }
                 Ok(Err(e)) => {
                     warn!(
-                        "❌ ADB命令执行失败 (尝试 {}/{}): {}",
+                        "❌ 安全ADB命令执行失败 (尝试 {}/{}): {}",
                         attempt, self.max_retries, e
                     );
                     if attempt == self.max_retries {
@@ -308,10 +372,10 @@ impl VcfImporterAsync {
                     }
                 }
                 Err(_) => {
-                    warn!("⏰ ADB命令超时 (尝试 {}/{})", attempt, self.max_retries);
+                    warn!("⏰ 安全ADB命令超时 (尝试 {}/{})", attempt, self.max_retries);
                     if attempt == self.max_retries {
                         error!("💥 所有重试次数用尽，最终超时");
-                        return Err(anyhow::anyhow!("ADB命令超时"));
+                        return Err(anyhow::anyhow!("安全ADB命令超时"));
                     }
                 }
             }
@@ -320,7 +384,7 @@ impl VcfImporterAsync {
             sleep(Duration::from_secs(1)).await;
         }
 
-        Err(anyhow::anyhow!("ADB命令重试次数用尽"))
+        Err(anyhow::anyhow!("安全ADB命令重试次数用尽"))
     }
 
     /// 运行命令并获取输出

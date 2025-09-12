@@ -7,8 +7,11 @@ use services::adb_service::AdbService;
 use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
+use services::crash_debugger::*;
+use services::crash_test::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::permission_test::*;
+use services::safe_adb_manager::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use std::sync::Mutex;
@@ -202,6 +205,8 @@ fn main() {
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             verify_vcf_import,
+            test_vcf_import_crash_fix,          // 崩溃测试修复命令
+            debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
             // 雷电模拟器专用VCF打开功能
             open_vcf_file_ldplayer,             // 打开已存在的VCF文件
             import_and_open_vcf_ldplayer,       // 完整的传输+打开流程
@@ -216,7 +221,10 @@ fn main() {
             import_and_follow_xiaohongshu,
             // 权限处理测试功能
             test_permission_handling,
-            test_vcf_import_with_permission
+            test_vcf_import_with_permission,
+            // 安全ADB管理功能
+            get_adb_devices_safe,               // 使用安全ADB检测设备
+            safe_adb_push                       // 使用安全ADB传输文件
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -9,6 +9,8 @@ use services::contact_automation::*;
 use services::contact_service::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::permission_test::*;
+use services::smart_vcf_opener::*;
+use services::ui_reader_service::*;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -200,6 +202,14 @@ fn main() {
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             verify_vcf_import,
+            // 雷电模拟器专用VCF打开功能
+            open_vcf_file_ldplayer,             // 打开已存在的VCF文件
+            import_and_open_vcf_ldplayer,       // 完整的传输+打开流程
+            // UI状态读取功能
+            read_device_ui_state,               // 实时读取设备UI状态
+            find_ui_elements,                   // 查找特定UI元素
+            // 智能VCF打开器
+            smart_vcf_opener,                   // 基于UI状态的智能VCF打开
             check_xiaohongshu_app_status,
             navigate_to_xiaohongshu_contacts,
             xiaohongshu_auto_follow,

@@ -1,13 +1,12 @@
+use crate::services::vcf_importer::VcfImportResult as OriginalVcfImportResult;
+use crate::services::vcf_importer::VcfImporter;
 use crate::services::vcf_importer::{
     AppStatusResult, NavigationResult, XiaohongshuFollowOptions, XiaohongshuFollowResult,
 };
-use crate::services::vcf_importer::{
-    Contact, ImportAndFollowResult, VcfVerifyResult,
-};
-use crate::services::vcf_importer::VcfImportResult as OriginalVcfImportResult;
-use crate::services::vcf_importer::VcfImporter;
+use crate::services::vcf_importer::{Contact, ImportAndFollowResult, VcfVerifyResult};
+use crate::services::vcf_importer_async::{VcfImportResult, VcfImporterAsync};
 use crate::services::vcf_importer_optimized::VcfImporterOptimized;
-use crate::services::vcf_importer_async::{VcfImporterAsync, VcfImportResult};
+use crate::services::ldplayer_vcf_opener::{LDPlayerVcfOpener, VcfOpenResult};
 use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
 use tauri::command;
 use tracing::{error, info, warn};
@@ -44,23 +43,134 @@ pub async fn import_vcf_contacts_async_safe(
     contactsFilePath: String,
 ) -> Result<VcfImportResult, String> {
     info!(
-        "开始VCF导入（异步安全版）: 设备 {} 文件 {}",
+        "🚀 开始VCF导入（异步安全版）: 设备 {} 文件 {}",
         deviceId, contactsFilePath
     );
 
-    let importer = VcfImporterAsync::new(deviceId);
+    // 添加全局错误处理
+    let result = tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            info!("📋 创建VcfImporterAsync实例...");
+            let importer = VcfImporterAsync::new(deviceId.clone());
+            
+            info!("⚡ 调用异步导入方法...");
+            match importer.import_vcf_contacts_simple(&contactsFilePath).await {
+                Ok(result) => {
+                    info!(
+                        "🎉 VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
+                        result.success, result.total_contacts, result.imported_contacts
+                    );
+                    Ok(result)
+                }
+                Err(e) => {
+                    error!("💥 VCF导入失败（异步安全版）: {}", e);
+                    error!("🔍 错误详情: {:?}", e);
+                    Err(format!("导入失败: {}", e))
+                }
+            }
+        })
+    }).await;
 
-    match importer.import_vcf_contacts_simple(&contactsFilePath).await {
+    match result {
+        Ok(inner_result) => inner_result,
+        Err(e) => {
+            error!("🔥 任务执行失败: {}", e);
+            Err(format!("任务执行失败: {}", e))
+        }
+    }
+}
+
+/// 雷电模拟器VCF文件打开和导入（专用优化版本）
+#[command]
+#[allow(non_snake_case)]
+pub async fn open_vcf_file_ldplayer(
+    deviceId: String,
+    vcfFilePath: String,
+) -> Result<VcfOpenResult, String> {
+    info!(
+        "🎯 开始雷电模拟器VCF文件打开: 设备 {} 文件 {}",
+        deviceId, vcfFilePath
+    );
+
+    let opener = LDPlayerVcfOpener::new(deviceId.clone());
+    
+    match opener.open_vcf_file_complete(&vcfFilePath).await {
         Ok(result) => {
             info!(
-                "VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
-                result.success, result.total_contacts, result.imported_contacts
+                "🎉 VCF文件打开完成: 成功={} 步骤={}",
+                result.success, result.steps_completed.len()
             );
             Ok(result)
         }
         Err(e) => {
-            error!("VCF导入失败（异步安全版）: {}", e);
-            Err(e.to_string())
+            error!("💥 VCF文件打开失败: {}", e);
+            Err(format!("打开失败: {}", e))
+        }
+    }
+}
+
+/// VCF文件传输和自动打开的完整流程（雷电模拟器专用）
+#[command]
+#[allow(non_snake_case)]
+pub async fn import_and_open_vcf_ldplayer(
+    deviceId: String,
+    contactsFilePath: String,
+) -> Result<VcfOpenResult, String> {
+    info!(
+        "🚀 开始完整VCF导入和打开流程: 设备 {} 文件 {}",
+        deviceId, contactsFilePath
+    );
+
+    // 步骤1: 使用异步安全版本传输VCF文件
+    info!("📤 步骤1: 传输VCF文件到设备...");
+    let importer = VcfImporterAsync::new(deviceId.clone());
+    
+    let import_result = match importer.import_vcf_contacts_simple(&contactsFilePath).await {
+        Ok(result) => {
+            if result.success {
+                info!("✅ VCF文件传输成功");
+                result
+            } else {
+                error!("❌ VCF文件传输失败: {}", result.message);
+                return Err(format!("传输失败: {}", result.message));
+            }
+        }
+        Err(e) => {
+            error!("💥 VCF文件传输失败: {}", e);
+            return Err(format!("传输失败: {}", e));
+        }
+    };
+
+    // 步骤2: 自动打开VCF文件并完成导入
+    info!("📱 步骤2: 自动打开VCF文件...");
+    let device_vcf_path = "/sdcard/Download/contacts_import.vcf";
+    let opener = LDPlayerVcfOpener::new(deviceId);
+    
+    match opener.open_vcf_file_complete(device_vcf_path).await {
+        Ok(mut result) => {
+            // 合并传输和打开的结果信息
+            result.details = Some(format!(
+                "传输: {} 个联系人已传输到设备。打开: {}",
+                import_result.total_contacts,
+                result.details.unwrap_or_default()
+            ));
+            
+            info!("🎉 完整流程完成: 传输+打开成功");
+            Ok(result)
+        }
+        Err(e) => {
+            error!("💥 VCF文件打开失败: {}", e);
+            // 即使打开失败，文件也已经传输成功
+            Ok(VcfOpenResult {
+                success: false,
+                message: format!("文件已传输但自动打开失败: {}", e),
+                details: Some(format!(
+                    "文件位置: {}。请手动打开该文件完成导入。", 
+                    device_vcf_path
+                )),
+                steps_completed: vec!["文件传输".to_string()],
+            })
         }
     }
 }

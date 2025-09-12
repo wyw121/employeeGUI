@@ -27,6 +27,7 @@ import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import RealDeviceManager from './device/RealDeviceManager';
+import SmartVcfImporter from './SmartVcfImporter';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -59,6 +60,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'contacts',
       icon: <UserOutlined />,
       label: '通讯录管理',
+    },
+    {
+      key: 'smart-vcf',
+      icon: <ThunderboltOutlined />,
+      label: '智能VCF导入',
     },
     {
       key: 'permission-test',
@@ -263,6 +269,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'contacts' && (
               <ContactManagementPage />
+            )}
+
+            {selectedKey === 'smart-vcf' && (
+              <SmartVcfImporter />
             )}
 
             {selectedKey === 'permission-test' && (

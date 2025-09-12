@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::{error, info, warn};
@@ -48,27 +47,53 @@ impl VcfImporterAsync {
     }
 
     /// 异步执行VCF导入（简化版，减少UI自动化）
-    pub async fn import_vcf_contacts_simple(&self, contacts_file_path: &str) -> Result<VcfImportResult> {
+    pub async fn import_vcf_contacts_simple(
+        &self,
+        contacts_file_path: &str,
+    ) -> Result<VcfImportResult> {
         let start_time = std::time::Instant::now();
-        info!("开始简化VCF导入流程: {}", contacts_file_path);
+        info!("🚀 开始简化VCF导入流程: {}", contacts_file_path);
+        info!("📱 目标设备: {}", self.device_id);
 
         // 1. 读取联系人数据
-        let contacts = self.read_contacts_from_file(contacts_file_path)?;
+        info!("📖 步骤1: 读取联系人文件...");
+        let contacts = match self.read_contacts_from_file(contacts_file_path) {
+            Ok(contacts) => {
+                info!("✅ 成功读取 {} 个联系人", contacts.len());
+                contacts
+            }
+            Err(e) => {
+                error!("❌ 读取联系人文件失败: {}", e);
+                return Err(e);
+            }
+        };
         let total_contacts = contacts.len();
-        info!("读取到 {} 个联系人", total_contacts);
 
         // 2. 生成VCF文件
+        info!("📝 步骤2: 生成VCF文件...");
         let vcf_filename = "contacts_import.vcf";
-        self.generate_vcf_file(contacts.clone(), vcf_filename).await?;
-        info!("VCF文件生成完成");
+        match self.generate_vcf_file(contacts.clone(), vcf_filename).await {
+            Ok(_) => {
+                info!("✅ VCF文件生成完成: {}", vcf_filename);
+            }
+            Err(e) => {
+                error!("❌ VCF文件生成失败: {}", e);
+                return Err(e);
+            }
+        }
 
         // 3. 传输VCF文件到设备
+        info!("📤 步骤3: 传输VCF文件到设备...");
         let device_path = "/sdcard/Download/contacts_import.vcf";
-        match self.transfer_vcf_to_device_async(vcf_filename, device_path).await {
+        match self
+            .transfer_vcf_to_device_async(vcf_filename, device_path)
+            .await
+        {
             Ok(_) => {
                 info!("✅ 文件成功传输到设备: {}", device_path);
             }
             Err(e) => {
+                error!("❌ 文件传输失败: {}", e);
                 return Ok(VcfImportResult {
                     success: false,
                     total_contacts,
@@ -82,10 +107,11 @@ impl VcfImporterAsync {
         }
 
         // 4. 使用Intent直接打开VCF文件（简化方案）
+        info!("🎯 步骤4: 使用Intent打开VCF文件...");
         match self.open_vcf_with_intent(device_path).await {
             Ok(_) => {
                 let duration = start_time.elapsed().as_secs();
-                info!("VCF导入完成，耗时: {}秒", duration);
+                info!("🎉 VCF导入完成，耗时: {}秒", duration);
 
                 Ok(VcfImportResult {
                     success: true,
@@ -122,42 +148,71 @@ impl VcfImporterAsync {
         let mut vcf_content = String::new();
 
         for contact in &contacts {
-            vcf_content.push_str("BEGIN:VCARD\\n");
-            vcf_content.push_str("VERSION:2.1\\n");
-            vcf_content.push_str(&format!("FN:{}\\n", contact.name));
-            vcf_content.push_str(&format!("N:{};\\n", contact.name));
+            vcf_content.push_str("BEGIN:VCARD\n");
+            vcf_content.push_str("VERSION:2.1\n");
+            vcf_content.push_str(&format!("FN:{}\n", contact.name));
+            vcf_content.push_str(&format!("N:{};\n", contact.name));
 
             if !contact.phone.is_empty() {
                 let formatted_phone = self.format_chinese_phone(&contact.phone);
-                vcf_content.push_str(&format!("TEL;CELL:{}\\n", formatted_phone));
+                vcf_content.push_str(&format!("TEL;CELL:{}\n", formatted_phone));
             }
 
             if !contact.email.is_empty() {
-                vcf_content.push_str(&format!("EMAIL:{}\\n", contact.email));
+                vcf_content.push_str(&format!("EMAIL:{}\n", contact.email));
             }
 
             if !contact.address.is_empty() {
-                vcf_content.push_str(&format!("ADR:;;{};;;;\\n", contact.address));
+                vcf_content.push_str(&format!("ADR:;;{};;;;\n", contact.address));
             }
 
             if !contact.occupation.is_empty() {
-                vcf_content.push_str(&format!("NOTE:{}\\n", contact.occupation));
+                vcf_content.push_str(&format!("NOTE:{}\n", contact.occupation));
             }
 
-            vcf_content.push_str("END:VCARD\\n");
+            vcf_content.push_str("END:VCARD\n");
         }
 
-        // 异步写入文件
-        tokio::fs::write(output_path, vcf_content)
-            .await
-            .with_context(|| format!("写入VCF文件失败: {}", output_path))?;
+        // 先检查目录是否存在
+        if let Some(parent) = std::path::Path::new(output_path).parent() {
+            if !parent.exists() {
+                info!("创建目录: {:?}", parent);
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .with_context(|| format!("创建目录失败: {:?}", parent))?;
+            }
+        }
 
-        info!("VCF文件生成完成: {} 个联系人", contacts.len());
+        // 异步写入文件，添加重试机制
+        let mut attempts = 0;
+        let max_attempts = 3;
+        
+        while attempts < max_attempts {
+            match tokio::fs::write(output_path, &vcf_content).await {
+                Ok(_) => {
+                    info!("VCF文件生成完成: {} 个联系人", contacts.len());
+                    return Ok(output_path.to_string());
+                }
+                Err(e) => {
+                    attempts += 1;
+                    if attempts >= max_attempts {
+                        return Err(anyhow::anyhow!("写入VCF文件失败（重试{}次后）: {} - {}", max_attempts, output_path, e));
+                    }
+                    warn!("文件写入失败，重试第{}次: {}", attempts, e);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
+
         Ok(output_path.to_string())
     }
 
     /// 异步传输VCF文件到设备
-    async fn transfer_vcf_to_device_async(&self, local_path: &str, device_path: &str) -> Result<()> {
+    async fn transfer_vcf_to_device_async(
+        &self,
+        local_path: &str,
+        device_path: &str,
+    ) -> Result<()> {
         info!("异步传输VCF文件: {} -> {}", local_path, device_path);
 
         // 确保目标目录存在
@@ -226,9 +281,11 @@ impl VcfImporterAsync {
         let mut full_args = vec!["-s", &self.device_id];
         full_args.extend(args);
 
-        info!("执行ADB命令: {} {:?}", self.adb_path, full_args);
+        info!("🔧 执行ADB命令: {} {:?}", self.adb_path, full_args);
 
         for attempt in 1..=self.max_retries {
+            info!("🔄 尝试 {}/{}: 开始执行命令", attempt, self.max_retries);
+            
             match timeout(
                 self.timeout_duration,
                 self.run_command_with_output(&full_args),
@@ -236,18 +293,24 @@ impl VcfImporterAsync {
             .await
             {
                 Ok(Ok(output)) => {
-                    info!("ADB命令执行成功 (尝试 {}/{})", attempt, self.max_retries);
+                    info!("✅ ADB命令执行成功 (尝试 {}/{})", attempt, self.max_retries);
+                    info!("📄 命令输出: {}", output.trim());
                     return Ok(output);
                 }
                 Ok(Err(e)) => {
-                    warn!("ADB命令执行失败 (尝试 {}/{}): {}", attempt, self.max_retries, e);
+                    warn!(
+                        "❌ ADB命令执行失败 (尝试 {}/{}): {}",
+                        attempt, self.max_retries, e
+                    );
                     if attempt == self.max_retries {
+                        error!("💥 所有重试次数用尽，最终失败: {}", e);
                         return Err(e);
                     }
                 }
                 Err(_) => {
-                    warn!("ADB命令超时 (尝试 {}/{})", attempt, self.max_retries);
+                    warn!("⏰ ADB命令超时 (尝试 {}/{})", attempt, self.max_retries);
                     if attempt == self.max_retries {
+                        error!("💥 所有重试次数用尽，最终超时");
                         return Err(anyhow::anyhow!("ADB命令超时"));
                     }
                 }
@@ -267,25 +330,19 @@ impl VcfImporterAsync {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let mut child = cmd.spawn().context("启动ADB命令失败")?;
+        info!("🔧 启动命令: {} {:?}", self.adb_path, args);
+        
+        let output = cmd.output().await.context("执行ADB命令失败")?;
 
-        let stdout = child.stdout.take().context("获取stdout失败")?;
-        let mut reader = BufReader::new(stdout);
-        let mut output = String::new();
-
-        // 异步读取输出
-        while let Ok(line) = reader.read_line(&mut output).await {
-            if line == 0 {
-                break;
-            }
-        }
-
-        let status = child.wait().await.context("等待命令完成失败")?;
-
-        if status.success() {
-            Ok(output)
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            info!("✅ 命令执行成功，输出长度: {} 字符", stdout.len());
+            Ok(stdout)
         } else {
-            Err(anyhow::anyhow!("命令执行失败，退出码: {}", status))
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            error!("❌ 命令执行失败，退出码: {}", output.status);
+            error!("❌ 错误输出: {}", stderr);
+            Err(anyhow::anyhow!("命令执行失败，退出码: {} - {}", output.status, stderr))
         }
     }
 

@@ -66,6 +66,7 @@ pub struct FollowDetail {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageState {
     Unknown,         // 未知页面
+    Home,            // Android桌面
     MainPage,        // 小红书主页
     SidebarOpen,     // 侧边栏已打开
     DiscoverFriends, // 发现好友页面
@@ -326,6 +327,49 @@ impl XiaohongshuAutomator {
         
         // 根据当前状态决定从哪一步开始
         match page_state.current_state {
+            PageState::Home => {
+                info!("✓ 当前在桌面，需要启动小红书应用");
+                if let Err(e) = self.start_xiaohongshu_app().await {
+                    let error_msg = format!("启动小红书应用失败: {}", e);
+                    error!("❌ {}", error_msg);
+                    return Ok(NavigationResult {
+                        success: false,
+                        message: error_msg,
+                    });
+                }
+                sleep(Duration::from_millis(5000)).await;
+                
+                // 启动后重新检查页面状态
+                let new_state = match self.recognize_current_page().await {
+                    Ok(state) => state,
+                    Err(e) => {
+                        let error_msg = format!("启动后页面识别失败: {}", e);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                };
+                
+                info!("📋 启动后页面状态: {:?}, 置信度: {:.2}", new_state.current_state, new_state.confidence);
+                
+                // 根据启动后的状态继续导航
+                match new_state.current_state {
+                    PageState::MainPage => {
+                        info!("✓ 小红书已启动到主页面，继续导航流程");
+                        // 继续执行步骤3
+                    }
+                    PageState::SidebarOpen => {
+                        info!("✓ 启动后侧边栏已打开，直接进入步骤4");
+                        return self.navigate_from_sidebar().await;
+                    }
+                    _ => {
+                        info!("⚠️ 启动后页面状态未知，继续尝试导航");
+                        // 继续执行默认流程
+                    }
+                }
+            }
             PageState::MainPage => {
                 info!("✓ 当前在主页面，从步骤3开始（点击头像）");
                 // 继续执行步骤3
@@ -583,6 +627,13 @@ impl XiaohongshuAutomator {
 
         info!("🔍 分析UI内容，总长度: {} 字符", ui_dump.len());
 
+        // 首先检查是否在Android桌面
+        if ui_dump.contains("com.android.launcher3") || ui_dump.contains("launcher3") {
+            key_elements.push("Android桌面".to_string());
+            confidence_scores.push((PageState::Home, 0.95));
+            info!("✓ 检测到Android桌面特征 - 需要启动小红书应用");
+        }
+
         // 检查主页特征
         if ui_dump.contains("首页") || ui_dump.contains("推荐") || (ui_dump.contains("关注") && ui_dump.contains("发现")) {
             key_elements.push("主页导航".to_string());
@@ -668,6 +719,7 @@ impl XiaohongshuAutomator {
     async fn start_xiaohongshu_app(&self) -> Result<()> {
         info!("🚀 启动小红书应用...");
 
+        // 方法1: 通过ADB命令直接启动应用
         let output = Command::new(&self.adb_path)
             .args(&[
                 "-s", &self.device_id,
@@ -677,13 +729,68 @@ impl XiaohongshuAutomator {
             .output()
             .context("启动小红书应用失败")?;
 
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("启动应用失败: {}", error_msg));
+        if output.status.success() {
+            info!("✓ 小红书应用启动成功（通过ADB命令）");
+            return Ok(());
         }
 
-        info!("✓ 小红书应用启动成功");
-        Ok(())
+        // 方法2: 如果ADB启动失败，尝试从桌面点击图标
+        warn!("⚠️ ADB启动失败，尝试从桌面点击小红书图标");
+        let ui_dump = self.get_ui_dump().await?;
+        
+        // 查找小红书图标的坐标
+        if let Some(xiaohongshu_bounds) = self.extract_xiaohongshu_icon_coords(&ui_dump) {
+            info!("📍 找到小红书图标坐标: {:?}", xiaohongshu_bounds);
+            
+            // 计算点击坐标（图标中心）
+            let click_x = (xiaohongshu_bounds.0 + xiaohongshu_bounds.2) / 2;
+            let click_y = (xiaohongshu_bounds.1 + xiaohongshu_bounds.3) / 2;
+            
+            info!("👆 点击小红书图标坐标: ({}, {})", click_x, click_y);
+            self.click_coordinates(click_x, click_y).await?;
+            
+            info!("✓ 小红书应用启动成功（通过桌面图标）");
+            return Ok(());
+        }
+
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        Err(anyhow::anyhow!("启动应用失败: {}", error_msg))
+    }
+
+    /// 从UI dump中提取小红书图标的坐标
+    fn extract_xiaohongshu_icon_coords(&self, ui_dump: &str) -> Option<(i32, i32, i32, i32)> {
+        // 查找包含"小红书"文本的节点
+        for line in ui_dump.lines() {
+            if line.contains("小红书") && line.contains("bounds=") {
+                // 提取bounds信息
+                if let Some(bounds_start) = line.find("bounds=\"[") {
+                    if let Some(bounds_end) = line[bounds_start..].find("]\"") {
+                        let bounds_str = &line[bounds_start + 9..bounds_start + bounds_end];
+                        
+                        // 解析坐标格式: [left,top][right,bottom]
+                        if let Some(middle) = bounds_str.find("][") {
+                            let left_top = &bounds_str[..middle];
+                            let right_bottom = &bounds_str[middle + 2..];
+                            
+                            if let (Some(comma1), Some(comma2)) = (left_top.find(','), right_bottom.find(',')) {
+                                if let (Ok(left), Ok(top), Ok(right), Ok(bottom)) = (
+                                    left_top[..comma1].parse::<i32>(),
+                                    left_top[comma1 + 1..].parse::<i32>(),
+                                    right_bottom[..comma2].parse::<i32>(),
+                                    right_bottom[comma2 + 1..].parse::<i32>(),
+                                ) {
+                                    info!("✓ 解析到小红书图标坐标: ({}, {}, {}, {})", left, top, right, bottom);
+                                    return Some((left, top, right, bottom));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        warn!("⚠️ 未能从UI dump中找到小红书图标坐标");
+        None
     }
 
     /// 查找发现好友按钮坐标
@@ -712,6 +819,21 @@ impl XiaohongshuAutomator {
 
         info!("⚠️ UI解析失败，尝试候选坐标...");
         
+        // 添加调试信息：输出UI dump的关键片段
+        info!("🔍 UI dump关键内容调试:");
+        let lines: Vec<&str> = ui_dump.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("发现") || line.contains("好友") || line.contains("通讯录") || line.contains("联系人") {
+                info!("📝 第{}行包含关键词: {}", i, line.trim());
+            }
+        }
+        
+        // 输出UI dump的前几行和后几行供参考
+        info!("📄 UI dump前10行:");
+        for (i, line) in lines.iter().take(10).enumerate() {
+            info!("  {}： {}", i, line.trim());
+        }
+        
         // 基于UI内容选择最佳候选坐标
         for (x, y, desc) in &candidates {
             info!("🎯 尝试候选位置: {} 坐标:({}, {})", desc, x, y);
@@ -736,6 +858,7 @@ impl XiaohongshuAutomator {
         // 查找包含"发现好友"文本的XML节点
         let lines: Vec<&str> = ui_dump.lines().collect();
         
+        // 首先尝试精确匹配"发现好友"
         for (i, line) in lines.iter().enumerate() {
             if line.contains("发现好友") {
                 info!("📍 找到包含'发现好友'的行 {}: {}", i, line.trim());
@@ -748,6 +871,29 @@ impl XiaohongshuAutomator {
                         info!("✅ 解析到边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
                         
                         // 验证坐标合理性（避免过小或过大的坐标）
+                        if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
+                            return Some((center_x, center_y));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果没有找到"发现好友"，尝试查找"发现"和"好友"分开的情况
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("发现") && (line.contains("clickable=\"true\"") || line.contains("TextView")) {
+                info!("📍 找到包含'发现'的可点击元素行 {}: {}", i, line.trim());
+                
+                // 检查前后几行是否有"好友"
+                let context_lines = &lines[i.saturating_sub(3)..=(i + 3).min(lines.len() - 1)];
+                if context_lines.iter().any(|l| l.contains("好友")) {
+                    info!("📍 在上下文中找到'好友'，认为这是发现好友按钮");
+                    
+                    if let Some(bounds) = self.extract_bounds_from_line(line) {
+                        let center_x = (bounds.0 + bounds.2) / 2;
+                        let center_y = (bounds.1 + bounds.3) / 2;
+                        info!("✅ 解析到发现好友按钮边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                        
                         if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
                             return Some((center_x, center_y));
                         }
@@ -1169,6 +1315,11 @@ impl XiaohongshuAutomator {
             .context("返回主页失败")?;
 
         Ok(())
+    }
+
+    /// 通用点击坐标方法
+    async fn click_coordinates(&self, x: i32, y: i32) -> Result<()> {
+        self.adb_tap(x, y).await
     }
 
     /// ADB点击坐标

@@ -35,23 +35,14 @@ enum Commands {
         #[arg(short, long)]
         device: String,
     },
-    /// 执行自动关注
+    /// 执行自动关注通讯录好友
     Follow {
         /// 设备ID (例如: emulator-5554)
         #[arg(short, long)]
         device: String,
-        /// 最大处理页数
-        #[arg(short, long, default_value = "5")]
-        max_pages: usize,
-        /// 关注间隔（毫秒）
-        #[arg(short, long, default_value = "2000")]
-        interval: u64,
-        /// 跳过已关注用户
-        #[arg(short, long, default_value = "true")]
-        skip_existing: bool,
-        /// 完成后返回主页
-        #[arg(short, long, default_value = "true")]
-        return_home: bool,
+        /// 最大关注数量
+        #[arg(short, long, default_value = "20")]
+        max_follows: usize,
     },
     /// 完整流程：导入通讯录 + 自动关注
     Complete {
@@ -106,13 +97,10 @@ async fn main() -> Result<()> {
         }
         Commands::Follow {
             device,
-            max_pages,
-            interval,
-            skip_existing,
-            return_home,
+            max_follows,
         } => {
             info!("❤️ 开始在设备 {} 上执行自动关注", device);
-            auto_follow(&device, max_pages, interval, skip_existing, return_home).await?;
+            auto_follow_contacts(&device, Some(max_follows)).await?;
         }
         Commands::Complete {
             device,
@@ -297,6 +285,26 @@ async fn debug_ui_state(device_id: &str) -> Result<()> {
         Err(e) => {
             info!("❌ 页面识别失败: {}", e);
         }
+    }
+    
+    Ok(())
+}
+
+/// 自动关注通讯录好友
+async fn auto_follow_contacts(device_id: &str, max_follows: Option<usize>) -> Result<()> {
+    let automator = XiaohongshuAutomator::new(device_id.to_string());
+    
+    let result = automator.auto_follow_contacts(max_follows).await?;
+    
+    info!("🧭 关注结果:");
+    info!("  - 关注成功: {}", if result.success { "✅" } else { "❌" });
+    info!("  - 关注数量: {}", result.followed_count);
+    info!("  - 消息: {}", result.message);
+    
+    if result.success {
+        info!("✅ 已成功关注 {} 个好友", result.followed_count);
+    } else {
+        info!("❌ 关注失败: {}", result.message);
     }
     
     Ok(())

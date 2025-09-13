@@ -15,6 +15,14 @@ pub struct NavigationResult {
     pub message: String,
 }
 
+/// 关注结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FollowResult {
+    pub success: bool,
+    pub followed_count: usize,
+    pub message: String,
+}
+
 /// 小红书关注选项配置
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct XiaohongshuFollowOptions {

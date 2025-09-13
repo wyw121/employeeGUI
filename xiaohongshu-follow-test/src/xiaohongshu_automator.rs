@@ -898,10 +898,101 @@ impl XiaohongshuAutomator {
                 }
         }
         
-        // 如果没找到，使用预估坐标（基于发现好友页面布局）
-        warn!("未找到通讯录选项文本，使用预估坐标");
-        Ok((200, 400)) // 发现好友页面中部位置
+        // 如果找不到，返回默认坐标
+        warn!("⚠️ 未找到通讯录选项，使用默认坐标");
+        Ok((194, 205)) // 基于之前测试的成功坐标
     }
+        
+    /// 完整的自动关注流程
+    pub async fn auto_follow_contacts(&self, max_follows: Option<usize>) -> Result<FollowResult> {
+        info!("🚀 开始自动关注通讯录好友...");
+        
+        // 第一步：导航到通讯录页面
+        let nav_result = self.navigate_to_contacts().await?;
+        if !nav_result.success {
+            return Ok(FollowResult {
+                success: false,
+                followed_count: 0,
+                message: format!("导航失败: {}", nav_result.message),
+            });
+        }
+        
+        // 第二步：确保在通讯录选项卡
+        self.ensure_contacts_tab().await?;
+        
+        // 第三步：执行批量关注
+        let follow_count = self.follow_all_friends(max_follows).await?;
+        
+        Ok(FollowResult {
+            success: true,
+            followed_count: follow_count,
+            message: format!("成功关注了 {} 个好友", follow_count),
+        })
+    }
+
+    /// 确保在通讯录选项卡
+    async fn ensure_contacts_tab(&self) -> Result<()> {
+        info!("📋 确保在通讯录选项卡...");
+        
+        // 点击通讯录选项卡
+        self.adb_tap(194, 205).await?;
+        sleep(Duration::from_secs(2)).await;
+        
+        info!("✓ 已切换到通讯录选项卡");
+        Ok(())
+    }
+
+    /// 关注所有好友
+    async fn follow_all_friends(&self, max_follows: Option<usize>) -> Result<usize> {
+        info!("👥 开始关注好友...");
+        let mut followed_count = 0;
+        let max_count = max_follows.unwrap_or(50); // 默认最多关注50个
+        
+        // 多次尝试关注，直到没有更多好友或达到上限
+        for round in 1..=10 { // 最多10轮
+            info!("🔄 第 {} 轮关注", round);
+            
+            let round_follows = self.follow_visible_friends().await?;
+            followed_count += round_follows;
+            
+            if round_follows == 0 {
+                info!("✅ 没有更多好友需要关注");
+                break;
+            }
+            
+            if followed_count >= max_count {
+                info!("✅ 已达到最大关注数量限制: {}", max_count);
+                break;
+            }
+            
+            // 滚动页面以加载更多好友
+            self.scroll_down().await?;
+            sleep(Duration::from_secs(2)).await;
+        }
+        
+        info!("🎉 关注完成，总共关注了 {} 个好友", followed_count);
+        Ok(followed_count)
+    }
+
+    /// 关注当前可见的好友
+    async fn follow_visible_friends(&self) -> Result<usize> {
+        let follow_buttons = self.find_follow_buttons().await?;
+        let mut followed_count = 0;
+        
+        for (i, (x, y)) in follow_buttons.iter().enumerate() {
+            info!("👤 关注第 {} 个好友，坐标: ({}, {})", i + 1, x, y);
+            
+            self.adb_tap(*x, *y).await?;
+            followed_count += 1;
+            
+            // 随机延迟，模拟人工操作
+            let delay = rand::random::<u64>() % 2000 + 1000; // 1-3秒随机延迟
+            sleep(Duration::from_millis(delay)).await;
+        }
+        
+        Ok(followed_count)
+    }
+
 }
 
 /// 屏幕信息

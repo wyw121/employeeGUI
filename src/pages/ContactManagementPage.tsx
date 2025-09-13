@@ -420,10 +420,11 @@ export const ContactManagementPage: React.FC = () => {
                                     小红书关注
                                 </Space>
                             ),
-                            disabled: selectedContacts.length === 0,
-                            children: selectedContacts.length > 0 ? (
+                            disabled: selectedContacts.length === 0 || importResults.length === 0,
+                            children: (selectedContacts.length > 0 && importResults.length > 0) ? (
                                 <XiaohongshuFollowManager
                                     contacts={selectedContacts}
+                                    importResults={importResults}
                                     onFollowComplete={handleFollowComplete}
                                     onError={handleFollowError}
                                 />
@@ -431,16 +432,28 @@ export const ContactManagementPage: React.FC = () => {
                                 <Card>
                                     <Alert
                                         type="warning"
-                                        message="请先选择联系人"
-                                        description="请回到文件解析页面，上传并选择需要在小红书关注的联系人"
+                                        message="请先完成通讯录导入"
+                                        description="请先完成文件解析和设备导入操作，然后即可在小红书中关注这些联系人"
                                         showIcon
                                         action={
-                                            <Button 
-                                                type="primary"
-                                                onClick={() => setActiveTab('upload')}
-                                            >
-                                                返回选择
-                                            </Button>
+                                            <Space>
+                                                {selectedContacts.length === 0 && (
+                                                    <Button 
+                                                        type="primary"
+                                                        onClick={() => setActiveTab('upload')}
+                                                    >
+                                                        选择联系人
+                                                    </Button>
+                                                )}
+                                                {importResults.length === 0 && selectedContacts.length > 0 && (
+                                                    <Button 
+                                                        type="primary"
+                                                        onClick={() => setActiveTab('import')}
+                                                    >
+                                                        开始导入
+                                                    </Button>
+                                                )}
+                                            </Space>
                                         }
                                     />
                                 </Card>

@@ -14,4 +14,3 @@ pub mod vcf_importer;
 pub mod vcf_importer_async;
 pub mod vcf_importer_optimized;
 pub mod xiaohongshu_automator;
-pub mod xiaohongshu_follow_service;

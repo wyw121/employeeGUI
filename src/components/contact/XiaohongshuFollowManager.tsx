@@ -26,16 +26,18 @@ import {
     SettingOutlined,
     MobileOutlined,
     CheckCircleOutlined,
+    ExclamationCircleOutlined,
     UserAddOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import { Contact } from '../../types';
+import { Contact, VcfImportResult } from '../../types';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
 interface XiaohongshuFollowManagerProps {
     contacts: Contact[];
+    importResults: VcfImportResult[];
     onFollowComplete: (result: FollowResult) => void;
     onError: (error: string) => void;
 }
@@ -74,6 +76,7 @@ interface DeviceInfo {
 
 const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
     contacts,
+    importResults,
     onFollowComplete,
     onError
 }) => {
@@ -85,6 +88,7 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
     const [followProgress, setFollowProgress] = useState(0);
     const [followDetails, setFollowDetails] = useState<FollowDetail[]>([]);
     const [currentContact, setCurrentContact] = useState<string>('');
+    const [autoConfigured, setAutoConfigured] = useState(false);
 
     // 辅助函数
     const getStatusColor = (status: string) => {
@@ -105,10 +109,36 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
         }
     };
 
+    // 自动配置基于导入结果
+    const autoConfigureFromImportResults = () => {
+        if (!importResults || importResults.length === 0 || autoConfigured) {
+            return;
+        }
+
+        // 找到成功的导入结果
+        const successfulImports = importResults.filter(result => result.success);
+        if (successfulImports.length > 0) {
+            // 计算总的成功导入联系人数量
+            const totalImported = successfulImports.reduce((sum, result) => sum + result.importedContacts, 0);
+            
+            // 设置建议的关注数量（不超过导入数量，最多10个）
+            const suggestedFollows = Math.min(totalImported, 10);
+            setMaxFollows(suggestedFollows);
+            setAutoConfigured(true);
+            
+            message.info(`已根据导入结果自动配置：建议关注 ${suggestedFollows} 个好友（基于 ${totalImported} 个成功导入的联系人）`);
+        }
+    };
+
     // 获取连接的设备列表
     useEffect(() => {
         loadDevices();
     }, []);
+
+    // 监听导入结果变化，自动配置关注参数
+    useEffect(() => {
+        autoConfigureFromImportResults();
+    }, [importResults, autoConfigured]);
 
     const loadDevices = async () => {
         try {
@@ -137,15 +167,19 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
         }
 
         Modal.confirm({
-            title: '确认开始关注',
+            title: '确认开始小红书关注',
             content: (
                 <div>
-                    <p>即将开始关注小红书通讯录好友：</p>
-                    <ul>
-                        <li>设备: {devices.find(d => d.id === selectedDevice)?.name || selectedDevice}</li>
-                        <li>联系人数量: {contacts.length}</li>
-                        <li>最大关注数: {maxFollows}</li>
-                    </ul>
+                    <p>即将基于导入结果开始关注小红书通讯录好友：</p>
+                    <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '6px', margin: '12px 0' }}>
+                        <Text strong>导入摘要:</Text>
+                        <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                            <li>成功导入: {importResults.filter(r => r.success).reduce((sum, r) => sum + r.importedContacts, 0)} 个联系人</li>
+                            <li>成功设备: {importResults.filter(r => r.success).length} 个</li>
+                            <li>选择设备: {devices.find(d => d.id === selectedDevice)?.name || selectedDevice}</li>
+                            <li>关注数量: {maxFollows} 个好友</li>
+                        </ul>
+                    </div>
                     <Alert 
                         type="warning" 
                         message="请确保小红书APP已打开并处于主页面" 
@@ -255,10 +289,51 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
                 <Space>
                     <HeartOutlined style={{ color: '#ff4d4f' }} />
                     <span>小红书好友关注</span>
+                    {importResults.length > 0 && (
+                        <Tag color="green">
+                            基于 {importResults.filter(r => r.success).reduce((sum, r) => sum + r.importedContacts, 0)} 个导入联系人
+                        </Tag>
+                    )}
                 </Space>
             }>
                 <Row gutter={24}>
                     <Col span={16}>
+                        {/* 导入结果摘要 */}
+                        {importResults && importResults.length > 0 && (
+                            <Card title="导入结果摘要" size="small" style={{ marginBottom: 16 }}>
+                                <Row gutter={16}>
+                                    {importResults.map((result, index) => (
+                                        <Col span={8} key={`import-result-${index}-${result.totalContacts}`}>
+                                            <Card size="small" style={{ 
+                                                border: result.success ? '1px solid #52c41a' : '1px solid #ff4d4f',
+                                                backgroundColor: result.success ? '#f6ffed' : '#fff2f0'
+                                            }}>
+                                                <Statistic
+                                                    title={`设备 ${index + 1}`}
+                                                    value={result.importedContacts}
+                                                    suffix={`/ ${result.totalContacts}`}
+                                                    prefix={result.success ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+                                                    valueStyle={{ 
+                                                        color: result.success ? '#52c41a' : '#ff4d4f',
+                                                        fontSize: '16px'
+                                                    }}
+                                                />
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                    {result.success ? '导入成功' : '导入失败'}
+                                                </Text>
+                                            </Card>
+                                        </Col>
+                                    ))}
+                                </Row>
+                                <Alert
+                                    style={{ marginTop: 12 }}
+                                    type="info"
+                                    message={`建议关注数量已自动设置为 ${maxFollows} 个，基于成功导入的联系人数量`}
+                                    showIcon
+                                />
+                            </Card>
+                        )}
+
                         {/* 设备和参数配置 */}
                         <Card title="设备配置" size="small" style={{ marginBottom: 16 }}>
                             <Row gutter={16}>
@@ -397,14 +472,25 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
                         <Card title="操作指南" size="small">
                             <Paragraph style={{ fontSize: '13px' }}>
                                 <Title level={5} style={{ fontSize: '14px', margin: '8px 0 4px' }}>
-                                    使用步骤：
+                                    关注流程：
                                 </Title>
                                 <ol style={{ paddingLeft: '16px', margin: 0 }}>
-                                    <li>确保Android设备已连接</li>
-                                    <li>打开小红书APP并登录</li>
-                                    <li>选择设备和关注参数</li>
-                                    <li>点击"开始关注"</li>
+                                    <li>✅ 通讯录导入已完成 ({importResults.filter(r => r.success).length} 个设备成功)</li>
+                                    <li>🎯 已自动配置关注数量为 {maxFollows} 个好友</li>
+                                    <li>📱 确保Android设备已连接并打开小红书APP</li>
+                                    <li>🚀 点击"开始关注"执行自动关注</li>
                                 </ol>
+                                
+                                <Divider style={{ margin: '12px 0' }} />
+                                
+                                <Title level={5} style={{ fontSize: '14px', margin: '8px 0 4px' }}>
+                                    导入统计：
+                                </Title>
+                                <div style={{ fontSize: '12px' }}>
+                                    <Text>• 总计导入: {importResults.reduce((sum, r) => sum + r.importedContacts, 0)} 个联系人</Text><br/>
+                                    <Text>• 成功设备: {importResults.filter(r => r.success).length} / {importResults.length}</Text><br/>
+                                    <Text type="secondary">• 系统已根据导入结果自动优化关注数量</Text>
+                                </div>
                                 
                                 <Divider style={{ margin: '12px 0' }} />
                                 
@@ -412,10 +498,10 @@ const XiaohongshuFollowManager: React.FC<XiaohongshuFollowManagerProps> = ({
                                     注意事项：
                                 </Title>
                                 <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12px' }}>
-                                    <li>建议每次关注5-10个好友</li>
-                                    <li>避免频繁操作被系统限制</li>
-                                    <li>确保网络连接稳定</li>
+                                    <li>关注数量已根据导入结果智能设置</li>
+                                    <li>确保小红书APP处于主页面状态</li>
                                     <li>关注过程中请勿操作手机</li>
+                                    <li>系统会自动处理重复和异常情况</li>
                                 </ul>
                             </Paragraph>
                         </Card>

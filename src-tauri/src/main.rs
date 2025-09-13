@@ -223,6 +223,7 @@ fn main() {
             // 权限处理测试功能
             test_permission_handling,
             test_vcf_import_with_permission,
+            test_vcf_import_with_detailed_logs,
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push         // 使用安全ADB传输文件

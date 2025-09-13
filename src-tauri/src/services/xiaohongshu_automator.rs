@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
+use chrono;
 
 // 应用状态检查结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,6 +20,36 @@ pub struct AppStatusResult {
 pub struct NavigationResult {
     pub success: bool,
     pub message: String,
+}
+
+// 设备健康检查结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeviceHealthResult {
+    pub device_connected: bool,
+    pub adb_responsive: bool,
+    pub screen_responsive: bool,
+    pub app_accessible: bool,
+    pub overall_health: DeviceHealthStatus,
+    pub issues: Vec<String>,
+    pub recommendations: Vec<String>,
+}
+
+// 设备健康状态
+#[derive(Debug, Serialize, Deserialize)]
+pub enum DeviceHealthStatus {
+    Healthy,    // 设备状态良好
+    Warning,    // 有轻微问题但可以继续
+    Critical,   // 有严重问题需要处理
+    Disconnected, // 设备已断开连接
+}
+
+// 自动恢复结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecoveryResult {
+    pub success: bool,
+    pub actions_taken: Vec<String>,
+    pub message: String,
+    pub remaining_issues: Vec<String>,
 }
 
 // 关注操作配置
@@ -276,6 +307,683 @@ impl XiaohongshuAutomator {
             app_version,
             package_name: Some(package_name.to_string()),
         })
+    }
+
+    /// 设备健康检查 - 全面检测设备状态和潜在问题
+    pub async fn check_device_health(&self) -> Result<DeviceHealthResult> {
+        info!("🏥 开始设备健康检查...");
+        
+        let mut issues = Vec::new();
+        let mut recommendations = Vec::new();
+        
+        // 1. 检查设备连接状态
+        let device_connected = self.check_device_connection().await;
+        if !device_connected {
+            issues.push("设备未连接或ADB无法访问".to_string());
+            recommendations.push("请检查USB连接并确保设备已开启USB调试".to_string());
+        }
+        
+        // 2. 检查ADB响应性
+        let adb_responsive = if device_connected {
+            self.check_adb_responsiveness().await
+        } else {
+            false
+        };
+        if device_connected && !adb_responsive {
+            issues.push("ADB连接不稳定或响应缓慢".to_string());
+            recommendations.push("尝试重启ADB服务或重新连接设备".to_string());
+        }
+        
+        // 3. 检查屏幕响应性
+        let screen_responsive = if device_connected && adb_responsive {
+            self.check_screen_responsiveness().await
+        } else {
+            false
+        };
+        if device_connected && adb_responsive && !screen_responsive {
+            issues.push("设备屏幕无响应或界面异常".to_string());
+            recommendations.push("检查设备是否锁屏或界面是否正常".to_string());
+        }
+        
+        // 4. 检查小红书应用可访问性
+        let app_accessible = if screen_responsive {
+            self.check_app_accessibility().await
+        } else {
+            false
+        };
+        if screen_responsive && !app_accessible {
+            issues.push("小红书应用无法正常访问".to_string());
+            recommendations.push("检查应用是否已安装、是否有权限问题或需要更新".to_string());
+        }
+        
+        // 5. 综合评估设备健康状态
+        let overall_health = self.evaluate_overall_health(
+            device_connected, 
+            adb_responsive, 
+            screen_responsive, 
+            app_accessible
+        );
+        
+        // 6. 添加通用建议
+        if issues.is_empty() {
+            recommendations.push("设备状态良好，可以正常使用自动化功能".to_string());
+        } else {
+            recommendations.push("建议按顺序解决发现的问题".to_string());
+            if !device_connected {
+                recommendations.push("优先解决设备连接问题".to_string());
+            }
+        }
+        
+        info!("🏥 设备健康检查完成 - 状态: {:?}, 发现 {} 个问题", overall_health, issues.len());
+        
+        Ok(DeviceHealthResult {
+            device_connected,
+            adb_responsive,
+            screen_responsive,
+            app_accessible,
+            overall_health,
+            issues,
+            recommendations,
+        })
+    }
+    
+    /// 检查设备连接状态
+    async fn check_device_connection(&self) -> bool {
+        info!("🔌 检查设备连接状态...");
+        
+        // 检查ADB文件是否存在
+        if !std::path::Path::new(&self.adb_path).exists() {
+            error!("❌ ADB文件不存在: {}", self.adb_path);
+            return false;
+        }
+        
+        // 尝试列出连接的设备
+        match Command::new(&self.adb_path)
+            .args(&["devices"])
+            .output()
+        {
+            Ok(output) => {
+                let devices_output = String::from_utf8_lossy(&output.stdout);
+                let connected = devices_output.contains(&self.device_id) && 
+                               devices_output.contains("device"); // 确保设备状态是"device"而不是"offline"
+                
+                if connected {
+                    info!("✅ 设备 {} 已连接", self.device_id);
+                } else {
+                    warn!("⚠️ 设备 {} 未连接或状态异常", self.device_id);
+                    info!("📱 当前连接的设备:\n{}", devices_output);
+                }
+                connected
+            }
+            Err(e) => {
+                error!("❌ 检查设备连接失败: {}", e);
+                false
+            }
+        }
+    }
+    
+    /// 检查ADB响应性
+    async fn check_adb_responsiveness(&self) -> bool {
+        info!("⚡ 检查ADB响应性...");
+        
+        let start_time = std::time::Instant::now();
+        
+        // 执行简单的shell命令测试响应性
+        match Command::new(&self.adb_path)
+            .args(&["-s", &self.device_id, "shell", "echo", "adb_test"])
+            .output()
+        {
+            Ok(output) => {
+                let elapsed = start_time.elapsed();
+                let response_time_ms = elapsed.as_millis();
+                
+                if output.status.success() && String::from_utf8_lossy(&output.stdout).contains("adb_test") {
+                    if response_time_ms < 3000 { // 3秒内响应认为正常
+                        info!("✅ ADB响应正常，响应时间: {}ms", response_time_ms);
+                        true
+                    } else {
+                        warn!("⚠️ ADB响应缓慢，响应时间: {}ms", response_time_ms);
+                        false
+                    }
+                } else {
+                    error!("❌ ADB命令执行失败");
+                    false
+                }
+            }
+            Err(e) => {
+                error!("❌ ADB响应性检查失败: {}", e);
+                false
+            }
+        }
+    }
+    
+    /// 检查屏幕响应性
+    async fn check_screen_responsiveness(&self) -> bool {
+        info!("📱 检查屏幕响应性...");
+        
+        // 尝试获取屏幕信息
+        match Command::new(&self.adb_path)
+            .args(&["-s", &self.device_id, "shell", "wm", "size"])
+            .output()
+        {
+            Ok(output) => {
+                if output.status.success() {
+                    let screen_info = String::from_utf8_lossy(&output.stdout);
+                    if screen_info.contains("Physical size") {
+                        info!("✅ 屏幕信息获取正常: {}", screen_info.trim());
+                        
+                        // 进一步检查是否能获取UI dump（表示界面可访问）
+                        match Command::new(&self.adb_path)
+                            .args(&["-s", &self.device_id, "shell", "uiautomator", "dump", "/dev/stdout"])
+                            .output()
+                        {
+                            Ok(ui_output) => {
+                                if ui_output.status.success() && !ui_output.stdout.is_empty() {
+                                    info!("✅ UI界面可正常访问");
+                                    true
+                                } else {
+                                    warn!("⚠️ 无法获取UI信息，可能设备锁屏或界面异常");
+                                    false
+                                }
+                            }
+                            Err(e) => {
+                                warn!("⚠️ UI dump检查失败: {}", e);
+                                false
+                            }
+                        }
+                    } else {
+                        warn!("⚠️ 屏幕信息格式异常");
+                        false
+                    }
+                } else {
+                    error!("❌ 无法获取屏幕信息");
+                    false
+                }
+            }
+            Err(e) => {
+                error!("❌ 屏幕响应性检查失败: {}", e);
+                false
+            }
+        }
+    }
+    
+    /// 检查小红书应用可访问性
+    async fn check_app_accessibility(&self) -> bool {
+        info!("📱 检查小红书应用可访问性...");
+        
+        match self.check_app_status().await {
+            Ok(app_status) => {
+                if !app_status.app_installed {
+                    warn!("⚠️ 小红书应用未安装");
+                    false
+                } else if !app_status.app_running {
+                    info!("⚡ 小红书应用未运行，尝试启动...");
+                    // 尝试启动应用
+                    match self.start_xiaohongshu_app().await {
+                        Ok(_) => {
+                            info!("✅ 小红书应用启动成功");
+                            // 等待应用完全启动
+                            sleep(Duration::from_millis(3000)).await;
+                            true
+                        }
+                        Err(e) => {
+                            error!("❌ 小红书应用启动失败: {}", e);
+                            false
+                        }
+                    }
+                } else {
+                    info!("✅ 小红书应用运行正常");
+                    true
+                }
+            }
+            Err(e) => {
+                error!("❌ 检查小红书应用状态失败: {}", e);
+                false
+            }
+        }
+    }
+    
+    /// 评估整体健康状态
+    fn evaluate_overall_health(
+        &self,
+        device_connected: bool,
+        adb_responsive: bool,
+        screen_responsive: bool,
+        app_accessible: bool,
+    ) -> DeviceHealthStatus {
+        if !device_connected {
+            DeviceHealthStatus::Disconnected
+        } else if device_connected && adb_responsive && screen_responsive && app_accessible {
+            DeviceHealthStatus::Healthy
+        } else if device_connected && adb_responsive {
+            DeviceHealthStatus::Warning
+        } else {
+            DeviceHealthStatus::Critical
+        }
+    }
+
+    /// 自动恢复机制 - 尝试解决检测到的问题
+    pub async fn auto_recovery(&self) -> Result<RecoveryResult> {
+        info!("🔄 启动自动恢复流程...");
+        
+        let mut actions_taken = Vec::new();
+        let mut remaining_issues = Vec::new();
+        
+        // 首先进行健康检查
+        let health_result = self.check_device_health().await?;
+        
+        if matches!(health_result.overall_health, DeviceHealthStatus::Healthy) {
+            return Ok(RecoveryResult {
+                success: true,
+                actions_taken: vec!["设备状态良好，无需恢复".to_string()],
+                message: "设备健康状态良好".to_string(),
+                remaining_issues: vec![],
+            });
+        }
+        
+        info!("🚨 检测到设备问题，开始恢复操作...");
+        
+        // 1. 处理设备连接问题
+        if !health_result.device_connected {
+            info!("🔌 尝试恢复设备连接...");
+            
+            if self.attempt_device_reconnection().await {
+                actions_taken.push("重新建立设备连接".to_string());
+                info!("✅ 设备连接恢复成功");
+            } else {
+                remaining_issues.push("设备连接失败 - 需要手动检查USB连接和调试设置".to_string());
+                error!("❌ 设备连接恢复失败");
+            }
+        }
+        
+        // 2. 处理ADB响应问题
+        if health_result.device_connected && !health_result.adb_responsive {
+            info!("⚡ 尝试恢复ADB响应性...");
+            
+            if self.attempt_adb_recovery().await {
+                actions_taken.push("重启ADB服务并恢复响应性".to_string());
+                info!("✅ ADB响应性恢复成功");
+            } else {
+                remaining_issues.push("ADB响应异常 - 可能需要重启ADB或重新连接设备".to_string());
+                error!("❌ ADB响应性恢复失败");
+            }
+        }
+        
+        // 3. 处理屏幕响应问题
+        if health_result.adb_responsive && !health_result.screen_responsive {
+            info!("📱 尝试恢复屏幕响应性...");
+            
+            if self.attempt_screen_recovery().await {
+                actions_taken.push("唤醒设备屏幕并解锁".to_string());
+                info!("✅ 屏幕响应性恢复成功");
+            } else {
+                remaining_issues.push("屏幕无响应 - 请手动检查设备是否锁定或界面异常".to_string());
+                error!("❌ 屏幕响应性恢复失败");
+            }
+        }
+        
+        // 4. 处理应用访问问题
+        if health_result.screen_responsive && !health_result.app_accessible {
+            info!("📱 尝试恢复小红书应用访问...");
+            
+            if self.attempt_app_recovery().await {
+                actions_taken.push("启动小红书应用并恢复访问".to_string());
+                info!("✅ 应用访问恢复成功");
+            } else {
+                remaining_issues.push("小红书应用无法访问 - 请检查应用是否已安装或需要更新".to_string());
+                error!("❌ 应用访问恢复失败");
+            }
+        }
+        
+        // 5. 进行最终健康检查
+        info!("🔍 执行恢复后健康检查...");
+        let final_health = self.check_device_health().await?;
+        let success = matches!(final_health.overall_health, DeviceHealthStatus::Healthy | DeviceHealthStatus::Warning);
+        
+        let message = if success {
+            if actions_taken.is_empty() {
+                "设备状态良好，无需恢复操作".to_string()
+            } else {
+                format!("恢复成功，执行了 {} 项恢复操作", actions_taken.len())
+            }
+        } else {
+            format!("部分恢复成功，仍有 {} 个问题需要手动处理", remaining_issues.len())
+        };
+        
+        info!("🔄 自动恢复完成 - 成功: {}, 操作数: {}, 剩余问题: {}", 
+              success, actions_taken.len(), remaining_issues.len());
+        
+        Ok(RecoveryResult {
+            success,
+            actions_taken,
+            message,
+            remaining_issues,
+        })
+    }
+    
+    /// 尝试设备重连
+    async fn attempt_device_reconnection(&self) -> bool {
+        info!("🔄 尝试重新连接设备...");
+        
+        // 尝试重启ADB服务
+        if let Ok(_) = Command::new(&self.adb_path)
+            .args(&["kill-server"])
+            .output()
+        {
+            sleep(Duration::from_millis(2000)).await;
+            
+            if let Ok(_) = Command::new(&self.adb_path)
+                .args(&["start-server"])
+                .output()
+            {
+                sleep(Duration::from_millis(3000)).await;
+                
+                // 检查设备是否重新连接
+                return self.check_device_connection().await;
+            }
+        }
+        
+        false
+    }
+    
+    /// 尝试ADB恢复
+    async fn attempt_adb_recovery(&self) -> bool {
+        info!("🔄 尝试恢复ADB响应性...");
+        
+        // 发送几个简单命令测试连接
+        for _ in 0..3 {
+            if let Ok(output) = Command::new(&self.adb_path)
+                .args(&["-s", &self.device_id, "shell", "echo", "recovery_test"])
+                .output()
+            {
+                if output.status.success() {
+                    return true;
+                }
+            }
+            
+            sleep(Duration::from_millis(1000)).await;
+        }
+        
+        // 如果简单测试失败，尝试重连
+        self.attempt_device_reconnection().await
+    }
+    
+    /// 尝试屏幕恢复
+    async fn attempt_screen_recovery(&self) -> bool {
+        info!("🔄 尝试恢复屏幕响应性...");
+        
+        // 1. 尝试唤醒屏幕
+        if let Ok(_) = Command::new(&self.adb_path)
+            .args(&["-s", &self.device_id, "shell", "input", "keyevent", "KEYCODE_WAKEUP"])
+            .output()
+        {
+            sleep(Duration::from_millis(1000)).await;
+        }
+        
+        // 2. 尝试解锁（假设是简单滑动解锁）
+        if let Ok(_) = Command::new(&self.adb_path)
+            .args(&["-s", &self.device_id, "shell", "input", "swipe", "500", "1000", "500", "500"])
+            .output()
+        {
+            sleep(Duration::from_millis(1000)).await;
+        }
+        
+        // 3. 验证屏幕是否可访问
+        self.check_screen_responsiveness().await
+    }
+    
+    /// 尝试应用恢复
+    async fn attempt_app_recovery(&self) -> bool {
+        info!("🔄 尝试恢复小红书应用访问...");
+        
+        // 1. 检查应用状态
+        if let Ok(app_status) = self.check_app_status().await {
+            if !app_status.app_installed {
+                warn!("⚠️ 小红书应用未安装，无法自动恢复");
+                return false;
+            }
+            
+            // 2. 如果应用未运行，尝试启动
+            if !app_status.app_running {
+                if let Ok(_) = self.start_xiaohongshu_app().await {
+                    sleep(Duration::from_millis(5000)).await; // 等待应用完全启动
+                    
+                    // 验证启动是否成功
+                    if let Ok(new_status) = self.check_app_status().await {
+                        return new_status.app_running;
+                    }
+                }
+            } else {
+                // 应用已运行，检查是否可以访问界面
+                return self.check_app_accessibility().await;
+            }
+        }
+        
+        false
+    }
+    
+    /// 带恢复机制的导航 - 在导航失败时自动尝试恢复
+    pub async fn navigate_to_contacts_with_recovery(&self) -> Result<NavigationResult> {
+        info!("🧭 开始带恢复机制的导航流程...");
+        
+        // 第一次尝试正常导航
+        match self.navigate_to_contacts().await {
+            Ok(result) => {
+                if result.success {
+                    info!("✅ 首次导航成功");
+                    return Ok(result);
+                } else {
+                    warn!("⚠️ 首次导航失败: {}", result.message);
+                }
+            }
+            Err(e) => {
+                warn!("⚠️ 首次导航出错: {}", e);
+            }
+        }
+        
+        // 首次失败，尝试自动恢复
+        info!("🔄 首次导航失败，尝试自动恢复...");
+        match self.auto_recovery().await {
+            Ok(recovery_result) => {
+                if recovery_result.success {
+                    info!("✅ 自动恢复成功，重新尝试导航...");
+                    
+                    // 等待恢复完成
+                    sleep(Duration::from_millis(2000)).await;
+                    
+                    // 第二次尝试导航
+                    match self.navigate_to_contacts().await {
+                        Ok(result) => {
+                            if result.success {
+                                info!("✅ 恢复后导航成功");
+                                Ok(NavigationResult {
+                                    success: true,
+                                    message: format!("经过自动恢复后导航成功 - 恢复操作: {:?}", recovery_result.actions_taken),
+                                })
+                            } else {
+                                error!("❌ 恢复后导航仍然失败");
+                                Ok(NavigationResult {
+                                    success: false,
+                                    message: format!("恢复后导航失败: {} - 剩余问题: {:?}", result.message, recovery_result.remaining_issues),
+                                })
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ 恢复后导航出错: {}", e);
+                            Ok(NavigationResult {
+                                success: false,
+                                message: format!("恢复后导航出错: {} - 剩余问题: {:?}", e, recovery_result.remaining_issues),
+                            })
+                        }
+                    }
+                } else {
+                    error!("❌ 自动恢复失败");
+                    Ok(NavigationResult {
+                        success: false,
+                        message: format!("自动恢复失败: {} - 需要手动处理: {:?}", recovery_result.message, recovery_result.remaining_issues),
+                    })
+                }
+            }
+            Err(e) => {
+                error!("❌ 自动恢复过程出错: {}", e);
+                Ok(NavigationResult {
+                    success: false,
+                    message: format!("自动恢复过程出错: {}", e),
+                })
+            }
+        }
+    }
+
+    /// 获取用户友好的错误解决方案
+    pub fn get_error_solutions(&self, error_type: &str) -> Vec<String> {
+        match error_type {
+            "device_disconnected" => vec![
+                "1. 检查USB数据线连接是否牢固".to_string(),
+                "2. 确认设备已开启'USB调试'模式".to_string(),
+                "3. 尝试重新连接USB线或更换USB端口".to_string(),
+                "4. 在设备上允许此计算机的USB调试授权".to_string(),
+                "5. 重启ADB服务：关闭程序后重新打开".to_string(),
+            ],
+            "adb_unresponsive" => vec![
+                "1. 等待10-15秒让设备响应".to_string(),
+                "2. 重启ADB服务（程序会自动尝试）".to_string(),
+                "3. 拔掉USB线等待5秒后重新连接".to_string(),
+                "4. 检查设备是否在传输文件或其他操作中".to_string(),
+                "5. 重启设备的开发者选项".to_string(),
+            ],
+            "screen_locked" => vec![
+                "1. 手动解锁设备屏幕".to_string(),
+                "2. 确保设备屏幕保持亮屏状态".to_string(),
+                "3. 关闭设备的自动锁屏功能（开发者选项中的'保持唤醒状态'）".to_string(),
+                "4. 如果设置了复杂密码，建议临时改为简单滑动解锁".to_string(),
+            ],
+            "app_not_installed" => vec![
+                "1. 在设备上安装小红书应用".to_string(),
+                "2. 确保应用版本为最新版本".to_string(),
+                "3. 检查应用是否被设备管理软件禁用".to_string(),
+                "4. 重新安装小红书应用".to_string(),
+            ],
+            "app_not_running" => vec![
+                "1. 手动启动小红书应用".to_string(),
+                "2. 确保应用未被后台管理限制".to_string(),
+                "3. 检查应用是否需要登录".to_string(),
+                "4. 清除应用缓存后重启".to_string(),
+            ],
+            "permission_denied" => vec![
+                "1. 在小红书应用中允许必要的权限（联系人、存储等）".to_string(),
+                "2. 检查设备的权限管理设置".to_string(),
+                "3. 重新启动小红书应用".to_string(),
+                "4. 在应用信息中手动开启所有权限".to_string(),
+            ],
+            "ui_not_accessible" => vec![
+                "1. 检查设备上是否开启了无障碍服务".to_string(),
+                "2. 确保屏幕上没有其他应用的悬浮窗".to_string(),
+                "3. 关闭设备的省电模式".to_string(),
+                "4. 检查设备是否有弹窗或通知阻挡界面".to_string(),
+            ],
+            "network_error" => vec![
+                "1. 检查设备的网络连接".to_string(),
+                "2. 确保小红书应用有网络访问权限".to_string(),
+                "3. 尝试切换WiFi或移动数据".to_string(),
+                "4. 重启设备的网络连接".to_string(),
+            ],
+            _ => vec![
+                "1. 重启设备后重试".to_string(),
+                "2. 检查所有连接和设置".to_string(),
+                "3. 联系技术支持获取帮助".to_string(),
+            ],
+        }
+    }
+
+    /// 生成详细的故障排除报告
+    pub async fn generate_troubleshoot_report(&self) -> Result<String> {
+        info!("📋 生成故障排除报告...");
+        
+        let mut report = String::new();
+        report.push_str("📋 小红书自动化故障排除报告\n");
+        report.push_str("=====================================\n\n");
+        
+        // 1. 基本信息
+        report.push_str("🔧 基本信息:\n");
+        report.push_str(&format!("设备ID: {}\n", self.device_id));
+        report.push_str(&format!("ADB路径: {}\n", self.adb_path));
+        report.push_str(&format!("生成时间: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        
+        // 2. 设备健康检查
+        report.push_str("🏥 设备健康检查:\n");
+        match self.check_device_health().await {
+            Ok(health) => {
+                report.push_str(&format!("整体状态: {:?}\n", health.overall_health));
+                report.push_str(&format!("设备连接: {}\n", if health.device_connected { "✅ 正常" } else { "❌ 异常" }));
+                report.push_str(&format!("ADB响应: {}\n", if health.adb_responsive { "✅ 正常" } else { "❌ 异常" }));
+                report.push_str(&format!("屏幕响应: {}\n", if health.screen_responsive { "✅ 正常" } else { "❌ 异常" }));
+                report.push_str(&format!("应用访问: {}\n", if health.app_accessible { "✅ 正常" } else { "❌ 异常" }));
+                
+                if !health.issues.is_empty() {
+                    report.push_str("\n⚠️ 发现的问题:\n");
+                    for (i, issue) in health.issues.iter().enumerate() {
+                        report.push_str(&format!("{}. {}\n", i + 1, issue));
+                    }
+                }
+                
+                if !health.recommendations.is_empty() {
+                    report.push_str("\n💡 建议:\n");
+                    for (i, rec) in health.recommendations.iter().enumerate() {
+                        report.push_str(&format!("{}. {}\n", i + 1, rec));
+                    }
+                }
+            }
+            Err(e) => {
+                report.push_str(&format!("❌ 健康检查失败: {}\n", e));
+            }
+        }
+        
+        // 3. 应用状态
+        report.push_str("\n📱 应用状态:\n");
+        match self.check_app_status().await {
+            Ok(app_status) => {
+                report.push_str(&format!("应用安装: {}\n", if app_status.app_installed { "✅ 已安装" } else { "❌ 未安装" }));
+                report.push_str(&format!("应用运行: {}\n", if app_status.app_running { "✅ 运行中" } else { "❌ 未运行" }));
+                if let Some(version) = &app_status.app_version {
+                    report.push_str(&format!("应用版本: {}\n", version));
+                }
+                report.push_str(&format!("状态消息: {}\n", app_status.message));
+            }
+            Err(e) => {
+                report.push_str(&format!("❌ 应用状态检查失败: {}\n", e));
+            }
+        }
+        
+        // 4. 常见问题解决方案
+        report.push_str("\n🛠️ 常见问题解决方案:\n");
+        
+        let common_issues = vec![
+            ("设备连接问题", "device_disconnected"),
+            ("ADB响应异常", "adb_unresponsive"),
+            ("屏幕锁定", "screen_locked"),
+            ("应用未安装", "app_not_installed"),
+            ("应用未运行", "app_not_running"),
+            ("权限被拒绝", "permission_denied"),
+            ("界面无法访问", "ui_not_accessible"),
+            ("网络错误", "network_error"),
+        ];
+        
+        for (issue_name, error_type) in common_issues {
+            report.push_str(&format!("\n📌 {}:\n", issue_name));
+            let solutions = self.get_error_solutions(error_type);
+            for solution in solutions {
+                report.push_str(&format!("   {}\n", solution));
+            }
+        }
+        
+        // 5. 联系支持
+        report.push_str("\n📞 获取帮助:\n");
+        report.push_str("如果以上解决方案都无法解决问题，请：\n");
+        report.push_str("1. 保存此报告内容\n");
+        report.push_str("2. 记录具体的错误信息\n");
+        report.push_str("3. 联系技术支持\n");
+        
+        Ok(report)
     }
 
     /// 智能导航到通讯录页面

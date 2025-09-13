@@ -26,6 +26,7 @@ import {
 import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
+import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 
@@ -60,6 +61,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'contacts',
       icon: <UserOutlined />,
       label: '通讯录管理',
+    },
+    {
+      key: 'xiaohongshu-follow',
+      icon: <UserOutlined />,
+      label: '小红书关注',
     },
     {
       key: 'smart-vcf',
@@ -269,6 +275,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'contacts' && (
               <ContactManagementPage />
+            )}
+
+            {selectedKey === 'xiaohongshu-follow' && (
+              <XiaohongshuFollowPage />
             )}
 
             {selectedKey === 'smart-vcf' && (

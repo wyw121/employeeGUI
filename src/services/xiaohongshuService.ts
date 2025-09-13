@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from "@tauri-apps/api/core";
 
 // ===== 数据类型定义 =====
 
@@ -54,34 +54,33 @@ export interface CompleteWorkflowResult {
 // ===== 小红书服务类 =====
 
 export class XiaohongshuService {
-  
   /**
    * 初始化小红书自动化服务
    * @param deviceId Android设备ID，例如 "emulator-5554"
    */
   static async initializeService(deviceId: string): Promise<void> {
-    console.log('🚀 初始化小红书服务，设备ID:', deviceId);
-    return invoke('initialize_xiaohongshu_service', { deviceId });
+    console.log("🚀 初始化小红书服务，设备ID:", deviceId);
+    return invoke("initialize_xiaohongshu_service", { deviceId });
   }
-  
+
   /**
    * 检查小红书应用状态
    * @returns 应用安装和运行状态
    */
   static async checkAppStatus(): Promise<AppStatusResult> {
-    console.log('📱 检查小红书应用状态');
-    return invoke('check_xiaohongshu_status');
+    console.log("📱 检查小红书应用状态");
+    return invoke("check_xiaohongshu_status");
   }
-  
+
   /**
    * 导航到小红书通讯录页面
    * @returns 导航操作结果
    */
   static async navigateToContacts(): Promise<NavigationResult> {
-    console.log('🧭 导航到小红书通讯录页面');
-    return invoke('navigate_to_contacts_page');
+    console.log("🧭 导航到小红书通讯录页面");
+    return invoke("navigate_to_contacts_page");
   }
-  
+
   /**
    * 执行小红书自动关注
    * @param options 关注配置选项
@@ -90,18 +89,18 @@ export class XiaohongshuService {
   static async autoFollowContacts(
     options?: XiaohongshuFollowOptions
   ): Promise<XiaohongshuFollowResult> {
-    console.log('❤️ 开始执行小红书自动关注', options);
-    return invoke('auto_follow_contacts', { options });
+    console.log("❤️ 开始执行小红书自动关注", options);
+    return invoke("auto_follow_contacts", { options });
   }
-  
+
   /**
    * 获取服务状态
    * @returns 当前服务状态
    */
   static async getServiceStatus(): Promise<XiaohongshuServiceStatus> {
-    return invoke('get_xiaohongshu_service_status');
+    return invoke("get_xiaohongshu_service_status");
   }
-  
+
   /**
    * 执行完整的小红书关注工作流程
    * 包含初始化 -> 状态检查 -> 导航 -> 关注的完整流程
@@ -113,20 +112,20 @@ export class XiaohongshuService {
     deviceId: string,
     options?: XiaohongshuFollowOptions
   ): Promise<CompleteWorkflowResult> {
-    console.log('🚀 执行完整的小红书关注工作流程');
-    console.log('设备ID:', deviceId);
-    console.log('配置选项:', options);
-    
+    console.log("🚀 执行完整的小红书关注工作流程");
+    console.log("设备ID:", deviceId);
+    console.log("配置选项:", options);
+
     try {
       const result = await invoke<CompleteWorkflowResult>(
-        'execute_complete_xiaohongshu_workflow',
+        "execute_complete_xiaohongshu_workflow",
         { deviceId, options }
       );
-      
-      console.log('✅ 工作流程执行完成:', result);
+
+      console.log("✅ 工作流程执行完成:", result);
       return result;
     } catch (error) {
-      console.error('❌ 工作流程执行失败:', error);
+      console.error("❌ 工作流程执行失败:", error);
       throw new Error(`工作流程执行失败: ${error}`);
     }
   }
@@ -144,7 +143,7 @@ export class XiaohongshuService {
       const status = await this.checkAppStatus();
       return status.app_installed;
     } catch (error) {
-      console.error('设备连接验证失败:', error);
+      console.error("设备连接验证失败:", error);
       return false;
     }
   }
@@ -154,7 +153,9 @@ export class XiaohongshuService {
    * @param mode 模式：'conservative' | 'normal' | 'aggressive'
    * @returns 配置选项
    */
-  static getRecommendedOptions(mode: 'conservative' | 'normal' | 'aggressive' = 'normal'): XiaohongshuFollowOptions {
+  static getRecommendedOptions(
+    mode: "conservative" | "normal" | "aggressive" = "normal"
+  ): XiaohongshuFollowOptions {
     const configs = {
       conservative: {
         max_pages: 3,
@@ -191,18 +192,21 @@ export class XiaohongshuService {
     errorSummary: string[];
   } {
     const totalAttempts = result.details.length;
-    const successCount = result.details.filter(d => d.follow_success).length;
-    const successRate = totalAttempts > 0 ? (successCount / totalAttempts) * 100 : 0;
-    
+    const successCount = result.details.filter((d) => d.follow_success).length;
+    const successRate =
+      totalAttempts > 0 ? (successCount / totalAttempts) * 100 : 0;
+
     const errors = result.details
-      .filter(d => !d.follow_success && d.error)
-      .map(d => d.error!)
+      .filter((d) => !d.follow_success && d.error)
+      .map((d) => d.error!)
       .reduce((acc, error) => {
         acc[error] = (acc[error] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
-    const errorSummary = Object.entries(errors).map(([error, count]) => `${error}: ${count}次`);
+    const errorSummary = Object.entries(errors).map(
+      ([error, count]) => `${error}: ${count}次`
+    );
 
     return {
       isSuccess: result.success && successRate > 50, // 成功率超过50%才算成功
@@ -220,7 +224,7 @@ export class XiaohongshuService {
   static formatDuration(seconds: number): string {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    
+
     if (minutes > 0) {
       return `${minutes}分${remainingSeconds}秒`;
     }
@@ -240,13 +244,13 @@ export class XiaohongshuService {
     const maxPages = options.max_pages || 5;
     const followInterval = options.follow_interval || 2000;
     const totalContacts = maxPages * estimatedContactsPerPage;
-    
+
     // 基础时间：关注间隔 * 联系人数
     const followTime = (totalContacts * followInterval) / 1000;
-    
+
     // 导航和滚动时间：每页约3秒
     const navigationTime = maxPages * 3;
-    
+
     // 总时间包含一些缓冲
     return Math.ceil(followTime + navigationTime + 30); // 额外30秒缓冲
   }

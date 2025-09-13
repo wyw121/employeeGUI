@@ -1,34 +1,34 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Button,
-  Card,
-  Space,
-  Steps,
-  Alert,
-  Typography,
-  InputNumber,
-  Switch,
-  Progress,
-  Row,
-  Col,
-  Tag,
-  Divider,
-  message,
-  Spin,
-  Checkbox
-} from 'antd';
-import {
-  HeartOutlined,
-  SettingOutlined,
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  AndroidOutlined,
-  ReloadOutlined
+    AndroidOutlined,
+    CheckCircleOutlined,
+    ClockCircleOutlined,
+    HeartOutlined,
+    PlayCircleOutlined,
+    ReloadOutlined,
+    SettingOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import { Device, VcfImportResult, XiaohongshuFollowResult } from '../../types';
+import {
+    Alert,
+    Button,
+    Card,
+    Checkbox,
+    Col,
+    Divider,
+    InputNumber,
+    message,
+    Progress,
+    Row,
+    Space,
+    Spin,
+    Steps,
+    Switch,
+    Tag,
+    Typography
+} from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
 import { XiaohongshuService } from '../../services/xiaohongshuService';
+import { Device, VcfImportResult, XiaohongshuFollowResult } from '../../types';
 
 const { Text, Title } = Typography;
 const { Step } = Steps;

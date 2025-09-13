@@ -1,3 +1,2 @@
-export { DeviceList } from "./DeviceList";
-export { default as RealDeviceManager } from "./RealDeviceManager";
-export type { RealDeviceInfo } from "./RealDeviceManager";
+export { DeviceList } from './DeviceList';
+export { RealDeviceManager } from './RealDeviceManager';

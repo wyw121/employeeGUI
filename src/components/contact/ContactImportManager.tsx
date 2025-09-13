@@ -35,6 +35,7 @@ const { Step } = Steps;
 interface ContactImportManagerProps {
   contacts: Contact[];
   onImportComplete?: (results: VcfImportResult[]) => void;
+  onDeviceSelected?: (devices: Device[]) => void;
   onError?: (error: string) => void;
 }
 
@@ -49,6 +50,7 @@ interface DeviceContactGroup {
 export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
   contacts,
   onImportComplete,
+  onDeviceSelected,
   onError
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -167,6 +169,12 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
       const connectedDeviceIds = devices.map(device => device.id.toString());
       setSelectedDevices(connectedDeviceIds);
       
+      // 立即触发设备选择回调，因为我们刚刚设置了设备
+      if (onDeviceSelected && devices.length > 0) {
+        console.log('立即触发设备选择回调，设备数量:', devices.length);
+        onDeviceSelected(devices); // 直接传递设备数组，而不是等待状态更新
+      }
+      
       if (devices.length === 0) {
         message.info('未检测到连接的设备，请确保：\n1. 设备已通过USB连接\n2. 启用了USB调试\n3. ADB驱动已正确安装');
       } else {
@@ -228,6 +236,16 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
 
     return groups;
   }, [selectedContacts, selectedDevices, availableDevices]);
+
+  // 当设备选择发生变化时，通知父组件
+  useEffect(() => {
+    if (onDeviceSelected && selectedDevices.length > 0 && availableDevices.length > 0) {
+      const selectedDeviceObjects = availableDevices.filter(device => 
+        selectedDevices.includes(device.id.toString())
+      );
+      onDeviceSelected(selectedDeviceObjects);
+    }
+  }, [selectedDevices, availableDevices, onDeviceSelected]);
 
   // 准备分配
   const handlePrepareDistribution = useCallback(() => {

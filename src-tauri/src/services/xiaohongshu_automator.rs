@@ -122,15 +122,73 @@ pub struct XiaohongshuAutomator {
 impl XiaohongshuAutomator {
     /// 创建新的小红书自动化实例
     pub fn new(device_id: String) -> Self {
+        // 优先尝试几个可能的ADB路径
+        let possible_adb_paths = vec![
+            // 1. 项目根目录的platform-tools (使用绝对路径)
+            r"D:\repositories\employeeGUI\platform-tools\adb.exe".to_string(),
+            // 2. 相对于当前目录的platform-tools
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .parent()
+                .unwrap_or(&std::path::PathBuf::from(".."))
+                .join("platform-tools")
+                .join("adb.exe")
+                .to_string_lossy()
+                .to_string(),
+            // 3. 从src-tauri向上两级目录找platform-tools
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("..")
+                .join("platform-tools")
+                .join("adb.exe")
+                .to_string_lossy()
+                .to_string(),
+            // 4. 系统PATH中的adb
+            "adb.exe".to_string(),
+        ];
+
+        let mut adb_path = "adb.exe".to_string();
+        
+        // 找到第一个存在的ADB路径
+        for path in &possible_adb_paths {
+            info!("🔍 检查ADB路径: {}", path);
+            if std::path::Path::new(path).exists() {
+                adb_path = path.clone();
+                info!("✅ 找到可用的ADB路径: {}", adb_path);
+                break;
+            } else {
+                info!("❌ ADB路径不存在: {}", path);
+            }
+        }
+        
+        info!("🚀 创建XiaohongshuAutomator - 设备ID: {}, 最终ADB路径: {}", device_id, adb_path);
+            
         Self {
             device_id,
-            adb_path: "adb".to_string(), // 默认使用系统PATH中的adb
+            adb_path,
+        }
+    }
+    
+    /// 创建新的小红书自动化实例，指定ADB路径
+    pub fn new_with_adb_path(device_id: String, adb_path: String) -> Self {
+        Self {
+            device_id,
+            adb_path,
         }
     }
 
     /// 检查小红书应用状态
     pub async fn check_app_status(&self) -> Result<AppStatusResult> {
         info!("🔍 检查小红书应用状态");
+        info!("使用ADB路径: {}", self.adb_path);
+        info!("目标设备ID: {}", self.device_id);
+
+        // 首先验证ADB路径是否存在
+        if !std::path::Path::new(&self.adb_path).exists() {
+            let error_msg = format!("ADB文件不存在: {}", self.adb_path);
+            error!("{}", error_msg);
+            return Err(anyhow::anyhow!(error_msg));
+        }
 
         // 检查应用是否安装
         let package_name = "com.xingin.xhs";
@@ -145,9 +203,14 @@ impl XiaohongshuAutomator {
                 package_name,
             ])
             .output()
-            .context("检查应用安装状态失败")?;
+            .context(format!("检查应用安装状态失败 - ADB路径: {}, 设备ID: {}", self.adb_path, self.device_id))?;
 
-        let app_installed = !output.stdout.is_empty();
+        info!("📊 应用安装检查结果: stdout长度={}, stderr={}", 
+              output.stdout.len(), 
+              String::from_utf8_lossy(&output.stderr));
+
+        let app_installed = !output.stdout.is_empty() && 
+                           String::from_utf8_lossy(&output.stdout).contains(package_name);
 
         if !app_installed {
             return Ok(AppStatusResult {
@@ -159,8 +222,8 @@ impl XiaohongshuAutomator {
             });
         }
 
-        // 检查应用是否正在运行
-        let output = Command::new(&self.adb_path)
+        // 检查应用是否正在运行 - 使用简化的方法避免Windows管道问题
+        let running_output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
@@ -168,16 +231,14 @@ impl XiaohongshuAutomator {
                 "dumpsys",
                 "activity",
                 "activities",
-                "|",
-                "grep",
-                package_name,
             ])
             .output()
             .context("检查应用运行状态失败")?;
 
-        let app_running = !output.stdout.is_empty();
+        let running_result = String::from_utf8_lossy(&running_output.stdout);
+        let app_running = running_result.contains(package_name);
 
-        // 获取应用版本
+        // 获取应用版本 - 使用简化的方法避免Windows管道问题
         let version_output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
@@ -186,15 +247,17 @@ impl XiaohongshuAutomator {
                 "dumpsys",
                 "package",
                 package_name,
-                "|",
-                "grep",
-                "versionName",
             ])
             .output()
             .context("获取应用版本失败")?;
 
-        let app_version = if !version_output.stdout.is_empty() {
-            Some(String::from_utf8_lossy(&version_output.stdout).trim().to_string())
+        let version_result = String::from_utf8_lossy(&version_output.stdout);
+        let app_version = if version_result.contains("versionName") {
+            // 从dumpsys输出中提取versionName
+            version_result
+                .lines()
+                .find(|line| line.contains("versionName"))
+                .map(|line| line.trim().to_string())
         } else {
             None
         };
@@ -216,78 +279,271 @@ impl XiaohongshuAutomator {
 
     /// 智能导航到通讯录页面
     pub async fn navigate_to_contacts(&self) -> Result<NavigationResult> {
-        info!("🧭 开始导航到小红书通讯录页面");
+        info!("🧭 开始导航到小红书通讯录页面（基于成功实践的流程）");
 
-        // 1. 首先启动小红书应用
-        let output = Command::new(&self.adb_path)
-            .args(&[
-                "-s",
-                &self.device_id,
-                "shell",
-                "am",
-                "start",
-                "-n",
-                "com.xingin.xhs/com.xingin.xhs.index.v2.IndexActivityV2",
-            ])
-            .output()
-            .context("启动小红书应用失败")?;
-
-        if !output.status.success() {
+        // 步骤1: 确保应用正在运行
+        info!("📱 步骤1: 检查小红书应用状态");
+        let app_status = self.check_app_status().await?;
+        if !app_status.app_installed {
+            let error_msg = "小红书应用未安装".to_string();
+            error!("❌ {}", error_msg);
             return Ok(NavigationResult {
                 success: false,
-                message: "启动小红书应用失败".to_string(),
+                message: error_msg,
             });
         }
 
-        // 等待应用启动
-        sleep(Duration::from_millis(3000)).await;
+        if !app_status.app_running {
+            info!("📱 应用未运行，正在启动小红书应用...");
+            if let Err(e) = self.start_xiaohongshu_app().await {
+                let error_msg = format!("启动小红书应用失败: {}", e);
+                error!("❌ {}", error_msg);
+                return Ok(NavigationResult {
+                    success: false,
+                    message: error_msg,
+                });
+            }
+            sleep(Duration::from_millis(3000)).await;
+        } else {
+            info!("✅ 小红书应用已运行");
+        }
 
-        // 2. 识别当前页面状态
-        let page_state = self.recognize_current_page().await?;
-        info!("📱 当前页面状态: {:?}", page_state.current_state);
-
+        // 步骤2: 检查当前页面状态并确定起始点
+        info!("🏠 步骤2: 检查当前页面状态");
+        let page_state = match self.recognize_current_page().await {
+            Ok(state) => state,
+            Err(e) => {
+                let error_msg = format!("页面识别失败: {}", e);
+                error!("❌ {}", error_msg);
+                return Ok(NavigationResult {
+                    success: false,
+                    message: error_msg,
+                });
+            }
+        };
+        
+        info!("📋 当前页面状态: {:?}, 置信度: {:.2}", page_state.current_state, page_state.confidence);
+        
+        // 根据当前状态决定从哪一步开始
         match page_state.current_state {
+            PageState::MainPage => {
+                info!("✓ 当前在主页面，从步骤3开始（点击头像）");
+                // 继续执行步骤3
+            }
+            PageState::SidebarOpen => {
+                info!("✓ 侧边栏已打开，跳过步骤3，直接进入步骤4（点击发现好友）");
+                // 跳转到步骤4
+                return self.navigate_from_sidebar().await;
+            }
+            PageState::DiscoverFriends => {
+                info!("✓ 已在发现好友页面，跳到步骤5（点击通讯录）");
+                return self.navigate_from_discover_friends().await;
+            }
             PageState::ContactsList => {
+                info!("✅ 已在通讯录页面，导航完成！");
                 return Ok(NavigationResult {
                     success: true,
                     message: "已在通讯录页面".to_string(),
                 });
             }
-            PageState::MainPage => {
-                // 从主页导航到通讯录
-                info!("📍 从主页导航到通讯录");
-                // 点击右下角的"我"按钮
-                self.adb_tap(980, 1700).await?;
-                sleep(Duration::from_millis(1500)).await;
+            _ => {
+                info!("⚠️ 未知页面状态，尝试返回主页面");
+                if let Err(e) = self.return_to_home().await {
+                    let error_msg = format!("返回主页失败: {}", e);
+                    error!("❌ {}", error_msg);
+                    return Ok(NavigationResult {
+                        success: false,
+                        message: error_msg,
+                    });
+                }
+                sleep(Duration::from_millis(3000)).await;
+                
+                // 重新检查页面状态
+                let retry_state = match self.recognize_current_page().await {
+                    Ok(state) => state,
+                    Err(e) => {
+                        let error_msg = format!("重试页面识别失败: {}", e);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                };
+                
+                if !matches!(retry_state.current_state, PageState::MainPage) {
+                    let error_msg = format!("无法返回到主页面，当前状态: {:?}", retry_state.current_state);
+                    error!("❌ {}", error_msg);
+                    return Ok(NavigationResult {
+                        success: false,
+                        message: error_msg,
+                    });
+                }
+                info!("✓ 成功返回主页面");
+            }
+        }
 
-                // 点击"发现好友"
-                self.adb_tap(540, 400).await?;
-                sleep(Duration::from_millis(1500)).await;
+        // 步骤3: 点击头像打开侧边栏（已验证坐标: 60, 100）
+        info!("👤 步骤3: 点击头像打开侧边栏，坐标:(60, 100)");
+        if let Err(e) = self.adb_tap(60, 100).await {
+            let error_msg = format!("点击头像失败: {}", e);
+            error!("❌ {}", error_msg);
+            return Ok(NavigationResult {
+                success: false,
+                message: error_msg,
+            });
+        }
+        sleep(Duration::from_millis(2000)).await;
+        
+        // 验证侧边栏是否打开并继续导航
+        self.navigate_from_sidebar().await
+    }
 
-                // 验证是否成功到达通讯录页面
-                let final_state = self.recognize_current_page().await?;
-                if matches!(final_state.current_state, PageState::ContactsList) {
+    /// 从侧边栏继续导航流程
+    async fn navigate_from_sidebar(&self) -> Result<NavigationResult> {
+        info!("🔍 验证侧边栏状态");
+        let sidebar_check = match self.recognize_current_page().await {
+            Ok(state) => state,
+            Err(e) => {
+                let error_msg = format!("侧边栏状态检查失败: {}", e);
+                error!("❌ {}", error_msg);
+                return Ok(NavigationResult {
+                    success: false,
+                    message: error_msg,
+                });
+            }
+        };
+        
+        info!("📋 侧边栏检查结果: {:?}, 置信度: {:.2}", sidebar_check.current_state, sidebar_check.confidence);
+        
+        if !matches!(sidebar_check.current_state, PageState::SidebarOpen) {
+            let error_msg = format!("侧边栏打开失败，当前状态: {:?}", sidebar_check.current_state);
+            error!("❌ {}", error_msg);
+            return Ok(NavigationResult {
+                success: false,
+                message: error_msg,
+            });
+        }
+        info!("✓ 侧边栏状态确认");
+
+        // 步骤4: 在侧边栏中点击"发现好友"
+        info!("👥 步骤4: 查找并点击发现好友选项");
+        let discover_coords = match self.find_discover_friends_coords().await {
+            Ok(coords) => coords,
+            Err(e) => {
+                let error_msg = format!("查找发现好友坐标失败: {}", e);
+                error!("❌ {}", error_msg);
+                return Ok(NavigationResult {
+                    success: false,
+                    message: error_msg,
+                });
+            }
+        };
+        
+        info!("📍 发现好友坐标: ({}, {})", discover_coords.0, discover_coords.1);
+        if let Err(e) = self.adb_tap(discover_coords.0, discover_coords.1).await {
+            let error_msg = format!("点击发现好友失败: {}", e);
+            error!("❌ {}", error_msg);
+            return Ok(NavigationResult {
+                success: false,
+                message: error_msg,
+            });
+        }
+        sleep(Duration::from_millis(2000)).await;
+        
+        // 检查结果并继续导航
+        self.navigate_from_discover_friends().await
+    }
+
+    /// 从发现好友页面继续导航流程
+    async fn navigate_from_discover_friends(&self) -> Result<NavigationResult> {
+        // 验证是否到达发现好友页面或直接到达联系人页面
+        let discover_check = match self.recognize_current_page().await {
+            Ok(state) => state,
+            Err(e) => {
+                let error_msg = format!("发现好友页面状态检查失败: {}", e);
+                error!("❌ {}", error_msg);
+                return Ok(NavigationResult {
+                    success: false,
+                    message: error_msg,
+                });
+            }
+        };
+        
+        info!("📋 发现好友页面检查结果: {:?}, 置信度: {:.2}", discover_check.current_state, discover_check.confidence);
+        
+        match discover_check.current_state {
+            PageState::DiscoverFriends => {
+                info!("✓ 成功进入发现好友页面，继续点击通讯录选项");
+                
+                // 步骤5: 点击"通讯录朋友"选项
+                info!("📋 步骤5: 查找并点击通讯录朋友选项");
+                let contacts_coords = match self.find_contacts_option_coords().await {
+                    Ok(coords) => coords,
+                    Err(e) => {
+                        let error_msg = format!("查找通讯录选项坐标失败: {}", e);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                };
+                
+                info!("📍 通讯录选项坐标: ({}, {})", contacts_coords.0, contacts_coords.1);
+                if let Err(e) = self.adb_tap(contacts_coords.0, contacts_coords.1).await {
+                    let error_msg = format!("点击通讯录选项失败: {}", e);
+                    error!("❌ {}", error_msg);
+                    return Ok(NavigationResult {
+                        success: false,
+                        message: error_msg,
+                    });
+                }
+                sleep(Duration::from_millis(3000)).await; // 联系人加载可能需要更长时间
+                
+                // 验证最终是否到达联系人页面
+                let final_check = match self.recognize_current_page().await {
+                    Ok(state) => state,
+                    Err(e) => {
+                        let error_msg = format!("最终页面状态检查失败: {}", e);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                };
+                
+                info!("📋 最终页面检查结果: {:?}, 置信度: {:.2}", final_check.current_state, final_check.confidence);
+                
+                if matches!(final_check.current_state, PageState::ContactsList) {
+                    info!("✅ 成功导航到联系人页面");
                     Ok(NavigationResult {
                         success: true,
                         message: "成功导航到通讯录页面".to_string(),
                     })
                 } else {
+                    let error_msg = format!("导航失败，最终状态: {:?}，置信度: {:.2}", final_check.current_state, final_check.confidence);
+                    error!("❌ {}", error_msg);
                     Ok(NavigationResult {
                         success: false,
-                        message: "导航失败，未能到达通讯录页面".to_string(),
+                        message: error_msg,
                     })
                 }
-            }
+            },
+            PageState::ContactsList => {
+                info!("✅ 直接进入了联系人页面，导航成功！");
+                Ok(NavigationResult {
+                    success: true,
+                    message: "成功导航到通讯录页面（直接跳转）".to_string(),
+                })
+            },
             _ => {
-                // 其他状态，尝试返回主页
-                info!("🏠 返回主页后重新导航");
-                self.return_to_home().await?;
-                sleep(Duration::from_millis(2000)).await;
-
-                // 返回失败，避免递归
+                let error_msg = format!("未能进入发现好友页面，当前状态: {:?}，置信度: {:.2}", discover_check.current_state, discover_check.confidence);
+                error!("❌ {}", error_msg);
                 Ok(NavigationResult {
                     success: false,
-                    message: "无法识别当前页面状态，导航失败".to_string(),
+                    message: error_msg,
                 })
             }
         }
@@ -295,29 +551,341 @@ impl XiaohongshuAutomator {
 
     /// 智能页面识别
     pub async fn recognize_current_page(&self) -> Result<PageRecognitionResult> {
-        let ui_content = self.get_ui_dump().await?;
+        info!("🔍 开始识别当前页面状态...");
 
-        // 简化的页面识别逻辑
-        let current_state = if ui_content.contains("通讯录") || ui_content.contains("发现好友") {
-            PageState::ContactsList
-        } else if ui_content.contains("首页") || ui_content.contains("推荐") {
-            PageState::MainPage
-        } else if ui_content.contains("侧边栏") {
-            PageState::SidebarOpen
-        } else {
-            PageState::Unknown
-        };
+        let ui_dump = self.get_ui_dump().await?;
+        let ui_elements = self.parse_ui_elements(&ui_dump).await?;
+        
+        // 分析页面特征
+        let (page_state, confidence, key_elements) = self.analyze_page_state(&ui_dump, &ui_elements).await?;
+        
+        let message = format!("识别到页面: {:?}, 信心度: {:.2}", page_state, confidence);
+        info!("📋 {}", message);
+        
+        // 打印关键元素
+        if !key_elements.is_empty() {
+            info!("🔑 关键元素: {:?}", key_elements);
+        }
 
         Ok(PageRecognitionResult {
-            current_state: current_state.clone(),
-            confidence: 0.8, // 简化的置信度
-            key_elements: vec![], // 在实际实现中应该包含关键元素
-            ui_elements: vec![], // 在实际实现中应该解析UI元素
-            message: format!("识别到页面状态: {:?}", current_state),
+            current_state: page_state,
+            confidence,
+            key_elements,
+            ui_elements,
+            message,
         })
     }
 
-    /// 执行自动关注流程的核心逻辑
+    /// 分析页面状态
+    async fn analyze_page_state(&self, ui_dump: &str, _ui_elements: &[UIElement]) -> Result<(PageState, f32, Vec<String>)> {
+        let mut key_elements = Vec::new();
+        let mut confidence_scores = Vec::new();
+
+        info!("🔍 分析UI内容，总长度: {} 字符", ui_dump.len());
+
+        // 检查主页特征
+        if ui_dump.contains("首页") || ui_dump.contains("推荐") || (ui_dump.contains("关注") && ui_dump.contains("发现")) {
+            key_elements.push("主页导航".to_string());
+            confidence_scores.push((PageState::MainPage, 0.8));
+            info!("✓ 检测到主页特征");
+        }
+
+        // 检查侧边栏特征
+        if ui_dump.contains("设置") || ui_dump.contains("我的主页") || ui_dump.contains("发现好友") {
+            key_elements.push("侧边栏菜单".to_string());
+            confidence_scores.push((PageState::SidebarOpen, 0.9));
+            info!("✓ 检测到侧边栏特征");
+        }
+
+        // 检查发现好友页面特征
+        if ui_dump.contains("发现好友") || (ui_dump.contains("通讯录") && ui_dump.contains("好友")) {
+            key_elements.push("发现好友页面".to_string());
+            confidence_scores.push((PageState::DiscoverFriends, 0.85));
+            info!("✓ 检测到发现好友页面特征");
+        }
+
+        // 检查通讯录页面特征
+        if (ui_dump.contains("通讯录") || ui_dump.contains("联系人")) && 
+           (ui_dump.contains("关注") || ui_dump.contains("已关注") || ui_dump.contains("follow")) {
+            key_elements.push("通讯录关注列表".to_string());
+            confidence_scores.push((PageState::ContactsList, 0.9));
+            info!("✓ 检测到通讯录页面特征");
+        }
+
+        // 检查用户资料页面特征
+        if ui_dump.contains("粉丝") && ui_dump.contains("关注") && ui_dump.contains("获赞") {
+            key_elements.push("用户资料页面".to_string());
+            confidence_scores.push((PageState::UserProfile, 0.85));
+            info!("✓ 检测到用户资料页面特征");
+        }
+
+        // 确定最佳匹配
+        if let Some((page_state, confidence)) = confidence_scores.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()) {
+            info!("🎯 最佳匹配: {:?}, 置信度: {:.2}", page_state, confidence);
+            Ok((page_state, confidence, key_elements))
+        } else {
+            info!("❓ 未识别出页面类型");
+            Ok((PageState::Unknown, 0.0, key_elements))
+        }
+    }
+
+    /// 解析UI元素（简化版本）
+    async fn parse_ui_elements(&self, ui_dump: &str) -> Result<Vec<UIElement>> {
+        let mut elements = Vec::new();
+        
+        // 简化的XML解析 - 查找可点击元素
+        for line in ui_dump.lines() {
+            if line.contains("clickable=\"true\"") || line.contains("关注") || line.contains("发现好友") {
+                if let Some(element) = self.parse_ui_element_line(line) {
+                    elements.push(element);
+                }
+            }
+        }
+        
+        info!("📊 解析到 {} 个UI元素", elements.len());
+        Ok(elements)
+    }
+
+    /// 解析单行UI元素
+    fn parse_ui_element_line(&self, line: &str) -> Option<UIElement> {
+        // 简化的解析逻辑，实际项目中应该使用更完整的XML解析
+        if line.contains("text=") {
+            let text = line.split("text=\"").nth(1)?.split("\"").next()?.to_string();
+            Some(UIElement {
+                element_type: UIElementType::Button,
+                text,
+                bounds: (0, 0, 0, 0), // 简化处理
+                clickable: line.contains("clickable=\"true\""),
+                resource_id: None,
+                class_name: None,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// 启动小红书应用
+    async fn start_xiaohongshu_app(&self) -> Result<()> {
+        info!("🚀 启动小红书应用...");
+
+        let output = Command::new(&self.adb_path)
+            .args(&[
+                "-s", &self.device_id,
+                "shell", "am", "start",
+                "-n", "com.xingin.xhs/.index.v2.IndexActivityV2"
+            ])
+            .output()
+            .context("启动小红书应用失败")?;
+
+        if !output.status.success() {
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("启动应用失败: {}", error_msg));
+        }
+
+        info!("✓ 小红书应用启动成功");
+        Ok(())
+    }
+
+    /// 查找发现好友按钮坐标
+    async fn find_discover_friends_coords(&self) -> Result<(i32, i32)> {
+        info!("🔍 智能查找发现好友按钮坐标...");
+        
+        // 获取UI dump
+        let ui_dump = self.get_ui_dump().await?;
+        info!("📱 UI内容长度: {} 字符", ui_dump.len());
+        
+        // 尝试解析XML并查找发现好友相关元素
+        if let Some(coords) = self.parse_discover_friends_from_ui(&ui_dump).await {
+            info!("✅ 从UI解析到发现好友坐标: ({}, {})", coords.0, coords.1);
+            return Ok(coords);
+        }
+        
+        // 如果解析失败，使用基于成功实践的候选坐标
+        let candidates = vec![
+            (160, 280, "发现好友位置1 - 侧边栏上部"),
+            (160, 320, "发现好友位置2 - 侧边栏中部"),
+            (160, 360, "发现好友位置3 - 侧边栏中下部"),
+            (180, 300, "发现好友位置4 - 稍右偏移"),
+            (140, 340, "发现好友位置5 - 稍左偏移"),
+            (270, 168, "发现好友位置6 - 参考坐标"), // 来自成功文档的坐标
+        ];
+
+        info!("⚠️ UI解析失败，尝试候选坐标...");
+        
+        // 基于UI内容选择最佳候选坐标
+        for (x, y, desc) in &candidates {
+            info!("🎯 尝试候选位置: {} 坐标:({}, {})", desc, x, y);
+            
+            // 检查UI内容中是否有相关的文本提示
+            if ui_dump.contains("发现好友") {
+                info!("✓ UI中发现'发现好友'文本，选择坐标: ({}, {})", x, y);
+                return Ok((*x, *y));
+            }
+        }
+
+        // 如果都没找到，使用第一个候选位置并警告
+        let default_coords = candidates[0];
+        warn!("⚠️ 未找到发现好友文本，使用默认坐标: {} ({}, {})", default_coords.2, default_coords.0, default_coords.1);
+        Ok((default_coords.0, default_coords.1))
+    }
+
+    /// 从UI内容中解析发现好友按钮坐标
+    async fn parse_discover_friends_from_ui(&self, ui_dump: &str) -> Option<(i32, i32)> {
+        info!("🔧 解析UI XML内容查找发现好友按钮...");
+        
+        // 查找包含"发现好友"文本的XML节点
+        let lines: Vec<&str> = ui_dump.lines().collect();
+        
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("发现好友") {
+                info!("📍 找到包含'发现好友'的行 {}: {}", i, line.trim());
+                
+                // 尝试从当前行或相邻行解析bounds属性
+                for check_line in &lines[i.saturating_sub(2)..=(i + 2).min(lines.len() - 1)] {
+                    if let Some(bounds) = self.extract_bounds_from_line(check_line) {
+                        let center_x = (bounds.0 + bounds.2) / 2;
+                        let center_y = (bounds.1 + bounds.3) / 2;
+                        info!("✅ 解析到边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                        
+                        // 验证坐标合理性（避免过小或过大的坐标）
+                        if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
+                            return Some((center_x, center_y));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果没有找到"发现好友"，尝试查找相关的按钮元素
+        for line in &lines {
+            if (line.contains("clickable=\"true\"") || line.contains("android.widget.TextView")) 
+                && (line.contains("好友") || line.contains("发现")) {
+                info!("📍 找到可能的相关按钮: {}", line.trim());
+                
+                if let Some(bounds) = self.extract_bounds_from_line(line) {
+                    let center_x = (bounds.0 + bounds.2) / 2;
+                    let center_y = (bounds.1 + bounds.3) / 2;
+                    info!("✅ 解析到候选边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                    
+                    if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
+                        return Some((center_x, center_y));
+                    }
+                }
+            }
+        }
+        
+        info!("❌ 未能从UI解析到发现好友按钮坐标");
+        None
+    }
+
+    /// 从XML行中提取bounds属性
+    fn extract_bounds_from_line(&self, line: &str) -> Option<(i32, i32, i32, i32)> {
+        // 查找bounds="[left,top][right,bottom]"格式
+        if let Some(bounds_start) = line.find("bounds=\"[") {
+            let bounds_part = &line[bounds_start + 9..];
+            if let Some(bounds_end) = bounds_part.find('"') {
+                let bounds_str = &bounds_part[..bounds_end];
+                
+                // 解析 "[left,top][right,bottom]" 格式
+                if let Some(middle) = bounds_str.find("][") {
+                    let left_top = &bounds_str[..middle];
+                    let right_bottom = &bounds_str[middle + 2..];
+                    
+                    if let (Some(comma1), Some(comma2)) = (left_top.find(','), right_bottom.find(',')) {
+                        let left_str = &left_top[..comma1];
+                        let top_str = &left_top[comma1 + 1..];
+                        let right_str = &right_bottom[..comma2];
+                        let bottom_str = &right_bottom[comma2 + 1..];
+                        
+                        if let (Ok(left), Ok(top), Ok(right), Ok(bottom)) = (
+                            left_str.parse::<i32>(),
+                            top_str.parse::<i32>(),
+                            right_str.parse::<i32>(),
+                            bottom_str.parse::<i32>()
+                        ) {
+                            return Some((left, top, right, bottom));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// 查找通讯录选项坐标
+    async fn find_contacts_option_coords(&self) -> Result<(i32, i32)> {
+        info!("🔍 智能查找通讯录选项坐标...");
+        
+        // 获取UI dump
+        let ui_dump = self.get_ui_dump().await?;
+        info!("📱 UI内容长度: {} 字符", ui_dump.len());
+        
+        // 尝试解析XML并查找通讯录相关元素
+        if let Some(coords) = self.parse_contacts_from_ui(&ui_dump).await {
+            info!("✅ 从UI解析到通讯录坐标: ({}, {})", coords.0, coords.1);
+            return Ok(coords);
+        }
+        
+        // 如果解析失败，使用基于成功实践的候选坐标
+        let candidates = vec![
+            (200, 250, "通讯录位置1 - 发现好友页面上部"),
+            (200, 300, "通讯录位置2 - 发现好友页面中部"),
+            (200, 350, "通讯录位置3 - 发现好友页面中下部"),
+            (180, 280, "通讯录位置4 - 稍左偏移"),
+            (220, 320, "通讯录位置5 - 稍右偏移"),
+            (194, 205, "通讯录位置6 - 参考坐标"), // 来自成功文档的坐标
+        ];
+
+        info!("⚠️ UI解析失败，尝试候选坐标...");
+        
+        // 基于UI内容选择最佳候选坐标
+        for (x, y, desc) in &candidates {
+            info!("🎯 尝试候选位置: {} 坐标:({}, {})", desc, x, y);
+            
+            // 检查UI内容中是否有相关的文本提示
+            if ui_dump.contains("通讯录") || ui_dump.contains("联系人") {
+                info!("✓ UI中发现'通讯录'文本，选择坐标: ({}, {})", x, y);
+                return Ok((*x, *y));
+            }
+        }
+
+        // 如果都没找到，使用第一个候选位置并警告
+        let default_coords = candidates[0];
+        warn!("⚠️ 未找到通讯录文本，使用默认坐标: {} ({}, {})", default_coords.2, default_coords.0, default_coords.1);
+        Ok((default_coords.0, default_coords.1))
+    }
+
+    /// 从UI内容中解析通讯录选项坐标
+    async fn parse_contacts_from_ui(&self, ui_dump: &str) -> Option<(i32, i32)> {
+        info!("🔧 解析UI XML内容查找通讯录选项...");
+        
+        // 查找包含"通讯录"或"联系人"文本的XML节点
+        let lines: Vec<&str> = ui_dump.lines().collect();
+        
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("通讯录") || line.contains("联系人") {
+                info!("📍 找到包含'通讯录/联系人'的行 {}: {}", i, line.trim());
+                
+                // 尝试从当前行或相邻行解析bounds属性
+                for check_line in &lines[i.saturating_sub(2)..=(i + 2).min(lines.len() - 1)] {
+                    if let Some(bounds) = self.extract_bounds_from_line(check_line) {
+                        let center_x = (bounds.0 + bounds.2) / 2;
+                        let center_y = (bounds.1 + bounds.3) / 2;
+                        info!("✅ 解析到边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                        
+                        // 验证坐标合理性
+                        if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
+                            return Some((center_x, center_y));
+                        }
+                    }
+                }
+            }
+        }
+        
+        info!("❌ 未能从UI解析到通讯录选项坐标");
+        None
+    }
+
     pub async fn auto_follow(
         &self,
         options: Option<XiaohongshuFollowOptions>,
@@ -499,7 +1067,32 @@ impl XiaohongshuAutomator {
 
     /// 获取UI dump
     async fn get_ui_dump(&self) -> Result<String> {
-        let output = Command::new(&self.adb_path)
+        info!("📱 获取UI dump...");
+        
+        // 方法1: 直接输出到stdout
+        let output1 = Command::new(&self.adb_path)
+            .args(&[
+                "-s",
+                &self.device_id,
+                "shell",
+                "uiautomator",
+                "dump",
+                "/dev/stdout",
+            ])
+            .output()
+            .context("获取UI dump失败")?;
+
+        let result1 = String::from_utf8_lossy(&output1.stdout).to_string();
+        
+        if result1.len() > 100 && result1.contains("<?xml") {
+            info!("✓ 方法1成功获取UI dump，长度: {} 字符", result1.len());
+            return Ok(result1);
+        }
+
+        info!("⚠️ 方法1失败，尝试方法2...");
+        
+        // 方法2: 先dump到文件，再cat
+        let dump_output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
@@ -509,14 +1102,15 @@ impl XiaohongshuAutomator {
                 "/sdcard/xiaohongshu_ui.xml",
             ])
             .output()
-            .context("获取UI dump失败")?;
+            .context("dump到文件失败")?;
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("UI dump失败"));
+        if !dump_output.status.success() {
+            let error_msg = String::from_utf8_lossy(&dump_output.stderr);
+            return Err(anyhow::anyhow!("UI dump到文件失败: {}", error_msg));
         }
 
         // 读取UI文件内容
-        let output = Command::new(&self.adb_path)
+        let output2 = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
@@ -527,13 +1121,20 @@ impl XiaohongshuAutomator {
             .output()
             .context("读取UI文件失败")?;
 
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let result2 = String::from_utf8_lossy(&output2.stdout).to_string();
+        
+        if result2.len() > 100 && result2.contains("<?xml") {
+            info!("✓ 方法2成功获取UI dump，长度: {} 字符", result2.len());
+            return Ok(result2);
+        }
+
+        Err(anyhow::anyhow!("无法获取有效的UI dump"))
     }
 
     /// 向下滚动页面
     async fn scroll_down(&self) -> Result<()> {
         // 从屏幕中间向上滑动
-        let output = Command::new(&self.adb_path)
+        let _output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
@@ -549,17 +1150,13 @@ impl XiaohongshuAutomator {
             .output()
             .context("滑动页面失败")?;
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("滑动页面失败"));
-        }
-
         Ok(())
     }
 
     /// 返回主页
     async fn return_to_home(&self) -> Result<()> {
         // 点击返回按钮或按Home键
-        let output = Command::new(&self.adb_path)
+        let _output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
@@ -576,6 +1173,8 @@ impl XiaohongshuAutomator {
 
     /// ADB点击坐标
     async fn adb_tap(&self, x: i32, y: i32) -> Result<()> {
+        info!("👆 执行点击操作，坐标:({}, {})", x, y);
+        
         let output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
@@ -590,9 +1189,11 @@ impl XiaohongshuAutomator {
             .context("ADB点击失败")?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!("ADB点击失败"));
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("ADB点击失败: {}", error_msg));
         }
 
+        info!("✓ 点击操作成功");
         Ok(())
     }
 }

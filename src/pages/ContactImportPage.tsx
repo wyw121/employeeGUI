@@ -13,7 +13,6 @@ import {
     Col,
     Divider,
     Row,
-    Select,
     Space,
     Steps,
     Typography,
@@ -56,6 +55,20 @@ export const ContactImportPage: React.FC = () => {
     setParsedContacts(contacts);
     setCurrentStep(1);
     message.success(`已选择 ${contacts.length} 个联系人`);
+  }, []);
+
+  // 处理设备选择
+  const handleDeviceSelected = useCallback((devices: Device[]) => {
+    console.log('handleDeviceSelected 被调用，设备数量:', devices.length, '设备列表:', devices);
+    if (devices.length > 0) {
+      // 选择第一个设备作为小红书关注的设备
+      setSelectedDeviceForFollow(devices[0]);
+      console.log('选择了设备用于小红书关注:', devices[0]);
+      console.log('当前 selectedDeviceForFollow 状态:', devices[0]);
+    } else {
+      console.log('没有设备被选择，重置 selectedDeviceForFollow');
+      setSelectedDeviceForFollow(null);
+    }
   }, []);
 
   // 处理导入完成
@@ -398,6 +411,7 @@ export const ContactImportPage: React.FC = () => {
                 <ContactImportManager
                   contacts={parsedContacts}
                   onImportComplete={handleImportComplete}
+                  onDeviceSelected={handleDeviceSelected}
                   onError={handleError}
                 />
               </Card>
@@ -415,8 +429,8 @@ export const ContactImportPage: React.FC = () => {
                 className="shadow-sm"
               >
                 <XiaohongshuAutoFollow
-                  selectedDevice={selectedDeviceForFollow?.id?.toString()}
-                  onFollowComplete={handleXiaohongshuComplete}
+                  selectedDevice={selectedDeviceForFollow}
+                  onWorkflowComplete={handleXiaohongshuComplete}
                   onError={handleError}
                 />
               </Card>

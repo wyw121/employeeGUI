@@ -17,6 +17,8 @@ use services::ui_reader_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use std::sync::Mutex;
 use tauri::State;
+use tracing::{info, error};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Tauri命令：获取所有员工
 #[tauri::command]
@@ -382,9 +384,23 @@ async fn delete_file(path: String) -> Result<(), String> {
 }
 
 fn main() {
+    // 初始化日志系统
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,employee_gui=debug,xiaohongshu_automator=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    info!("🚀 启动EmployeeGUI应用程序");
+    info!("📊 日志级别: DEBUG (开发模式)");
+
     let employee_service = EmployeeService::new().expect("Failed to initialize employee service");
     let adb_service = AdbService::new();
     let xiaohongshu_service = XiaohongshuService::new();
+
+    info!("✅ 所有服务初始化完成");
 
     tauri::Builder::default()
         .manage(Mutex::new(employee_service))

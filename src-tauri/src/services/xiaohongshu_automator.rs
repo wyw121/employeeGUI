@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
-use chrono;
 
 // 应用状态检查结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,36 +19,6 @@ pub struct AppStatusResult {
 pub struct NavigationResult {
     pub success: bool,
     pub message: String,
-}
-
-// 设备健康检查结果
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeviceHealthResult {
-    pub device_connected: bool,
-    pub adb_responsive: bool,
-    pub screen_responsive: bool,
-    pub app_accessible: bool,
-    pub overall_health: DeviceHealthStatus,
-    pub issues: Vec<String>,
-    pub recommendations: Vec<String>,
-}
-
-// 设备健康状态
-#[derive(Debug, Serialize, Deserialize)]
-pub enum DeviceHealthStatus {
-    Healthy,    // 设备状态良好
-    Warning,    // 有轻微问题但可以继续
-    Critical,   // 有严重问题需要处理
-    Disconnected, // 设备已断开连接
-}
-
-// 自动恢复结果
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RecoveryResult {
-    pub success: bool,
-    pub actions_taken: Vec<String>,
-    pub message: String,
-    pub remaining_issues: Vec<String>,
 }
 
 // 关注操作配置
@@ -103,6 +72,23 @@ pub enum PageState {
     DiscoverFriends, // 发现好友页面
     ContactsList,    // 通讯录列表页面
     UserProfile,     // 用户资料页面
+}
+
+#[derive(Debug, Clone)]
+pub struct FollowButton {
+    pub x: i32,
+    pub y: i32,
+    pub state: ButtonState,
+    pub text: String,
+}
+
+// 按钮状态枚举
+#[derive(Debug, Clone, PartialEq)]
+pub enum ButtonState {
+    CanFollow,       // 可以关注
+    AlreadyFollowed, // 已经关注
+    Loading,         // 加载中
+    Unknown,         // 未知状态
 }
 
 // 页面识别结果
@@ -307,683 +293,6 @@ impl XiaohongshuAutomator {
             app_version,
             package_name: Some(package_name.to_string()),
         })
-    }
-
-    /// 设备健康检查 - 全面检测设备状态和潜在问题
-    pub async fn check_device_health(&self) -> Result<DeviceHealthResult> {
-        info!("🏥 开始设备健康检查...");
-        
-        let mut issues = Vec::new();
-        let mut recommendations = Vec::new();
-        
-        // 1. 检查设备连接状态
-        let device_connected = self.check_device_connection().await;
-        if !device_connected {
-            issues.push("设备未连接或ADB无法访问".to_string());
-            recommendations.push("请检查USB连接并确保设备已开启USB调试".to_string());
-        }
-        
-        // 2. 检查ADB响应性
-        let adb_responsive = if device_connected {
-            self.check_adb_responsiveness().await
-        } else {
-            false
-        };
-        if device_connected && !adb_responsive {
-            issues.push("ADB连接不稳定或响应缓慢".to_string());
-            recommendations.push("尝试重启ADB服务或重新连接设备".to_string());
-        }
-        
-        // 3. 检查屏幕响应性
-        let screen_responsive = if device_connected && adb_responsive {
-            self.check_screen_responsiveness().await
-        } else {
-            false
-        };
-        if device_connected && adb_responsive && !screen_responsive {
-            issues.push("设备屏幕无响应或界面异常".to_string());
-            recommendations.push("检查设备是否锁屏或界面是否正常".to_string());
-        }
-        
-        // 4. 检查小红书应用可访问性
-        let app_accessible = if screen_responsive {
-            self.check_app_accessibility().await
-        } else {
-            false
-        };
-        if screen_responsive && !app_accessible {
-            issues.push("小红书应用无法正常访问".to_string());
-            recommendations.push("检查应用是否已安装、是否有权限问题或需要更新".to_string());
-        }
-        
-        // 5. 综合评估设备健康状态
-        let overall_health = self.evaluate_overall_health(
-            device_connected, 
-            adb_responsive, 
-            screen_responsive, 
-            app_accessible
-        );
-        
-        // 6. 添加通用建议
-        if issues.is_empty() {
-            recommendations.push("设备状态良好，可以正常使用自动化功能".to_string());
-        } else {
-            recommendations.push("建议按顺序解决发现的问题".to_string());
-            if !device_connected {
-                recommendations.push("优先解决设备连接问题".to_string());
-            }
-        }
-        
-        info!("🏥 设备健康检查完成 - 状态: {:?}, 发现 {} 个问题", overall_health, issues.len());
-        
-        Ok(DeviceHealthResult {
-            device_connected,
-            adb_responsive,
-            screen_responsive,
-            app_accessible,
-            overall_health,
-            issues,
-            recommendations,
-        })
-    }
-    
-    /// 检查设备连接状态
-    async fn check_device_connection(&self) -> bool {
-        info!("🔌 检查设备连接状态...");
-        
-        // 检查ADB文件是否存在
-        if !std::path::Path::new(&self.adb_path).exists() {
-            error!("❌ ADB文件不存在: {}", self.adb_path);
-            return false;
-        }
-        
-        // 尝试列出连接的设备
-        match Command::new(&self.adb_path)
-            .args(&["devices"])
-            .output()
-        {
-            Ok(output) => {
-                let devices_output = String::from_utf8_lossy(&output.stdout);
-                let connected = devices_output.contains(&self.device_id) && 
-                               devices_output.contains("device"); // 确保设备状态是"device"而不是"offline"
-                
-                if connected {
-                    info!("✅ 设备 {} 已连接", self.device_id);
-                } else {
-                    warn!("⚠️ 设备 {} 未连接或状态异常", self.device_id);
-                    info!("📱 当前连接的设备:\n{}", devices_output);
-                }
-                connected
-            }
-            Err(e) => {
-                error!("❌ 检查设备连接失败: {}", e);
-                false
-            }
-        }
-    }
-    
-    /// 检查ADB响应性
-    async fn check_adb_responsiveness(&self) -> bool {
-        info!("⚡ 检查ADB响应性...");
-        
-        let start_time = std::time::Instant::now();
-        
-        // 执行简单的shell命令测试响应性
-        match Command::new(&self.adb_path)
-            .args(&["-s", &self.device_id, "shell", "echo", "adb_test"])
-            .output()
-        {
-            Ok(output) => {
-                let elapsed = start_time.elapsed();
-                let response_time_ms = elapsed.as_millis();
-                
-                if output.status.success() && String::from_utf8_lossy(&output.stdout).contains("adb_test") {
-                    if response_time_ms < 3000 { // 3秒内响应认为正常
-                        info!("✅ ADB响应正常，响应时间: {}ms", response_time_ms);
-                        true
-                    } else {
-                        warn!("⚠️ ADB响应缓慢，响应时间: {}ms", response_time_ms);
-                        false
-                    }
-                } else {
-                    error!("❌ ADB命令执行失败");
-                    false
-                }
-            }
-            Err(e) => {
-                error!("❌ ADB响应性检查失败: {}", e);
-                false
-            }
-        }
-    }
-    
-    /// 检查屏幕响应性
-    async fn check_screen_responsiveness(&self) -> bool {
-        info!("📱 检查屏幕响应性...");
-        
-        // 尝试获取屏幕信息
-        match Command::new(&self.adb_path)
-            .args(&["-s", &self.device_id, "shell", "wm", "size"])
-            .output()
-        {
-            Ok(output) => {
-                if output.status.success() {
-                    let screen_info = String::from_utf8_lossy(&output.stdout);
-                    if screen_info.contains("Physical size") {
-                        info!("✅ 屏幕信息获取正常: {}", screen_info.trim());
-                        
-                        // 进一步检查是否能获取UI dump（表示界面可访问）
-                        match Command::new(&self.adb_path)
-                            .args(&["-s", &self.device_id, "shell", "uiautomator", "dump", "/dev/stdout"])
-                            .output()
-                        {
-                            Ok(ui_output) => {
-                                if ui_output.status.success() && !ui_output.stdout.is_empty() {
-                                    info!("✅ UI界面可正常访问");
-                                    true
-                                } else {
-                                    warn!("⚠️ 无法获取UI信息，可能设备锁屏或界面异常");
-                                    false
-                                }
-                            }
-                            Err(e) => {
-                                warn!("⚠️ UI dump检查失败: {}", e);
-                                false
-                            }
-                        }
-                    } else {
-                        warn!("⚠️ 屏幕信息格式异常");
-                        false
-                    }
-                } else {
-                    error!("❌ 无法获取屏幕信息");
-                    false
-                }
-            }
-            Err(e) => {
-                error!("❌ 屏幕响应性检查失败: {}", e);
-                false
-            }
-        }
-    }
-    
-    /// 检查小红书应用可访问性
-    async fn check_app_accessibility(&self) -> bool {
-        info!("📱 检查小红书应用可访问性...");
-        
-        match self.check_app_status().await {
-            Ok(app_status) => {
-                if !app_status.app_installed {
-                    warn!("⚠️ 小红书应用未安装");
-                    false
-                } else if !app_status.app_running {
-                    info!("⚡ 小红书应用未运行，尝试启动...");
-                    // 尝试启动应用
-                    match self.start_xiaohongshu_app().await {
-                        Ok(_) => {
-                            info!("✅ 小红书应用启动成功");
-                            // 等待应用完全启动
-                            sleep(Duration::from_millis(3000)).await;
-                            true
-                        }
-                        Err(e) => {
-                            error!("❌ 小红书应用启动失败: {}", e);
-                            false
-                        }
-                    }
-                } else {
-                    info!("✅ 小红书应用运行正常");
-                    true
-                }
-            }
-            Err(e) => {
-                error!("❌ 检查小红书应用状态失败: {}", e);
-                false
-            }
-        }
-    }
-    
-    /// 评估整体健康状态
-    fn evaluate_overall_health(
-        &self,
-        device_connected: bool,
-        adb_responsive: bool,
-        screen_responsive: bool,
-        app_accessible: bool,
-    ) -> DeviceHealthStatus {
-        if !device_connected {
-            DeviceHealthStatus::Disconnected
-        } else if device_connected && adb_responsive && screen_responsive && app_accessible {
-            DeviceHealthStatus::Healthy
-        } else if device_connected && adb_responsive {
-            DeviceHealthStatus::Warning
-        } else {
-            DeviceHealthStatus::Critical
-        }
-    }
-
-    /// 自动恢复机制 - 尝试解决检测到的问题
-    pub async fn auto_recovery(&self) -> Result<RecoveryResult> {
-        info!("🔄 启动自动恢复流程...");
-        
-        let mut actions_taken = Vec::new();
-        let mut remaining_issues = Vec::new();
-        
-        // 首先进行健康检查
-        let health_result = self.check_device_health().await?;
-        
-        if matches!(health_result.overall_health, DeviceHealthStatus::Healthy) {
-            return Ok(RecoveryResult {
-                success: true,
-                actions_taken: vec!["设备状态良好，无需恢复".to_string()],
-                message: "设备健康状态良好".to_string(),
-                remaining_issues: vec![],
-            });
-        }
-        
-        info!("🚨 检测到设备问题，开始恢复操作...");
-        
-        // 1. 处理设备连接问题
-        if !health_result.device_connected {
-            info!("🔌 尝试恢复设备连接...");
-            
-            if self.attempt_device_reconnection().await {
-                actions_taken.push("重新建立设备连接".to_string());
-                info!("✅ 设备连接恢复成功");
-            } else {
-                remaining_issues.push("设备连接失败 - 需要手动检查USB连接和调试设置".to_string());
-                error!("❌ 设备连接恢复失败");
-            }
-        }
-        
-        // 2. 处理ADB响应问题
-        if health_result.device_connected && !health_result.adb_responsive {
-            info!("⚡ 尝试恢复ADB响应性...");
-            
-            if self.attempt_adb_recovery().await {
-                actions_taken.push("重启ADB服务并恢复响应性".to_string());
-                info!("✅ ADB响应性恢复成功");
-            } else {
-                remaining_issues.push("ADB响应异常 - 可能需要重启ADB或重新连接设备".to_string());
-                error!("❌ ADB响应性恢复失败");
-            }
-        }
-        
-        // 3. 处理屏幕响应问题
-        if health_result.adb_responsive && !health_result.screen_responsive {
-            info!("📱 尝试恢复屏幕响应性...");
-            
-            if self.attempt_screen_recovery().await {
-                actions_taken.push("唤醒设备屏幕并解锁".to_string());
-                info!("✅ 屏幕响应性恢复成功");
-            } else {
-                remaining_issues.push("屏幕无响应 - 请手动检查设备是否锁定或界面异常".to_string());
-                error!("❌ 屏幕响应性恢复失败");
-            }
-        }
-        
-        // 4. 处理应用访问问题
-        if health_result.screen_responsive && !health_result.app_accessible {
-            info!("📱 尝试恢复小红书应用访问...");
-            
-            if self.attempt_app_recovery().await {
-                actions_taken.push("启动小红书应用并恢复访问".to_string());
-                info!("✅ 应用访问恢复成功");
-            } else {
-                remaining_issues.push("小红书应用无法访问 - 请检查应用是否已安装或需要更新".to_string());
-                error!("❌ 应用访问恢复失败");
-            }
-        }
-        
-        // 5. 进行最终健康检查
-        info!("🔍 执行恢复后健康检查...");
-        let final_health = self.check_device_health().await?;
-        let success = matches!(final_health.overall_health, DeviceHealthStatus::Healthy | DeviceHealthStatus::Warning);
-        
-        let message = if success {
-            if actions_taken.is_empty() {
-                "设备状态良好，无需恢复操作".to_string()
-            } else {
-                format!("恢复成功，执行了 {} 项恢复操作", actions_taken.len())
-            }
-        } else {
-            format!("部分恢复成功，仍有 {} 个问题需要手动处理", remaining_issues.len())
-        };
-        
-        info!("🔄 自动恢复完成 - 成功: {}, 操作数: {}, 剩余问题: {}", 
-              success, actions_taken.len(), remaining_issues.len());
-        
-        Ok(RecoveryResult {
-            success,
-            actions_taken,
-            message,
-            remaining_issues,
-        })
-    }
-    
-    /// 尝试设备重连
-    async fn attempt_device_reconnection(&self) -> bool {
-        info!("🔄 尝试重新连接设备...");
-        
-        // 尝试重启ADB服务
-        if let Ok(_) = Command::new(&self.adb_path)
-            .args(&["kill-server"])
-            .output()
-        {
-            sleep(Duration::from_millis(2000)).await;
-            
-            if let Ok(_) = Command::new(&self.adb_path)
-                .args(&["start-server"])
-                .output()
-            {
-                sleep(Duration::from_millis(3000)).await;
-                
-                // 检查设备是否重新连接
-                return self.check_device_connection().await;
-            }
-        }
-        
-        false
-    }
-    
-    /// 尝试ADB恢复
-    async fn attempt_adb_recovery(&self) -> bool {
-        info!("🔄 尝试恢复ADB响应性...");
-        
-        // 发送几个简单命令测试连接
-        for _ in 0..3 {
-            if let Ok(output) = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "shell", "echo", "recovery_test"])
-                .output()
-            {
-                if output.status.success() {
-                    return true;
-                }
-            }
-            
-            sleep(Duration::from_millis(1000)).await;
-        }
-        
-        // 如果简单测试失败，尝试重连
-        self.attempt_device_reconnection().await
-    }
-    
-    /// 尝试屏幕恢复
-    async fn attempt_screen_recovery(&self) -> bool {
-        info!("🔄 尝试恢复屏幕响应性...");
-        
-        // 1. 尝试唤醒屏幕
-        if let Ok(_) = Command::new(&self.adb_path)
-            .args(&["-s", &self.device_id, "shell", "input", "keyevent", "KEYCODE_WAKEUP"])
-            .output()
-        {
-            sleep(Duration::from_millis(1000)).await;
-        }
-        
-        // 2. 尝试解锁（假设是简单滑动解锁）
-        if let Ok(_) = Command::new(&self.adb_path)
-            .args(&["-s", &self.device_id, "shell", "input", "swipe", "500", "1000", "500", "500"])
-            .output()
-        {
-            sleep(Duration::from_millis(1000)).await;
-        }
-        
-        // 3. 验证屏幕是否可访问
-        self.check_screen_responsiveness().await
-    }
-    
-    /// 尝试应用恢复
-    async fn attempt_app_recovery(&self) -> bool {
-        info!("🔄 尝试恢复小红书应用访问...");
-        
-        // 1. 检查应用状态
-        if let Ok(app_status) = self.check_app_status().await {
-            if !app_status.app_installed {
-                warn!("⚠️ 小红书应用未安装，无法自动恢复");
-                return false;
-            }
-            
-            // 2. 如果应用未运行，尝试启动
-            if !app_status.app_running {
-                if let Ok(_) = self.start_xiaohongshu_app().await {
-                    sleep(Duration::from_millis(5000)).await; // 等待应用完全启动
-                    
-                    // 验证启动是否成功
-                    if let Ok(new_status) = self.check_app_status().await {
-                        return new_status.app_running;
-                    }
-                }
-            } else {
-                // 应用已运行，检查是否可以访问界面
-                return self.check_app_accessibility().await;
-            }
-        }
-        
-        false
-    }
-    
-    /// 带恢复机制的导航 - 在导航失败时自动尝试恢复
-    pub async fn navigate_to_contacts_with_recovery(&self) -> Result<NavigationResult> {
-        info!("🧭 开始带恢复机制的导航流程...");
-        
-        // 第一次尝试正常导航
-        match self.navigate_to_contacts().await {
-            Ok(result) => {
-                if result.success {
-                    info!("✅ 首次导航成功");
-                    return Ok(result);
-                } else {
-                    warn!("⚠️ 首次导航失败: {}", result.message);
-                }
-            }
-            Err(e) => {
-                warn!("⚠️ 首次导航出错: {}", e);
-            }
-        }
-        
-        // 首次失败，尝试自动恢复
-        info!("🔄 首次导航失败，尝试自动恢复...");
-        match self.auto_recovery().await {
-            Ok(recovery_result) => {
-                if recovery_result.success {
-                    info!("✅ 自动恢复成功，重新尝试导航...");
-                    
-                    // 等待恢复完成
-                    sleep(Duration::from_millis(2000)).await;
-                    
-                    // 第二次尝试导航
-                    match self.navigate_to_contacts().await {
-                        Ok(result) => {
-                            if result.success {
-                                info!("✅ 恢复后导航成功");
-                                Ok(NavigationResult {
-                                    success: true,
-                                    message: format!("经过自动恢复后导航成功 - 恢复操作: {:?}", recovery_result.actions_taken),
-                                })
-                            } else {
-                                error!("❌ 恢复后导航仍然失败");
-                                Ok(NavigationResult {
-                                    success: false,
-                                    message: format!("恢复后导航失败: {} - 剩余问题: {:?}", result.message, recovery_result.remaining_issues),
-                                })
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ 恢复后导航出错: {}", e);
-                            Ok(NavigationResult {
-                                success: false,
-                                message: format!("恢复后导航出错: {} - 剩余问题: {:?}", e, recovery_result.remaining_issues),
-                            })
-                        }
-                    }
-                } else {
-                    error!("❌ 自动恢复失败");
-                    Ok(NavigationResult {
-                        success: false,
-                        message: format!("自动恢复失败: {} - 需要手动处理: {:?}", recovery_result.message, recovery_result.remaining_issues),
-                    })
-                }
-            }
-            Err(e) => {
-                error!("❌ 自动恢复过程出错: {}", e);
-                Ok(NavigationResult {
-                    success: false,
-                    message: format!("自动恢复过程出错: {}", e),
-                })
-            }
-        }
-    }
-
-    /// 获取用户友好的错误解决方案
-    pub fn get_error_solutions(&self, error_type: &str) -> Vec<String> {
-        match error_type {
-            "device_disconnected" => vec![
-                "1. 检查USB数据线连接是否牢固".to_string(),
-                "2. 确认设备已开启'USB调试'模式".to_string(),
-                "3. 尝试重新连接USB线或更换USB端口".to_string(),
-                "4. 在设备上允许此计算机的USB调试授权".to_string(),
-                "5. 重启ADB服务：关闭程序后重新打开".to_string(),
-            ],
-            "adb_unresponsive" => vec![
-                "1. 等待10-15秒让设备响应".to_string(),
-                "2. 重启ADB服务（程序会自动尝试）".to_string(),
-                "3. 拔掉USB线等待5秒后重新连接".to_string(),
-                "4. 检查设备是否在传输文件或其他操作中".to_string(),
-                "5. 重启设备的开发者选项".to_string(),
-            ],
-            "screen_locked" => vec![
-                "1. 手动解锁设备屏幕".to_string(),
-                "2. 确保设备屏幕保持亮屏状态".to_string(),
-                "3. 关闭设备的自动锁屏功能（开发者选项中的'保持唤醒状态'）".to_string(),
-                "4. 如果设置了复杂密码，建议临时改为简单滑动解锁".to_string(),
-            ],
-            "app_not_installed" => vec![
-                "1. 在设备上安装小红书应用".to_string(),
-                "2. 确保应用版本为最新版本".to_string(),
-                "3. 检查应用是否被设备管理软件禁用".to_string(),
-                "4. 重新安装小红书应用".to_string(),
-            ],
-            "app_not_running" => vec![
-                "1. 手动启动小红书应用".to_string(),
-                "2. 确保应用未被后台管理限制".to_string(),
-                "3. 检查应用是否需要登录".to_string(),
-                "4. 清除应用缓存后重启".to_string(),
-            ],
-            "permission_denied" => vec![
-                "1. 在小红书应用中允许必要的权限（联系人、存储等）".to_string(),
-                "2. 检查设备的权限管理设置".to_string(),
-                "3. 重新启动小红书应用".to_string(),
-                "4. 在应用信息中手动开启所有权限".to_string(),
-            ],
-            "ui_not_accessible" => vec![
-                "1. 检查设备上是否开启了无障碍服务".to_string(),
-                "2. 确保屏幕上没有其他应用的悬浮窗".to_string(),
-                "3. 关闭设备的省电模式".to_string(),
-                "4. 检查设备是否有弹窗或通知阻挡界面".to_string(),
-            ],
-            "network_error" => vec![
-                "1. 检查设备的网络连接".to_string(),
-                "2. 确保小红书应用有网络访问权限".to_string(),
-                "3. 尝试切换WiFi或移动数据".to_string(),
-                "4. 重启设备的网络连接".to_string(),
-            ],
-            _ => vec![
-                "1. 重启设备后重试".to_string(),
-                "2. 检查所有连接和设置".to_string(),
-                "3. 联系技术支持获取帮助".to_string(),
-            ],
-        }
-    }
-
-    /// 生成详细的故障排除报告
-    pub async fn generate_troubleshoot_report(&self) -> Result<String> {
-        info!("📋 生成故障排除报告...");
-        
-        let mut report = String::new();
-        report.push_str("📋 小红书自动化故障排除报告\n");
-        report.push_str("=====================================\n\n");
-        
-        // 1. 基本信息
-        report.push_str("🔧 基本信息:\n");
-        report.push_str(&format!("设备ID: {}\n", self.device_id));
-        report.push_str(&format!("ADB路径: {}\n", self.adb_path));
-        report.push_str(&format!("生成时间: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
-        
-        // 2. 设备健康检查
-        report.push_str("🏥 设备健康检查:\n");
-        match self.check_device_health().await {
-            Ok(health) => {
-                report.push_str(&format!("整体状态: {:?}\n", health.overall_health));
-                report.push_str(&format!("设备连接: {}\n", if health.device_connected { "✅ 正常" } else { "❌ 异常" }));
-                report.push_str(&format!("ADB响应: {}\n", if health.adb_responsive { "✅ 正常" } else { "❌ 异常" }));
-                report.push_str(&format!("屏幕响应: {}\n", if health.screen_responsive { "✅ 正常" } else { "❌ 异常" }));
-                report.push_str(&format!("应用访问: {}\n", if health.app_accessible { "✅ 正常" } else { "❌ 异常" }));
-                
-                if !health.issues.is_empty() {
-                    report.push_str("\n⚠️ 发现的问题:\n");
-                    for (i, issue) in health.issues.iter().enumerate() {
-                        report.push_str(&format!("{}. {}\n", i + 1, issue));
-                    }
-                }
-                
-                if !health.recommendations.is_empty() {
-                    report.push_str("\n💡 建议:\n");
-                    for (i, rec) in health.recommendations.iter().enumerate() {
-                        report.push_str(&format!("{}. {}\n", i + 1, rec));
-                    }
-                }
-            }
-            Err(e) => {
-                report.push_str(&format!("❌ 健康检查失败: {}\n", e));
-            }
-        }
-        
-        // 3. 应用状态
-        report.push_str("\n📱 应用状态:\n");
-        match self.check_app_status().await {
-            Ok(app_status) => {
-                report.push_str(&format!("应用安装: {}\n", if app_status.app_installed { "✅ 已安装" } else { "❌ 未安装" }));
-                report.push_str(&format!("应用运行: {}\n", if app_status.app_running { "✅ 运行中" } else { "❌ 未运行" }));
-                if let Some(version) = &app_status.app_version {
-                    report.push_str(&format!("应用版本: {}\n", version));
-                }
-                report.push_str(&format!("状态消息: {}\n", app_status.message));
-            }
-            Err(e) => {
-                report.push_str(&format!("❌ 应用状态检查失败: {}\n", e));
-            }
-        }
-        
-        // 4. 常见问题解决方案
-        report.push_str("\n🛠️ 常见问题解决方案:\n");
-        
-        let common_issues = vec![
-            ("设备连接问题", "device_disconnected"),
-            ("ADB响应异常", "adb_unresponsive"),
-            ("屏幕锁定", "screen_locked"),
-            ("应用未安装", "app_not_installed"),
-            ("应用未运行", "app_not_running"),
-            ("权限被拒绝", "permission_denied"),
-            ("界面无法访问", "ui_not_accessible"),
-            ("网络错误", "network_error"),
-        ];
-        
-        for (issue_name, error_type) in common_issues {
-            report.push_str(&format!("\n📌 {}:\n", issue_name));
-            let solutions = self.get_error_solutions(error_type);
-            for solution in solutions {
-                report.push_str(&format!("   {}\n", solution));
-            }
-        }
-        
-        // 5. 联系支持
-        report.push_str("\n📞 获取帮助:\n");
-        report.push_str("如果以上解决方案都无法解决问题，请：\n");
-        report.push_str("1. 保存此报告内容\n");
-        report.push_str("2. 记录具体的错误信息\n");
-        report.push_str("3. 联系技术支持\n");
-        
-        Ok(report)
     }
 
     /// 智能导航到通讯录页面
@@ -1770,62 +1079,111 @@ impl XiaohongshuAutomator {
                 break;
             }
 
-            // 遍历按钮进行关注
-            for (x, y) in buttons {
-                let button_text_before = if skip_existing {
-                    self.get_button_text_at(x, y).await.unwrap_or_default()
-                } else {
-                    String::new()
-                };
+            info!("📊 总共找到 {} 个关注按钮", buttons.len());
 
+            // 遍历按钮进行关注
+            for button in buttons {
                 // 如果启用跳过已关注，检查按钮状态
-                if skip_existing && (button_text_before.contains("已关注") || button_text_before.contains("Following")) {
-                    info!("⏭️ 跳过已关注用户 at ({}, {})", x, y);
+                if skip_existing && button.state == ButtonState::AlreadyFollowed {
+                    info!("⏭️ 跳过已关注用户 at ({}, {}), 按钮文本: '{}'", button.x, button.y, button.text);
                     details.push(FollowDetail {
-                        user_position: (x, y),
+                        user_position: (button.x, button.y),
                         follow_success: false,
-                        button_text_before: Some(button_text_before),
+                        button_text_before: Some(button.text.clone()),
                         button_text_after: None,
-                        error: Some("已关注，跳过".to_string()),
+                        error: Some(format!("已关注，跳过")),
                     });
                     continue;
                 }
 
-                // 点击关注按钮
-                match self.click_follow_button(x, y).await {
-                    Ok(success) => {
-                        if success {
-                            total_followed += 1;
-                            info!("✅ 成功关注用户 at ({}, {})", x, y);
+                // 如果按钮状态未知，需要重新检查
+                let final_state = if button.state == ButtonState::Unknown {
+                    let current_text = self.get_button_text_at(button.x, button.y).await.unwrap_or_default();
+                    self.analyze_button_state(&current_text)
+                } else {
+                    button.state.clone()
+                };
 
-                            let button_text_after = self.get_button_text_at(x, y).await.unwrap_or_default();
+                // 根据最终状态决定是否关注
+                match final_state {
+                    ButtonState::CanFollow => {
+                        info!("👆 点击关注按钮 at ({}, {})", button.x, button.y);
+                        
+                        match self.click_follow_button_with_retry(button.x, button.y, 3).await {
+                            Ok(success) => {
+                                if success {
+                                    total_followed += 1;
+                                    info!("✅ 成功关注用户 at ({}, {})", button.x, button.y);
 
-                            details.push(FollowDetail {
-                                user_position: (x, y),
-                                follow_success: true,
-                                button_text_before: Some(button_text_before),
-                                button_text_after: Some(button_text_after),
-                                error: None,
-                            });
-                        } else {
-                            warn!("⚠️ 关注失败 at ({}, {})", x, y);
-                            details.push(FollowDetail {
-                                user_position: (x, y),
-                                follow_success: false,
-                                button_text_before: Some(button_text_before),
-                                button_text_after: None,
-                                error: Some("点击失败".to_string()),
-                            });
+                                    // 验证关注结果
+                                    sleep(Duration::from_millis(1000)).await;
+                                    let button_text_after = self.get_button_text_at(button.x, button.y).await.unwrap_or_default();
+                                    let final_state_after = self.analyze_button_state(&button_text_after);
+                                    
+                                    if final_state_after == ButtonState::AlreadyFollowed {
+                                        info!("✓ 关注状态已确认: '{}'", button_text_after);
+                                    } else {
+                                        warn!("⚠️ 关注状态未确认: '{}'", button_text_after);
+                                    }
+
+                                    details.push(FollowDetail {
+                                        user_position: (button.x, button.y),
+                                        follow_success: true,
+                                        button_text_before: Some(button.text.clone()),
+                                        button_text_after: Some(button_text_after),
+                                        error: None,
+                                    });
+                                } else {
+                                    warn!("⚠️ 关注失败 at ({}, {})", button.x, button.y);
+                                    details.push(FollowDetail {
+                                        user_position: (button.x, button.y),
+                                        follow_success: false,
+                                        button_text_before: Some(button.text.clone()),
+                                        button_text_after: None,
+                                        error: Some("点击失败".to_string()),
+                                    });
+                                }
+                            }
+                            Err(e) => {
+                                error!("❌ 关注操作失败 at ({}, {}): {}", button.x, button.y, e);
+                                details.push(FollowDetail {
+                                    user_position: (button.x, button.y),
+                                    follow_success: false,
+                                    button_text_before: Some(button.text.clone()),
+                                    button_text_after: None,
+                                    error: Some(format!("操作错误: {}", e)),
+                                });
+                            }
                         }
                     }
-                    Err(e) => {
-                        error!("❌ 关注操作失败 at ({}, {}): {}", x, y, e);
+                    ButtonState::AlreadyFollowed => {
+                        info!("⏭️ 跳过已关注用户 at ({}, {})", button.x, button.y);
                         details.push(FollowDetail {
-                            user_position: (x, y),
+                            user_position: (button.x, button.y),
                             follow_success: false,
-                            button_text_before: Some(button_text_before),
+                            button_text_before: Some(button.text.clone()),
                             button_text_after: None,
-                            error: Some(format!("操作错误: {}", e)),
+                            error: Some("已关注，跳过".to_string()),
+                        });
+                    }
+                    ButtonState::Unknown => {
+                        warn!("⚠️ 未知按钮状态 at ({}, {}), 跳过", button.x, button.y);
+                        details.push(FollowDetail {
+                            user_position: (button.x, button.y),
+                            follow_success: false,
+                            button_text_before: Some(button.text.clone()),
+                            button_text_after: None,
+                            error: Some("按钮状态未知，跳过".to_string()),
+                        });
+                    }
+                    ButtonState::Loading => {
+                        info!("⏳ 按钮正在加载中 at ({}, {}), 跳过", button.x, button.y);
+                        details.push(FollowDetail {
+                            user_position: (button.x, button.y),
+                            follow_success: false,
+                            button_text_before: Some(button.text.clone()),
+                            button_text_after: None,
+                            error: Some("按钮加载中，跳过".to_string()),
                         });
                     }
                 }
@@ -1836,14 +1194,29 @@ impl XiaohongshuAutomator {
 
             pages_processed += 1;
 
-            // 如果不是最后一页，滚动到下一页
+            // 如果不是最后一页，智能滚动到下一页
             if page < max_pages - 1 {
-                info!("📜 滚动到下一页");
+                info!("📜 检查是否可以滚动到下一页");
+                
+                // 获取滚动前的UI内容hash，用于检测是否有新内容
+                let content_before = self.get_ui_content_hash().await?;
+                
                 if let Err(e) = self.scroll_down().await {
                     warn!("滚动失败: {}", e);
                     break;
                 }
-                sleep(Duration::from_millis(1000)).await; // 等待页面加载
+                
+                // 等待页面加载并检测变化
+                sleep(Duration::from_millis(2000)).await;
+                
+                let content_after = self.get_ui_content_hash().await?;
+                
+                if content_before == content_after {
+                    info!("📄 页面内容未变化，可能已到达底部，停止滚动");
+                    break;
+                } else {
+                    info!("✓ 检测到新内容，继续处理下一页");
+                }
             }
         }
 
@@ -1877,29 +1250,180 @@ impl XiaohongshuAutomator {
     }
 
     /// 查找页面中的关注按钮坐标
-    async fn find_follow_buttons(&self) -> Result<Vec<(i32, i32)>> {
+    async fn find_follow_buttons(&self) -> Result<Vec<FollowButton>> {
         // 获取UI dump
         let ui_content = self.get_ui_dump().await?;
-
-        // 简化的按钮查找逻辑
-        // 在实际应用中，这里应该解析XML并查找关注按钮的准确位置
+        
+        info!("🔍 开始动态解析UI内容查找关注按钮...");
+        
+        // 处理压缩的XML
+        let expanded_content = if ui_content.lines().count() <= 3 {
+            info!("⚠️ 检测到压缩的XML格式，正在展开以便按钮解析...");
+            self.expand_compressed_xml(&ui_content)
+        } else {
+            ui_content
+        };
+        
+        // 动态解析UI XML来查找关注按钮
         let mut buttons = Vec::new();
-
-        // 假设的关注按钮位置（基于UI分析）
-        let possible_positions = vec![
-            (960, 200), // 第一个用户的关注按钮
-            (960, 350), // 第二个用户的关注按钮
-            (960, 500), // 第三个用户的关注按钮
-            (960, 650), // 第四个用户的关注按钮
-        ];
-
-        for (x, y) in possible_positions {
-            // 简单检查：如果UI内容包含关注相关文本，认为存在按钮
-            if ui_content.contains("关注") || ui_content.contains("follow") {
-                buttons.push((x, y));
+        
+        // 解析XML内容，查找包含"关注"文本的可点击元素
+        for line in expanded_content.lines() {
+            if self.is_follow_button_line(line) {
+                if let Some((x, y)) = self.extract_button_center_coords(line) {
+                    // 直接从当前行提取按钮文本和状态
+                    let text = self.extract_text_from_line(line).unwrap_or_else(|| "关注".to_string());
+                    let state = self.analyze_button_state(&text);
+                    
+                    let button = FollowButton {
+                        x,
+                        y,
+                        state: state.clone(),
+                        text: text.clone(),
+                    };
+                    
+                    info!("✓ 发现关注按钮: 位置({}, {}) 状态({:?}) 文本('{}')", x, y, state, text);
+                    buttons.push(button);
+                }
             }
         }
+        
+        // 如果动态解析失败，使用备用的启发式方法
+        if buttons.is_empty() {
+            warn!("⚠️ 动态解析未找到按钮，使用启发式方法");
+            buttons = self.find_buttons_heuristic(&expanded_content).await?;
+        }
+        
+        info!("📊 总共找到 {} 个关注按钮", buttons.len());
+        Ok(buttons)
+    }
 
+    /// 判断某一行是否包含关注按钮信息
+    fn is_follow_button_line(&self, line: &str) -> bool {
+        // 检查是否包含关注按钮的特征
+        let has_follow_text = line.contains("关注") || 
+                             line.contains("follow") || 
+                             line.contains("Follow") ||
+                             line.contains("+ 关注");
+        
+        // 检查是否是可点击的元素
+        let is_clickable = line.contains("clickable=\"true\"");
+        
+        // 检查是否有合理的坐标信息（不是整个屏幕）
+        let has_reasonable_bounds = line.contains("bounds=\"[") && 
+                                   !line.contains("bounds=\"[0,0][1080,1920]") && // 排除全屏元素
+                                   !line.contains("bounds=\"[0,0][1920,1080]"); // 排除横屏全屏元素
+        
+        // 检查是否是Button或TextView类型
+        let is_button_type = line.contains("class=\"android.widget.Button\"") ||
+                            line.contains("class=\"android.widget.TextView\"") ||
+                            line.contains("class=\"android.view.View\"");
+        
+        let result = has_follow_text && is_clickable && has_reasonable_bounds && is_button_type;
+        
+        if has_follow_text {
+            info!("🔍 检查按钮行: follow_text={}, clickable={}, reasonable_bounds={}, button_type={}, result={}",
+                  has_follow_text, is_clickable, has_reasonable_bounds, is_button_type, result);
+            if result {
+                info!("✓ 找到有效关注按钮行: {}", line.chars().take(100).collect::<String>());
+            }
+        }
+        
+        result
+    }
+
+    /// 从UI元素行中提取按钮中心坐标
+    fn extract_button_center_coords(&self, line: &str) -> Option<(i32, i32)> {
+        // 查找bounds信息: bounds="[left,top][right,bottom]"
+        if let Some(bounds_start) = line.find("bounds=\"[") {
+            if let Some(bounds_end) = line[bounds_start..].find("]\"") {
+                let bounds_str = &line[bounds_start + 9..bounds_start + bounds_end];
+                
+                // 解析坐标格式: [left,top][right,bottom]
+                if let Some(middle) = bounds_str.find("][") {
+                    let left_top = &bounds_str[..middle];
+                    let right_bottom = &bounds_str[middle + 2..];
+                    
+                    if let (Some(comma1), Some(comma2)) = (left_top.find(','), right_bottom.find(',')) {
+                        if let (Ok(left), Ok(top), Ok(right), Ok(bottom)) = (
+                            left_top[..comma1].parse::<i32>(),
+                            left_top[comma1 + 1..].parse::<i32>(),
+                            right_bottom[..comma2].parse::<i32>(),
+                            right_bottom[comma2 + 1..].parse::<i32>(),
+                        ) {
+                            // 计算按钮中心坐标
+                            let center_x = (left + right) / 2;
+                            let center_y = (top + bottom) / 2;
+                            
+                            info!("📍 解析按钮坐标: bounds=[{},{},{},{}], center=({},{})", 
+                                  left, top, right, bottom, center_x, center_y);
+                            return Some((center_x, center_y));
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// 启发式方法查找按钮（备用方案）
+    async fn find_buttons_heuristic(&self, ui_content: &str) -> Result<Vec<FollowButton>> {
+        let mut buttons = Vec::new();
+        
+        info!("🎯 使用启发式按钮位置检测");
+        
+        // 分析UI内容来推断按钮位置
+        let follow_count = ui_content.matches("关注").count() + ui_content.matches("follow").count();
+        info!("📊 UI内容中发现 {} 个关注相关文本", follow_count);
+        
+        if follow_count > 0 {
+            // 基于小红书通讯录界面的典型布局
+            let potential_positions = vec![
+                (900, 300),   // 右上角关注按钮
+                (900, 450),   // 第二个用户
+                (900, 600),   // 第三个用户
+                (900, 750),   // 第四个用户
+                (900, 900),   // 第五个用户
+                (1000, 300),  // 稍右偏移的位置
+                (1000, 450),
+                (1000, 600),
+                (800, 300),   // 稍左偏移的位置
+                (800, 450),
+                (800, 600),
+            ];
+            
+            // 添加更多可能的位置进行测试
+            let test_positions = std::cmp::min(follow_count * 2, potential_positions.len());
+            
+            for i in 0..test_positions {
+                let (x, y) = potential_positions[i];
+                let button = FollowButton {
+                    x,
+                    y,
+                    state: ButtonState::Unknown,
+                    text: "关注".to_string(),
+                };
+                buttons.push(button);
+                info!("📍 添加启发式按钮位置 {}: ({}, {})", i + 1, x, y);
+            }
+        }
+        
+        if buttons.is_empty() {
+            warn!("⚠️ 启发式方法也未找到按钮，添加默认测试位置");
+            // 如果没有找到关注文本，尝试一些常见位置
+            let default_positions = [(950, 350), (950, 500)];
+            for (x, y) in default_positions {
+                let button = FollowButton {
+                    x,
+                    y,
+                    state: ButtonState::Unknown,
+                    text: "关注".to_string(),
+                };
+                buttons.push(button);
+            }
+        }
+        
         Ok(buttons)
     }
 
@@ -1913,16 +1437,280 @@ impl XiaohongshuAutomator {
         Ok(true)
     }
 
-    /// 获取指定位置的按钮文本（简化实现）
-    async fn get_button_text_at(&self, _x: i32, _y: i32) -> Result<String> {
-        // 简化处理，实际应该通过UI分析获取具体按钮文本
-        Ok("关注".to_string())
+    /// 带重试机制的点击关注按钮
+    async fn click_follow_button_with_retry(&self, x: i32, y: i32, max_retries: u32) -> Result<bool> {
+        for attempt in 1..=max_retries {
+            info!("🔄 第 {} 次尝试点击按钮 at ({}, {})", attempt, x, y);
+            
+            match self.click_follow_button(x, y).await {
+                Ok(success) => {
+                    if success {
+                        return Ok(true);
+                    } else {
+                        warn!("⚠️ 第 {} 次点击未成功", attempt);
+                    }
+                }
+                Err(e) => {
+                    warn!("❌ 第 {} 次点击出错: {}", attempt, e);
+                    if attempt < max_retries {
+                        info!("⏳ 等待 {}ms 后重试", 1000 * attempt);
+                        sleep(Duration::from_millis(1000 * attempt as u64)).await;
+                    }
+                }
+            }
+        }
+        
+        Err(anyhow::anyhow!("点击按钮失败，已重试 {} 次", max_retries))
     }
 
-    /// 获取UI dump
-    async fn get_ui_dump(&self) -> Result<String> {
-        info!("📱 获取UI dump...");
+    /// 获取指定位置的按钮文本（真实实现）
+    async fn get_button_text_at(&self, x: i32, y: i32) -> Result<String> {
+        info!("� 正在读取坐标 ({}, {}) 处的按钮文本", x, y);
         
+        // 获取UI dump
+        let ui_content = self.get_ui_dump().await?;
+        
+        // 处理压缩的XML - 将其拆分成多行以便解析
+        let expanded_content = if ui_content.lines().count() <= 3 {
+            // 如果只有少数几行，说明XML被压缩了，需要展开
+            info!("⚠️ 检测到压缩的XML格式，正在展开...");
+            self.expand_compressed_xml(&ui_content)
+        } else {
+            ui_content
+        };
+        
+        let lines: Vec<&str> = expanded_content.lines().collect();
+        info!("📄 处理后的UI Dump 共有 {} 行", lines.len());
+        
+        // 调试：先输出所有包含关注相关内容的行
+        info!("🔍 调试: 搜索包含'关注'或'follow'的所有XML行...");
+        let mut follow_related_lines = 0;
+        for (line_num, line) in lines.iter().enumerate() {
+            if line.contains("关注") || line.contains("follow") || line.contains("text=\"关注\"") {
+                follow_related_lines += 1;
+                info!("🎯 第{}行包含关注相关内容: {}", line_num + 1, 
+                    line.chars().take(200).collect::<String>());
+                
+                // 尝试解析这行的坐标
+                if let Some((left, top, right, bottom)) = self.parse_bounds_from_line(line) {
+                    let center_x = (left + right) / 2;
+                    let center_y = (top + bottom) / 2;
+                    info!("   📍 该元素坐标: 范围[{},{},{},{}] 中心({},{})", 
+                        left, top, right, bottom, center_x, center_y);
+                    
+                    // 检查是否与目标坐标匹配
+                    let distance = (((center_x - x).pow(2) + (center_y - y).pow(2)) as f64).sqrt() as i32;
+                    if distance <= 10 {
+                        info!("   ✅ 该元素与目标坐标({},{})非常接近，距离{}像素", x, y, distance);
+                    }
+                }
+            }
+        }
+        info!("📊 总共找到 {} 行包含关注相关内容", follow_related_lines);
+        
+        let mut found_texts = Vec::new();
+        
+        // 扫描所有UI元素，查找包含目标坐标的元素
+        for (line_num, line) in lines.iter().enumerate() {
+            if let Some(text) = self.extract_text_from_coords_line(line, x, y) {
+                info!("✓ 第{}行: 在坐标({},{})处找到文本: '{}'", line_num + 1, x, y, text);
+                found_texts.push(text.clone());
+            }
+        }
+        
+        if found_texts.is_empty() {
+            // 如果没找到，打印附近的一些元素用于调试
+            info!("⚠️ 在坐标({},{})处未找到任何文本，正在检查附近元素...", x, y);
+            
+            let tolerance = 50; // 50像素容差
+            let mut nearby_elements = Vec::new();
+            
+            for (line_num, line) in lines.iter().enumerate() {
+                if let Some((left, top, right, bottom)) = self.parse_bounds_from_line(line) {
+                    // 检查是否在附近
+                    let center_x = (left + right) / 2;
+                    let center_y = (top + bottom) / 2;
+                    let distance_sq = (center_x - x).pow(2) + (center_y - y).pow(2);
+                    
+                    if distance_sq <= tolerance * tolerance {
+                        if let Some(text) = self.extract_text_from_line(line) {
+                            let distance = (distance_sq as f64).sqrt() as i32;
+                            nearby_elements.push((distance, line_num + 1, center_x, center_y, text));
+                        }
+                    }
+                }
+            }
+            
+            // 按距离排序并打印最近的几个元素
+            nearby_elements.sort_by_key(|&(distance, _, _, _, _)| distance);
+            for (distance, line_num, center_x, center_y, text) in nearby_elements.iter().take(5) {
+                info!("🔍 附近元素(第{}行): 中心({},{}) 距离{} 文本:'{}'", 
+                    line_num, center_x, center_y, distance, text);
+            }
+            
+            return Ok("未知".to_string());
+        }
+        
+        // 返回最相关的文本（通常是最后一个，因为它可能是最顶层的）
+        let result = found_texts.last().unwrap().clone();
+        info!("✅ 最终确定坐标({},{})处的文本: '{}'", x, y, result);
+        Ok(result)
+    }
+
+    /// 从UI元素行中解析坐标范围
+    fn parse_bounds_from_line(&self, line: &str) -> Option<(i32, i32, i32, i32)> {
+        if let Some(bounds_start) = line.find("bounds=\"[") {
+            let bounds_part = &line[bounds_start + 9..];
+            if let Some(bounds_end) = bounds_part.find("\"]") {
+                let bounds_str = &bounds_part[..bounds_end];
+                
+                // 解析格式如: 123,456][789,012
+                if let Some(right_bracket) = bounds_str.find("][") {
+                    let left_top = &bounds_str[..right_bracket];
+                    let right_bottom = &bounds_str[right_bracket + 2..];
+                    
+                    if let Some(comma1) = left_top.find(',') {
+                        if let Some(comma2) = right_bottom.find(',') {
+                            if let (Ok(left), Ok(top), Ok(right), Ok(bottom)) = (
+                                left_top[..comma1].parse::<i32>(),
+                                left_top[comma1 + 1..].parse::<i32>(),
+                                right_bottom[..comma2].parse::<i32>(),
+                                right_bottom[comma2 + 1..].parse::<i32>()
+                            ) {
+                                return Some((left, top, right, bottom));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// 从UI元素行中提取文本内容
+    fn extract_text_from_line(&self, line: &str) -> Option<String> {
+        // 尝试提取text属性
+        if let Some(text_start) = line.find("text=\"") {
+            let text_part = &line[text_start + 6..];
+            if let Some(text_end) = text_part.find("\"") {
+                let text = text_part[..text_end].to_string();
+                if !text.trim().is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+        
+        // 如果没有text，尝试提取resource-id
+        if let Some(id_start) = line.find("resource-id=\"") {
+            let id_part = &line[id_start + 13..];
+            if let Some(id_end) = id_part.find("\"") {
+                let id = id_part[..id_end].to_string();
+                if id.contains("follow") || id.contains("关注") {
+                    return Some("关注".to_string());
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// 从UI元素行中提取指定坐标范围内的文本
+    fn extract_text_from_coords_line(&self, line: &str, target_x: i32, target_y: i32) -> Option<String> {
+        // 检查这行是否包含坐标信息
+        if !line.contains("bounds=\"[") {
+            return None;
+        }
+        
+        // 解析坐标范围
+        if let Some((left, top, right, bottom)) = self.parse_bounds_from_line(line) {
+            // 计算元素的中心点
+            let center_x = (left + right) / 2;
+            let center_y = (top + bottom) / 2;
+            
+            // 检查目标坐标是否在这个元素的范围内，或者非常接近中心点
+            let in_bounds = target_x >= left && target_x <= right && target_y >= top && target_y <= bottom;
+            let near_center = (target_x - center_x).abs() <= 5 && (target_y - center_y).abs() <= 5;
+            
+            if in_bounds || near_center {
+                // 提取文本内容
+                if let Some(text) = self.extract_text_from_line(line) {
+                    if !text.trim().is_empty() {
+                        info!("✓ 在范围[{},{},{},{}]中心({},{})找到文本: '{}' (目标:{},{})", 
+                            left, top, right, bottom, center_x, center_y, text, target_x, target_y);
+                        return Some(text);
+                    }
+                }
+                
+                // 如果没有text属性，检查resource-id或class等其他信息
+                if line.contains("关注") || line.contains("follow") {
+                    info!("✓ 在范围[{},{},{},{}]中心({},{})发现关注相关元素 (目标:{},{})", 
+                        left, top, right, bottom, center_x, center_y, target_x, target_y);
+                    return Some("关注".to_string());
+                }
+                
+                // 打印调试信息，看看这个元素是什么
+                info!("🔍 在目标坐标({},{})附近找到元素: {}", target_x, target_y, 
+                    line.chars().take(150).collect::<String>());
+            }
+        }
+        
+        None
+    }
+
+    /// 智能判断按钮状态
+    fn analyze_button_state(&self, button_text: &str) -> ButtonState {
+        let text_lower = button_text.to_lowercase();
+        
+        if text_lower.contains("已关注") || 
+           text_lower.contains("following") || 
+           text_lower.contains("已follow") ||
+           text_lower.contains("取消关注") {
+            ButtonState::AlreadyFollowed
+        } else if text_lower.contains("关注") || 
+                  text_lower.contains("follow") ||
+                  text_lower.contains("+ 关注") {
+            ButtonState::CanFollow
+        } else if text_lower.contains("加载") || 
+                  text_lower.contains("loading") {
+            ButtonState::Loading
+        } else {
+            ButtonState::Unknown
+        }
+    }
+
+    /// 获取UI dump（带重试机制）
+    async fn get_ui_dump(&self) -> Result<String> {
+        const MAX_RETRIES: u32 = 3;
+        
+        for attempt in 1..=MAX_RETRIES {
+            info!("📱 第 {} 次尝试获取UI dump...", attempt);
+            
+            match self.get_ui_dump_once().await {
+                Ok(ui_dump) => {
+                    if ui_dump.len() > 100 && ui_dump.contains("<?xml") {
+                        info!("✓ 成功获取UI dump，长度: {} 字符", ui_dump.len());
+                        return Ok(ui_dump);
+                    } else {
+                        warn!("⚠️ UI dump内容不完整，长度: {}", ui_dump.len());
+                    }
+                }
+                Err(e) => {
+                    warn!("❌ 第 {} 次获取UI dump失败: {}", attempt, e);
+                }
+            }
+            
+            if attempt < MAX_RETRIES {
+                let wait_time = 1000 * attempt;
+                info!("⏳ 等待 {}ms 后重试", wait_time);
+                sleep(Duration::from_millis(wait_time as u64)).await;
+            }
+        }
+        
+        Err(anyhow::anyhow!("获取UI dump失败，已重试 {} 次", MAX_RETRIES))
+    }
+
+    /// 单次获取UI dump尝试
+    async fn get_ui_dump_once(&self) -> Result<String> {
         // 方法1: 直接输出到stdout
         let output1 = Command::new(&self.adb_path)
             .args(&[
@@ -1939,12 +1727,9 @@ impl XiaohongshuAutomator {
         let result1 = String::from_utf8_lossy(&output1.stdout).to_string();
         
         if result1.len() > 100 && result1.contains("<?xml") {
-            info!("✓ 方法1成功获取UI dump，长度: {} 字符", result1.len());
             return Ok(result1);
         }
 
-        info!("⚠️ 方法1失败，尝试方法2...");
-        
         // 方法2: 先dump到文件，再cat
         let dump_output = Command::new(&self.adb_path)
             .args(&[
@@ -1963,6 +1748,9 @@ impl XiaohongshuAutomator {
             return Err(anyhow::anyhow!("UI dump到文件失败: {}", error_msg));
         }
 
+        // 短暂等待文件写入完成
+        sleep(Duration::from_millis(500)).await;
+
         // 读取UI文件内容
         let output2 = Command::new(&self.adb_path)
             .args(&[
@@ -1978,7 +1766,6 @@ impl XiaohongshuAutomator {
         let result2 = String::from_utf8_lossy(&output2.stdout).to_string();
         
         if result2.len() > 100 && result2.contains("<?xml") {
-            info!("✓ 方法2成功获取UI dump，长度: {} 字符", result2.len());
             return Ok(result2);
         }
 
@@ -1987,7 +1774,9 @@ impl XiaohongshuAutomator {
 
     /// 向下滚动页面
     async fn scroll_down(&self) -> Result<()> {
-        // 从屏幕中间向上滑动
+        info!("📜 执行向下滚动操作");
+        
+        // 从屏幕中间向上滑动，距离适中以避免滑动过快
         let _output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
@@ -1996,15 +1785,46 @@ impl XiaohongshuAutomator {
                 "input",
                 "swipe",
                 "500",
-                "800", // 起始位置
+                "700", // 起始位置 (稍微降低起始位置)
                 "500",
-                "300",  // 结束位置
-                "1000", // 滑动时长(ms)
+                "400",  // 结束位置 (增加滚动距离)
+                "800", // 滑动时长(ms) (减少滑动时间使其更流畅)
             ])
             .output()
             .context("滑动页面失败")?;
 
+        info!("✓ 滚动操作完成");
         Ok(())
+    }
+
+    /// 获取UI内容的简化hash，用于检测页面变化
+    async fn get_ui_content_hash(&self) -> Result<u64> {
+        let ui_content = self.get_ui_dump().await?;
+        
+        // 提取关键内容用于hash计算（忽略动态变化的部分）
+        let key_content = ui_content
+            .lines()
+            .filter(|line| {
+                // 只关注包含用户信息和按钮的行
+                line.contains("关注") || 
+                line.contains("用户") || 
+                line.contains("用户名") ||
+                line.contains("nickname") ||
+                (line.contains("TextView") && line.contains("bounds"))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        
+        // 计算简单hash
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        key_content.hash(&mut hasher);
+        let hash = hasher.finish();
+        
+        info!("📊 计算页面内容hash: {}, 关键行数: {}", hash, key_content.lines().count());
+        Ok(hash)
     }
 
     /// 返回主页
@@ -2054,5 +1874,32 @@ impl XiaohongshuAutomator {
 
         info!("✓ 点击操作成功");
         Ok(())
+    }
+
+    /// 展开压缩的XML内容
+    fn expand_compressed_xml(&self, compressed_xml: &str) -> String {
+        // 在关键标签前后添加换行符，使XML更易解析
+        let mut expanded = compressed_xml.to_string();
+        
+        // 在标签开始前添加换行
+        let patterns = [
+            r"<node",
+            r"</node>",
+            r"<hierarchy",
+            r"</hierarchy>",
+        ];
+        
+        for pattern in &patterns {
+            expanded = expanded.replace(pattern, &format!("\n{}", pattern));
+        }
+        
+        // 在属性间添加空格，确保解析正确
+        expanded = expanded.replace("\" ", "\" ");
+        expanded = expanded.replace("\"><", "\">\n<");
+        
+        info!("✅ XML展开完成，从 {} 字符扩展到 {} 字符", 
+              compressed_xml.len(), expanded.len());
+        
+        expanded
     }
 }

@@ -392,11 +392,19 @@ export const ContactManagementPage: React.FC = () => {
 
                                     <div style={{ marginTop: '24px', textAlign: 'center' }}>
                                         <Space>
-                                            <Button type="primary" onClick={handleRestart}>
-                                                重新开始
+                                            <Button 
+                                                type="primary" 
+                                                icon={<HeartOutlined style={{ color: '#fff' }} />}
+                                                onClick={() => setActiveTab('xiaohongshu')}
+                                                size="large"
+                                            >
+                                                进入小红书关注
                                             </Button>
                                             <Button onClick={() => setActiveTab('import')}>
                                                 查看导入过程
+                                            </Button>
+                                            <Button onClick={handleRestart}>
+                                                重新开始
                                             </Button>
                                         </Space>
                                     </div>

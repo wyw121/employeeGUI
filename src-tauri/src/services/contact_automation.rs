@@ -1,13 +1,23 @@
 use crate::services::ldplayer_vcf_opener::{LDPlayerVcfOpener, VcfOpenResult};
 use crate::services::vcf_importer::VcfImportResult as OriginalVcfImportResult;
 use crate::services::vcf_importer::VcfImporter;
-use crate::services::vcf_importer::{
-    AppStatusResult, NavigationResult, XiaohongshuFollowOptions, XiaohongshuFollowResult,
-};
-use crate::services::vcf_importer::{Contact, ImportAndFollowResult, VcfVerifyResult};
+use crate::services::vcf_importer::{Contact, VcfVerifyResult};
 use crate::services::vcf_importer_async::{VcfImportResult, VcfImporterAsync};
 use crate::services::vcf_importer_optimized::VcfImporterOptimized;
-use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
+use crate::services::xiaohongshu_automator::{
+    XiaohongshuAutomator, AppStatusResult, NavigationResult, 
+    XiaohongshuFollowOptions, XiaohongshuFollowResult
+};
+use serde::{Deserialize, Serialize};
+
+// 定义本地的ImportAndFollowResult结构，使用正确的类型
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportAndFollowResult {
+    pub import_result: OriginalVcfImportResult,
+    pub follow_result: XiaohongshuFollowResult,
+    pub total_duration: u64,
+    pub success: bool,
+}
 use tauri::command;
 use tracing::{error, info, warn};
 
@@ -409,8 +419,8 @@ pub async fn navigate_to_xiaohongshu_contacts(
     match automator.navigate_to_contacts().await {
         Ok(result) => {
             info!(
-                "导航结果: 成功={} 页面={} 尝试次数={}",
-                result.success, result.current_page, result.attempts
+                "导航结果: 成功={} 消息={}",
+                result.success, result.message
             );
             Ok(result)
         }

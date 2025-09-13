@@ -1,8 +1,7 @@
-import { CheckCircleOutlined, ContactsOutlined, FileTextOutlined, MobileOutlined, HeartOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, ContactsOutlined, FileTextOutlined, HeartOutlined, MobileOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Col, Divider, message, Row, Space, Tabs, Typography } from 'antd';
 import React, { useState } from 'react';
-import { ContactImportManager, ContactReader } from '../components/contact';
-import XiaohongshuFollowManager from '../components/contact/XiaohongshuFollowManager';
+import { ContactImportManager, ContactReader, XiaohongshuAutoFollow } from '../components/contact';
 import type { Contact, VcfImportResult } from '../types';
 // 使用相对导入来确保类型一致性
 import type { ContactDocument as ReaderContactDocument } from '../components/contact/ContactReader';
@@ -13,7 +12,6 @@ export const ContactManagementPage: React.FC = () => {
     const [parsedDocument, setParsedDocument] = useState<ReaderContactDocument | null>(null);
     const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
     const [importResults, setImportResults] = useState<VcfImportResult[]>([]);
-    const [followResults, setFollowResults] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>('upload');
 
     const handleContactsParsed = (document: ReaderContactDocument) => {
@@ -46,8 +44,7 @@ export const ContactManagementPage: React.FC = () => {
     };
 
     const handleFollowComplete = (result: any) => {
-        setFollowResults(prev => [...prev, result]);
-        message.success(`小红书关注完成：成功关注 ${result.followedCount} 个好友`);
+        message.success(`小红书关注完成：成功关注 ${result.totalFollowed} 个好友`);
     };
 
     const handleFollowError = (error: string) => {
@@ -430,10 +427,9 @@ export const ContactManagementPage: React.FC = () => {
                             ),
                             disabled: selectedContacts.length === 0 || importResults.length === 0,
                             children: (selectedContacts.length > 0 && importResults.length > 0) ? (
-                                <XiaohongshuFollowManager
-                                    contacts={selectedContacts}
+                                <XiaohongshuAutoFollow
                                     importResults={importResults}
-                                    onFollowComplete={handleFollowComplete}
+                                    onWorkflowComplete={handleFollowComplete}
                                     onError={handleFollowError}
                                 />
                             ) : (

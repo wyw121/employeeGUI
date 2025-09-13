@@ -1,12 +1,118 @@
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
 
-use super::vcf_importer::{
-    AppStatusResult, FollowDetail, NavigationResult, XiaohongshuFollowOptions,
-    XiaohongshuFollowResult,
-};
+// 应用状态检查结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AppStatusResult {
+    pub app_installed: bool,
+    pub app_running: bool,
+    pub message: String,
+    pub app_version: Option<String>,
+    pub package_name: Option<String>,
+}
+
+// 导航操作结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NavigationResult {
+    pub success: bool,
+    pub message: String,
+}
+
+// 关注操作配置
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct XiaohongshuFollowOptions {
+    pub max_pages: Option<usize>,
+    pub follow_interval: Option<u64>,
+    pub skip_existing: Option<bool>,
+    pub return_to_home: Option<bool>,
+}
+
+impl Default for XiaohongshuFollowOptions {
+    fn default() -> Self {
+        Self {
+            max_pages: Some(5),
+            follow_interval: Some(2000),
+            skip_existing: Some(true),
+            return_to_home: Some(true),
+        }
+    }
+}
+
+// 关注操作结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct XiaohongshuFollowResult {
+    pub success: bool,
+    pub total_followed: usize,
+    pub pages_processed: usize,
+    pub duration: u64,
+    pub details: Vec<FollowDetail>,
+    pub message: String,
+}
+
+// 单个关注操作的详细信息
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FollowDetail {
+    pub user_position: (i32, i32),
+    pub follow_success: bool,
+    pub button_text_before: Option<String>,
+    pub button_text_after: Option<String>,
+    pub error: Option<String>,
+}
+
+// 页面状态枚举
+#[derive(Debug, Clone, PartialEq)]
+pub enum PageState {
+    Unknown,         // 未知页面
+    MainPage,        // 小红书主页
+    SidebarOpen,     // 侧边栏已打开
+    DiscoverFriends, // 发现好友页面
+    ContactsList,    // 通讯录列表页面
+    UserProfile,     // 用户资料页面
+}
+
+// 页面识别结果
+#[derive(Debug, Clone)]
+pub struct PageRecognitionResult {
+    pub current_state: PageState,
+    pub confidence: f32,
+    pub key_elements: Vec<String>,
+    pub ui_elements: Vec<UIElement>,
+    pub message: String,
+}
+
+// UI元素信息
+#[derive(Debug, Clone)]
+pub struct UIElement {
+    pub element_type: UIElementType,
+    pub text: String,
+    pub bounds: (i32, i32, i32, i32), // (left, top, right, bottom)
+    pub clickable: bool,
+    pub resource_id: Option<String>,
+    pub class_name: Option<String>,
+}
+
+// UI元素类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum UIElementType {
+    Button,
+    TextView,
+    ImageView,
+    EditText,
+    RecyclerView,
+    LinearLayout,
+    RelativeLayout,
+    Unknown,
+}
+
+// 屏幕信息
+#[derive(Debug)]
+struct ScreenInfo {
+    width: i32,
+    height: i32,
+}
 
 pub struct XiaohongshuAutomator {
     device_id: String,
@@ -14,44 +120,20 @@ pub struct XiaohongshuAutomator {
 }
 
 impl XiaohongshuAutomator {
+    /// 创建新的小红书自动化实例
     pub fn new(device_id: String) -> Self {
         Self {
             device_id,
-            adb_path: "D:\\leidian\\LDPlayer9\\adb.exe".to_string(),
+            adb_path: "adb".to_string(), // 默认使用系统PATH中的adb
         }
     }
 
     /// 检查小红书应用状态
     pub async fn check_app_status(&self) -> Result<AppStatusResult> {
-        info!("检查小红书应用状态");
+        info!("🔍 检查小红书应用状态");
 
-        // 检查是否安装
-        let installed = self.is_app_installed("com.xingin.xhs").await?;
-
-        // 检查是否运行
-        let running = if installed {
-            self.is_app_running("com.xingin.xhs").await?
-        } else {
-            false
-        };
-
-        // 获取应用版本（简化处理）
-        let app_version = if installed {
-            Some("未知版本".to_string())
-        } else {
-            None
-        };
-
-        Ok(AppStatusResult {
-            app_installed: installed,
-            app_running: running,
-            app_version,
-            package_name: Some("com.xingin.xhs".to_string()),
-        })
-    }
-
-    /// 检查应用是否安装
-    async fn is_app_installed(&self, package_name: &str) -> Result<bool> {
+        // 检查应用是否安装
+        let package_name = "com.xingin.xhs";
         let output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
@@ -65,17 +147,27 @@ impl XiaohongshuAutomator {
             .output()
             .context("检查应用安装状态失败")?;
 
-        Ok(output.status.success() && !output.stdout.is_empty())
-    }
+        let app_installed = !output.stdout.is_empty();
 
-    /// 检查应用是否运行
-    async fn is_app_running(&self, package_name: &str) -> Result<bool> {
+        if !app_installed {
+            return Ok(AppStatusResult {
+                app_installed: false,
+                app_running: false,
+                message: "小红书应用未安装".to_string(),
+                app_version: None,
+                package_name: Some(package_name.to_string()),
+            });
+        }
+
+        // 检查应用是否正在运行
         let output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
                 &self.device_id,
                 "shell",
-                "ps",
+                "dumpsys",
+                "activity",
+                "activities",
                 "|",
                 "grep",
                 package_name,
@@ -83,76 +175,50 @@ impl XiaohongshuAutomator {
             .output()
             .context("检查应用运行状态失败")?;
 
-        Ok(!output.stdout.is_empty())
-    }
+        let app_running = !output.stdout.is_empty();
 
-    /// 导航到小红书通讯录页面
-    pub async fn navigate_to_contacts(&self) -> Result<NavigationResult> {
-        info!("导航到小红书通讯录页面");
+        // 获取应用版本
+        let version_output = Command::new(&self.adb_path)
+            .args(&[
+                "-s",
+                &self.device_id,
+                "shell",
+                "dumpsys",
+                "package",
+                package_name,
+                "|",
+                "grep",
+                "versionName",
+            ])
+            .output()
+            .context("获取应用版本失败")?;
 
-        let mut attempts = 0;
-        let max_attempts = 3;
+        let app_version = if !version_output.stdout.is_empty() {
+            Some(String::from_utf8_lossy(&version_output.stdout).trim().to_string())
+        } else {
+            None
+        };
 
-        while attempts < max_attempts {
-            attempts += 1;
+        let message = match (app_installed, app_running) {
+            (true, true) => "小红书应用已安装且正在运行".to_string(),
+            (true, false) => "小红书应用已安装但未运行".to_string(),
+            (false, _) => "小红书应用未安装".to_string(),
+        };
 
-            // 1. 启动小红书应用
-            if let Err(e) = self.open_xiaohongshu_app().await {
-                warn!("启动小红书失败 (尝试 {}): {}", attempts, e);
-                continue;
-            }
-
-            sleep(Duration::from_secs(3)).await;
-
-            // 2. 尝试导航到通讯录
-            match self.navigate_to_contacts_internal().await {
-                Ok(_) => {
-                    return Ok(NavigationResult {
-                        success: true,
-                        current_page: "通讯录页面".to_string(),
-                        message: "成功导航到通讯录页面".to_string(),
-                        attempts,
-                    });
-                }
-                Err(e) => {
-                    warn!("导航失败 (尝试 {}): {}", attempts, e);
-                    if attempts < max_attempts {
-                        sleep(Duration::from_secs(2)).await;
-                    }
-                }
-            }
-        }
-
-        Ok(NavigationResult {
-            success: false,
-            current_page: "未知页面".to_string(),
-            message: format!("导航失败，已尝试 {} 次", max_attempts),
-            attempts,
+        Ok(AppStatusResult {
+            app_installed,
+            app_running,
+            message,
+            app_version,
+            package_name: Some(package_name.to_string()),
         })
     }
 
-    /// 内部导航逻辑
-    async fn navigate_to_contacts_internal(&self) -> Result<()> {
-        // 点击左上角菜单按钮
-        self.adb_tap(49, 98).await?;
-        sleep(Duration::from_secs(2)).await;
+    /// 智能导航到通讯录页面
+    pub async fn navigate_to_contacts(&self) -> Result<NavigationResult> {
+        info!("🧭 开始导航到小红书通讯录页面");
 
-        // 在侧边栏中寻找"发现好友"或相关选项
-        // 这里使用固定坐标，实际应用中可以通过UI分析获取
-        self.adb_tap(200, 300).await?;
-        sleep(Duration::from_secs(2)).await;
-
-        // 进入通讯录页面
-        self.adb_tap(200, 400).await?;
-        sleep(Duration::from_secs(3)).await;
-
-        Ok(())
-    }
-
-    /// 启动小红书应用
-    async fn open_xiaohongshu_app(&self) -> Result<()> {
-        info!("启动小红书应用");
-
+        // 1. 首先启动小红书应用
         let output = Command::new(&self.adb_path)
             .args(&[
                 "-s",
@@ -161,107 +227,140 @@ impl XiaohongshuAutomator {
                 "am",
                 "start",
                 "-n",
-                "com.xingin.xhs/.activity.SplashActivity",
+                "com.xingin.xhs/com.xingin.xhs.index.v2.IndexActivityV2",
             ])
             .output()
             .context("启动小红书应用失败")?;
 
         if !output.status.success() {
-            // 尝试备用启动方式
-            let output = Command::new(&self.adb_path)
-                .args(&[
-                    "-s",
-                    &self.device_id,
-                    "shell",
-                    "monkey",
-                    "-p",
-                    "com.xingin.xhs",
-                    "-c",
-                    "android.intent.category.LAUNCHER",
-                    "1",
-                ])
-                .output()
-                .context("备用启动方式失败")?;
-
-            if !output.status.success() {
-                return Err(anyhow::anyhow!("启动小红书应用失败"));
-            }
+            return Ok(NavigationResult {
+                success: false,
+                message: "启动小红书应用失败".to_string(),
+            });
         }
 
-        Ok(())
+        // 等待应用启动
+        sleep(Duration::from_millis(3000)).await;
+
+        // 2. 识别当前页面状态
+        let page_state = self.recognize_current_page().await?;
+        info!("📱 当前页面状态: {:?}", page_state.current_state);
+
+        match page_state.current_state {
+            PageState::ContactsList => {
+                return Ok(NavigationResult {
+                    success: true,
+                    message: "已在通讯录页面".to_string(),
+                });
+            }
+            PageState::MainPage => {
+                // 从主页导航到通讯录
+                info!("📍 从主页导航到通讯录");
+                // 点击右下角的"我"按钮
+                self.adb_tap(980, 1700).await?;
+                sleep(Duration::from_millis(1500)).await;
+
+                // 点击"发现好友"
+                self.adb_tap(540, 400).await?;
+                sleep(Duration::from_millis(1500)).await;
+
+                // 验证是否成功到达通讯录页面
+                let final_state = self.recognize_current_page().await?;
+                if matches!(final_state.current_state, PageState::ContactsList) {
+                    Ok(NavigationResult {
+                        success: true,
+                        message: "成功导航到通讯录页面".to_string(),
+                    })
+                } else {
+                    Ok(NavigationResult {
+                        success: false,
+                        message: "导航失败，未能到达通讯录页面".to_string(),
+                    })
+                }
+            }
+            _ => {
+                // 其他状态，尝试返回主页
+                info!("🏠 返回主页后重新导航");
+                self.return_to_home().await?;
+                sleep(Duration::from_millis(2000)).await;
+
+                // 返回失败，避免递归
+                Ok(NavigationResult {
+                    success: false,
+                    message: "无法识别当前页面状态，导航失败".to_string(),
+                })
+            }
+        }
     }
 
-    /// 执行小红书自动关注
+    /// 智能页面识别
+    pub async fn recognize_current_page(&self) -> Result<PageRecognitionResult> {
+        let ui_content = self.get_ui_dump().await?;
+
+        // 简化的页面识别逻辑
+        let current_state = if ui_content.contains("通讯录") || ui_content.contains("发现好友") {
+            PageState::ContactsList
+        } else if ui_content.contains("首页") || ui_content.contains("推荐") {
+            PageState::MainPage
+        } else if ui_content.contains("侧边栏") {
+            PageState::SidebarOpen
+        } else {
+            PageState::Unknown
+        };
+
+        Ok(PageRecognitionResult {
+            current_state: current_state.clone(),
+            confidence: 0.8, // 简化的置信度
+            key_elements: vec![], // 在实际实现中应该包含关键元素
+            ui_elements: vec![], // 在实际实现中应该解析UI元素
+            message: format!("识别到页面状态: {:?}", current_state),
+        })
+    }
+
+    /// 执行自动关注流程的核心逻辑
     pub async fn auto_follow(
         &self,
         options: Option<XiaohongshuFollowOptions>,
     ) -> Result<XiaohongshuFollowResult> {
         let start_time = std::time::Instant::now();
-        info!("开始小红书自动关注流程");
-
         let opts = options.unwrap_or_default();
+
         let max_pages = opts.max_pages.unwrap_or(5);
         let follow_interval = opts.follow_interval.unwrap_or(2000);
         let skip_existing = opts.skip_existing.unwrap_or(true);
         let return_to_home = opts.return_to_home.unwrap_or(true);
 
+        info!("🚀 开始自动关注流程");
+        info!("最大页数: {}, 关注间隔: {}ms", max_pages, follow_interval);
+
         let mut total_followed = 0;
         let mut pages_processed = 0;
         let mut details = Vec::new();
 
-        // 确保在通讯录页面
-        match self.navigate_to_contacts().await? {
-            result if !result.success => {
-                return Ok(XiaohongshuFollowResult {
-                    success: false,
-                    total_followed: 0,
-                    pages_processed: 0,
-                    duration: start_time.elapsed().as_secs(),
-                    details: vec![],
-                    message: "无法导航到通讯录页面".to_string(),
-                });
-            }
-            _ => {}
-        }
-
-        // 开始批量关注
         for page in 0..max_pages {
-            pages_processed = page + 1;
-            info!("处理第 {} 页", pages_processed);
+            info!("📄 处理第 {} 页", page + 1);
 
-            // 获取当前页面的关注按钮
-            let follow_buttons = self.find_follow_buttons().await?;
+            // 查找当前页面的关注按钮
+            let buttons = self.find_follow_buttons().await?;
 
-            if follow_buttons.is_empty() {
-                info!("第 {} 页没有找到关注按钮", pages_processed);
-                if page > 0 {
-                    // 如果不是第一页且没有按钮，可能已经到底了
-                    break;
-                }
-                // 尝试滚动到下一页
-                if page < max_pages - 1 {
-                    self.scroll_down().await?;
-                    sleep(Duration::from_millis(2000)).await;
-                }
-                continue;
+            if buttons.is_empty() {
+                warn!("当前页面没有找到关注按钮");
+                break;
             }
 
-            info!("找到 {} 个关注按钮", follow_buttons.len());
+            // 遍历按钮进行关注
+            for (x, y) in buttons {
+                let button_text_before = if skip_existing {
+                    self.get_button_text_at(x, y).await.unwrap_or_default()
+                } else {
+                    String::new()
+                };
 
-            // 逐个点击关注按钮
-            for (_i, (x, y)) in follow_buttons.iter().enumerate() {
-                let button_text_before = self
-                    .get_button_text_at(*x, *y)
-                    .await
-                    .unwrap_or("关注".to_string());
-
-                if skip_existing
-                    && (button_text_before.contains("已关注")
-                        || button_text_before.contains("following"))
-                {
-                    info!("跳过已关注用户 ({}, {})", x, y);
+                // 如果启用跳过已关注，检查按钮状态
+                if skip_existing && (button_text_before.contains("已关注") || button_text_before.contains("Following")) {
+                    info!("⏭️ 跳过已关注用户 at ({}, {})", x, y);
                     details.push(FollowDetail {
-                        user_position: (*x, *y),
+                        user_position: (x, y),
                         follow_success: false,
                         button_text_before: Some(button_text_before),
                         button_text_after: None,
@@ -271,41 +370,40 @@ impl XiaohongshuAutomator {
                 }
 
                 // 点击关注按钮
-                match self.click_follow_button(*x, *y).await {
-                    Ok(true) => {
-                        total_followed += 1;
-                        let button_text_after = self
-                            .get_button_text_at(*x, *y)
-                            .await
-                            .unwrap_or("已关注".to_string());
+                match self.click_follow_button(x, y).await {
+                    Ok(success) => {
+                        if success {
+                            total_followed += 1;
+                            info!("✅ 成功关注用户 at ({}, {})", x, y);
 
-                        info!("成功关注用户 #{}: ({}, {})", total_followed, x, y);
-                        details.push(FollowDetail {
-                            user_position: (*x, *y),
-                            follow_success: true,
-                            button_text_before: Some(button_text_before),
-                            button_text_after: Some(button_text_after),
-                            error: None,
-                        });
-                    }
-                    Ok(false) => {
-                        warn!("关注失败: ({}, {})", x, y);
-                        details.push(FollowDetail {
-                            user_position: (*x, *y),
-                            follow_success: false,
-                            button_text_before: Some(button_text_before),
-                            button_text_after: None,
-                            error: Some("点击失败".to_string()),
-                        });
+                            let button_text_after = self.get_button_text_at(x, y).await.unwrap_or_default();
+
+                            details.push(FollowDetail {
+                                user_position: (x, y),
+                                follow_success: true,
+                                button_text_before: Some(button_text_before),
+                                button_text_after: Some(button_text_after),
+                                error: None,
+                            });
+                        } else {
+                            warn!("⚠️ 关注失败 at ({}, {})", x, y);
+                            details.push(FollowDetail {
+                                user_position: (x, y),
+                                follow_success: false,
+                                button_text_before: Some(button_text_before),
+                                button_text_after: None,
+                                error: Some("点击失败".to_string()),
+                            });
+                        }
                     }
                     Err(e) => {
-                        error!("关注出错: ({}, {}) - {}", x, y, e);
+                        error!("❌ 关注操作失败 at ({}, {}): {}", x, y, e);
                         details.push(FollowDetail {
-                            user_position: (*x, *y),
+                            user_position: (x, y),
                             follow_success: false,
                             button_text_before: Some(button_text_before),
                             button_text_after: None,
-                            error: Some(e.to_string()),
+                            error: Some(format!("操作错误: {}", e)),
                         });
                     }
                 }
@@ -314,17 +412,21 @@ impl XiaohongshuAutomator {
                 sleep(Duration::from_millis(follow_interval)).await;
             }
 
-            // 滚动到下一页
-            if pages_processed < max_pages {
-                info!("滚动到下一页");
-                self.scroll_down().await?;
-                sleep(Duration::from_millis(2000)).await;
+            pages_processed += 1;
+
+            // 如果不是最后一页，滚动到下一页
+            if page < max_pages - 1 {
+                info!("📜 滚动到下一页");
+                if let Err(e) = self.scroll_down().await {
+                    warn!("滚动失败: {}", e);
+                    break;
+                }
+                sleep(Duration::from_millis(1000)).await; // 等待页面加载
             }
         }
 
-        // 返回主页
+        // 如果启用了返回主页选项
         if return_to_home {
-            info!("返回小红书主页");
             if let Err(e) = self.return_to_home().await {
                 warn!("返回主页失败: {}", e);
             }
@@ -469,14 +571,6 @@ impl XiaohongshuAutomator {
             .output()
             .context("返回主页失败")?;
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("返回主页失败"));
-        }
-
-        // 再次启动小红书到主页
-        sleep(Duration::from_millis(1000)).await;
-        self.open_xiaohongshu_app().await?;
-
         Ok(())
     }
 
@@ -500,17 +594,5 @@ impl XiaohongshuAutomator {
         }
 
         Ok(())
-    }
-}
-
-impl Default for XiaohongshuFollowOptions {
-    fn default() -> Self {
-        Self {
-            max_pages: Some(5),
-            follow_interval: Some(2000),
-            skip_existing: Some(true),
-            take_screenshots: Some(false),
-            return_to_home: Some(true),
-        }
     }
 }

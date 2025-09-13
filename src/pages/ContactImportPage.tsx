@@ -2,15 +2,18 @@ import {
     CheckCircleOutlined,
     ContactsOutlined,
     FileTextOutlined,
+    HeartOutlined,
     MobileOutlined
 } from '@ant-design/icons';
 import {
     Alert,
     Button,
     Card,
+    Checkbox,
     Col,
     Divider,
     Row,
+    Select,
     Space,
     Steps,
     Typography,
@@ -19,9 +22,10 @@ import {
 import React, { useCallback, useState } from 'react';
 import {
     ContactImportManager,
-    ContactReader
+    ContactReader,
+    XiaohongshuAutoFollow
 } from '../components/contact';
-import { Contact, ContactDocument, VcfImportResult } from '../types';
+import { Contact, ContactDocument, Device, VcfImportResult, XiaohongshuFollowResult } from '../types';
 
 const { Title, Paragraph } = Typography;
 const { Step } = Steps;
@@ -31,6 +35,11 @@ export const ContactImportPage: React.FC = () => {
   const [parsedContacts, setParsedContacts] = useState<Contact[]>([]);
   const [parsedDocument, setParsedDocument] = useState<ContactDocument | null>(null);
   const [importResults, setImportResults] = useState<VcfImportResult[]>([]);
+  
+  // 小红书关注相关状态
+  const [enableAutoFollow, setEnableAutoFollow] = useState(true);
+  const [selectedDeviceForFollow, setSelectedDeviceForFollow] = useState<Device | null>(null);
+  const [xiaohongshuResults, setXiaohongshuResults] = useState<XiaohongshuFollowResult | null>(null);
 
   // 处理通讯录文档解析完成
   const handleContactsParsed = useCallback((document: any) => {
@@ -52,13 +61,31 @@ export const ContactImportPage: React.FC = () => {
   // 处理导入完成
   const handleImportComplete = useCallback((results: VcfImportResult[]) => {
     setImportResults(results);
-    setCurrentStep(2);
     
     const totalImported = results.reduce((sum, result) => sum + result.importedContacts, 0);
     const successCount = results.filter(result => result.success).length;
     
     message.success(`导入完成！成功设备: ${successCount}/${results.length}，总导入联系人: ${totalImported}`);
-  }, []);
+    
+    // 检查是否启用小红书关注联动
+    if (enableAutoFollow && results.some(r => r.success)) {
+      setCurrentStep(2); // 进入小红书关注步骤
+      message.info('3秒后将自动开始小红书关注流程...');
+    } else {
+      setCurrentStep(3); // 跳过小红书关注，直接进入完成步骤
+    }
+  }, [enableAutoFollow]);
+
+  // 处理小红书关注完成
+  const handleXiaohongshuComplete = useCallback((result: XiaohongshuFollowResult) => {
+    setXiaohongshuResults(result);
+    setCurrentStep(3); // 进入最终结果页
+    
+    const totalImported = importResults.reduce((sum, r) => sum + r.importedContacts, 0);
+    message.success(
+      `🎉 全流程完成！导入了 ${totalImported} 个联系人，关注了 ${result.totalFollowed} 个好友`
+    );
+  }, [importResults]);
 
   // 处理错误
   const handleError = useCallback((error: string) => {
@@ -71,6 +98,8 @@ export const ContactImportPage: React.FC = () => {
     setParsedContacts([]);
     setParsedDocument(null);
     setImportResults([]);
+    setXiaohongshuResults(null);
+    setSelectedDeviceForFollow(null);
   }, []);
 
   // 渲染导入结果摘要
@@ -163,6 +192,89 @@ export const ContactImportPage: React.FC = () => {
     );
   };
 
+  const renderXiaohongshuSummary = () => {
+    if (!xiaohongshuResults) return null;
+
+    return (
+      <div className="mt-6">
+        <Alert
+          type={xiaohongshuResults.success ? "success" : "error"}
+          message="小红书关注任务完成"
+          description={`关注任务${xiaohongshuResults.success ? '成功' : '失败'}，共关注用户 ${xiaohongshuResults.totalFollowed} 个，处理 ${xiaohongshuResults.pagesProcessed} 页内容`}
+          showIcon
+          className="mb-6"
+        />
+
+        <Row gutter={16} className="mb-4">
+          <Col span={6}>
+            <Card size="small" className="text-center">
+              <div className="text-2xl font-bold text-pink-600">{xiaohongshuResults.totalFollowed}</div>
+              <div className="text-sm text-gray-600">关注用户</div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{xiaohongshuResults.pagesProcessed}</div>
+              <div className="text-sm text-gray-600">处理页面</div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{Math.round(xiaohongshuResults.duration)}s</div>
+              <div className="text-sm text-gray-600">耗时</div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" className="text-center">
+              <div className={`text-2xl font-bold ${xiaohongshuResults.success ? 'text-green-600' : 'text-red-600'}`}>
+                {xiaohongshuResults.success ? '成功' : '失败'}
+              </div>
+              <div className="text-sm text-gray-600">状态</div>
+            </Card>
+          </Col>
+        </Row>
+
+        <Card title="小红书关注详细结果" size="small">
+          <div className="mb-4">
+            <div className="text-sm text-gray-600 mb-2">{xiaohongshuResults.message}</div>
+          </div>
+          
+          {xiaohongshuResults.details && xiaohongshuResults.details.length > 0 && (
+            <div>
+              <div className="text-sm font-medium mb-3">关注详情 ({xiaohongshuResults.details.length} 个用户):</div>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {xiaohongshuResults.details.map((detail, index) => (
+                  <div key={`follow-detail-${detail.userPosition.x}-${detail.userPosition.y}-${index}`} className="border border-gray-200 rounded p-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>用户位置: ({detail.userPosition.x}, {detail.userPosition.y})</span>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        detail.followSuccess 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {detail.followSuccess ? '已关注' : '失败'}
+                      </span>
+                    </div>
+                    {detail.buttonTextBefore && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        按钮文本: {detail.buttonTextBefore} → {detail.buttonTextAfter || '未知'}
+                      </div>
+                    )}
+                    {detail.error && (
+                      <div className="text-xs text-red-600 mt-1">
+                        错误: {detail.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
   return (
     <div className="contact-import-page min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -191,8 +303,13 @@ export const ContactImportPage: React.FC = () => {
               icon={<ContactsOutlined />}
             />
             <Step
+              title="小红书关注"
+              description="自动关注小红书好友"
+              icon={<HeartOutlined />}
+            />
+            <Step
               title="完成"
-              description="查看导入结果"
+              description="查看导入和关注结果"
               icon={<CheckCircleOutlined />}
             />
           </Steps>
@@ -257,6 +374,27 @@ export const ContactImportPage: React.FC = () => {
                   />
                 )}
 
+                {/* 小红书关注设置 */}
+                <Card title="小红书关注设置" size="small" className="mb-4">
+                  <Checkbox 
+                    checked={enableAutoFollow}
+                    onChange={(e) => setEnableAutoFollow(e.target.checked)}
+                  >
+                    导入完成后自动启动小红书关注
+                  </Checkbox>
+                  
+                  {enableAutoFollow && (
+                    <div style={{ marginTop: 8 }}>
+                      <Alert
+                        type="info"
+                        message="将在通讯录导入完成后自动触发小红书关注流程"
+                        showIcon
+                        banner
+                      />
+                    </div>
+                  )}
+                </Card>
+
                 <ContactImportManager
                   contacts={parsedContacts}
                   onImportComplete={handleImportComplete}
@@ -265,18 +403,38 @@ export const ContactImportPage: React.FC = () => {
               </Card>
             )}
 
-            {/* 第三步：导入结果 */}
+            {/* 第三步：小红书关注 */}
             {currentStep === 2 && (
               <Card
                 title={
                   <Space>
+                    <HeartOutlined />
+                    步骤3：小红书自动关注
+                  </Space>
+                }
+                className="shadow-sm"
+              >
+                <XiaohongshuAutoFollow
+                  selectedDevice={selectedDeviceForFollow?.id?.toString()}
+                  onFollowComplete={handleXiaohongshuComplete}
+                  onError={handleError}
+                />
+              </Card>
+            )}
+
+            {/* 第四步：完成 */}
+            {currentStep === 3 && (
+              <Card
+                title={
+                  <Space>
                     <CheckCircleOutlined />
-                    步骤3：导入完成
+                    步骤4：完成
                   </Space>
                 }
                 className="shadow-sm"
               >
                 {renderImportSummary()}
+                {xiaohongshuResults && renderXiaohongshuSummary()}
               </Card>
             )}
           </Col>

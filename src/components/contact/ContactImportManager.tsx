@@ -1,30 +1,30 @@
 import {
-    CheckCircleOutlined,
-    ContactsOutlined,
-    InfoCircleOutlined,
-    MobileOutlined,
-    PlayCircleOutlined,
-    SettingOutlined,
-    UserOutlined
+  CheckCircleOutlined,
+  ContactsOutlined,
+  InfoCircleOutlined,
+  MobileOutlined,
+  PlayCircleOutlined,
+  SettingOutlined,
+  UserOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import {
-    Alert,
-    Button,
-    Card,
-    Checkbox,
-    Col,
-    message,
-    Progress,
-    Row,
-    Select,
-    Space,
-    Spin,
-    Statistic,
-    Steps,
-    Table,
-    Tag,
-    Typography
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Col,
+  message,
+  Progress,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Statistic,
+  Steps,
+  Table,
+  Tag,
+  Typography
 } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Contact, Device, VcfImportResult } from '../../types';

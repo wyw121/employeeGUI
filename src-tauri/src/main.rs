@@ -14,6 +14,7 @@ use services::permission_test::*;
 use services::safe_adb_manager::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
+use services::xiaohongshu_service::{XiaohongshuService, *};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -186,38 +187,73 @@ struct DeviceInfo {
 
 // 新增：小红书关注命令
 #[tauri::command]
-async fn xiaohongshu_follow_contacts(request: XiaohongshuFollowRequest) -> Result<XiaohongshuFollowResult, String> {
+async fn xiaohongshu_follow_contacts(
+    request: XiaohongshuFollowRequest,
+) -> Result<XiaohongshuFollowResult, String> {
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    println!("收到小红书关注请求: device={}, max_follows={:?}, contacts_count={}", 
-             request.device, request.max_follows, request.contacts.len());
+    println!(
+        "收到小红书关注请求: device={}, max_follows={:?}, contacts_count={}",
+        request.device,
+        request.max_follows,
+        request.contacts.len()
+    );
 
     let max_follows = request.max_follows.unwrap_or(5);
-    let contacts_to_follow = request.contacts.into_iter().take(max_follows).collect::<Vec<_>>();
-    
+    let contacts_to_follow = request
+        .contacts
+        .into_iter()
+        .take(max_follows)
+        .collect::<Vec<_>>();
+
     // 调用 xiaohongshu-follow-test 程序
-    let xiaohongshu_test_path = std::env::current_dir()
-        .map_err(|e| format!("获取当前目录失败: {}", e))?
-        .join("xiaohongshu-follow-test");
-    
-    println!("执行路径: {:?}", xiaohongshu_test_path);
-    
+    let current_dir = std::env::current_dir().map_err(|e| format!("获取当前目录失败: {}", e))?;
+
+    println!("当前工作目录: {:?}", current_dir);
+
+    // 尝试多个可能的路径
+    let possible_paths = vec![
+        current_dir.join("xiaohongshu-follow-test"),
+        current_dir
+            .parent()
+            .unwrap_or(&current_dir)
+            .join("xiaohongshu-follow-test"),
+        std::path::PathBuf::from("D:\\repositories\\employeeGUI\\xiaohongshu-follow-test"),
+    ];
+
+    let mut xiaohongshu_test_path = None;
+    for path in possible_paths {
+        println!("检查路径: {:?}", path);
+        if path.exists() && path.is_dir() {
+            println!("找到有效路径: {:?}", path);
+            xiaohongshu_test_path = Some(path);
+            break;
+        }
+    }
+
+    let xiaohongshu_test_path =
+        xiaohongshu_test_path.ok_or_else(|| "找不到 xiaohongshu-follow-test 目录".to_string())?;
+
+    println!("使用执行路径: {:?}", xiaohongshu_test_path);
+
     let output = Command::new("cargo")
         .arg("run")
         .arg("--")
-        .arg("follow")
+        .arg("follow-from-gui")
         .arg("--device")
         .arg(&request.device)
         .arg("--max-follows")
         .arg(max_follows.to_string())
+        .arg("--contacts-json")
+        .arg(&serde_json::to_string(&contacts_to_follow).unwrap_or_default())
         .current_dir(&xiaohongshu_test_path)
         .output()
         .map_err(|e| format!("执行小红书关注命令失败: {}", e))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     println!("关注命令输出: {}", stdout);
     if !stderr.is_empty() {
         println!("关注命令错误: {}", stderr);
@@ -226,7 +262,8 @@ async fn xiaohongshu_follow_contacts(request: XiaohongshuFollowRequest) -> Resul
     let success = output.status.success();
     let followed_count = if success {
         // 从输出中解析关注数量
-        stdout.lines()
+        stdout
+            .lines()
             .find(|line| line.contains("已成功关注"))
             .and_then(|line| {
                 line.split_whitespace()
@@ -244,8 +281,10 @@ async fn xiaohongshu_follow_contacts(request: XiaohongshuFollowRequest) -> Resul
         .as_secs()
         .to_string();
 
-    let details: Vec<FollowDetail> = contacts_to_follow.iter().enumerate().map(|(i, contact)| {
-        FollowDetail {
+    let details: Vec<FollowDetail> = contacts_to_follow
+        .iter()
+        .enumerate()
+        .map(|(i, contact)| FollowDetail {
             contact_name: contact.name.clone(),
             contact_phone: contact.phone.clone(),
             follow_status: if success && i < followed_count {
@@ -263,8 +302,8 @@ async fn xiaohongshu_follow_contacts(request: XiaohongshuFollowRequest) -> Resul
                 "关注失败".to_string()
             },
             timestamp: timestamp.clone(),
-        }
-    }).collect();
+        })
+        .collect();
 
     let result = XiaohongshuFollowResult {
         success,
@@ -294,11 +333,12 @@ async fn get_xiaohongshu_devices() -> Result<Vec<DeviceInfo>, String> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut devices = Vec::new();
 
-    for line in stdout.lines().skip(1) { // 跳过标题行
+    for line in stdout.lines().skip(1) {
+        // 跳过标题行
         if line.trim().is_empty() {
             continue;
         }
-        
+
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 2 {
             let device_id = parts[0].to_string();
@@ -307,7 +347,7 @@ async fn get_xiaohongshu_devices() -> Result<Vec<DeviceInfo>, String> {
                 "offline" => "offline",
                 _ => "unknown",
             };
-            
+
             devices.push(DeviceInfo {
                 id: device_id.clone(),
                 name: format!("Android设备 {}", device_id),
@@ -344,10 +384,12 @@ async fn delete_file(path: String) -> Result<(), String> {
 fn main() {
     let employee_service = EmployeeService::new().expect("Failed to initialize employee service");
     let adb_service = AdbService::new();
+    let xiaohongshu_service = XiaohongshuService::new();
 
     tauri::Builder::default()
         .manage(Mutex::new(employee_service))
         .manage(Mutex::new(adb_service))
+        .manage(tokio::sync::Mutex::new(xiaohongshu_service))
         .invoke_handler(tauri::generate_handler![
             get_employees,
             add_employee,
@@ -395,6 +437,13 @@ fn main() {
             xiaohongshu_follow_contacts,
             get_xiaohongshu_devices,
             import_and_follow_xiaohongshu,
+            // 新的小红书服务模块化命令
+            initialize_xiaohongshu_service,
+            check_xiaohongshu_status,
+            navigate_to_contacts_page,
+            auto_follow_contacts,
+            get_xiaohongshu_service_status,
+            execute_complete_xiaohongshu_workflow,
             // 权限处理测试功能
             test_permission_handling,
             test_vcf_import_with_permission,

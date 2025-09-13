@@ -85,21 +85,21 @@ impl Default for XiaohongshuFollowOptions {
 /// 页面状态枚举
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageState {
-    Unknown,                    // 未知页面
-    MainPage,                  // 小红书主页
-    SidebarOpen,               // 侧边栏已打开
-    DiscoverFriends,           // 发现好友页面
-    ContactsList,              // 通讯录列表页面
-    UserProfile,               // 用户资料页面
-    SettingsPage,              // 设置页面
+    Unknown,         // 未知页面
+    MainPage,        // 小红书主页
+    SidebarOpen,     // 侧边栏已打开
+    DiscoverFriends, // 发现好友页面
+    ContactsList,    // 通讯录列表页面
+    UserProfile,     // 用户资料页面
+    SettingsPage,    // 设置页面
 }
 
 /// 页面识别结果
 #[derive(Debug, Clone)]
 pub struct PageRecognitionResult {
     pub current_state: PageState,
-    pub confidence: f32,        // 识别信心度 (0.0-1.0)
-    pub key_elements: Vec<String>, // 识别到的关键元素
+    pub confidence: f32,             // 识别信心度 (0.0-1.0)
+    pub key_elements: Vec<String>,   // 识别到的关键元素
     pub ui_elements: Vec<UIElement>, // 可操作的UI元素
     pub message: String,
 }

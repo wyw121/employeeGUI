@@ -44,6 +44,18 @@ enum Commands {
         #[arg(short, long, default_value = "20")]
         max_follows: usize,
     },
+    /// 从GUI接收联系人并执行关注（用于GUI集成）
+    FollowFromGui {
+        /// 设备ID (例如: emulator-5554)
+        #[arg(short, long)]
+        device: String,
+        /// 最大关注数量
+        #[arg(short, long, default_value = "5")]
+        max_follows: usize,
+        /// 联系人JSON数据（可选，用于GUI集成）
+        #[arg(short, long)]
+        contacts_json: Option<String>,
+    },
     /// 完整流程：导入通讯录 + 自动关注
     Complete {
         /// 设备ID (例如: emulator-5554)
@@ -100,6 +112,18 @@ async fn main() -> Result<()> {
             max_follows,
         } => {
             info!("❤️ 开始在设备 {} 上执行自动关注", device);
+            auto_follow_contacts(&device, Some(max_follows)).await?;
+        }
+        Commands::FollowFromGui {
+            device,
+            max_follows,
+            contacts_json,
+        } => {
+            info!("❤️ 开始在设备 {} 上执行 自动关注", device);
+            if let Some(json_data) = contacts_json {
+                info!("📋 收到GUI联系人数据: {}", json_data);
+                // 这里可以解析联系人数据，但目前仍使用通用关注逻辑
+            }
             auto_follow_contacts(&device, Some(max_follows)).await?;
         }
         Commands::Complete {

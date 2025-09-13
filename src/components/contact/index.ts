@@ -10,3 +10,4 @@ export { VcfImportDemo } from "./VcfImportDemo";
 export { VcfImportDialog } from "./VcfImportDialog";
 export { VcfImporter } from "./VcfImporter";
 export { default as XiaohongshuAutoFollow } from "./XiaohongshuAutoFollow";
+export { default as XiaohongshuFollowManager } from "./XiaohongshuFollowManager";

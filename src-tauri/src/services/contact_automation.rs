@@ -1,3 +1,4 @@
+use crate::services::ldplayer_vcf_opener::{LDPlayerVcfOpener, VcfOpenResult};
 use crate::services::vcf_importer::VcfImportResult as OriginalVcfImportResult;
 use crate::services::vcf_importer::VcfImporter;
 use crate::services::vcf_importer::{
@@ -6,7 +7,6 @@ use crate::services::vcf_importer::{
 use crate::services::vcf_importer::{Contact, ImportAndFollowResult, VcfVerifyResult};
 use crate::services::vcf_importer_async::{VcfImportResult, VcfImporterAsync};
 use crate::services::vcf_importer_optimized::VcfImporterOptimized;
-use crate::services::ldplayer_vcf_opener::{LDPlayerVcfOpener, VcfOpenResult};
 use crate::services::xiaohongshu_automator::XiaohongshuAutomator;
 use tauri::command;
 use tracing::{error, info, warn};
@@ -44,7 +44,10 @@ pub async fn import_vcf_contacts_async_safe(
 ) -> Result<VcfImportResult, String> {
     // 在命令开始就添加 panic hook
     std::panic::set_hook(Box::new(|panic_info| {
-        error!("🔥 PANIC in import_vcf_contacts_async_safe: {:?}", panic_info);
+        error!(
+            "🔥 PANIC in import_vcf_contacts_async_safe: {:?}",
+            panic_info
+        );
         if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             error!("🔥 PANIC message: {}", s);
         }
@@ -53,14 +56,17 @@ pub async fn import_vcf_contacts_async_safe(
         }
     }));
 
-    info!("🚀 开始VCF导入（异步安全版）: 设备 {} 文件 {}", deviceId, contactsFilePath);
-    
+    info!(
+        "🚀 开始VCF导入（异步安全版）: 设备 {} 文件 {}",
+        deviceId, contactsFilePath
+    );
+
     // 参数验证
     if deviceId.is_empty() {
         error!("❌ 设备ID不能为空");
         return Err("设备ID不能为空".to_string());
     }
-    
+
     if contactsFilePath.is_empty() {
         error!("❌ 联系人文件路径不能为空");
         return Err("联系人文件路径不能为空".to_string());
@@ -77,17 +83,19 @@ pub async fn import_vcf_contacts_async_safe(
     // 使用简化的错误处理，避免复杂的嵌套
     let device_id_clone = deviceId.clone();
     let file_path_clone = contactsFilePath.clone();
-    
+
     let result = tokio::task::spawn_blocking(move || {
         tokio::runtime::Handle::current().block_on(async move {
             info!("📋 创建VcfImporterAsync实例...");
             let importer = VcfImporterAsync::new(device_id_clone);
-            
+
             info!("⚡ 调用异步导入方法...");
             match importer.import_vcf_contacts_simple(&file_path_clone).await {
                 Ok(result) => {
-                    info!("🎉 VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
-                        result.success, result.total_contacts, result.imported_contacts);
+                    info!(
+                        "🎉 VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
+                        result.success, result.total_contacts, result.imported_contacts
+                    );
                     Ok(result)
                 }
                 Err(e) => {
@@ -97,7 +105,8 @@ pub async fn import_vcf_contacts_async_safe(
                 }
             }
         })
-    }).await;
+    })
+    .await;
 
     match result {
         Ok(import_result) => {
@@ -124,12 +133,13 @@ pub async fn open_vcf_file_ldplayer(
     );
 
     let opener = LDPlayerVcfOpener::new(deviceId.clone());
-    
+
     match opener.open_vcf_file_complete(&vcfFilePath).await {
         Ok(result) => {
             info!(
                 "🎉 VCF文件打开完成: 成功={} 步骤={}",
-                result.success, result.steps_completed.len()
+                result.success,
+                result.steps_completed.len()
             );
             Ok(result)
         }
@@ -155,7 +165,7 @@ pub async fn import_and_open_vcf_ldplayer(
     // 步骤1: 使用异步安全版本传输VCF文件
     info!("📤 步骤1: 传输VCF文件到设备...");
     let importer = VcfImporterAsync::new(deviceId.clone());
-    
+
     let import_result = match importer.import_vcf_contacts_simple(&contactsFilePath).await {
         Ok(result) => {
             if result.success {
@@ -176,7 +186,7 @@ pub async fn import_and_open_vcf_ldplayer(
     info!("📱 步骤2: 自动打开VCF文件...");
     let device_vcf_path = "/sdcard/Download/contacts_import.vcf";
     let opener = LDPlayerVcfOpener::new(deviceId);
-    
+
     match opener.open_vcf_file_complete(device_vcf_path).await {
         Ok(mut result) => {
             // 合并传输和打开的结果信息
@@ -185,7 +195,7 @@ pub async fn import_and_open_vcf_ldplayer(
                 import_result.total_contacts,
                 result.details.unwrap_or_default()
             ));
-            
+
             info!("🎉 完整流程完成: 传输+打开成功");
             Ok(result)
         }
@@ -196,7 +206,7 @@ pub async fn import_and_open_vcf_ldplayer(
                 success: false,
                 message: format!("文件已传输但自动打开失败: {}", e),
                 details: Some(format!(
-                    "文件位置: {}。请手动打开该文件完成导入。", 
+                    "文件位置: {}。请手动打开该文件完成导入。",
                     device_vcf_path
                 )),
                 steps_completed: vec!["文件传输".to_string()],
@@ -319,7 +329,10 @@ pub async fn import_vcf_contacts_with_intent_fallback(
 
     let importer = VcfImporter::new(device_id);
 
-    match importer.import_vcf_contacts_with_intent_fallback(&contacts_file_path).await {
+    match importer
+        .import_vcf_contacts_with_intent_fallback(&contacts_file_path)
+        .await
+    {
         Ok(result) => {
             info!("✅ Intent + 回退方法VCF导入完成: {}", result.message);
             Ok(result)

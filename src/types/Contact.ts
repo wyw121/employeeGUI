@@ -31,20 +31,15 @@ export interface ContactDocument {
 
 // 文档状态
 export type DocumentStatus =
-  | 'uploading'
-  | 'parsing'
-  | 'parsed'
-  | 'processing'
-  | 'completed'
-  | 'error';
+  | "uploading"
+  | "parsing"
+  | "parsed"
+  | "processing"
+  | "completed"
+  | "error";
 
 // 文档格式
-export type DocumentFormat =
-  | 'txt'
-  | 'csv'
-  | 'excel'
-  | 'vcf'
-  | 'json';
+export type DocumentFormat = "txt" | "csv" | "excel" | "vcf" | "json";
 
 // 通讯录联系任务
 export interface ContactTask {
@@ -63,12 +58,12 @@ export interface ContactTask {
 
 // 联系任务设置
 export interface ContactTaskSettings {
-  batchSize: number;          // 每批联系数量
-  intervalSeconds: number;    // 联系间隔（秒）
-  message?: string;           // 联系消息模板
-  autoReply?: boolean;        // 是否自动回复
-  skipExisting?: boolean;     // 跳过已联系的用户
-  maxRetries: number;         // 最大重试次数
+  batchSize: number; // 每批联系数量
+  intervalSeconds: number; // 联系间隔（秒）
+  message?: string; // 联系消息模板
+  autoReply?: boolean; // 是否自动回复
+  skipExisting?: boolean; // 跳过已联系的用户
+  maxRetries: number; // 最大重试次数
 }
 
 // ADB设备操作相关
@@ -77,7 +72,7 @@ export interface AdbOperation {
   deviceId: string;
   type: AdbOperationType;
   command: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   result?: string;
   error?: string;
   createdAt: Date;
@@ -86,20 +81,33 @@ export interface AdbOperation {
 
 // ADB操作类型
 export type AdbOperationType =
-  | 'tap'
-  | 'swipe'
-  | 'input'
-  | 'screenshot'
-  | 'install'
-  | 'uninstall'
-  | 'shell'
-  | 'custom';
+  | "tap"
+  | "swipe"
+  | "input"
+  | "screenshot"
+  | "install"
+  | "uninstall"
+  | "shell"
+  | "custom";
 
 // 平台类型 (与Employee.ts保持一致)
-export type Platform = 'xiaohongshu' | 'douyin' | 'kuaishou' | 'bilibili' | 'wechat' | 'qq' | 'weibo';
+export type Platform =
+  | "xiaohongshu"
+  | "douyin"
+  | "kuaishou"
+  | "bilibili"
+  | "wechat"
+  | "qq"
+  | "weibo";
 
 // 任务状态 (重用Employee.ts中的定义)
-export type TaskStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus =
+  | "pending"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 // 任务进度 (重用Employee.ts中的定义)
 export interface TaskProgress {
@@ -148,16 +156,16 @@ export interface VcfVerifyResult {
 export interface ContactVerification {
   contactName: string;
   found: boolean;
-  method: 'phone' | 'email' | 'ui_structure';
+  method: "phone" | "email" | "ui_structure";
 }
 
 // 小红书自动关注选项
 export interface XiaohongshuFollowOptions {
-  maxPages?: number;        // 最大滚动页数
-  followInterval?: number;  // 关注间隔（毫秒）
-  skipExisting?: boolean;   // 跳过已关注用户
+  maxPages?: number; // 最大滚动页数
+  followInterval?: number; // 关注间隔（毫秒）
+  skipExisting?: boolean; // 跳过已关注用户
   takeScreenshots?: boolean; // 是否截图
-  returnToHome?: boolean;   // 完成后是否返回主页
+  returnToHome?: boolean; // 完成后是否返回主页
 }
 
 // 小红书自动关注结果

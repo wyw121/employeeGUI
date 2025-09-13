@@ -1,7 +1,8 @@
-import { CheckCircleOutlined, ContactsOutlined, FileTextOutlined, MobileOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, ContactsOutlined, FileTextOutlined, MobileOutlined, HeartOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Col, Divider, message, Row, Space, Tabs, Typography } from 'antd';
 import React, { useState } from 'react';
 import { ContactImportManager, ContactReader } from '../components/contact';
+import XiaohongshuFollowManager from '../components/contact/XiaohongshuFollowManager';
 import type { Contact, VcfImportResult } from '../types';
 // 使用相对导入来确保类型一致性
 import type { ContactDocument as ReaderContactDocument } from '../components/contact/ContactReader';
@@ -12,6 +13,7 @@ export const ContactManagementPage: React.FC = () => {
     const [parsedDocument, setParsedDocument] = useState<ReaderContactDocument | null>(null);
     const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
     const [importResults, setImportResults] = useState<VcfImportResult[]>([]);
+    const [followResults, setFollowResults] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>('upload');
 
     const handleContactsParsed = (document: ReaderContactDocument) => {
@@ -41,6 +43,15 @@ export const ContactManagementPage: React.FC = () => {
 
     const handleImportError = (error: string) => {
         message.error(error);
+    };
+
+    const handleFollowComplete = (result: any) => {
+        setFollowResults(prev => [...prev, result]);
+        message.success(`小红书关注完成：成功关注 ${result.followedCount} 个好友`);
+    };
+
+    const handleFollowError = (error: string) => {
+        message.error(`小红书关注失败: ${error}`);
     };
 
     const handleRestart = () => {
@@ -397,6 +408,40 @@ export const ContactManagementPage: React.FC = () => {
                                         message="暂无导入结果"
                                         description="完成导入操作后，结果将在此处显示"
                                         showIcon
+                                    />
+                                </Card>
+                            )
+                        },
+                        {
+                            key: 'xiaohongshu',
+                            label: (
+                                <Space>
+                                    <HeartOutlined style={{ color: '#ff4d4f' }} />
+                                    小红书关注
+                                </Space>
+                            ),
+                            disabled: selectedContacts.length === 0,
+                            children: selectedContacts.length > 0 ? (
+                                <XiaohongshuFollowManager
+                                    contacts={selectedContacts}
+                                    onFollowComplete={handleFollowComplete}
+                                    onError={handleFollowError}
+                                />
+                            ) : (
+                                <Card>
+                                    <Alert
+                                        type="warning"
+                                        message="请先选择联系人"
+                                        description="请回到文件解析页面，上传并选择需要在小红书关注的联系人"
+                                        showIcon
+                                        action={
+                                            <Button 
+                                                type="primary"
+                                                onClick={() => setActiveTab('upload')}
+                                            >
+                                                返回选择
+                                            </Button>
+                                        }
                                     />
                                 </Card>
                             )

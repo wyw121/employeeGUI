@@ -146,6 +146,179 @@ async fn kill_adb_server(
     service.kill_server(&adb_path).map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct XiaohongshuFollowRequest {
+    device: String,
+    max_follows: Option<usize>,
+    contacts: Vec<ContactInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct ContactInfo {
+    name: String,
+    phone: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct XiaohongshuFollowResult {
+    success: bool,
+    followed_count: usize,
+    total_contacts: usize,
+    message: String,
+    details: Vec<FollowDetail>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct FollowDetail {
+    contact_name: String,
+    contact_phone: String,
+    follow_status: String, // "pending", "success", "failed", "skipped"
+    message: String,
+    timestamp: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct DeviceInfo {
+    id: String,
+    name: String,
+    status: String,
+}
+
+// 新增：小红书关注命令
+#[tauri::command]
+async fn xiaohongshu_follow_contacts(request: XiaohongshuFollowRequest) -> Result<XiaohongshuFollowResult, String> {
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    println!("收到小红书关注请求: device={}, max_follows={:?}, contacts_count={}", 
+             request.device, request.max_follows, request.contacts.len());
+
+    let max_follows = request.max_follows.unwrap_or(5);
+    let contacts_to_follow = request.contacts.into_iter().take(max_follows).collect::<Vec<_>>();
+    
+    // 调用 xiaohongshu-follow-test 程序
+    let xiaohongshu_test_path = std::env::current_dir()
+        .map_err(|e| format!("获取当前目录失败: {}", e))?
+        .join("xiaohongshu-follow-test");
+    
+    println!("执行路径: {:?}", xiaohongshu_test_path);
+    
+    let output = Command::new("cargo")
+        .arg("run")
+        .arg("--")
+        .arg("follow")
+        .arg("--device")
+        .arg(&request.device)
+        .arg("--max-follows")
+        .arg(max_follows.to_string())
+        .current_dir(&xiaohongshu_test_path)
+        .output()
+        .map_err(|e| format!("执行小红书关注命令失败: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    println!("关注命令输出: {}", stdout);
+    if !stderr.is_empty() {
+        println!("关注命令错误: {}", stderr);
+    }
+
+    let success = output.status.success();
+    let followed_count = if success {
+        // 从输出中解析关注数量
+        stdout.lines()
+            .find(|line| line.contains("已成功关注"))
+            .and_then(|line| {
+                line.split_whitespace()
+                    .find(|word| word.parse::<usize>().is_ok())
+                    .and_then(|word| word.parse().ok())
+            })
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .to_string();
+
+    let details: Vec<FollowDetail> = contacts_to_follow.iter().enumerate().map(|(i, contact)| {
+        FollowDetail {
+            contact_name: contact.name.clone(),
+            contact_phone: contact.phone.clone(),
+            follow_status: if success && i < followed_count {
+                "success".to_string()
+            } else if success {
+                "skipped".to_string()
+            } else {
+                "failed".to_string()
+            },
+            message: if success && i < followed_count {
+                "关注成功".to_string()
+            } else if success {
+                "已跳过".to_string()
+            } else {
+                "关注失败".to_string()
+            },
+            timestamp: timestamp.clone(),
+        }
+    }).collect();
+
+    let result = XiaohongshuFollowResult {
+        success,
+        followed_count,
+        total_contacts: contacts_to_follow.len(),
+        message: if success {
+            format!("成功关注 {} 个好友", followed_count)
+        } else {
+            format!("关注失败: {}", stderr)
+        },
+        details,
+    };
+
+    Ok(result)
+}
+
+// 获取ADB设备列表（用于小红书功能）
+#[tauri::command]
+async fn get_xiaohongshu_devices() -> Result<Vec<DeviceInfo>, String> {
+    use std::process::Command;
+
+    let output = Command::new("adb")
+        .arg("devices")
+        .output()
+        .map_err(|e| format!("执行adb devices失败: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut devices = Vec::new();
+
+    for line in stdout.lines().skip(1) { // 跳过标题行
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let device_id = parts[0].to_string();
+            let status = match parts[1] {
+                "device" => "online",
+                "offline" => "offline",
+                _ => "unknown",
+            };
+            
+            devices.push(DeviceInfo {
+                id: device_id.clone(),
+                name: format!("Android设备 {}", device_id),
+                status: status.to_string(),
+            });
+        }
+    }
+
+    Ok(devices)
+}
+
 // 写入文件
 #[tauri::command]
 async fn write_file(path: String, content: String) -> Result<(), String> {
@@ -219,6 +392,8 @@ fn main() {
             check_xiaohongshu_app_status,
             navigate_to_xiaohongshu_contacts,
             xiaohongshu_auto_follow,
+            xiaohongshu_follow_contacts,
+            get_xiaohongshu_devices,
             import_and_follow_xiaohongshu,
             // 权限处理测试功能
             test_permission_handling,

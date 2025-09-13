@@ -1,83 +1,92 @@
 import { Plus, Smartphone } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { DeviceList } from '../../components/device';
 import { PageWrapper } from '../../components/layout';
-import type { Device } from '../../types';
+import { useDevices, useSelectedDevice, useDeviceLoading, useDeviceError, useDeviceActions } from '../../store/deviceStore';
+import { message } from 'antd';
 
 /**
  * 设备管理页面
- * 允许员工管理最多10台设备的连接状态
+ * 允许员工管理设备的连接状态 - 使用全局设备状态
  */
 export const DeviceManagementPage: React.FC = () => {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // 使用全局设备状态
+  const devices = useDevices();
+  const selectedDevice = useSelectedDevice();
+  const isLoading = useDeviceLoading();
+  const error = useDeviceError();
+  const { initializeAdb, refreshDevices, setSelectedDevice } = useDeviceActions();
 
-  // 初始化设备列表（1-10号设备）
+  // 初始化ADB和设备列表
   useEffect(() => {
-    const initializeDevices = () => {
-      const initialDevices: Device[] = Array.from({ length: 10 }, (_, i) => ({
-        id: i + 1,
-        name: `Device-${String(i + 1).padStart(2, '0')}`,
-        phone_name: `Phone-${i + 1}`,
-        status: 'disconnected' as const,
-        last_connected: undefined
-      }));
-
-      setDevices(initialDevices);
-      setIsLoading(false);
+    const initDevices = async () => {
+      try {
+        await initializeAdb();
+        await refreshDevices();
+      } catch (error) {
+        console.error('初始化设备管理失败:', error);
+        message.error('设备管理初始化失败');
+      }
     };
 
-    initializeDevices();
-  }, []);
+    initDevices();
+  }, [initializeAdb, refreshDevices]);
 
-  // 连接设备
-  const handleConnect = async (deviceId: number) => {
+  // 处理设备选择
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDevice(deviceId);
+    message.success(`已选择设备: ${deviceId}`);
+  };
+
+  // 手动刷新设备列表
+  const handleRefresh = async () => {
     try {
-      // 这里应该调用后端API连接设备
-      // 暂时模拟连接成功
-      setDevices(prev => prev.map(device =>
-        device.id === deviceId
-          ? { ...device, status: 'connected', last_connected: new Date().toISOString() }
-          : device
-      ));
+      await refreshDevices();
     } catch (error) {
-      console.error('Failed to connect device:', error);
-      alert('设备连接失败，请重试');
+      console.error('刷新设备列表失败:', error);
+      message.error('刷新失败，请重试');
     }
   };
 
-  // 断开设备
-  const handleDisconnect = async (deviceId: number) => {
-    try {
-      // 这里应该调用后端API断开设备
-      // 暂时模拟断开成功
-      setDevices(prev => prev.map(device =>
-        device.id === deviceId
-          ? { ...device, status: 'disconnected' }
-          : device
-      ));
-    } catch (error) {
-      console.error('Failed to disconnect device:', error);
-      alert('设备断开失败，请重试');
-    }
-  };
-
-  const connectedCount = devices.filter(d => d.status === 'connected').length;
+  const connectedCount = devices.filter(d => d.status === 'device').length;
 
   return (
     <PageWrapper
       title="设备管理"
-      subtitle="管理最多10台设备的连接状态，确保任务正常执行"
+      subtitle="管理设备的连接状态，确保任务正常执行"
       icon={<Smartphone className="w-6 h-6 text-indigo-600" />}
-      onRefresh={() => window.location.reload()}
+      onRefresh={handleRefresh}
       actions={
-        <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+        <button 
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+        >
           <Plus className="w-4 h-4 mr-1" />
-          添加设备
+          刷新设备
         </button>
       }
     >
       <div className="space-y-6">
+        {/* 错误提示 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <span className="text-red-400 text-lg">❌</span>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  设备管理错误
+                </h3>
+                <p className="mt-1 text-sm text-red-700">
+                  {error}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 设备统计卡片 */}
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between">
@@ -93,7 +102,7 @@ export const DeviceManagementPage: React.FC = () => {
             <div className="text-right">
               <span className="text-indigo-700 font-medium text-sm block">已连接设备</span>
               <span className="text-indigo-800 font-bold text-2xl">
-                {connectedCount}/10
+                {connectedCount}/{devices.length}
               </span>
             </div>
           </div>
@@ -111,7 +120,7 @@ export const DeviceManagementPage: React.FC = () => {
                   暂无已连接设备
                 </h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  请先连接设备后再执行任务操作。点击设备卡片中的"连接"按钮开始连接。
+                  请先使用ADB连接设备后再执行任务操作。点击"刷新设备"按钮扫描可用设备。
                 </p>
               </div>
             </div>
@@ -126,9 +135,9 @@ export const DeviceManagementPage: React.FC = () => {
           </div>
           <DeviceList
             devices={devices}
-            onConnect={handleConnect}
-            onDisconnect={handleDisconnect}
-            isLoading={isLoading}
+            selectedDevice={selectedDevice || undefined}
+            onDeviceSelect={handleDeviceSelect}
+            loading={isLoading}
           />
         </div>
 
@@ -136,24 +145,29 @@ export const DeviceManagementPage: React.FC = () => {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
           <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center">
             <span className="text-blue-500 mr-2">💡</span>
+            {' '}
             使用说明
           </h4>
           <ul className="text-sm text-blue-800 space-y-2">
             <li className="flex items-start">
               <span className="text-blue-500 mr-2">•</span>
-              系统支持最多10台设备同时连接，确保高效任务执行
+              {' '}
+              设备通过ADB自动检测，支持Android手机和模拟器
             </li>
             <li className="flex items-start">
               <span className="text-blue-500 mr-2">•</span>
-              只有已连接的设备才能参与任务执行
+              {' '}
+              只有状态为"device"的设备才能参与任务执行
             </li>
             <li className="flex items-start">
               <span className="text-blue-500 mr-2">•</span>
+              {' '}
               任务会根据设备状态智能分配到可用设备
             </li>
             <li className="flex items-start">
               <span className="text-blue-500 mr-2">•</span>
-              请确保设备网络连接稳定，避免任务执行中断
+              {' '}
+              请确保设备已开启USB调试模式并授权
             </li>
           </ul>
         </div>

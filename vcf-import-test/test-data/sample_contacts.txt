@@ -1,7 +1,0 @@
-# VCF导入测试示例数据
-# 格式: 姓名,电话,地址,职业,邮箱
-张三,13800138001,北京市朝阳区,软件工程师,zhangsan@example.com
-李四,13800138002,上海市浦东新区,产品经理,lisi@example.com
-王五,13800138003,广州市天河区,UI设计师,wangwu@example.com
-赵六,13800138004,深圳市南山区,测试工程师,zhaoliu@example.com
-钱七,13800138005,杭州市西湖区,运营专员,qianqi@example.com

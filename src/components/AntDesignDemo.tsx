@@ -5,7 +5,8 @@ import {
     SecurityScanOutlined,
     SyncOutlined,
     ThunderboltOutlined,
-    UserOutlined
+    UserOutlined,
+    HeartOutlined
 } from '@ant-design/icons';
 import {
     App,
@@ -28,6 +29,7 @@ import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
+import XiaohongshuTestPage from './xiaohongshu-test/XiaohongshuTestPage';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -75,6 +77,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'acquisition',
       icon: <AimOutlined />,
       label: '精准获客',
+    },
+    {
+      key: 'xiaohongshu-test',
+      icon: <HeartOutlined />,
+      label: '小红书测试',
     }
   ];
 
@@ -277,6 +284,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'permission-test' && (
               <PermissionTestPage />
+            )}
+
+            {selectedKey === 'xiaohongshu-test' && (
+              <XiaohongshuTestPage />
             )}
 
             {['adb-test', 'acquisition'].includes(selectedKey) && (

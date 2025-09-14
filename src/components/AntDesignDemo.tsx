@@ -28,13 +28,14 @@ import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import RealDeviceManager from './device/RealDeviceManager';
+import { AdbToolbox } from './device/AdbToolboxStable';
 import SmartVcfImporter from './SmartVcfImporter';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 export const AntDesignIntegrationDemo: React.FC = () => {
-  const [selectedKey, setSelectedKey] = useState('dashboard');
+  const [selectedKey, setSelectedKey] = useState('adb-test'); // 默认选中ADB测试
   const [selectedDevice, setSelectedDevice] = useState<string>('');
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -289,7 +290,14 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               <PermissionTestPage />
             )}
 
-            {['adb-test', 'acquisition'].includes(selectedKey) && (
+            {selectedKey === 'adb-test' && (
+              <>
+                {console.log('🎯 渲染 ADB 测试页面，selectedKey:', selectedKey)}
+                <AdbToolbox />
+              </>
+            )}
+
+            {selectedKey === 'acquisition' && (
               <Card title={`${menuItems.find(item => item.key === selectedKey)?.label} 功能`}>
                 <div className="text-center py-16">
                   <div className="text-6xl mb-4">🚧</div>

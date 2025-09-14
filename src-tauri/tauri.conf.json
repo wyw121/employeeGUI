@@ -6,11 +6,19 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:1421"
+    "frontendDist": "../dist"
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "../platform-tools/*"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   },
   "app": {
     "windows": [

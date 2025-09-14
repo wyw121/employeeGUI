@@ -21,6 +21,21 @@ export const PLATFORMS: Record<Platform, { name: string; color: string; icon: st
     name: 'B站',
     color: 'bg-pink-500',
     icon: '📺'
+  },
+  wechat: {
+    name: '微信',
+    color: 'bg-green-500',
+    icon: '💬'
+  },
+  qq: {
+    name: 'QQ',
+    color: 'bg-blue-500',
+    icon: '🐧'
+  },
+  weibo: {
+    name: '微博',
+    color: 'bg-orange-600',
+    icon: '📰'
   }
 };
 

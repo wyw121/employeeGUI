@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Employee, EmployeeFormData } from '../../types';
+import type { Employee, EmployeeFormData } from '../types';
 
 interface EmployeeFormProps {
   employee?: Employee | null;

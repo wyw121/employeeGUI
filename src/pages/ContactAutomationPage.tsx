@@ -138,14 +138,14 @@ export const ContactAutomationPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                          device.status === 'online' ? 'animate-pulse' : ''
+                          device.status === 'device' ? 'animate-pulse' : ''
                         }`}
                              style={{ 
-                               background: device.status === 'online' 
+                               background: device.status === 'device' 
                                  ? 'var(--gradient-green)' 
                                  : 'var(--bg-tertiary)' 
                              }}>
-                          {device.status === 'online' ? '📱' : '📴'}
+                          {device.status === 'device' ? '📱' : '📴'}
                         </div>
                         <div>
                           <div className="font-medium" style={{ color: 'var(--text-primary)' }}>

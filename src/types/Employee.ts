@@ -8,6 +8,42 @@ export interface Device {
   last_connected?: string;
 }
 
+// 员工相关类型
+export interface Employee {
+  id?: number;
+  name: string;
+  department: string;
+  email: string;
+  phone: string;
+}
+
+export interface EmployeeFormData {
+  name: string;
+  department: string;
+  email: string;
+  phone: string;
+}
+
+// 联系人任务类型
+export interface ContactTask {
+  id: number;
+  name: string;
+  status: TaskStatus;
+  progress: number;
+  device_id?: number;
+  platform?: Platform;
+  created_at?: string;
+  completed_at?: string;
+}
+
+// 任务进度
+export interface TaskProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  remaining: number;
+}
+
 // 平台类型
 export type Platform = 'xiaohongshu' | 'douyin' | 'kuaishou' | 'bilibili' | 'wechat' | 'qq' | 'weibo';
 

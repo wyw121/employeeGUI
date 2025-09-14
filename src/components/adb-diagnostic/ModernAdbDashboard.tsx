@@ -35,6 +35,7 @@ import {
 } from '@ant-design/icons';
 import { useAdbDiagnostic } from '../../hooks/useAdbDiagnostic';
 import { useDeviceMonitor } from '../../hooks/useDeviceMonitor';
+import { useLogManager } from '../../hooks/useLogManager';
 import { DiagnosticStatus } from '../../services/adb-diagnostic/EnhancedAdbDiagnosticService';
 
 const { Title, Text, Paragraph } = Typography;
@@ -418,11 +419,18 @@ export const ModernAdbDashboard: React.FC<ModernAdbDashboardProps> = ({ classNam
     autoFixIssues 
   } = useAdbDiagnostic();
   const { devices, refreshDevices } = useDeviceMonitor();
+  const { adbCommandLogs, clearLogs } = useLogManager();
 
   const [systemStatus, setSystemStatus] = useState<'normal' | 'warning' | 'error'>('normal');
   const [adbServerStatus, setAdbServerStatus] = useState<'running' | 'stopped' | 'unknown'>('unknown');
   const [lastDiagnosticTime, setLastDiagnosticTime] = useState<Date>();
-  const [terminalOutput, setTerminalOutput] = useState<Array<{ command: string; output: string; timestamp: Date }>>([]);
+
+  // 将ADB命令日志转换为终端输出格式
+  const terminalOutput = adbCommandLogs.map(cmd => ({
+    command: `adb ${cmd.args.join(' ')}`,
+    output: cmd.output || cmd.error || '',
+    timestamp: new Date(cmd.timestamp)
+  }));
 
   // 监听诊断结果更新系统状态
   useEffect(() => {
@@ -440,23 +448,11 @@ export const ModernAdbDashboard: React.FC<ModernAdbDashboardProps> = ({ classNam
 
   // 处理完整诊断
   const handleFullDiagnostic = async () => {
-    setTerminalOutput(prev => [...prev, {
-      command: 'adb full diagnostic',
-      output: '开始完整诊断流程...',
-      timestamp: new Date()
-    }]);
-    
     await runFullDiagnostic();
   };
 
   // 处理快速检查
   const handleQuickCheck = async () => {
-    setTerminalOutput(prev => [...prev, {
-      command: 'adb quick check',
-      output: '执行快速健康检查...',
-      timestamp: new Date()
-    }]);
-    
     await runQuickCheck();
   };
 
@@ -467,8 +463,8 @@ export const ModernAdbDashboard: React.FC<ModernAdbDashboardProps> = ({ classNam
   };
 
   // 清空终端
-  const handleClearTerminal = () => {
-    setTerminalOutput([]);
+  const handleClearTerminal = async () => {
+    await clearLogs();
   };
 
   return (

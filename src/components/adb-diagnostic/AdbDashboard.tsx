@@ -28,14 +28,13 @@ import {
   SafetyCertificateOutlined,
   ToolOutlined
 } from '@ant-design/icons';
-import { useLogManager } from './hooks/useLogManager';
+import { useLogManager } from '../../hooks/useLogManager';
 import {
   enhancedAdbDiagnosticService,
   DiagnosticResult,
   DiagnosticStatus,
   DiagnosticProgress
 } from '../../services/adb-diagnostic/EnhancedAdbDiagnosticService';
-import { LogCategory } from '../../services/adb-diagnostic/LogManager';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -393,7 +392,7 @@ const ActionPanel: React.FC<{
   onQuickCheck: () => void;
   onExportReport: () => void;
 }> = ({ isRunning, onStartDiagnostic, onQuickCheck, onExportReport }) => {
-  const { info } = useLogManager();
+  const { addLogEntry } = useLogManager();
 
   // ADB服务器操作
   const handleRestartAdbServer = async () => {
@@ -407,7 +406,7 @@ const ActionPanel: React.FC<{
         description: 'ADB服务器重启成功，请重新连接设备'
       });
       
-      info(LogCategory.USER_ACTION, 'ActionPanel', '用户手动重启ADB服务器');
+      await addLogEntry('INFO', 'USER_ACTION', 'ActionPanel', '用户手动重启ADB服务器');
     } catch (error) {
       notification.error({
         message: 'ADB服务器重启失败',
@@ -434,7 +433,7 @@ const ActionPanel: React.FC<{
         duration: 8
       });
       
-      info(LogCategory.USER_ACTION, 'ActionPanel', '用户查看ADB版本信息', { version, path: adbPath });
+      await addLogEntry('INFO', 'USER_ACTION', 'ActionPanel', '用户查看ADB版本信息', JSON.stringify({ version, path: adbPath }));
     } catch (error) {
       console.error('获取ADB信息失败:', error);
       notification.error({
@@ -475,7 +474,7 @@ const ActionPanel: React.FC<{
         duration: 10
       });
       
-      info(LogCategory.USER_ACTION, 'ActionPanel', '用户执行端口连接测试', { results });
+      await addLogEntry('INFO', 'USER_ACTION', 'ActionPanel', '用户执行端口连接测试', JSON.stringify({ results }));
     } catch (error) {
       notification.error({
         message: '端口测试失败',
@@ -499,10 +498,10 @@ const ActionPanel: React.FC<{
         duration: 6
       });
       
-      info(LogCategory.USER_ACTION, 'ActionPanel', '用户手动刷新设备列表', { 
+      await addLogEntry('INFO', 'USER_ACTION', 'ActionPanel', '用户手动刷新设备列表', JSON.stringify({
         deviceCount: devices.length,
         devices: devices.map(d => ({ id: d.id, status: d.status }))
-      });
+      }));
     } catch (error) {
       notification.error({
         message: '设备扫描失败',
@@ -644,15 +643,15 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
   const [diagnosticResults, setDiagnosticResults] = useState<DiagnosticResult[]>([]);
   const [currentStep, setCurrentStep] = useState<string>('');
   
-  const { info, warn } = useLogManager();
+  const { addLogEntry } = useLogManager();
 
   // 初始化时获取上次诊断结果
   useEffect(() => {
     const lastResults = enhancedAdbDiagnosticService.getLastDiagnosticResults();
     setDiagnosticResults(lastResults);
     
-    info(LogCategory.USER_ACTION, 'AdbDashboard', 'ADB 诊断仪表板已加载');
-  }, [info]);
+    addLogEntry('INFO', 'USER_ACTION', 'AdbDashboard', 'ADB 诊断仪表板已加载');
+  }, [addLogEntry]);
 
   // 开始完整诊断
   const handleStartDiagnostic = async () => {
@@ -661,7 +660,7 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
     setCurrentStep('');
     setDiagnosticResults([]);
 
-    info(LogCategory.USER_ACTION, 'AdbDashboard', '用户启动完整诊断');
+    await addLogEntry('INFO', 'USER_ACTION', 'AdbDashboard', '用户启动完整诊断');
 
     try {
       const results = await enhancedAdbDiagnosticService.runFullDiagnostic(
@@ -692,11 +691,11 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
         });
       }
 
-      info(LogCategory.DIAGNOSTIC, 'AdbDashboard', '完整诊断完成', {
+      await addLogEntry('INFO', 'DIAGNOSTIC', 'AdbDashboard', '完整诊断完成', JSON.stringify({
         totalChecks: results.length,
         errors: errorCount,
         warnings: warningCount
-      });
+      }));
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '诊断过程出现未知错误';
@@ -707,7 +706,7 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
         duration: 8
       });
 
-      warn(LogCategory.DIAGNOSTIC, 'AdbDashboard', '诊断过程失败', { error: errorMessage });
+      await addLogEntry('WARN', 'DIAGNOSTIC', 'AdbDashboard', '诊断过程失败', errorMessage);
     } finally {
       setIsRunning(false);
       setProgress(100);
@@ -716,7 +715,7 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
 
   // 快速检查
   const handleQuickCheck = async () => {
-    info(LogCategory.USER_ACTION, 'AdbDashboard', '用户启动快速检查');
+    await addLogEntry('INFO', 'USER_ACTION', 'AdbDashboard', '用户启动快速检查');
 
     try {
       const results = await enhancedAdbDiagnosticService.runQuickCheck();
@@ -734,13 +733,13 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
         description: errorMessage
       });
       
-      warn(LogCategory.DIAGNOSTIC, 'AdbDashboard', '快速检查失败', { error: errorMessage });
+      await addLogEntry('WARN', 'DIAGNOSTIC', 'AdbDashboard', '快速检查失败', errorMessage);
     }
   };
 
   // 自动修复
   const handleAutoFix = async () => {
-    info(LogCategory.USER_ACTION, 'AdbDashboard', '用户启动自动修复');
+    await addLogEntry('INFO', 'USER_ACTION', 'AdbDashboard', '用户启动自动修复');
 
     try {
       const fixResults = await enhancedAdbDiagnosticService.autoFixIssues(diagnosticResults);
@@ -771,13 +770,13 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
         description: errorMessage
       });
       
-      error(LogCategory.DIAGNOSTIC, 'AdbDashboard', '自动修复失败', { error: errorMessage });
+      await addLogEntry('ERROR', 'DIAGNOSTIC', 'AdbDashboard', '自动修复失败', errorMessage);
     }
   };
 
   // 导出报告
   const handleExportReport = async () => {
-    info(LogCategory.USER_ACTION, 'AdbDashboard', '用户导出诊断报告');
+    await addLogEntry('INFO', 'USER_ACTION', 'AdbDashboard', '用户导出诊断报告');
 
     try {
       // 这里将集成日志导出功能
@@ -792,7 +791,7 @@ export const AdbDashboard: React.FC<AdbDashboardProps> = ({ className }) => {
         message: '导出失败',
         description: errorMessage
       });
-      warn(LogCategory.USER_ACTION, 'AdbDashboard', '报告导出失败', { error: errorMessage });
+      await addLogEntry('WARN', 'USER_ACTION', 'AdbDashboard', '报告导出失败', errorMessage);
     }
   };
 

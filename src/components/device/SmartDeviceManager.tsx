@@ -169,7 +169,7 @@ export const SmartDeviceManager: React.FC = () => {
   const loadDevices = async () => {
     setLoading(true);
     try {
-      const deviceList = await adbService.getDevices(true); // 强制刷新
+      const deviceList = await adbService.getDevices(); // 获取设备列表
       setDevices(deviceList);
       
       if (deviceList.length === 0) {

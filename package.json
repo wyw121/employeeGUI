@@ -1,7 +1,8 @@
 {
-  "name": "employee-gui",
+  "name": "employee-drainage-tool",
   "private": true,
   "version": "0.1.0",
+  "description": "员工引流工具 - 基于 Tauri + React 的桌面应用",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -404,23 +404,51 @@ export class EnhancedAdbDiagnosticService {
   private async checkAdbTool(): Promise<DiagnosticResult> {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      
+      // 执行 adb version 命令
+      const versionCommand = 'adb version';
+      this.logManager.info(LogCategory.DIAGNOSTIC, 'checkAdbTool', `执行命令: ${versionCommand}`);
+      
       const version = await invoke<string>('get_adb_version');
       const adbPath = await invoke<string>('get_adb_path').catch(() => 'platform-tools/adb.exe');
+      
+      // 尝试获取更详细的版本信息
+      let detailedVersion = version;
+      try {
+        const { AdbService } = await import('../adbService');
+        const adbService = AdbService.getInstance();
+        const versionOutput = await (adbService as any).executeAdbCommand(['version']);
+        detailedVersion = versionOutput;
+      } catch (e) {
+        // 如果获取详细版本失败，使用基础版本
+      }
+      
+      this.logManager.info(LogCategory.DIAGNOSTIC, 'checkAdbTool', `命令执行成功`, {
+        command: versionCommand,
+        output: detailedVersion,
+        path: adbPath
+      });
       
       return {
         id: 'check-adb-tool',
         name: '检查 ADB 工具',
         description: '验证 ADB 调试工具是否正确安装和可用',
         status: DiagnosticStatus.SUCCESS,
-        message: `ADB 工具正常 (版本: ${version})`,
+        message: `ADB 工具正常`,
         details: { 
           version,
+          fullVersionOutput: detailedVersion,
           path: adbPath,
-          location: '工具位置: ' + adbPath
+          location: '工具位置: ' + adbPath,
+          commandExecuted: versionCommand,
+          commandOutput: detailedVersion
         },
         timestamp: new Date()
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logManager.error(LogCategory.DIAGNOSTIC, 'checkAdbTool', `ADB工具检查失败: ${errorMessage}`, error);
+      
       return {
         id: 'check-adb-tool',
         name: '检查 ADB 工具',
@@ -428,9 +456,11 @@ export class EnhancedAdbDiagnosticService {
         status: DiagnosticStatus.ERROR,
         message: 'ADB 工具未找到或不可用',
         details: { 
-          error,
+          error: errorMessage,
           expectedPath: 'platform-tools/adb.exe',
-          troubleshooting: 'ADB工具应该位于程序根目录的platform-tools文件夹中'
+          troubleshooting: 'ADB工具应该位于程序根目录的platform-tools文件夹中',
+          commandAttempted: 'adb version',
+          errorDetails: error
         },
         suggestion: '请确保 platform-tools 文件夹在程序目录下，或重新下载完整程序包',
         canAutoFix: false,
@@ -444,15 +474,54 @@ export class EnhancedAdbDiagnosticService {
       const { AdbService } = await import('../adbService');
       const adbService = AdbService.getInstance();
       
-      // 尝试重启 ADB 服务器来测试
-      await adbService.restartServer();
+      // 执行多个ADB服务器检查命令
+      const commands = [
+        'adb kill-server',
+        'adb start-server', 
+        'adb devices'
+      ];
+      
+      const commandResults: string[] = [];
+      
+      for (const cmd of commands) {
+        try {
+          this.logManager.info(LogCategory.DIAGNOSTIC, 'checkAdbServer', `执行命令: ${cmd}`);
+          
+          if (cmd === 'adb kill-server') {
+            const success = await adbService.stopServer();
+            commandResults.push(`${cmd}: ${success ? '执行成功' : '执行失败'}`);
+          } else if (cmd === 'adb start-server') {
+            const success = await adbService.startServer();
+            commandResults.push(`${cmd}: ${success ? '执行成功' : '执行失败'}`);
+          } else if (cmd === 'adb devices') {
+            const devices = await adbService.getDevices();
+            const devicesList = devices.map(d => `${d.id}\t${d.status}`).join('\n');
+            commandResults.push(`${cmd}:\nList of devices attached\n${devicesList || '(无设备)'}`);
+          }
+          
+        } catch (cmdError) {
+          const errorMsg = cmdError instanceof Error ? cmdError.message : String(cmdError);
+          commandResults.push(`${cmd}: 失败 - ${errorMsg}`);
+          this.logManager.warn(LogCategory.DIAGNOSTIC, 'checkAdbServer', `命令 ${cmd} 执行失败`, cmdError);
+        }
+      }
+      
+      this.logManager.info(LogCategory.DIAGNOSTIC, 'checkAdbServer', 'ADB服务器检查完成', {
+        commands,
+        results: commandResults
+      });
       
       return {
         id: 'check-adb-server',
         name: '检查 ADB 服务器',
-        description: '确认 ADB 服务器运行状态',
+        description: '确认 ADB 服务器运行状态并重启服务',
         status: DiagnosticStatus.SUCCESS,
-        message: 'ADB 服务器运行正常',
+        message: 'ADB 服务器重启成功',
+        details: {
+          commandsExecuted: commands,
+          commandResults: commandResults,
+          fullOutput: commandResults.join('\n\n'),
+        },
         timestamp: new Date(),
         canAutoFix: true,
         autoFixAction: async () => {
@@ -465,13 +534,20 @@ export class EnhancedAdbDiagnosticService {
         }
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logManager.error(LogCategory.DIAGNOSTIC, 'checkAdbServer', `ADB服务器检查失败: ${errorMessage}`, error);
+      
       return {
         id: 'check-adb-server',
         name: '检查 ADB 服务器',
         description: '确认 ADB 服务器运行状态',
         status: DiagnosticStatus.ERROR,
         message: 'ADB 服务器启动失败',
-        details: error,
+        details: {
+          error: errorMessage,
+          commandsAttempted: ['adb kill-server', 'adb start-server', 'adb devices'],
+          errorDetails: error
+        },
         suggestion: '尝试重启 ADB 服务器，或以管理员权限运行程序',
         canAutoFix: true,
         autoFixAction: async () => {
@@ -493,38 +569,110 @@ export class EnhancedAdbDiagnosticService {
     try {
       const { AdbService } = await import('../adbService');
       const adbService = AdbService.getInstance();
-      const devices = await adbService.getDevices();
       
-      if (devices.length > 0) {
-        return {
-          id: 'scan-devices',
-          name: '扫描设备',
-          description: '查找连接的 Android 设备和模拟器',
-          status: DiagnosticStatus.SUCCESS,
-          message: `找到 ${devices.length} 个设备`,
-          details: { devices: devices.map(d => ({ id: d.id, status: d.status })) },
-          timestamp: new Date()
-        };
-      } else {
-        return {
-          id: 'scan-devices',
-          name: '扫描设备',
-          description: '查找连接的 Android 设备和模拟器',
-          status: DiagnosticStatus.WARNING,
-          message: '未找到连接的设备',
-          suggestion: '请确保设备已连接并启用 USB 调试，或启动 Android 模拟器',
-          timestamp: new Date()
-        };
+      // 执行设备扫描命令
+      const commands = ['adb devices -l'];
+      const commandResults: string[] = [];
+      
+      this.logManager.info(LogCategory.DIAGNOSTIC, 'scanDevices', '开始设备扫描', { commands });
+      
+      // 执行 adb devices -l 命令获取详细设备信息
+      try {
+        const devices = await adbService.getDevices();
+        const devicesOutput = devices.length > 0 
+          ? devices.map(d => `${d.id}\t${d.status}\t${d.model || 'unknown'}\t${d.product || 'unknown'}`).join('\n')
+          : '(无设备连接)';
+        
+        commandResults.push(`adb devices -l:\nList of devices attached\n${devicesOutput}`);
+        
+        // 为每个设备获取详细信息
+        const deviceDetails: any[] = [];
+        for (const device of devices) {
+          try {
+            this.logManager.debug(LogCategory.DIAGNOSTIC, 'scanDevices', `获取设备详情: ${device.id}`);
+            const deviceInfo = await adbService.getDeviceInfo(device.id);
+            deviceDetails.push({
+              id: device.id,
+              status: device.status,
+              model: device.model,
+              product: device.product,
+              type: device.type,
+              properties: deviceInfo ? {
+                androidVersion: deviceInfo['ro.build.version.release'],
+                apiLevel: deviceInfo['ro.build.version.sdk'],
+                manufacturer: deviceInfo['ro.product.manufacturer'],
+                brand: deviceInfo['ro.product.brand']
+              } : null
+            });
+          } catch (deviceError) {
+            this.logManager.warn(LogCategory.DIAGNOSTIC, 'scanDevices', `获取设备 ${device.id} 详情失败`, deviceError);
+            deviceDetails.push({
+              id: device.id,
+              status: device.status,
+              error: '无法获取设备详情'
+            });
+          }
+        }
+        
+        this.logManager.info(LogCategory.DIAGNOSTIC, 'scanDevices', '设备扫描完成', {
+          deviceCount: devices.length,
+          devices: deviceDetails
+        });
+        
+        if (devices.length > 0) {
+          return {
+            id: 'scan-devices',
+            name: '扫描设备',
+            description: '查找连接的 Android 设备和模拟器',
+            status: DiagnosticStatus.SUCCESS,
+            message: `找到 ${devices.length} 个设备`,
+            details: { 
+              devices: deviceDetails,
+              commandsExecuted: commands,
+              commandResults: commandResults,
+              fullOutput: commandResults.join('\n\n')
+            },
+            timestamp: new Date()
+          };
+        } else {
+          return {
+            id: 'scan-devices',
+            name: '扫描设备',
+            description: '查找连接的 Android 设备和模拟器',
+            status: DiagnosticStatus.WARNING,
+            message: '未找到连接的设备',
+            details: { 
+              commandsExecuted: commands,
+              commandResults: commandResults,
+              fullOutput: commandResults.join('\n\n')
+            },
+            suggestion: '请确保设备已连接并启用 USB 调试，或启动 Android 模拟器',
+            timestamp: new Date()
+          };
+        }
+        
+      } catch (cmdError) {
+        const errorMsg = cmdError instanceof Error ? cmdError.message : String(cmdError);
+        commandResults.push(`adb devices -l: 执行失败 - ${errorMsg}`);
+        throw cmdError;
       }
+      
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logManager.error(LogCategory.DIAGNOSTIC, 'scanDevices', `设备扫描失败: ${errorMessage}`, error);
+      
       return {
         id: 'scan-devices',
         name: '扫描设备',
         description: '查找连接的 Android 设备和模拟器',
         status: DiagnosticStatus.ERROR,
         message: '设备扫描失败',
-        details: error,
-        suggestion: '检查 ADB 服务状态，确保没有其他程序占用 ADB',
+        details: { 
+          error: errorMessage,
+          commandsAttempted: ['adb devices -l'],
+          errorDetails: error
+        },
+        suggestion: '检查 ADB 工具是否正常工作，尝试重启 ADB 服务器',
         timestamp: new Date()
       };
     }

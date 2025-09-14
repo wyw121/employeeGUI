@@ -188,6 +188,42 @@ const DiagnosticResults: React.FC<{
         fontSize: '12px',
         fontFamily: 'monospace'
       }}>
+        {/* 显示命令执行回显 */}
+        {details.commandsExecuted && details.commandResults && (
+          <div style={{ marginBottom: '12px' }}>
+            <Text strong style={{ fontSize: '12px', color: '#1890ff' }}>💻 命令执行详情:</Text>
+            <div style={{ 
+              backgroundColor: '#1e1e1e', 
+              color: '#d4d4d4', 
+              padding: '8px', 
+              borderRadius: '4px', 
+              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+              fontSize: '11px',
+              marginTop: '4px',
+              maxHeight: '200px',
+              overflow: 'auto',
+              border: '1px solid #ddd'
+            }}>
+              {Array.isArray(details.commandResults) ? 
+                details.commandResults.map((result: string, index: number) => (
+                  <div key={index} style={{ marginBottom: '8px' }}>
+                    <div style={{ color: '#569cd6', marginBottom: '2px' }}>
+                      $ {details.commandsExecuted[index] || 'command'}
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap', color: '#d4d4d4' }}>
+                      {result}
+                    </div>
+                    {index < details.commandResults.length - 1 && (
+                      <div style={{ borderBottom: '1px solid #333', margin: '4px 0' }}></div>
+                    )}
+                  </div>
+                )) : 
+                <div style={{ whiteSpace: 'pre-wrap' }}>{details.fullOutput || details.commandResults}</div>
+              }
+            </div>
+          </div>
+        )}
+        
         {/* ADB工具详细信息 */}
         {details.version && (
           <div>
@@ -195,6 +231,25 @@ const DiagnosticResults: React.FC<{
             <Text code>{details.version}</Text>
           </div>
         )}
+        
+        {/* 显示完整版本输出 */}
+        {details.fullVersionOutput && details.fullVersionOutput !== details.version && (
+          <div style={{ marginTop: '4px' }}>
+            <Text strong>详细版本: </Text>
+            <div style={{ 
+              backgroundColor: '#f0f0f0', 
+              padding: '4px 8px', 
+              borderRadius: '3px', 
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              marginTop: '2px',
+              border: '1px solid #e8e8e8'
+            }}>
+              {details.fullVersionOutput}
+            </div>
+          </div>
+        )}
+        
         {details.path && (
           <div>
             <Text strong>工具位置: </Text>
@@ -214,6 +269,15 @@ const DiagnosticResults: React.FC<{
             {details.devices.map((device: any, index: number) => (
               <div key={`device-${index}`} style={{ marginLeft: '16px' }}>
                 <Text code>{device.id}</Text> - <Text>{device.status}</Text>
+                {device.model && <Text type="secondary"> ({device.model})</Text>}
+                {device.properties && (
+                  <div style={{ marginLeft: '16px', fontSize: '11px', color: '#666' }}>
+                    {device.properties.androidVersion && 
+                      <div>📱 Android: {device.properties.androidVersion}</div>}
+                    {device.properties.manufacturer && 
+                      <div>🏭 制造商: {device.properties.manufacturer}</div>}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -229,6 +293,14 @@ const DiagnosticResults: React.FC<{
         {details.troubleshooting && (
           <div style={{ marginTop: '4px' }}>
             <Text type="warning">{details.troubleshooting}</Text>
+          </div>
+        )}
+        
+        {/* 错误详情 */}
+        {details.error && (
+          <div style={{ marginTop: '4px' }}>
+            <Text strong>错误信息: </Text>
+            <Text type="danger">{details.error}</Text>
           </div>
         )}
       </div>

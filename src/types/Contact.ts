@@ -194,6 +194,17 @@ export interface ImportAndFollowResult {
   success: boolean;
 }
 
+// 增强版导入+关注结果（包含详细步骤信息）
+export interface EnhancedImportAndFollowResult {
+  importResult: VcfImportResult;
+  appStatus?: AppStatusResult;
+  navigationResult?: NavigationResult;
+  followResult: XiaohongshuFollowResult;
+  totalDuration: number;
+  success: boolean;
+  stepDetails: string[]; // 步骤详情记录
+}
+
 // 应用状态检查结果
 export interface AppStatusResult {
   appInstalled: boolean;

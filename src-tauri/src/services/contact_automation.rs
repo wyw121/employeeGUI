@@ -18,6 +18,18 @@ pub struct ImportAndFollowResult {
     pub total_duration: u64,
     pub success: bool,
 }
+
+// 增强版的ImportAndFollowResult，包含详细的步骤信息
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnhancedImportAndFollowResult {
+    pub import_result: OriginalVcfImportResult,
+    pub app_status: Option<AppStatusResult>,
+    pub navigation_result: Option<NavigationResult>,
+    pub follow_result: XiaohongshuFollowResult,
+    pub total_duration: u64,
+    pub success: bool,
+    pub step_details: Vec<String>, // 步骤详情记录
+}
 use tauri::command;
 use tracing::{error, info, warn};
 
@@ -456,7 +468,7 @@ pub async fn xiaohongshu_auto_follow(
     }
 }
 
-/// 完整的VCF导入+小红书自动关注流程
+/// 完整的VCF导入+小红书自动关注流程（增强版 - 包含状态检查和导航）
 #[command]
 pub async fn import_and_follow_xiaohongshu(
     device_id: String,
@@ -485,22 +497,120 @@ pub async fn import_and_follow_xiaohongshu(
     info!("等待联系人同步到小红书...");
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-    // 2. 小红书自动关注
-    let follow_result = {
-        let automator = XiaohongshuAutomator::new(device_id);
-        match automator.auto_follow(options).await {
-            Ok(result) => result,
-            Err(e) => {
-                error!("小红书自动关注失败: {}", e);
-                // 即使关注失败，也返回结果，只是标记失败
-                XiaohongshuFollowResult {
+    // 2. 创建自动化器并进行状态检查
+    let automator = XiaohongshuAutomator::new(device_id.clone());
+    
+    // 2.1 检查小红书应用状态
+    info!("检查小红书应用状态...");
+    let app_status = match automator.check_app_status().await {
+        Ok(status) => {
+            if !status.app_installed {
+                let error_msg = "小红书应用未安装，无法执行自动关注";
+                error!("{}", error_msg);
+                let follow_result = XiaohongshuFollowResult {
                     success: false,
                     total_followed: 0,
                     pages_processed: 0,
                     duration: 0,
                     details: vec![],
-                    message: format!("自动关注失败: {}", e),
-                }
+                    message: error_msg.to_string(),
+                };
+                let total_duration = start_time.elapsed().as_secs();
+                return Ok(ImportAndFollowResult {
+                    import_result,
+                    follow_result,
+                    total_duration,
+                    success: false,
+                });
+            }
+            if !status.app_running {
+                warn!("小红书应用未运行，尝试启动应用...");
+            }
+            status
+        }
+        Err(e) => {
+            error!("检查小红书应用状态失败: {}", e);
+            let follow_result = XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("应用状态检查失败: {}", e),
+            };
+            let total_duration = start_time.elapsed().as_secs();
+            return Ok(ImportAndFollowResult {
+                import_result,
+                follow_result,
+                total_duration,
+                success: false,
+            });
+        }
+    };
+
+    // 2.2 导航到小红书通讯录页面
+    info!("导航到小红书通讯录页面...");
+    let navigation_result = match automator.navigate_to_contacts().await {
+        Ok(nav_result) => {
+            if !nav_result.success {
+                warn!("导航到通讯录页面失败: {}", nav_result.message);
+                let follow_result = XiaohongshuFollowResult {
+                    success: false,
+                    total_followed: 0,
+                    pages_processed: 0,
+                    duration: 0,
+                    details: vec![],
+                    message: format!("导航失败: {}", nav_result.message),
+                };
+                let total_duration = start_time.elapsed().as_secs();
+                return Ok(ImportAndFollowResult {
+                    import_result,
+                    follow_result,
+                    total_duration,
+                    success: false,
+                });
+            }
+            nav_result
+        }
+        Err(e) => {
+            error!("导航到通讯录页面异常: {}", e);
+            let follow_result = XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("导航异常: {}", e),
+            };
+            let total_duration = start_time.elapsed().as_secs();
+            return Ok(ImportAndFollowResult {
+                import_result,
+                follow_result,
+                total_duration,
+                success: false,
+            });
+        }
+    };
+
+    // 3. 执行小红书自动关注
+    info!("开始执行小红书自动关注...");
+    let follow_result = match automator.auto_follow(options).await {
+        Ok(result) => {
+            info!(
+                "自动关注完成: 成功={} 关注数={} 页数={} 耗时={}秒",
+                result.success, result.total_followed, result.pages_processed, result.duration
+            );
+            result
+        }
+        Err(e) => {
+            error!("小红书自动关注失败: {}", e);
+            XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("自动关注失败: {}", e),
             }
         }
     };
@@ -516,8 +626,241 @@ pub async fn import_and_follow_xiaohongshu(
     };
 
     info!(
-        "完整流程完成: 总成功={} 总耗时={}秒",
+        "完整流程完成: VCF导入={} 应用状态={} 导航={} 自动关注={} 总成功={} 总耗时={}秒",
+        result.import_result.success,
+        app_status.app_installed && app_status.app_running,
+        navigation_result.success,
+        result.follow_result.success,
+        success,
+        total_duration
+    );
+    Ok(result)
+}
+
+/// 完整的VCF导入+小红书自动关注流程（增强版 - 包含详细步骤信息）
+#[command]
+pub async fn import_and_follow_xiaohongshu_enhanced(
+    device_id: String,
+    contacts_file_path: String,
+    options: Option<XiaohongshuFollowOptions>,
+) -> Result<EnhancedImportAndFollowResult, String> {
+    let start_time = std::time::Instant::now();
+    let mut step_details = Vec::new();
+    
+    info!(
+        "开始增强版导入+关注流程: 设备 {} 文件 {}",
+        device_id, contacts_file_path
+    );
+    step_details.push("开始完整的VCF导入+自动关注流程".to_string());
+
+    // 1. VCF导入
+    step_details.push("步骤1: 开始VCF联系人导入".to_string());
+    let import_result = {
+        let importer = VcfImporter::new(device_id.clone());
+        match importer.import_vcf_contacts(&contacts_file_path).await {
+            Ok(result) => {
+                step_details.push(format!(
+                    "VCF导入完成: 成功={} 导入联系人数={}",
+                    result.success, result.imported_contacts
+                ));
+                result
+            }
+            Err(e) => {
+                error!("VCF导入失败: {}", e);
+                step_details.push(format!("VCF导入失败: {}", e));
+                return Err(format!("VCF导入失败: {}", e));
+            }
+        }
+    };
+
+    // 等待联系人同步
+    step_details.push("步骤2: 等待联系人同步到小红书(5秒)".to_string());
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // 2. 创建自动化器并进行状态检查
+    let automator = XiaohongshuAutomator::new(device_id.clone());
+    
+    // 2.1 检查小红书应用状态
+    step_details.push("步骤3: 检查小红书应用状态".to_string());
+    let app_status = match automator.check_app_status().await {
+        Ok(status) => {
+            step_details.push(format!(
+                "应用状态检查完成: 已安装={} 运行中={}",
+                status.app_installed, status.app_running
+            ));
+            
+            if !status.app_installed {
+                let error_msg = "小红书应用未安装，无法执行自动关注";
+                error!("{}", error_msg);
+                step_details.push(error_msg.to_string());
+                
+                let follow_result = XiaohongshuFollowResult {
+                    success: false,
+                    total_followed: 0,
+                    pages_processed: 0,
+                    duration: 0,
+                    details: vec![],
+                    message: error_msg.to_string(),
+                };
+                let total_duration = start_time.elapsed().as_secs();
+                
+                return Ok(EnhancedImportAndFollowResult {
+                    import_result,
+                    app_status: Some(status),
+                    navigation_result: None,
+                    follow_result,
+                    total_duration,
+                    success: false,
+                    step_details,
+                });
+            }
+            
+            if !status.app_running {
+                step_details.push("小红书应用未运行，尝试启动应用".to_string());
+            }
+            status
+        }
+        Err(e) => {
+            error!("检查小红书应用状态失败: {}", e);
+            step_details.push(format!("应用状态检查失败: {}", e));
+            
+            let follow_result = XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("应用状态检查失败: {}", e),
+            };
+            let total_duration = start_time.elapsed().as_secs();
+            
+            return Ok(EnhancedImportAndFollowResult {
+                import_result,
+                app_status: None,
+                navigation_result: None,
+                follow_result,
+                total_duration,
+                success: false,
+                step_details,
+            });
+        }
+    };
+
+    // 2.2 导航到小红书通讯录页面
+    step_details.push("步骤4: 导航到小红书通讯录页面".to_string());
+    let navigation_result = match automator.navigate_to_contacts().await {
+        Ok(nav_result) => {
+            step_details.push(format!(
+                "导航完成: 成功={} 消息={}",
+                nav_result.success, nav_result.message
+            ));
+            
+            if !nav_result.success {
+                warn!("导航到通讯录页面失败: {}", nav_result.message);
+                
+                let follow_result = XiaohongshuFollowResult {
+                    success: false,
+                    total_followed: 0,
+                    pages_processed: 0,
+                    duration: 0,
+                    details: vec![],
+                    message: format!("导航失败: {}", nav_result.message),
+                };
+                let total_duration = start_time.elapsed().as_secs();
+                
+                return Ok(EnhancedImportAndFollowResult {
+                    import_result,
+                    app_status: Some(app_status),
+                    navigation_result: Some(nav_result),
+                    follow_result,
+                    total_duration,
+                    success: false,
+                    step_details,
+                });
+            }
+            nav_result
+        }
+        Err(e) => {
+            error!("导航到通讯录页面异常: {}", e);
+            step_details.push(format!("导航异常: {}", e));
+            
+            let follow_result = XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("导航异常: {}", e),
+            };
+            let total_duration = start_time.elapsed().as_secs();
+            
+            return Ok(EnhancedImportAndFollowResult {
+                import_result,
+                app_status: Some(app_status),
+                navigation_result: None,
+                follow_result,
+                total_duration,
+                success: false,
+                step_details,
+            });
+        }
+    };
+
+    // 3. 执行小红书自动关注
+    step_details.push("步骤5: 开始执行小红书自动关注".to_string());
+    let follow_result = match automator.auto_follow(options).await {
+        Ok(result) => {
+            step_details.push(format!(
+                "自动关注完成: 成功={} 关注数={} 页数={} 耗时={}秒",
+                result.success, result.total_followed, result.pages_processed, result.duration
+            ));
+            info!(
+                "自动关注完成: 成功={} 关注数={} 页数={} 耗时={}秒",
+                result.success, result.total_followed, result.pages_processed, result.duration
+            );
+            result
+        }
+        Err(e) => {
+            error!("小红书自动关注失败: {}", e);
+            step_details.push(format!("自动关注失败: {}", e));
+            
+            XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: 0,
+                details: vec![],
+                message: format!("自动关注失败: {}", e),
+            }
+        }
+    };
+
+    let total_duration = start_time.elapsed().as_secs();
+    let success = import_result.success && follow_result.success;
+
+    step_details.push(format!(
+        "流程完成: 总成功={} 总耗时={}秒",
         success, total_duration
+    ));
+
+    let result = EnhancedImportAndFollowResult {
+        import_result,
+        app_status: Some(app_status),
+        navigation_result: Some(navigation_result),
+        follow_result,
+        total_duration,
+        success,
+        step_details,
+    };
+
+    info!(
+        "增强版流程完成: VCF导入={} 应用状态={} 导航={} 自动关注={} 总成功={} 总耗时={}秒",
+        result.import_result.success,
+        result.app_status.as_ref().map(|s| s.app_installed && s.app_running).unwrap_or(false),
+        result.navigation_result.as_ref().map(|n| n.success).unwrap_or(false),
+        result.follow_result.success,
+        success,
+        total_duration
     );
     Ok(result)
 }

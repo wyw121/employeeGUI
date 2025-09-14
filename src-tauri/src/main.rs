@@ -453,6 +453,7 @@ fn main() {
             xiaohongshu_follow_contacts,
             get_xiaohongshu_devices,
             import_and_follow_xiaohongshu,
+            import_and_follow_xiaohongshu_enhanced, // 增强版VCF导入+自动关注
             // 新的小红书服务模块化命令
             initialize_xiaohongshu_service,
             check_xiaohongshu_status,

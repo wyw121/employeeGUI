@@ -7,6 +7,7 @@ import {
   ContactDocument,
   ContactStatistics,
   ContactTask,
+  EnhancedImportAndFollowResult,
   ImportAndFollowResult,
   NavigationResult,
   VcfImportResult,
@@ -417,6 +418,24 @@ export class AdbAPI {
   ): Promise<ImportAndFollowResult> {
     return await invoke<ImportAndFollowResult>(
       "import_and_follow_xiaohongshu",
+      {
+        deviceId,
+        contactsFilePath,
+        options,
+      }
+    );
+  }
+
+  /**
+   * 完整的VCF导入+小红书自动关注流程（增强版 - 包含详细步骤信息和完整状态检查）
+   */
+  static async importAndFollowXiaohongshuEnhanced(
+    deviceId: string,
+    contactsFilePath: string,
+    options?: XiaohongshuFollowOptions
+  ): Promise<EnhancedImportAndFollowResult> {
+    return await invoke<EnhancedImportAndFollowResult>(
+      "import_and_follow_xiaohongshu_enhanced",
       {
         deviceId,
         contactsFilePath,

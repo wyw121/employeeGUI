@@ -5,6 +5,7 @@ export { ContactList } from "./ContactList";
 export { default as ContactReader } from "./ContactReader";
 export { ContactStatistics } from "./ContactStatistics";
 export { ContactTaskForm } from "./ContactTaskForm";
+export { default as EnhancedImportAndFollow } from "./EnhancedImportAndFollow";
 export { default as ImportAndFollow } from "./ImportAndFollow";
 export { VcfImportDemo } from "./VcfImportDemo";
 export { VcfImportDialog } from "./VcfImportDialog";

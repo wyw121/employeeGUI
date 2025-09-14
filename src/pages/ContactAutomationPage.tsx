@@ -250,13 +250,14 @@ export const ContactAutomationPage: React.FC = () => {
                 {activeTab === 'vcf-import' && (
                   <VcfImporter
                     selectedDevice={selectedDevice}
-                    onComplete={(result) => setResults(prev => ({ ...prev, vcfImport: result }))}
+                    contacts={[]}
+                    onImportComplete={(result) => setResults(prev => ({ ...prev, vcfImport: result }))}
                   />
                 )}
                 {activeTab === 'auto-follow' && (
                   <XiaohongshuAutoFollow
                     selectedDevice={selectedDevice}
-                    onComplete={(result) => setResults(prev => ({ ...prev, autoFollow: result }))}
+                    onWorkflowComplete={(result) => setResults(prev => ({ ...prev, autoFollow: result }))}
                   />
                 )}
               </div>

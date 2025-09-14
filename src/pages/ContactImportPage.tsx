@@ -37,7 +37,7 @@ export const ContactImportPage: React.FC = () => {
   
   // 小红书关注相关状态
   const [enableAutoFollow, setEnableAutoFollow] = useState(true);
-  const [selectedDeviceForFollow, setSelectedDeviceForFollow] = useState<Device | null>(null);
+  const [selectedDeviceForFollow, setSelectedDeviceForFollow] = useState<string | null>(null);
   const [xiaohongshuResults, setXiaohongshuResults] = useState<XiaohongshuFollowResult | null>(null);
 
   // 处理通讯录文档解析完成
@@ -61,10 +61,10 @@ export const ContactImportPage: React.FC = () => {
   const handleDeviceSelected = useCallback((devices: Device[]) => {
     console.log('handleDeviceSelected 被调用，设备数量:', devices.length, '设备列表:', devices);
     if (devices.length > 0) {
-      // 选择第一个设备作为小红书关注的设备
-      setSelectedDeviceForFollow(devices[0]);
+      // 选择第一个设备的ID作为小红书关注的设备
+      setSelectedDeviceForFollow(devices[0].id.toString());
       console.log('选择了设备用于小红书关注:', devices[0]);
-      console.log('当前 selectedDeviceForFollow 状态:', devices[0]);
+      console.log('当前 selectedDeviceForFollow 状态:', devices[0].id.toString());
     } else {
       console.log('没有设备被选择，重置 selectedDeviceForFollow');
       setSelectedDeviceForFollow(null);

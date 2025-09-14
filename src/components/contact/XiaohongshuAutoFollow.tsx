@@ -35,7 +35,7 @@ const { Step } = Steps;
 
 interface XiaohongshuAutoFollowProps {
   importResults?: VcfImportResult[];
-  selectedDevice?: Device;
+  selectedDevice?: string;  // 改为字符串设备ID
   onWorkflowComplete?: (result: XiaohongshuFollowResult) => void;
   onError?: (error: string) => void;
 }
@@ -68,7 +68,7 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   // 设备检测相关状态
   const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(propSelectedDevice || null);
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(false);
   const [adbPath, setAdbPath] = useState<string>('');
 
@@ -177,10 +177,13 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
       
       setAvailableDevices(devices);
       
-      // 如果从props传递了设备，使用props设备
-      if (propSelectedDevice) {
-        setSelectedDevice(propSelectedDevice);
-        setSelectedDevices([propSelectedDevice.id.toString()]);
+      // 如果从props传递了设备ID，在可用设备中查找
+      if (propSelectedDevice && devices.length > 0) {
+        const foundDevice = devices.find(d => d.id.toString() === propSelectedDevice);
+        if (foundDevice) {
+          setSelectedDevice(foundDevice);
+          setSelectedDevices([foundDevice.id.toString()]);
+        }
       } else if (devices.length > 0) {
         // 默认选中第一个设备
         setSelectedDevice(devices[0]);
@@ -210,13 +213,16 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
     }
   }, [adbPath, detectDevices]);
 
-  // 当props中的selectedDevice改变时更新内部状态
+  // 当props中的selectedDevice改变时，在设备列表中查找对应设备
   useEffect(() => {
-    if (propSelectedDevice) {
-      setSelectedDevice(propSelectedDevice);
-      setSelectedDevices([propSelectedDevice.id.toString()]);
+    if (propSelectedDevice && availableDevices.length > 0) {
+      const foundDevice = availableDevices.find(d => d.id.toString() === propSelectedDevice);
+      if (foundDevice) {
+        setSelectedDevice(foundDevice);
+        setSelectedDevices([foundDevice.id.toString()]);
+      }
     }
-  }, [propSelectedDevice]);
+  }, [propSelectedDevice, availableDevices]);
 
   // 调试：监听 selectedDevice 的变化
   useEffect(() => {
@@ -376,17 +382,17 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
         className="mb-4" 
         size="small"
       >
-        {availableDevices.length > 0 ? (
+        {availableDevices.length > 0 && (
           <div>
             <div className="mb-3">
               <Text>选择设备：</Text>
               <Checkbox.Group
                 value={selectedDevices}
                 onChange={(values) => {
-                  setSelectedDevices(values as string[]);
+                  setSelectedDevices(values);
                   if (values.length > 0) {
                     // 使用第一个选中的设备
-                    const firstSelectedId = values[0] as string;
+                    const firstSelectedId = values[0];
                     const device = availableDevices.find(d => d.id.toString() === firstSelectedId);
                     if (device) {
                       setSelectedDevice(device);
@@ -429,12 +435,16 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
               </div>
             )}
           </div>
-        ) : loading ? (
+        )}
+        
+        {availableDevices.length === 0 && loading && (
           <div className="text-center py-4">
             <Spin />
             <Text className="ml-2">正在检测设备...</Text>
           </div>
-        ) : (
+        )}
+        
+        {availableDevices.length === 0 && !loading && (
           <Alert 
             type="warning" 
             message="未检测到设备" 

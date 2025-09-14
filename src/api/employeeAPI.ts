@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Employee, EmployeeFormData } from '../types';
+import type { EmployeeData, EmployeeFormData } from '../types';
 
 /**
  * 员工API接口层 - 封装所有Tauri命令调用
@@ -9,9 +9,9 @@ export class EmployeeAPI {
   /**
    * 获取所有员工列表
    */
-  static async getEmployees(): Promise<Employee[]> {
+  static async getEmployees(): Promise<EmployeeData[]> {
     try {
-      return await invoke<Employee[]>('get_employees');
+      return await invoke<EmployeeData[]>('get_employees');
     } catch (error) {
       console.error('Failed to fetch employees:', error);
       throw new Error(`获取员工列表失败: ${error}`);
@@ -21,9 +21,9 @@ export class EmployeeAPI {
   /**
    * 添加新员工
    */
-  static async addEmployee(employee: EmployeeFormData): Promise<Employee> {
+  static async addEmployee(employee: EmployeeFormData): Promise<EmployeeData> {
     try {
-      return await invoke<Employee>('add_employee', { employee });
+      return await invoke<EmployeeData>('add_employee', { employee });
     } catch (error) {
       console.error('Failed to add employee:', error);
       throw new Error(`添加员工失败: ${error}`);
@@ -33,9 +33,9 @@ export class EmployeeAPI {
   /**
    * 更新员工信息
    */
-  static async updateEmployee(employee: Employee): Promise<Employee> {
+  static async updateEmployee(employee: EmployeeData): Promise<EmployeeData> {
     try {
-      return await invoke<Employee>('update_employee', { employee });
+      return await invoke<EmployeeData>('update_employee', { employee });
     } catch (error) {
       console.error('Failed to update employee:', error);
       throw new Error(`更新员工信息失败: ${error}`);

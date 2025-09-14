@@ -339,7 +339,7 @@ export const ContactAutomationPage: React.FC = () => {
                   {activeTab === 'auto-follow' && (
                     <XiaohongshuAutoFollow
                       selectedDevice={selectedDevice}
-                      onFollowComplete={handleAutoFollowComplete}
+                      onWorkflowComplete={handleAutoFollowComplete}
                     />
                   )}
                   {activeTab === 'complete-flow' && (

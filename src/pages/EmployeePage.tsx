@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { EmployeeTable, EmployeeForm } from '../components';
 import { EmployeeAPI } from '../api';
-import type { Employee, EmployeeFormData } from '../types';
+import type { EmployeeData, EmployeeFormData } from '../types';
 
 /**
  * 员工管理主页面
  * 包含员工列表展示、添加、编辑、删除功能
  */
 export const EmployeePage: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<EmployeeData[]>([]);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeData | null>(null);
   const [isShowingForm, setIsShowingForm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(false);
@@ -58,7 +58,7 @@ export const EmployeePage: React.FC = () => {
     try {
       setIsFormLoading(true);
       setError(null);
-      const updatedEmployee: Employee = {
+      const updatedEmployee: EmployeeData = {
         ...employeeData,
         id: editingEmployee.id
       };
@@ -89,7 +89,7 @@ export const EmployeePage: React.FC = () => {
   };
 
   // 处理编辑员工
-  const handleEditEmployee = (employee: Employee) => {
+  const handleEditEmployee = (employee: EmployeeData) => {
     setEditingEmployee(employee);
     setIsShowingForm(true);
   };

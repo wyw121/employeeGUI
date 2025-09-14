@@ -6,6 +6,7 @@ pub mod crash_debugger;
 pub mod crash_test;
 pub mod employee_service;
 pub mod ldplayer_vcf_opener;
+pub mod log_bridge;
 pub mod permission_test;
 pub mod safe_adb_manager;
 pub mod smart_vcf_opener;

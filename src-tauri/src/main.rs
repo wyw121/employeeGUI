@@ -14,6 +14,7 @@ use services::contact_service::*;
 use services::crash_debugger::*;
 use services::crash_test::*;
 use services::employee_service::{Employee, EmployeeService};
+use services::log_bridge::{LogEntry, AdbCommandLog, LOG_COLLECTOR};
 use services::permission_test::*;
 use services::safe_adb_manager::*;
 use services::smart_vcf_opener::*;
@@ -21,7 +22,7 @@ use services::ui_reader_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use std::sync::Mutex;
 use tauri::State;
-use tracing::{info, error};
+use tracing::{info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Tauri命令：获取所有员工
@@ -517,6 +518,66 @@ async fn delete_file(path: String) -> Result<(), String> {
     }
 }
 
+// ====== 日志桥接相关命令 ======
+
+// 获取所有日志
+#[tauri::command]
+async fn get_logs() -> Result<Vec<LogEntry>, String> {
+    Ok(LOG_COLLECTOR.get_logs())
+}
+
+// 获取ADB命令日志
+#[tauri::command]
+async fn get_adb_command_logs() -> Result<Vec<AdbCommandLog>, String> {
+    Ok(LOG_COLLECTOR.get_adb_command_logs())
+}
+
+// 获取过滤后的日志
+#[tauri::command]
+async fn get_filtered_logs(
+    level_filter: Option<Vec<String>>,
+    category_filter: Option<Vec<String>>,
+    source_filter: Option<Vec<String>>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+) -> Result<Vec<LogEntry>, String> {
+    Ok(LOG_COLLECTOR.get_filtered_logs(
+        level_filter,
+        category_filter,
+        source_filter,
+        start_time,
+        end_time,
+    ))
+}
+
+// 清空日志
+#[tauri::command]
+async fn clear_logs() -> Result<(), String> {
+    LOG_COLLECTOR.clear_logs();
+    Ok(())
+}
+
+// 添加自定义日志条目
+#[tauri::command]
+async fn add_log_entry(
+    level: String,
+    category: String,
+    source: String,
+    message: String,
+    details: Option<String>,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    LOG_COLLECTOR.add_log(
+        &level,
+        &category,
+        &source,
+        &message,
+        details.as_deref(),
+        device_id.as_deref(),
+    );
+    Ok(())
+}
+
 fn main() {
     // 初始化日志系统
     tracing_subscriber::registry()
@@ -537,6 +598,12 @@ fn main() {
     info!("✅ 所有服务初始化完成");
 
     tauri::Builder::default()
+        .setup(|_app| {
+            // 设置日志收集器的app handle以便实时发送日志到前端
+            // 注意：这里需要通过不安全的方式来设置，因为LOG_COLLECTOR是静态的
+            // 在实际应用中，我们会在启动后通过命令来初始化
+            Ok(())
+        })
         .manage(Mutex::new(employee_service))
         .manage(Mutex::new(adb_service))
         .manage(tokio::sync::Mutex::new(xiaohongshu_service))
@@ -559,6 +626,12 @@ fn main() {
             execute_adb_command_simple,
             write_file,
             delete_file,
+            // 日志桥接命令
+            get_logs,
+            get_adb_command_logs,
+            get_filtered_logs,
+            clear_logs,
+            add_log_entry,
             employee_login,
             verify_token,
             get_current_user,

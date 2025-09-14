@@ -25,10 +25,8 @@ import {
 } from 'antd';
 import {
   SearchOutlined,
-  FilterOutlined,
   ExportOutlined,
   ClearOutlined,
-  ReloadOutlined,
   SettingOutlined,
   DownloadOutlined,
   PlayCircleOutlined,
@@ -89,7 +87,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({
   const {
     filteredLogs,
     filter,
-    setFilter,
+    updateFilter,
     clearFilter,
     clearLogs,
     exportLogs,
@@ -101,7 +99,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({
   const [isRealTime, setIsRealTime] = useState(autoRefresh);
   const [selectedLevels, setSelectedLevels] = useState<LogLevel[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<LogCategory[]>([]);
-  const [loading, setLoading] = useState(false);
+  const loading = false; // 简化为常量，如果需要可以后续添加加载逻辑
   const tableRef = useRef<any>(null);
 
   // 实时刷新定时器
@@ -123,7 +121,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({
 
   // 过滤处理
   const handleFilterChange = (newFilter: Partial<LogFilter>) => {
-    setFilter({
+    updateFilter({
       ...filter,
       ...newFilter,
       searchText: searchText || undefined
@@ -268,7 +266,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({
           )}
         </div>
       ),
-      ellipsis: { tooltip: true }
+      ellipsis: true
     },
     {
       title: '详情',

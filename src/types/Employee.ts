@@ -15,6 +15,9 @@ export interface Employee {
   department: string;
   email: string;
   phone: string;
+  position?: string;
+  salary?: number;
+  hire_date?: string;
 }
 
 export interface EmployeeFormData {
@@ -22,6 +25,9 @@ export interface EmployeeFormData {
   department: string;
   email: string;
   phone: string;
+  position: string;
+  salary: number;
+  hire_date: string;
 }
 
 // 联系人任务类型

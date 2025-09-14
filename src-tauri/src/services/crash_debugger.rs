@@ -2,7 +2,11 @@ use anyhow::Result;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::panic;
+use std::process::Command;
 use tracing::{error, info, warn};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// 崩溃调试工具 - 捕获和记录详细的崩溃信息
 pub struct CrashDebugger {
@@ -200,7 +204,16 @@ pub async fn debug_vcf_import_with_crash_detection(
 
     // 测试设备连接
     debugger.log_step("开始测试设备连接");
-    match std::process::Command::new("adb").args(["devices"]).output() {
+    
+    let mut cmd = Command::new("adb");
+    cmd.args(["devices"]);
+    
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    match cmd.output() {
         Ok(output) => {
             let devices_output = String::from_utf8_lossy(&output.stdout);
             debugger.log_step(&format!("ADB设备列表: {}", devices_output));

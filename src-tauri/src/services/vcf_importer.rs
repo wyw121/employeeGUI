@@ -5,6 +5,9 @@ use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 // 从Flow_Farm项目复制的核心结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Contact {
@@ -106,6 +109,19 @@ impl VcfImporter {
             device_id,
             adb_path: "D:\\leidian\\LDPlayer9\\adb.exe".to_string(), // 默认雷电模拟器ADB路径
         }
+    }
+
+    /// 执行ADB命令并隐藏CMD窗口
+    fn execute_adb_command(&self, args: &[&str]) -> Result<std::process::Output> {
+        let mut cmd = Command::new(&self.adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.output().context("ADB命令执行失败")
     }
 
     /// 生成VCF文件
@@ -326,14 +342,10 @@ impl VcfImporter {
                 .unwrap_or("/sdcard");
 
             // 创建目录（如果不存在）
-            let _mkdir_output = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "shell", "mkdir", "-p", parent_dir])
-                .output();
+            let _mkdir_output = self.execute_adb_command(&["-s", &self.device_id, "shell", "mkdir", "-p", parent_dir]);
 
             // 传输文件
-            let output = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "push", local_path, path])
-                .output();
+            let output = self.execute_adb_command(&["-s", &self.device_id, "push", local_path, path]);
 
             match output {
                 Ok(result) if result.status.success() => {
@@ -344,9 +356,7 @@ impl VcfImporter {
                         info!("文件传输验证成功: {}", path);
 
                         // 设置文件权限，确保可读
-                        let _chmod_output = Command::new(&self.adb_path)
-                            .args(&["-s", &self.device_id, "shell", "chmod", "644", path])
-                            .output();
+                        let _chmod_output = self.execute_adb_command(&["-s", &self.device_id, "shell", "chmod", "644", path]);
 
                         return Ok(());
                     } else {
@@ -373,9 +383,7 @@ impl VcfImporter {
 
     /// 验证文件是否存在于设备上（增强版）
     async fn verify_file_on_device(&self, device_path: &str) -> Result<bool> {
-        let output = Command::new(&self.adb_path)
-            .args(&["-s", &self.device_id, "shell", "ls", "-la", device_path])
-            .output()
+        let output = self.execute_adb_command(&["-s", &self.device_id, "shell", "ls", "-la", device_path])
             .context("验证设备文件失败")?;
 
         if output.status.success() {
@@ -441,8 +449,7 @@ impl VcfImporter {
     async fn open_contacts_app(&self) -> Result<()> {
         info!("启动联系人应用");
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -451,7 +458,6 @@ impl VcfImporter {
                 "-n",
                 "com.android.contacts/.activities.PeopleActivity",
             ])
-            .output()
             .context("启动联系人应用失败")?;
 
         if !output.status.success() {
@@ -463,8 +469,7 @@ impl VcfImporter {
 
     /// ADB点击坐标
     async fn adb_tap(&self, x: i32, y: i32) -> Result<()> {
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -473,7 +478,6 @@ impl VcfImporter {
                 &x.to_string(),
                 &y.to_string(),
             ])
-            .output()
             .context("ADB点击失败")?;
 
         if !output.status.success() {
@@ -634,8 +638,7 @@ impl VcfImporter {
 
         // 最后的媒体扫描刷新
         info!("执行媒体扫描刷新");
-        let _refresh_cmd = Command::new(&self.adb_path)
-            .args(&[
+        let _refresh_cmd = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -645,8 +648,7 @@ impl VcfImporter {
                 "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
                 "-d",
                 "file:///sdcard/Download/",
-            ])
-            .output();
+            ]);
 
         sleep(Duration::from_secs(1)).await;
 
@@ -879,8 +881,7 @@ impl VcfImporter {
 
     /// 获取文件选择器UI内容
     async fn get_file_picker_ui_dump(&self) -> Result<String> {
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -888,7 +889,6 @@ impl VcfImporter {
                 "dump",
                 "/sdcard/file_picker_ui.xml",
             ])
-            .output()
             .context("获取文件选择器UI失败")?;
 
         if !output.status.success() {
@@ -896,15 +896,13 @@ impl VcfImporter {
         }
 
         // 读取UI文件内容
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
                 "cat",
                 "/sdcard/file_picker_ui.xml",
             ])
-            .output()
             .context("读取UI文件失败")?;
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -1015,8 +1013,7 @@ impl VcfImporter {
 
     /// 获取当前UI dump
     async fn get_current_ui_dump(&self) -> Result<String> {
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1024,7 +1021,6 @@ impl VcfImporter {
                 "dump",
                 "/sdcard/current_ui.xml",
             ])
-            .output()
             .context("获取当前UI失败")?;
 
         if !output.status.success() {
@@ -1032,15 +1028,13 @@ impl VcfImporter {
         }
 
         // 读取UI文件内容
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
                 "cat",
                 "/sdcard/current_ui.xml",
             ])
-            .output()
             .context("读取UI文件失败")?;
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -1430,8 +1424,7 @@ impl VcfImporter {
         sleep(Duration::from_secs(2)).await;
 
         // 或者直接启动联系人首页
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1440,7 +1433,6 @@ impl VcfImporter {
                 "-n",
                 "com.android.contacts/.activities.PeopleActivity",
             ])
-            .output()
             .context("启动联系人应用失败")?;
 
         if !output.status.success() {
@@ -1453,8 +1445,7 @@ impl VcfImporter {
 
     /// 获取联系人应用UI内容
     async fn get_contacts_ui_dump(&self) -> Result<String> {
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1462,7 +1453,6 @@ impl VcfImporter {
                 "dump",
                 "/sdcard/contacts_home.xml",
             ])
-            .output()
             .context("获取联系人UI失败")?;
 
         if !output.status.success() {
@@ -1470,15 +1460,13 @@ impl VcfImporter {
         }
 
         // 读取UI文件内容
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
                 "cat",
                 "/sdcard/contacts_home.xml",
             ])
-            .output()
             .context("读取联系人UI文件失败")?;
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -1542,8 +1530,7 @@ impl VcfImporter {
         for package in &contacts_packages {
             info!("🔄 尝试通讯录包: {}", package);
             
-            let output = Command::new(&self.adb_path)
-                .args(&[
+            let output = self.execute_adb_command(&[
                     "-s",
                     &self.device_id,
                     "shell",
@@ -1557,7 +1544,6 @@ impl VcfImporter {
                     "text/vcard",
                     package,
                 ])
-                .output()
                 .context("执行Intent命令失败")?;
 
             if output.status.success() {
@@ -1586,8 +1572,7 @@ impl VcfImporter {
         ];
 
         for cmd in &commands {
-            let output = Command::new(&self.adb_path)
-                .args(&[
+            let output = self.execute_adb_command(&[
                     "-s",
                     &self.device_id,
                     "shell",
@@ -1595,7 +1580,6 @@ impl VcfImporter {
                     "-c",
                     cmd,
                 ])
-                .output()
                 .context("执行Root命令失败")?;
 
             if output.status.success() {
@@ -1613,8 +1597,7 @@ impl VcfImporter {
     async fn open_vcf_with_system_intent(&self, vcf_path: &str) -> Result<()> {
         info!("🌐 使用系统Intent打开VCF文件");
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1627,7 +1610,6 @@ impl VcfImporter {
                 "-t",
                 "text/vcard",
             ])
-            .output()
             .context("执行系统Intent失败")?;
 
         if output.status.success() {

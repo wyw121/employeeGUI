@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AdbCommandResult {
     pub success: bool,
@@ -24,7 +27,15 @@ impl AdbService {
     ) -> Result<String, Box<dyn std::error::Error>> {
         println!("执行ADB命令: {} {:?}", adb_path, args);
 
-        let output = Command::new(adb_path).args(args).output()?;
+        let mut cmd = Command::new(adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        let output = cmd.output()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -82,7 +93,15 @@ impl AdbService {
         for path in common_paths {
             if path == "adb.exe" || path == "adb" {
                 // 测试系统PATH中的ADB
-                if let Ok(output) = std::process::Command::new(path).arg("version").output() {
+                let mut cmd = Command::new(path);
+                cmd.arg("version");
+                
+                #[cfg(windows)]
+                {
+                    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                }
+                
+                if let Ok(output) = cmd.output() {
                     if output.status.success() {
                         println!("Found system ADB: {}", path);
                         return Some(path.to_string());

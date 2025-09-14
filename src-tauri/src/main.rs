@@ -2,6 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod services;
+mod utils;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 use services::adb_service::AdbService;
 use services::auth_service::*;
@@ -239,19 +243,27 @@ async fn xiaohongshu_follow_contacts(
 
     println!("使用执行路径: {:?}", xiaohongshu_test_path);
 
-    let output = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("follow-from-gui")
-        .arg("--device")
-        .arg(&request.device)
-        .arg("--max-follows")
-        .arg(max_follows.to_string())
-        .arg("--contacts-json")
-        .arg(&serde_json::to_string(&contacts_to_follow).unwrap_or_default())
-        .current_dir(&xiaohongshu_test_path)
-        .output()
-        .map_err(|e| format!("执行小红书关注命令失败: {}", e))?;
+    let output = {
+        let mut cmd = Command::new("cargo");
+        cmd.arg("run")
+            .arg("--")
+            .arg("follow-from-gui")
+            .arg("--device")
+            .arg(&request.device)
+            .arg("--max-follows")
+            .arg(max_follows.to_string());
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.arg("--contacts-json")
+            .arg(&serde_json::to_string(&contacts_to_follow).unwrap_or_default())
+            .current_dir(&xiaohongshu_test_path)
+            .output()
+            .map_err(|e| format!("执行小红书关注命令失败: {}", e))?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -327,10 +339,18 @@ async fn xiaohongshu_follow_contacts(
 async fn get_xiaohongshu_devices() -> Result<Vec<DeviceInfo>, String> {
     use std::process::Command;
 
-    let output = Command::new("adb")
-        .arg("devices")
-        .output()
-        .map_err(|e| format!("执行adb devices失败: {}", e))?;
+    let output = {
+        let mut cmd = Command::new("adb");
+        cmd.arg("devices");
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.output()
+            .map_err(|e| format!("执行adb devices失败: {}", e))?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut devices = Vec::new();

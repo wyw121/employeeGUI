@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
+use crate::utils::adb_utils::{get_adb_path, execute_command_hidden};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 // 应用状态检查结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -140,44 +144,7 @@ pub struct XiaohongshuAutomator {
 impl XiaohongshuAutomator {
     /// 创建新的小红书自动化实例
     pub fn new(device_id: String) -> Self {
-        // 优先尝试几个可能的ADB路径
-        let possible_adb_paths = vec![
-            // 1. 项目根目录的platform-tools (使用绝对路径)
-            r"D:\repositories\employeeGUI\platform-tools\adb.exe".to_string(),
-            // 2. 相对于当前目录的platform-tools
-            std::env::current_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."))
-                .parent()
-                .unwrap_or(&std::path::PathBuf::from(".."))
-                .join("platform-tools")
-                .join("adb.exe")
-                .to_string_lossy()
-                .to_string(),
-            // 3. 从src-tauri向上两级目录找platform-tools
-            std::env::current_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."))
-                .join("..")
-                .join("platform-tools")
-                .join("adb.exe")
-                .to_string_lossy()
-                .to_string(),
-            // 4. 系统PATH中的adb
-            "adb.exe".to_string(),
-        ];
-
-        let mut adb_path = "adb.exe".to_string();
-        
-        // 找到第一个存在的ADB路径
-        for path in &possible_adb_paths {
-            info!("🔍 检查ADB路径: {}", path);
-            if std::path::Path::new(path).exists() {
-                adb_path = path.clone();
-                info!("✅ 找到可用的ADB路径: {}", adb_path);
-                break;
-            } else {
-                info!("❌ ADB路径不存在: {}", path);
-            }
-        }
+        let adb_path = get_adb_path();
         
         info!("🚀 创建XiaohongshuAutomator - 设备ID: {}, 最终ADB路径: {}", device_id, adb_path);
             
@@ -185,6 +152,24 @@ impl XiaohongshuAutomator {
             device_id,
             adb_path,
         }
+    }
+    
+    /// 执行 ADB 命令并隐藏 CMD 窗口
+    fn execute_adb_command(&self, args: &[&str]) -> Result<std::process::Output> {
+        let mut cmd = Command::new(&self.adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            // Windows: 隐藏命令行窗口
+            // CREATE_NO_WINDOW = 0x08000000
+            cmd.creation_flags(0x08000000);
+        }
+        
+        let output = cmd.output()
+            .context(format!("执行ADB命令失败 - ADB路径: {}, 参数: {:?}", self.adb_path, args))?;
+        
+        Ok(output)
     }
     
     /// 创建新的小红书自动化实例，指定ADB路径
@@ -210,8 +195,7 @@ impl XiaohongshuAutomator {
 
         // 检查应用是否安装
         let package_name = "com.xingin.xhs";
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -220,7 +204,6 @@ impl XiaohongshuAutomator {
                 "packages",
                 package_name,
             ])
-            .output()
             .context(format!("检查应用安装状态失败 - ADB路径: {}, 设备ID: {}", self.adb_path, self.device_id))?;
 
         info!("📊 应用安装检查结果: stdout长度={}, stderr={}", 
@@ -241,8 +224,7 @@ impl XiaohongshuAutomator {
         }
 
         // 检查应用是否正在运行 - 使用简化的方法避免Windows管道问题
-        let running_output = Command::new(&self.adb_path)
-            .args(&[
+        let running_output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -250,15 +232,13 @@ impl XiaohongshuAutomator {
                 "activity",
                 "activities",
             ])
-            .output()
             .context("检查应用运行状态失败")?;
 
         let running_result = String::from_utf8_lossy(&running_output.stdout);
         let app_running = running_result.contains(package_name);
 
         // 获取应用版本 - 使用简化的方法避免Windows管道问题
-        let version_output = Command::new(&self.adb_path)
-            .args(&[
+        let version_output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -266,7 +246,6 @@ impl XiaohongshuAutomator {
                 "package",
                 package_name,
             ])
-            .output()
             .context("获取应用版本失败")?;
 
         let version_result = String::from_utf8_lossy(&version_output.stdout);
@@ -737,13 +716,11 @@ impl XiaohongshuAutomator {
         info!("🚀 启动小红书应用...");
 
         // 方法1: 通过ADB命令直接启动应用
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s", &self.device_id,
                 "shell", "am", "start",
                 "-n", "com.xingin.xhs/.index.v2.IndexActivityV2"
             ])
-            .output()
             .context("启动小红书应用失败")?;
 
         if output.status.success() {
@@ -1712,8 +1689,7 @@ impl XiaohongshuAutomator {
     /// 单次获取UI dump尝试
     async fn get_ui_dump_once(&self) -> Result<String> {
         // 方法1: 直接输出到stdout
-        let output1 = Command::new(&self.adb_path)
-            .args(&[
+        let output1 = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1721,7 +1697,6 @@ impl XiaohongshuAutomator {
                 "dump",
                 "/dev/stdout",
             ])
-            .output()
             .context("获取UI dump失败")?;
 
         let result1 = String::from_utf8_lossy(&output1.stdout).to_string();
@@ -1731,8 +1706,7 @@ impl XiaohongshuAutomator {
         }
 
         // 方法2: 先dump到文件，再cat
-        let dump_output = Command::new(&self.adb_path)
-            .args(&[
+        let dump_output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1740,7 +1714,6 @@ impl XiaohongshuAutomator {
                 "dump",
                 "/sdcard/xiaohongshu_ui.xml",
             ])
-            .output()
             .context("dump到文件失败")?;
 
         if !dump_output.status.success() {
@@ -1752,15 +1725,13 @@ impl XiaohongshuAutomator {
         sleep(Duration::from_millis(500)).await;
 
         // 读取UI文件内容
-        let output2 = Command::new(&self.adb_path)
-            .args(&[
+        let output2 = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
                 "cat",
                 "/sdcard/xiaohongshu_ui.xml",
             ])
-            .output()
             .context("读取UI文件失败")?;
 
         let result2 = String::from_utf8_lossy(&output2.stdout).to_string();
@@ -1777,8 +1748,7 @@ impl XiaohongshuAutomator {
         info!("📜 执行向下滚动操作");
         
         // 从屏幕中间向上滑动，距离适中以避免滑动过快
-        let _output = Command::new(&self.adb_path)
-            .args(&[
+        let _output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1790,7 +1760,6 @@ impl XiaohongshuAutomator {
                 "400",  // 结束位置 (增加滚动距离)
                 "800", // 滑动时长(ms) (减少滑动时间使其更流畅)
             ])
-            .output()
             .context("滑动页面失败")?;
 
         info!("✓ 滚动操作完成");
@@ -1830,8 +1799,7 @@ impl XiaohongshuAutomator {
     /// 返回主页
     async fn return_to_home(&self) -> Result<()> {
         // 点击返回按钮或按Home键
-        let _output = Command::new(&self.adb_path)
-            .args(&[
+        let _output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1839,7 +1807,6 @@ impl XiaohongshuAutomator {
                 "keyevent",
                 "KEYCODE_HOME",
             ])
-            .output()
             .context("返回主页失败")?;
 
         Ok(())
@@ -1854,8 +1821,7 @@ impl XiaohongshuAutomator {
     async fn adb_tap(&self, x: i32, y: i32) -> Result<()> {
         info!("👆 执行点击操作，坐标:({}, {})", x, y);
         
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let _output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -1864,13 +1830,7 @@ impl XiaohongshuAutomator {
                 &x.to_string(),
                 &y.to_string(),
             ])
-            .output()
             .context("ADB点击失败")?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("ADB点击失败: {}", error_msg));
-        }
 
         info!("✓ 点击操作成功");
         Ok(())

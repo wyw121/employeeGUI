@@ -107,6 +107,120 @@ async fn get_adb_devices(
     service.get_devices(&adb_path).map_err(|e| e.to_string())
 }
 
+// 获取ADB版本
+#[tauri::command]
+async fn get_adb_version() -> Result<String, String> {
+    use std::process::Command;
+    
+    let adb_path = "platform-tools/adb.exe";
+    let mut cmd = Command::new(adb_path);
+    cmd.arg("version");
+    
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                let version_output = String::from_utf8_lossy(&output.stdout);
+                // 提取版本号（通常在第一行）
+                let first_line = version_output.lines().next().unwrap_or("Unknown");
+                Ok(first_line.to_string())
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(format!("ADB版本获取失败: {}", error))
+            }
+        }
+        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+    }
+}
+
+// 简化的ADB服务器启动命令
+#[tauri::command]
+async fn start_adb_server_simple() -> Result<String, String> {
+    use std::process::Command;
+    
+    let adb_path = "platform-tools/adb.exe";
+    let mut cmd = Command::new(adb_path);
+    cmd.arg("start-server");
+    
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                Ok("ADB服务器启动成功".to_string())
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(format!("ADB服务器启动失败: {}", error))
+            }
+        }
+        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+    }
+}
+
+// 简化的ADB服务器停止命令
+#[tauri::command]
+async fn kill_adb_server_simple() -> Result<String, String> {
+    use std::process::Command;
+    
+    let adb_path = "platform-tools/adb.exe";
+    let mut cmd = Command::new(adb_path);
+    cmd.arg("kill-server");
+    
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                Ok("ADB服务器停止成功".to_string())
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(format!("ADB服务器停止失败: {}", error))
+            }
+        }
+        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+    }
+}
+
+// 执行通用ADB命令
+#[tauri::command]
+async fn execute_adb_command_simple(command: String) -> Result<String, String> {
+    use std::process::Command;
+    
+    let adb_path = "platform-tools/adb.exe";
+    let args: Vec<&str> = command.split_whitespace().collect();
+    
+    let mut cmd = Command::new(adb_path);
+    cmd.args(&args);
+    
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                let result = String::from_utf8_lossy(&output.stdout);
+                Ok(result.to_string())
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(format!("ADB命令执行失败: {}", error))
+            }
+        }
+        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+    }
+}
+
 // 连接ADB设备
 #[tauri::command]
 async fn connect_adb_device(
@@ -435,10 +549,14 @@ fn main() {
             check_file_exists,
             detect_ldplayer_adb,
             get_adb_devices,
+            get_adb_version,
             connect_adb_device,
             disconnect_adb_device,
             start_adb_server,
             kill_adb_server,
+            start_adb_server_simple,
+            kill_adb_server_simple,
+            execute_adb_command_simple,
             write_file,
             delete_file,
             employee_login,

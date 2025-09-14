@@ -6,6 +6,8 @@ export interface AdbDevice {
   model?: string;
   product?: string;
   transport_id?: string;
+  type: 'usb' | 'wifi' | 'emulator';
+  lastSeen: Date;
 }
 
 export interface AdbServiceConfig {
@@ -131,9 +133,21 @@ export class AdbService {
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
       if (parts.length >= 2) {
+        // 判断设备类型
+        let type: 'usb' | 'wifi' | 'emulator' = 'usb';
+        const deviceId = parts[0];
+        
+        if (deviceId.includes('emulator') || deviceId.includes('127.0.0.1')) {
+          type = 'emulator';
+        } else if (deviceId.includes('.') && deviceId.includes(':')) {
+          type = 'wifi';
+        }
+
         const device: AdbDevice = {
-          id: parts[0],
-          status: parts[1] as AdbDevice['status']
+          id: deviceId,
+          status: parts[1] as AdbDevice['status'],
+          type,
+          lastSeen: new Date()
         };
 
         // 解析额外信息
@@ -205,7 +219,7 @@ export class AdbService {
   async startServer(): Promise<boolean> {
     try {
       console.log('Starting ADB server...');
-      await this.executeAdbCommand(['start-server']);
+      await invoke('start_adb_server_simple');
       console.log('ADB server started successfully');
       return true;
     } catch (error) {
@@ -220,7 +234,7 @@ export class AdbService {
   async stopServer(): Promise<boolean> {
     try {
       console.log('Stopping ADB server...');
-      await this.executeAdbCommand(['kill-server']);
+      await invoke('kill_adb_server_simple');
       console.log('ADB server stopped successfully');
       return true;
     } catch (error) {

@@ -405,6 +405,7 @@ export class EnhancedAdbDiagnosticService {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const version = await invoke<string>('get_adb_version');
+      const adbPath = await invoke<string>('get_adb_path').catch(() => 'platform-tools/adb.exe');
       
       return {
         id: 'check-adb-tool',
@@ -412,7 +413,11 @@ export class EnhancedAdbDiagnosticService {
         description: '验证 ADB 调试工具是否正确安装和可用',
         status: DiagnosticStatus.SUCCESS,
         message: `ADB 工具正常 (版本: ${version})`,
-        details: { version },
+        details: { 
+          version,
+          path: adbPath,
+          location: '工具位置: ' + adbPath
+        },
         timestamp: new Date()
       };
     } catch (error) {
@@ -422,7 +427,11 @@ export class EnhancedAdbDiagnosticService {
         description: '验证 ADB 调试工具是否正确安装和可用',
         status: DiagnosticStatus.ERROR,
         message: 'ADB 工具未找到或不可用',
-        details: error,
+        details: { 
+          error,
+          expectedPath: 'platform-tools/adb.exe',
+          troubleshooting: 'ADB工具应该位于程序根目录的platform-tools文件夹中'
+        },
         suggestion: '请确保 platform-tools 文件夹在程序目录下，或重新下载完整程序包',
         canAutoFix: false,
         timestamp: new Date()

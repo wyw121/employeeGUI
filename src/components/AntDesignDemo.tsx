@@ -27,8 +27,8 @@ import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
+import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import RealDeviceManager from './device/RealDeviceManager';
-import { AdbToolbox } from './device/AdbToolboxStable';
 import SmartVcfImporter from './SmartVcfImporter';
 
 const { Header, Sider, Content } = Layout;
@@ -292,8 +292,8 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'adb-test' && (
               <>
-                {console.log('🎯 渲染 ADB 测试页面，selectedKey:', selectedKey)}
-                <AdbToolbox />
+                {console.log('🎯 渲染 ADB 诊断模块页面，selectedKey:', selectedKey)}
+                <ComprehensiveAdbPage />
               </>
             )}
 

@@ -173,6 +173,68 @@ const DiagnosticResults: React.FC<{
 
   const fixableIssues = results.filter(r => r.canAutoFix);
 
+  // 渲染详细信息
+  const renderResultDetails = (result: DiagnosticResult) => {
+    if (!result.details) return null;
+
+    const details = result.details;
+    
+    return (
+      <div style={{ 
+        backgroundColor: '#f5f5f5', 
+        padding: '8px 12px', 
+        borderRadius: '4px',
+        marginTop: '8px',
+        fontSize: '12px',
+        fontFamily: 'monospace'
+      }}>
+        {/* ADB工具详细信息 */}
+        {details.version && (
+          <div>
+            <Text strong>ADB版本: </Text>
+            <Text code>{details.version}</Text>
+          </div>
+        )}
+        {details.path && (
+          <div>
+            <Text strong>工具位置: </Text>
+            <Text code>{details.path}</Text>
+          </div>
+        )}
+        {details.location && (
+          <div>
+            <Text type="secondary">{details.location}</Text>
+          </div>
+        )}
+        
+        {/* 设备列表 */}
+        {details.devices && Array.isArray(details.devices) && (
+          <div>
+            <Text strong>发现设备: </Text>
+            {details.devices.map((device: any, index: number) => (
+              <div key={`device-${index}`} style={{ marginLeft: '16px' }}>
+                <Text code>{device.id}</Text> - <Text>{device.status}</Text>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 错误排查信息 */}
+        {details.expectedPath && (
+          <div>
+            <Text strong>预期路径: </Text>
+            <Text code>{details.expectedPath}</Text>
+          </div>
+        )}
+        {details.troubleshooting && (
+          <div style={{ marginTop: '4px' }}>
+            <Text type="warning">{details.troubleshooting}</Text>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card 
       title="诊断结果" 
@@ -230,6 +292,8 @@ const DiagnosticResults: React.FC<{
                         </Text>
                       </>
                     )}
+                    {/* 详细信息展示 */}
+                    {renderResultDetails(result)}
                   </div>
                 </Col>
                 <Col flex="none">
@@ -257,9 +321,128 @@ const ActionPanel: React.FC<{
   onQuickCheck: () => void;
   onExportReport: () => void;
 }> = ({ isRunning, onStartDiagnostic, onQuickCheck, onExportReport }) => {
+  const { info } = useLogManager();
+
+  // ADB服务器操作
+  const handleRestartAdbServer = async () => {
+    try {
+      const { AdbService } = await import('../../services/adbService');
+      const adbService = AdbService.getInstance();
+      await adbService.restartServer();
+      
+      notification.success({
+        message: 'ADB服务器已重启',
+        description: 'ADB服务器重启成功，请重新连接设备'
+      });
+      
+      info(LogCategory.USER_ACTION, 'ActionPanel', '用户手动重启ADB服务器');
+    } catch (error) {
+      notification.error({
+        message: 'ADB服务器重启失败',
+        description: error instanceof Error ? error.message : '未知错误'
+      });
+    }
+  };
+
+  // 查看ADB版本
+  const handleCheckAdbVersion = async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const version = await invoke<string>('get_adb_version');
+      const adbPath = await invoke<string>('get_adb_path').catch(() => 'platform-tools/adb.exe');
+      
+      notification.info({
+        message: 'ADB工具信息',
+        description: (
+          <div>
+            <div>版本: {version}</div>
+            <div>位置: {adbPath}</div>
+          </div>
+        ),
+        duration: 8
+      });
+      
+      info(LogCategory.USER_ACTION, 'ActionPanel', '用户查看ADB版本信息', { version, path: adbPath });
+    } catch (error) {
+      console.error('获取ADB信息失败:', error);
+      notification.error({
+        message: '获取ADB信息失败',
+        description: 'ADB工具可能未正确安装或配置'
+      });
+    }
+  };
+
+  // 端口连接测试
+  const handleTestPortConnection = async () => {
+    try {
+      const { AdbService } = await import('../../services/adbService');
+      const adbService = AdbService.getInstance();
+      
+      // 测试常见模拟器端口
+      const ports = [5555, 5554, 21503];
+      const results: string[] = [];
+      
+      for (const port of ports) {
+        try {
+          const connected = await adbService.connectToLdPlayer(port);
+          results.push(`127.0.0.1:${port}: ${connected ? '✅ 连接成功' : '❌ 连接失败'}`);
+        } catch {
+          results.push(`127.0.0.1:${port}: ❌ 连接异常`);
+        }
+      }
+      
+      notification.info({
+        message: '端口连接测试结果',
+        description: (
+          <div style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+            {results.map((result, index) => (
+              <div key={`port-test-${index}`}>{result}</div>
+            ))}
+          </div>
+        ),
+        duration: 10
+      });
+      
+      info(LogCategory.USER_ACTION, 'ActionPanel', '用户执行端口连接测试', { results });
+    } catch (error) {
+      notification.error({
+        message: '端口测试失败',
+        description: error instanceof Error ? error.message : '未知错误'
+      });
+    }
+  };
+
+  // 设备列表刷新
+  const handleRefreshDevices = async () => {
+    try {
+      const { AdbService } = await import('../../services/adbService');
+      const adbService = AdbService.getInstance();
+      const devices = await adbService.getDevices();
+      
+      notification.info({
+        message: '设备扫描结果',
+        description: devices.length > 0 
+          ? `发现 ${devices.length} 个设备: ${devices.map(d => d.id).join(', ')}`
+          : '未发现连接的设备',
+        duration: 6
+      });
+      
+      info(LogCategory.USER_ACTION, 'ActionPanel', '用户手动刷新设备列表', { 
+        deviceCount: devices.length,
+        devices: devices.map(d => ({ id: d.id, status: d.status }))
+      });
+    } catch (error) {
+      notification.error({
+        message: '设备扫描失败',
+        description: error instanceof Error ? error.message : '未知错误'
+      });
+    }
+  };
+
   return (
     <Card title="操作面板">
       <Space direction="vertical" style={{ width: '100%' }}>
+        {/* 主要诊断操作 */}
         <Row gutter={16}>
           <Col span={12}>
             <Button
@@ -285,25 +468,96 @@ const ActionPanel: React.FC<{
             </Button>
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Button
-              icon={<ExportOutlined />}
-              onClick={onExportReport}
-              block
-            >
-              导出报告
-            </Button>
-          </Col>
-          <Col span={12}>
-            <Button
-              icon={<SettingOutlined />}
-              block
-            >
-              高级设置
-            </Button>
-          </Col>
-        </Row>
+
+        {/* ADB工具测试 */}
+        <div>
+          <Typography.Text strong style={{ marginBottom: 8, display: 'block' }}>
+            ADB工具测试
+          </Typography.Text>
+          <Row gutter={[8, 8]}>
+            <Col span={12}>
+              <Button
+                icon={<BugOutlined />}
+                onClick={handleCheckAdbVersion}
+                disabled={isRunning}
+                size="small"
+                block
+              >
+                查看版本信息
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRestartAdbServer}
+                disabled={isRunning}
+                size="small"
+                block
+              >
+                重启ADB服务
+              </Button>
+            </Col>
+          </Row>
+        </div>
+
+        {/* 连接测试 */}
+        <div>
+          <Typography.Text strong style={{ marginBottom: 8, display: 'block' }}>
+            连接测试
+          </Typography.Text>
+          <Row gutter={[8, 8]}>
+            <Col span={12}>
+              <Button
+                icon={<MobileOutlined />}
+                onClick={handleRefreshDevices}
+                disabled={isRunning}
+                size="small"
+                block
+              >
+                扫描设备
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                icon={<SafetyCertificateOutlined />}
+                onClick={handleTestPortConnection}
+                disabled={isRunning}
+                size="small"
+                block
+              >
+                测试端口连接
+              </Button>
+            </Col>
+          </Row>
+        </div>
+
+        {/* 报告和设置 */}
+        <div>
+          <Typography.Text strong style={{ marginBottom: 8, display: 'block' }}>
+            报告和设置
+          </Typography.Text>
+          <Row gutter={[8, 8]}>
+            <Col span={12}>
+              <Button
+                icon={<ExportOutlined />}
+                onClick={onExportReport}
+                size="small"
+                block
+              >
+                导出报告
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                icon={<SettingOutlined />}
+                size="small"
+                block
+              >
+                高级设置
+              </Button>
+            </Col>
+          </Row>
+        </div>
       </Space>
     </Card>
   );

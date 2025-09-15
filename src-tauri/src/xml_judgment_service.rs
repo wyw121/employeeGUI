@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use regex::Regex;
-use crate::adb_utils::execute_adb_command;
+use std::process::Output;
+use crate::utils::adb_utils::execute_adb_command;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct XmlElement {
@@ -29,28 +30,38 @@ pub struct XmlJudgmentResult {
 
 pub struct XmlJudgmentService;
 
+// 添加便捷的包装函数，处理 execute_adb_command 的 Result<Output> 返回值
+async fn execute_adb_with_result(args: &[&str]) -> Result<Output, String> {
+    match execute_adb_command(args) {
+        Ok(output) => {
+            if output.status.success() {
+                Ok(output)
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(format!("ADB命令执行失败: {}", stderr))
+            }
+        }
+        Err(e) => Err(format!("ADB命令执行错误: {}", e))
+    }
+}
+
 impl XmlJudgmentService {
     /// 获取设备当前UI的XML结构
     pub async fn get_ui_xml(device_id: &str) -> Result<String, String> {
         // 先dump UI hierarchy
-        let dump_result = execute_adb_command(device_id, &["shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]);
-        if !dump_result.success {
-            return Err(format!("UI dump失败: {}", dump_result.output));
-        }
+        let dump_result = execute_adb_with_result(&["-s", device_id, "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]).await?;
 
         // 等待文件生成
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // 读取XML文件内容
-        let cat_result = execute_adb_command(device_id, &["shell", "cat", "/sdcard/ui_dump.xml"]);
-        if !cat_result.success {
-            return Err(format!("读取UI XML失败: {}", cat_result.output));
-        }
+        let cat_result = execute_adb_with_result(&["-s", device_id, "shell", "cat", "/sdcard/ui_dump.xml"]).await?;
 
         // 清理临时文件
-        let _ = execute_adb_command(device_id, &["shell", "rm", "/sdcard/ui_dump.xml"]);
+        let _ = execute_adb_command(&["-s", device_id, "shell", "rm", "/sdcard/ui_dump.xml"]);
 
-        Ok(cat_result.output)
+        let xml_content = String::from_utf8_lossy(&cat_result.stdout);
+        Ok(xml_content.to_string())
     }
 
     /// 解析XML字符串为结构化数据
@@ -255,7 +266,7 @@ pub async fn get_device_ui_xml(device_id: String) -> Result<String, String> {
 }
 
 #[command]
-pub async fn find_ui_elements(
+pub async fn find_xml_ui_elements(
     device_id: String, 
     condition: XmlCondition
 ) -> Result<XmlJudgmentResult, String> {

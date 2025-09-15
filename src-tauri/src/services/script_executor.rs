@@ -449,7 +449,7 @@ impl ScriptExecutor {
             &self.device_id, 
             &condition, 
             timeout_ms
-        ).await.context("等待元素失败")?;
+        ).await.map_err(|e| anyhow::anyhow!("等待元素失败: {}", e))?;
 
         if result.matched {
             info!("✅ 元素已找到");
@@ -473,7 +473,7 @@ impl ScriptExecutor {
         let result = crate::xml_judgment_service::XmlJudgmentService::check_page_state(
             &self.device_id, 
             &indicators
-        ).await.context("页面状态检查失败")?;
+        ).await.map_err(|e| anyhow::anyhow!("页面状态检查失败: {}", e))?;
 
         if result {
             info!("✅ 页面状态检查通过");

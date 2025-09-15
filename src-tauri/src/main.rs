@@ -660,7 +660,6 @@ fn main() {
             import_and_open_vcf_ldplayer, // 完整的传输+打开流程
             // UI状态读取功能
             read_device_ui_state, // 实时读取设备UI状态
-            find_ui_elements,     // 查找特定UI元素
             // 智能VCF打开器
             smart_vcf_opener, // 基于UI状态的智能VCF打开
             check_xiaohongshu_app_status,
@@ -691,7 +690,7 @@ fn main() {
             get_device_screen_resolution, // 获取设备分辨率
             // XML判断服务功能
             get_device_ui_xml,           // 获取UI XML结构
-            find_ui_elements,            // 查找UI元素
+            find_xml_ui_elements,        // 查找XML UI元素
             wait_for_ui_element,         // 等待元素出现
             check_device_page_state      // 检查页面状态
         ])

@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
   Card,
-  Form,
   Input,
   Select,
   InputNumber,
@@ -20,7 +19,6 @@ import {
   DeleteOutlined,
   CopyOutlined,
   PlayCircleOutlined,
-  ReloadOutlined,
   BranchesOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -340,10 +338,28 @@ const DynamicParametersConfig: React.FC<{
 
 const AdvancedLoopBuilder: React.FC = () => {
   const [loops, setLoops] = useState<LoopConfig[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [previewVisible, setPreviewVisible] = useState(false);
   const [currentLoop, setCurrentLoop] = useState<LoopConfig | null>(null);
-  const [form] = Form.useForm();
+
+  const getTemplateTagColor = (type: string) => {
+    switch (type) {
+      case 'simple': return 'blue';
+      case 'conditional': return 'green';
+      case 'nested': return 'orange';
+      case 'dynamic': return 'purple';
+      default: return 'blue';
+    }
+  };
+
+  const getTemplateTagText = (type: string) => {
+    switch (type) {
+      case 'simple': return '简单';
+      case 'conditional': return '条件';
+      case 'nested': return '嵌套';
+      case 'dynamic': return '动态';
+      default: return '简单';
+    }
+  };
 
   const handleAddLoop = useCallback((template?: LoopConfig) => {
     const newLoop: LoopConfig = template || {
@@ -421,7 +437,7 @@ const AdvancedLoopBuilder: React.FC = () => {
         title={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
-              <LoopOutlined />
+              <BranchesOutlined />
               <span>{loop.name}</span>
               <Tag color={getLoopTypeColor(loop.type)}>
                 {getLoopTypeName(loop.type)}
@@ -607,12 +623,8 @@ const AdvancedLoopBuilder: React.FC = () => {
                   <div style={{ flex: 1 }}>
                     <Text strong>{template.name}</Text>
                     <div style={{ marginTop: 4 }}>
-                      <Tag size="small" color={template.type === 'simple' ? 'blue' : 
-                                              template.type === 'conditional' ? 'green' :
-                                              template.type === 'nested' ? 'orange' : 'purple'}>
-                        {template.type === 'simple' ? '简单' :
-                         template.type === 'conditional' ? '条件' :
-                         template.type === 'nested' ? '嵌套' : '动态'}
+                      <Tag color={getTemplateTagColor(template.type)}>
+                        {getTemplateTagText(template.type)}
                       </Tag>
                     </div>
                   </div>
@@ -634,7 +646,7 @@ const AdvancedLoopBuilder: React.FC = () => {
         >
           {loops.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
-              <LoopOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+              <BranchesOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
               <div>
                 <Text type="secondary">还没有配置任何循环</Text>
               </div>

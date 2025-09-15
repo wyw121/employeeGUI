@@ -128,7 +128,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
     set({ loading: true });
 
     try {
-      await invoke("adb_connect", { adbPath, address });
+      await invoke("adb_connect", { adb_path: adbPath, address });
       message.success(`已连接到设备: ${address}`);
 
       // 刷新设备列表
@@ -150,7 +150,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
     set({ loading: true });
 
     try {
-      await invoke("adb_disconnect", { adbPath, deviceId });
+      await invoke("adb_disconnect", { adb_path: adbPath, device_id: deviceId });
       message.success(`已断开设备: ${deviceId}`);
 
       // 如果断开的是当前选中的设备，清除选择

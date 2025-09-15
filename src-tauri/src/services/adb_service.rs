@@ -110,6 +110,18 @@ impl AdbService {
         for path in adb_paths {
             if self.check_file_exists(path) {
                 println!("Found ADB at: {}", path);
+                // 如果是相对路径，尝试转换为绝对路径
+                if path.starts_with("platform-tools") {
+                    // 获取当前工作目录
+                    if let Ok(current_dir) = std::env::current_dir() {
+                        let absolute_path = current_dir.join(path);
+                        if absolute_path.exists() {
+                            return Some(absolute_path.to_string_lossy().to_string());
+                        }
+                    }
+                    // 如果无法转换为绝对路径，返回相对路径
+                    return Some(path.to_string());
+                }
                 return Some(path.to_string());
             }
         }

@@ -96,7 +96,7 @@ export class AdbService {
       }
 
       const result = await invoke<string>('connect_adb_device', {
-        adbPath: this.LEIDIAN_ADB_PATH,
+        adb_path: this.LEIDIAN_ADB_PATH,
         address: `127.0.0.1:${port}`
       });
       return result.includes('connected');
@@ -117,7 +117,7 @@ export class AdbService {
   static async disconnect(deviceId: string): Promise<boolean> {
     try {
       const result = await invoke<string>('disconnect_adb_device', {
-        adbPath: this.LEIDIAN_ADB_PATH,
+        adb_path: this.LEIDIAN_ADB_PATH,
         address: deviceId
       });
       return result.includes('disconnected');

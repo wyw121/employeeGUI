@@ -115,8 +115,14 @@ async fn detect_smart_adb_path(
     if let Some(detected_path) = service.detect_ldplayer_adb() {
         Ok(detected_path)
     } else {
-        // 如果没有检测到任何ADB，返回默认路径
-        Ok("adb.exe".to_string())
+        // 尝试检测系统PATH中的ADB
+        match service.execute_command("adb.exe", &["version".to_string()]) {
+            Ok(_) => Ok("adb.exe".to_string()), // 系统PATH中有ADB
+            Err(_) => {
+                // 最后回退到项目相对路径
+                Ok("platform-tools/adb.exe".to_string())
+            }
+        }
     }
 }
 

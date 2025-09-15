@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::panic;
 use std::process::Command;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tracing::{error, info};
-use crate::services::vcf_importer_async::{VcfImporterAsync, VcfImportResult};
+use crate::services::vcf_importer_async::VcfImporterAsync;
 
 /// 简化的崩溃测试命令
 #[tauri::command]

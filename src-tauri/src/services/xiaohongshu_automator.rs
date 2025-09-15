@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
-use crate::utils::adb_utils::{get_adb_path, execute_command_hidden};
+use crate::utils::adb_utils::get_adb_path;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;

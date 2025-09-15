@@ -1,6 +1,5 @@
 use anyhow::Result;
 use std::process::Command;
-use tokio::process::Command as AsyncCommand;
 use tracing::{error, info, warn};
 
 #[cfg(windows)]

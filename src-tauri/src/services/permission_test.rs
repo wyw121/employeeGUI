@@ -1,4 +1,4 @@
-use crate::services::vcf_importer::{VcfImporter, VcfImportResult};
+use crate::services::vcf_importer::VcfImporter;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use tracing::info;

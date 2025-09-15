@@ -1,12 +1,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::process::Command;
-use std::time::Duration;
 use tauri::command;
-use tokio::time::sleep;
-use tracing::{error, info, warn};
-use regex::Regex;
+use tracing::{error, info};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -316,8 +312,8 @@ impl SmartScriptExecutor {
         let mut logs = Vec::new();
         let mut executed_steps = 0;
         let mut failed_steps = 0;
-        let mut skipped_steps = 0;
-        let mut extracted_data = HashMap::new();
+        let skipped_steps = 0;
+        let extracted_data = HashMap::new();
         
         info!("🚀 开始执行智能脚本，总共 {} 个步骤", steps.len());
 

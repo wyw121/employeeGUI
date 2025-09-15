@@ -65,7 +65,7 @@ export class AdbService {
       }
 
       const result = await invoke<string>('get_adb_devices', {
-        adbPath: this.LEIDIAN_ADB_PATH
+        adb_path: this.LEIDIAN_ADB_PATH
       });
       return this.parseDevicesOutput(result);
     } catch (error) {

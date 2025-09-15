@@ -185,8 +185,8 @@ export class AdbAPI {
   /**
    * 获取连接的ADB设备列表
    */
-  static async getAdbDevices(): Promise<string[]> {
-    return await invoke<string[]>("get_adb_devices");
+  static async getAdbDevices(adbPath: string = "platform-tools/adb.exe"): Promise<string[]> {
+    return await invoke<string[]>("get_adb_devices", { adb_path: adbPath });
   }
 
   /**

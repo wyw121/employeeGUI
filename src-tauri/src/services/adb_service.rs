@@ -84,18 +84,21 @@ impl AdbService {
             user_profile
         );
 
-        let common_paths = vec![
-            // Android SDK Platform Tools (系统安装)
-            "adb.exe", // 系统PATH中的ADB
-            "adb",     // Unix系统中的ADB
-            // 用户ADB目录
+        // 智能ADB路径检测 - 优先级顺序
+        let adb_paths = vec![
+            // 1. 生产环境路径 (发布时ADB与程序在一起) - 使用相对路径
+            "platform-tools\\adb.exe",      // 程序目录下的platform-tools文件夹
+            
+            // 2. 开发环境路径
+            "platform-tools/adb.exe",       // Unix风格路径用于开发环境
+            
+            // 3. 系统ADB路径
             user_adb_path.as_str(),
-            // 用户临时目录中的Platform Tools
             temp_platform_tools_path.as_str(),
-            // Android SDK 标准路径
             android_sdk_path.as_str(),
             local_android_sdk_path.as_str(),
-            // 旧版雷电模拟器路径（仍保留以向后兼容）
+            
+            // 4. 雷电模拟器路径（向后兼容）
             "C:\\LDPlayer\\LDPlayer9\\adb.exe",
             "C:\\LDPlayer\\LDPlayer4\\adb.exe",
             "D:\\LDPlayer\\LDPlayer9\\adb.exe",
@@ -104,24 +107,8 @@ impl AdbService {
             "E:\\LDPlayer\\LDPlayer4\\adb.exe",
         ];
 
-        for path in common_paths {
-            if path == "adb.exe" || path == "adb" {
-                // 测试系统PATH中的ADB
-                let mut cmd = Command::new(path);
-                cmd.arg("version");
-                
-                #[cfg(windows)]
-                {
-                    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                }
-                
-                if let Ok(output) = cmd.output() {
-                    if output.status.success() {
-                        println!("Found system ADB: {}", path);
-                        return Some(path.to_string());
-                    }
-                }
-            } else if self.check_file_exists(path) {
+        for path in adb_paths {
+            if self.check_file_exists(path) {
                 println!("Found ADB at: {}", path);
                 return Some(path.to_string());
             }

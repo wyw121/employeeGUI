@@ -54,18 +54,27 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
   // 初始化ADB路径
   initializeAdb: async () => {
     try {
-      // 检测雷电模拟器ADB路径
-      const detectedPath = await invoke<string | null>("detect_ldplayer_adb");
-      if (detectedPath) {
-        set({ adbPath: detectedPath });
-        message.success("已自动检测到雷电模拟器ADB路径");
-      } else {
-        set({ adbPath: "adb" }); // 使用系统默认ADB
-        message.info("未检测到雷电模拟器，将使用系统默认ADB");
-      }
+      // 使用智能ADB检测
+      const smartPath = await invoke<string>("detect_smart_adb_path");
+      set({ adbPath: smartPath });
+      message.success(`已自动检测到ADB路径: ${smartPath}`);
     } catch (error) {
-      console.error("Initialize ADB failed:", error);
-      set({ adbPath: "adb" });
+      console.error("Smart ADB detection failed:", error);
+      
+      // 回退到原来的检测逻辑
+      try {
+        const detectedPath = await invoke<string | null>("detect_ldplayer_adb");
+        if (detectedPath) {
+          set({ adbPath: detectedPath });
+          message.success("已自动检测到雷电模拟器ADB路径");
+        } else {
+          set({ adbPath: "adb.exe" }); // 最后的回退路径
+          message.info("使用默认ADB路径");
+        }
+      } catch (fallbackError) {
+        console.error("Fallback ADB detection failed:", fallbackError);
+        set({ adbPath: "adb.exe" });
+      }
     }
   },
 
@@ -77,7 +86,7 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const output = await invoke<string>("get_adb_devices", { adbPath });
+      const output = await invoke<string>("get_adb_devices", { adb_path: adbPath });
       const parsedDevices = parseDevicesOutput(output);
 
       set({

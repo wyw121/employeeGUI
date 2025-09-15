@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
-  
+
   // 设置基础路径为相对路径，确保在Tauri中正常工作
   base: "./",
 
@@ -24,20 +24,22 @@ export default defineConfig(async () => ({
 
   // 构建配置
   build: {
+    // 确保 Tauri API 能够正确打包
     rollupOptions: {
-      external: [
-        '@tauri-apps/api/tauri',
-        '@tauri-apps/api/window',
-        '@tauri-apps/api/event',
-        '@tauri-apps/api/path',
-        '@tauri-apps/api/fs',
-        '@tauri-apps/api/shell',
-        '@tauri-apps/api/os',
-        '@tauri-apps/api/dialog',
-        '@tauri-apps/api/http',
-        '@tauri-apps/api/notification',
-        '@tauri-apps/api/clipboard'
-      ]
-    }
-  }
+      output: {
+        manualChunks: {
+          "tauri-api": [
+            "@tauri-apps/api/core",
+            "@tauri-apps/api/event",
+            "@tauri-apps/api/window",
+          ],
+        },
+      },
+    },
+    // 目标为 ES2020 以支持现代浏览器特性
+    target: "es2020",
+    // 确保模块格式正确
+    lib: false,
+    sourcemap: false,
+  },
 }));

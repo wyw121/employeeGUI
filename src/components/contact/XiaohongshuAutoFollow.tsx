@@ -28,6 +28,7 @@ import {
 } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
 import { XiaohongshuService } from '../../services/xiaohongshuService';
+import { useDeviceStore } from '../../store/deviceStore';
 import { Device, VcfImportResult, XiaohongshuFollowResult } from '../../types';
 
 const { Text, Title } = Typography;
@@ -70,7 +71,10 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(false);
-  const [adbPath, setAdbPath] = useState<string>('');
+  
+  // 使用全局设备状态的ADB路径
+  const deviceStore = useDeviceStore();
+  const adbPath = deviceStore.adbPath || 'platform-tools/adb.exe';
 
   // 解析ADB设备输出 - 与ContactImportManager保持一致
   const parseDevicesOutput = useCallback((output: string): Device[] => {
@@ -132,12 +136,27 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   // 初始化ADB路径
   useEffect(() => {
     const initAdbPath = async () => {
+      // 初始化全局设备状态
+      await deviceStore.initializeAdb();
+      
       try {
-        // 首先尝试检测雷电模拟器ADB
+        // 使用智能ADB检测
+        const smartPath = await invoke<string>('detect_smart_adb_path');
+        if (smartPath) {
+          console.log('已检测到智能ADB路径:', smartPath);
+          deviceStore.setAdbPath(smartPath);
+          return;
+        }
+      } catch (error) {
+        console.log('智能ADB检测失败:', error);
+      }
+      
+      try {
+        // 回退：首先尝试检测雷电模拟器ADB
         const ldPlayerAdb = await invoke<string>('detect_ldplayer_adb');
         if (ldPlayerAdb) {
           console.log('已检测到雷电模拟器ADB路径:', ldPlayerAdb);
-          setAdbPath(ldPlayerAdb);
+          deviceStore.setAdbPath(ldPlayerAdb);
           return;
         }
       } catch (error) {
@@ -149,19 +168,19 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
         const systemAdb = await invoke<string>('detect_system_adb');
         if (systemAdb) {
           console.log('已检测到系统ADB路径:', systemAdb);
-          setAdbPath(systemAdb);
+          deviceStore.setAdbPath(systemAdb);
           return;
         }
       } catch (error) {
         console.log('系统ADB检测失败:', error);
       }
 
-      // 使用默认ADB路径
-      setAdbPath('adb.exe');
+      // 使用最后的默认路径
+      deviceStore.setAdbPath('adb.exe');
     };
 
     initAdbPath();
-  }, []);
+  }, [deviceStore]);
 
   // 检测可用设备
   const detectDevices = useCallback(async () => {
@@ -172,7 +191,11 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
 
     setLoading(true);
     try {
-      const output = await invoke<string>('get_adb_devices', { adbPath });
+      // 刷新全局设备状态
+      await deviceStore.refreshDevices();
+      
+      // 同时获取当前设备用于本地显示
+      const output = await invoke<string>('get_adb_devices', { adb_path: adbPath });
       const devices = parseDevicesOutput(output);
       
       setAvailableDevices(devices);

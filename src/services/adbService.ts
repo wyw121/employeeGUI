@@ -27,7 +27,7 @@ export class AdbService {
 
   constructor(config?: Partial<AdbServiceConfig>) {
     this.config = {
-      adbPath: config?.adbPath || 'adb',
+      adbPath: config?.adbPath || 'auto', // 'auto' 表示自动检测
       ldPlayerPath: config?.ldPlayerPath,
       autoDetectLdPlayer: config?.autoDetectLdPlayer ?? true,
       ...config
@@ -39,6 +39,21 @@ export class AdbService {
       AdbService.instance = new AdbService(config);
     }
     return AdbService.instance;
+  }
+
+  /**
+   * 智能检测最佳ADB路径 (环境感知)
+   */
+  private async detectSmartAdbPath(): Promise<string> {
+    try {
+      const result = await invoke('detect_smart_adb_path');
+      console.log('Smart ADB path detected:', result);
+      return result as string;
+    } catch (error) {
+      console.error('Smart ADB detection failed:', error);
+      // 回退到默认路径
+      return 'adb.exe';
+    }
   }
 
   /**
@@ -87,18 +102,25 @@ export class AdbService {
    */
   private async executeAdbCommand(args: string[]): Promise<string> {
     try {
-      // 如果启用自动检测且未设置路径，尝试检测雷电模拟器ADB
       let adbPath = this.config.adbPath;
-      if (this.config.autoDetectLdPlayer && adbPath === 'adb') {
-        const ldAdbPath = await this.detectLdPlayerAdb();
-        if (ldAdbPath) {
-          adbPath = ldAdbPath;
-          this.config.adbPath = ldAdbPath; // 缓存检测到的路径
+      
+      // 如果是自动检测模式，使用智能检测
+      if (adbPath === 'auto') {
+        adbPath = await this.detectSmartAdbPath();
+        this.config.adbPath = adbPath; // 缓存检测到的路径
+      }
+      
+      // 如果启用自动检测且路径不是具体路径，尝试智能检测
+      if (this.config.autoDetectLdPlayer && (adbPath === 'adb' || adbPath === 'platform-tools/adb.exe')) {
+        const smartPath = await this.detectSmartAdbPath();
+        if (smartPath) {
+          adbPath = smartPath;
+          this.config.adbPath = smartPath; // 缓存检测到的路径
         }
       }
 
       const result = await invoke('execute_adb_command', {
-        adbPath,
+        adb_path: adbPath,
         args
       });
       return result as string;

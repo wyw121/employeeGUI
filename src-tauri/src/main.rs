@@ -104,6 +104,22 @@ async fn detect_ldplayer_adb(
     Ok(service.detect_ldplayer_adb())
 }
 
+// 智能检测最佳ADB路径 (环境感知)
+#[tauri::command]
+async fn detect_smart_adb_path(
+    service: State<'_, Mutex<AdbService>>,
+) -> Result<String, String> {
+    let service = service.lock().map_err(|e| e.to_string())?;
+    
+    // 使用智能检测逻辑
+    if let Some(detected_path) = service.detect_ldplayer_adb() {
+        Ok(detected_path)
+    } else {
+        // 如果没有检测到任何ADB，返回默认路径
+        Ok("adb.exe".to_string())
+    }
+}
+
 // 获取ADB设备列表
 #[tauri::command]
 async fn get_adb_devices(
@@ -621,6 +637,7 @@ fn main() {
             execute_adb_command,
             check_file_exists,
             detect_ldplayer_adb,
+            detect_smart_adb_path,
             get_adb_devices,
             get_adb_version,
             connect_adb_device,

@@ -20,6 +20,7 @@ use services::log_bridge::{LogEntry, AdbCommandLog, LOG_COLLECTOR};
 use services::permission_test::*;
 use services::safe_adb_manager::*;
 use services::script_executor::*;
+use services::smart_script_executor::*;
 use screenshot_service::*;
 use xml_judgment_service::*;
 use services::smart_vcf_opener::*;
@@ -685,6 +686,8 @@ fn main() {
             // 脚本执行器功能
             execute_automation_script,   // 执行自动化脚本
             validate_device_connection,  // 验证设备连接
+            // 智能脚本执行器功能  
+            execute_smart_automation_script, // 执行智能自动化脚本
             // 截图服务功能
             capture_device_screenshot,   // 捕获设备截图
             get_device_screen_resolution, // 获取设备分辨率

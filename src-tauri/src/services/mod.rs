@@ -10,6 +10,7 @@ pub mod log_bridge;
 pub mod permission_test;
 pub mod safe_adb_manager;
 pub mod script_executor;
+pub mod smart_script_executor;
 pub mod smart_vcf_opener;
 pub mod ui_reader_service;
 pub mod vcf_importer;

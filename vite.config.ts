@@ -21,4 +21,23 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // 构建配置
+  build: {
+    rollupOptions: {
+      external: [
+        '@tauri-apps/api/tauri',
+        '@tauri-apps/api/window',
+        '@tauri-apps/api/event',
+        '@tauri-apps/api/path',
+        '@tauri-apps/api/fs',
+        '@tauri-apps/api/shell',
+        '@tauri-apps/api/os',
+        '@tauri-apps/api/dialog',
+        '@tauri-apps/api/http',
+        '@tauri-apps/api/notification',
+        '@tauri-apps/api/clipboard'
+      ]
+    }
+  }
 }));

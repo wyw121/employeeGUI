@@ -7,7 +7,8 @@ import {
     SecurityScanOutlined,
     SyncOutlined,
     ThunderboltOutlined,
-    UserOutlined
+    UserOutlined,
+    RobotOutlined
 } from '@ant-design/icons';
 import {
     App,
@@ -31,6 +32,7 @@ import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import ScriptBuilderPage from '../pages/ScriptBuilderPage'; // 脚本构建器
+import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
@@ -92,6 +94,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'script-builder',
       icon: <SyncOutlined />,
       label: '脚本构建器',
+    },
+    {
+      key: 'smart-script-builder',
+      icon: <RobotOutlined />,
+      label: '智能脚本构建器',
     },
     {
       key: 'flow-builder',
@@ -337,6 +344,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'script-builder' && (
               <ScriptBuilderPage />
+            )}
+
+            {selectedKey === 'smart-script-builder' && (
+              <SmartScriptBuilderPage />
             )}
 
             {selectedKey === 'flow-builder' && (

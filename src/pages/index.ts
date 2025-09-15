@@ -13,6 +13,9 @@ export { default as AdvancedLoopPage } from './AdvancedLoopPage';
 // 优化总结页面
 export { default as OptimizationSummaryPage } from './OptimizationSummaryPage';
 
+// 智能脚本构建器页面
+export { default as SmartScriptBuilderPage } from './SmartScriptBuilderPage';
+
 // 新的业务页面
 export * from './auth';
 export * from './contact-management';

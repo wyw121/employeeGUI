@@ -3,6 +3,8 @@
 
 mod services;
 mod utils;
+mod screenshot_service;
+mod xml_judgment_service;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -17,6 +19,9 @@ use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{LogEntry, AdbCommandLog, LOG_COLLECTOR};
 use services::permission_test::*;
 use services::safe_adb_manager::*;
+use services::script_executor::*;
+use screenshot_service::*;
+use xml_judgment_service::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
@@ -677,7 +682,18 @@ fn main() {
             test_vcf_import_with_detailed_logs,
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
-            safe_adb_push         // 使用安全ADB传输文件
+            safe_adb_push,        // 使用安全ADB传输文件
+            // 脚本执行器功能
+            execute_automation_script,   // 执行自动化脚本
+            validate_device_connection,  // 验证设备连接
+            // 截图服务功能
+            capture_device_screenshot,   // 捕获设备截图
+            get_device_screen_resolution, // 获取设备分辨率
+            // XML判断服务功能
+            get_device_ui_xml,           // 获取UI XML结构
+            find_ui_elements,            // 查找UI元素
+            wait_for_ui_element,         // 等待元素出现
+            check_device_page_state      // 检查页面状态
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

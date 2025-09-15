@@ -410,7 +410,8 @@ export class EnhancedAdbDiagnosticService {
       this.logManager.info(LogCategory.DIAGNOSTIC, 'checkAdbTool', `执行命令: ${versionCommand}`);
       
       const version = await invoke<string>('get_adb_version');
-      const adbPath = await invoke<string>('get_adb_path').catch(() => 'platform-tools/adb.exe');
+      // 使用智能检测获取ADB路径
+      const adbPath = await invoke<string>('detect_smart_adb_path').catch(() => 'platform-tools/adb.exe');
       
       // 尝试获取更详细的版本信息
       let detailedVersion = version;

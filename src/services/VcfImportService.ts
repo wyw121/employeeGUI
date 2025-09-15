@@ -149,7 +149,7 @@ export class VcfImportService {
   static async getAdbDevices(): Promise<string[]> {
     try {
       const devices = await invoke<string[]>("get_adb_devices", { 
-        adb_path: "platform-tools/adb.exe"
+        adbPath: "platform-tools/adb.exe"
       });
       return devices;
     } catch (error) {

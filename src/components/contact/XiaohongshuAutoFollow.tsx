@@ -195,7 +195,7 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
       await deviceStore.refreshDevices();
       
       // 同时获取当前设备用于本地显示
-      const output = await invoke<string>('get_adb_devices', { adb_path: adbPath });
+      const output = await invoke<string>('get_adb_devices', { adbPath: adbPath });
       const devices = parseDevicesOutput(output);
       
       setAvailableDevices(devices);

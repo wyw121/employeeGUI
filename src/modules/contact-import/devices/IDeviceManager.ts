@@ -87,7 +87,7 @@ export class AndroidDeviceManager implements IDeviceManager {
 
       // 调用后端的ADB设备检测方法
       const adbOutput = await invoke<string>("get_adb_devices", { 
-        adb_path: "platform-tools/adb.exe"
+        adbPath: "platform-tools/adb.exe"
       });
       return this.parseAdbDevices(adbOutput);
     } catch (error) {

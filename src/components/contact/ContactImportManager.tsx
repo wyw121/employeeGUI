@@ -172,7 +172,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
     setLoading(true);
     try {
       // 使用与RealDeviceManager相同的方法获取设备
-      const output = await invoke<string>('get_adb_devices', { adb_path: adbPath });
+      const output = await invoke<string>('get_adb_devices', { adbPath: adbPath });
       const devices = parseDevicesOutput(output);
       
       setAvailableDevices(devices);

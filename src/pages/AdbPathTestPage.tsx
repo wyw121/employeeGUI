@@ -34,7 +34,7 @@ export const AdbPathTestPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const output = await invoke<string>('get_adb_devices', { adb_path: smartPath });
+      const output = await invoke<string>('get_adb_devices', { adbPath: smartPath });
       setDevices(output);
       console.log('设备检测结果:', output);
     } catch (err) {

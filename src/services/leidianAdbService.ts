@@ -65,7 +65,7 @@ export class AdbService {
       }
 
       const result = await invoke<string>('get_adb_devices', {
-        adb_path: this.LEIDIAN_ADB_PATH
+        adbPath: this.LEIDIAN_ADB_PATH
       });
       return this.parseDevicesOutput(result);
     } catch (error) {
@@ -96,7 +96,7 @@ export class AdbService {
       }
 
       const result = await invoke<string>('connect_adb_device', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         address: `127.0.0.1:${port}`
       });
       return result.includes('connected');
@@ -117,7 +117,7 @@ export class AdbService {
   static async disconnect(deviceId: string): Promise<boolean> {
     try {
       const result = await invoke<string>('disconnect_adb_device', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         address: deviceId
       });
       return result.includes('disconnected');
@@ -132,9 +132,9 @@ export class AdbService {
    */
   static async restartServer(): Promise<void> {
     try {
-      await invoke('kill_adb_server', { adb_path: this.LEIDIAN_ADB_PATH });
+      await invoke('kill_adb_server', { adbPath: this.LEIDIAN_ADB_PATH });
       await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
-      await invoke('start_adb_server', { adb_path: this.LEIDIAN_ADB_PATH });
+      await invoke('start_adb_server', { adbPath: this.LEIDIAN_ADB_PATH });
     } catch (error) {
       console.error('Failed to restart ADB server:', error);
       throw new Error(`重启ADB服务器失败: ${error}`);
@@ -156,7 +156,7 @@ export class AdbService {
       }
 
       await invoke<string>('execute_adb_command', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         args: ['version']
       });
       return true;
@@ -201,12 +201,12 @@ export class AdbService {
   static async getDeviceInfo(deviceId: string): Promise<{ model?: string; product?: string }> {
     try {
       const model = await invoke<string>('execute_adb_command', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         args: ['-s', deviceId, 'shell', 'getprop', 'ro.product.model']
       });
 
       const product = await invoke<string>('execute_adb_command', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         args: ['-s', deviceId, 'shell', 'getprop', 'ro.product.name']
       });
 
@@ -255,7 +255,7 @@ export class AdbService {
   static async executeShellCommand(deviceId: string, command: string): Promise<string> {
     try {
       const result = await invoke<string>('execute_adb_command', {
-        adb_path: this.LEIDIAN_ADB_PATH,
+        adbPath: this.LEIDIAN_ADB_PATH,
         args: ['-s', deviceId, 'shell', command]
       });
       return result;

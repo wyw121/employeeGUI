@@ -119,8 +119,40 @@ async fn detect_smart_adb_path(
         match service.execute_command("adb.exe", &["version".to_string()]) {
             Ok(_) => Ok("adb.exe".to_string()), // 系统PATH中有ADB
             Err(_) => {
-                // 最后回退到项目相对路径
-                Ok("platform-tools/adb.exe".to_string())
+                // 最后回退到项目绝对路径
+                let current_dir = std::env::current_dir()
+                    .map_err(|e| format!("Failed to get current directory: {}", e))?;
+                
+                println!("当前工作目录: {:?}", current_dir);
+                
+                // 在开发模式下，当前目录应该是工作空间根目录
+                let adb_path = current_dir.join("platform-tools").join("adb.exe");
+                
+                println!("尝试ADB路径: {:?}", adb_path);
+                
+                // 检查文件是否存在
+                if adb_path.exists() {
+                    let abs_path = adb_path.to_string_lossy().to_string();
+                    println!("找到ADB路径: {}", abs_path);
+                    Ok(abs_path)
+                } else {
+                    // 如果在工作空间根目录找不到，尝试上一级目录（处理在src-tauri目录运行的情况）
+                    let parent_adb_path = current_dir.parent()
+                        .ok_or("No parent directory")?
+                        .join("platform-tools")
+                        .join("adb.exe");
+                    
+                    println!("尝试父级目录ADB路径: {:?}", parent_adb_path);
+                    
+                    if parent_adb_path.exists() {
+                        let abs_path = parent_adb_path.to_string_lossy().to_string();
+                        println!("找到父级ADB路径: {}", abs_path);
+                        Ok(abs_path)
+                    } else {
+                        println!("未找到任何可用的ADB路径");
+                        Err("未找到可用的ADB路径".to_string())
+                    }
+                }
             }
         }
     }

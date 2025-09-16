@@ -84,21 +84,21 @@ export const useAdb = () => {
     } finally {
       initializeRef.current = null;
     }
-  }, [applicationService]);
+  }, []); // 移除applicationService依赖，因为它是通过useMemo稳定的
 
   /**
    * 更新配置
    */
   const updateConfig = useCallback(async (config: AdbConfig) => {
     return await applicationService.updateConfig(config);
-  }, [applicationService]);
+  }, []); // 移除applicationService依赖
 
   /**
    * 重置状态
    */
   const reset = useCallback(() => {
     applicationService.reset();
-  }, [applicationService]);
+  }, []); // 移除applicationService依赖
 
   // ===== 设备操作 =====
   
@@ -107,42 +107,42 @@ export const useAdb = () => {
    */
   const refreshDevices = useCallback(async () => {
     return await applicationService.refreshDevices();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 连接到设备
    */
   const connectToDevice = useCallback(async (address: string) => {
     return await applicationService.connectToDevice(address);
-  }, [applicationService]);
+  }, []);
 
   /**
    * 断开设备连接
    */
   const disconnectDevice = useCallback(async (deviceId: string) => {
     return await applicationService.disconnectDevice(deviceId);
-  }, [applicationService]);
+  }, []);
 
   /**
    * 连接到模拟器
    */
   const connectToEmulators = useCallback(async () => {
     return await applicationService.connectToEmulators();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 选择设备
    */
   const selectDevice = useCallback((deviceId: string | null) => {
     applicationService.selectDevice(deviceId);
-  }, [applicationService]);
+  }, []);
 
   /**
    * 获取设备详细信息
    */
   const getDeviceInfo = useCallback(async (deviceId: string) => {
     return await applicationService.getDeviceInfo(deviceId);
-  }, [applicationService]);
+  }, []);
 
   /**
    * 批量设备操作
@@ -152,7 +152,7 @@ export const useAdb = () => {
     operation: 'connect' | 'disconnect'
   ) => {
     return await applicationService.batchDeviceOperation(deviceIds, operation);
-  }, [applicationService]);
+  }, []);
 
   // ===== 连接管理 =====
   
@@ -161,35 +161,35 @@ export const useAdb = () => {
    */
   const testConnection = useCallback(async () => {
     return await applicationService.testConnection();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 启动ADB服务器
    */
   const startAdbServer = useCallback(async () => {
     return await applicationService.startAdbServer();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 停止ADB服务器
    */
   const stopAdbServer = useCallback(async () => {
     return await applicationService.stopAdbServer();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 重启ADB服务器
    */
   const restartAdbServer = useCallback(async () => {
     return await applicationService.restartAdbServer();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 自动检测ADB路径
    */
   const autoDetectAdbPath = useCallback(async () => {
     return await applicationService.autoDetectAdbPath();
-  }, [applicationService]);
+  }, []);
 
   // ===== 诊断功能 =====
   
@@ -198,28 +198,28 @@ export const useAdb = () => {
    */
   const runFullDiagnostic = useCallback(async () => {
     return await applicationService.runFullDiagnostic();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 运行快速诊断
    */
   const runQuickDiagnostic = useCallback(async () => {
     return await applicationService.runQuickDiagnostic();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 执行自动修复
    */
   const executeAutoFix = useCallback(async (diagnosticId?: string) => {
     return await applicationService.executeAutoFix(diagnosticId);
-  }, [applicationService]);
+  }, []);
 
   /**
    * 获取诊断报告
    */
   const getDiagnosticReport = useCallback(() => {
     return applicationService.getDiagnosticReport();
-  }, [applicationService]);
+  }, []);
 
   // ===== 高级功能 =====
   
@@ -228,14 +228,14 @@ export const useAdb = () => {
    */
   const getHealthStatus = useCallback(async () => {
     return await applicationService.getHealthStatus();
-  }, [applicationService]);
+  }, []);
 
   /**
    * 获取设备统计信息
    */
   const getDeviceStats = useCallback(async () => {
     return await applicationService.getDeviceStats();
-  }, [applicationService]);
+  }, []);
 
   // ===== 工具方法 =====
   
@@ -257,7 +257,7 @@ export const useAdb = () => {
       console.error('Quick connect failed:', error);
       throw error;
     }
-  }, [connectToEmulators, refreshDevices]);
+  }, []); // 移除对其他functions的依赖，避免循环
 
   /**
    * 快速修复 - 运行诊断并自动修复
@@ -274,17 +274,17 @@ export const useAdb = () => {
       console.error('Quick fix failed:', error);
       return false;
     }
-  }, [runQuickDiagnostic, executeAutoFix, diagnosticResults]);
+  }, [diagnosticResults]); // 只保留真正需要的依赖
 
   // ===== 生命周期 =====
   
   /**
-   * 自动初始化
+   * 自动初始化 - 优化版，避免循环依赖
    */
   useEffect(() => {
     let isMounted = true;
     
-    // 组件挂载时自动初始化（如果还没有连接）
+    // 只有在真正需要且没有正在初始化时才触发初始化
     const shouldInitialize = !isConnected && !isInitializing && !initializeRef.current;
     
     if (shouldInitialize) {
@@ -298,7 +298,7 @@ export const useAdb = () => {
     return () => {
       isMounted = false;
     };
-  }, [isConnected, isInitializing, initialize]); // 修复依赖数组
+  }, []); // 移除所有依赖，只在组件挂载时执行一次
 
   // ===== 返回接口 =====
   

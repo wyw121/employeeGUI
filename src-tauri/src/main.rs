@@ -325,6 +325,19 @@ async fn kill_adb_server(
     service.kill_server(&adb_path).map_err(|e| e.to_string())
 }
 
+// 获取设备属性
+#[tauri::command]
+async fn get_device_properties(
+    adb_path: String,
+    device_id: String,
+    service: State<'_, Mutex<AdbService>>,
+) -> Result<String, String> {
+    let service = service.lock().map_err(|e| e.to_string())?;
+    service
+        .get_device_properties(&adb_path, &device_id)
+        .map_err(|e| e.to_string())
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct XiaohongshuFollowRequest {
     device: String,
@@ -679,6 +692,7 @@ fn main() {
             disconnect_adb_device,
             start_adb_server,
             kill_adb_server,
+            get_device_properties,  // 添加设备属性获取命令
             start_adb_server_simple,
             kill_adb_server_simple,
             execute_adb_command_simple,

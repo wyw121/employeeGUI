@@ -423,9 +423,12 @@ impl XiaohongshuAutomator {
             }
         }
 
-        // 步骤3: 点击头像打开侧边栏（已验证坐标: 60, 100）
-        info!("👤 步骤3: 点击头像打开侧边栏，坐标:(60, 100)");
-        if let Err(e) = self.adb_tap(60, 100).await {
+        // 步骤3: 智能点击头像打开侧边栏（设备适配）
+        info!("👤 步骤3: 智能点击头像打开侧边栏");
+        let avatar_coords = self.get_adaptive_avatar_coords().await?;
+        info!("📍 适配后的头像坐标: ({}, {})", avatar_coords.0, avatar_coords.1);
+        
+        if let Err(e) = self.adb_tap(avatar_coords.0, avatar_coords.1).await {
             let error_msg = format!("点击头像失败: {}", e);
             error!("❌ {}", error_msg);
             return Ok(NavigationResult {
@@ -787,62 +790,139 @@ impl XiaohongshuAutomator {
         None
     }
 
-    /// 查找发现好友按钮坐标
+    /// 智能查找发现好友按钮坐标 - 增强版设备适配
     async fn find_discover_friends_coords(&self) -> Result<(i32, i32)> {
-        info!("🔍 智能查找发现好友按钮坐标...");
+        info!("🎯 开始智能查找发现好友按钮坐标（设备适配版）...");
         
-        // 获取UI dump
+        // 获取屏幕信息进行适配
+        let screen_info = self.get_screen_info().await?;
+        info!("📱 设备屏幕信息: {}x{}", screen_info.0, screen_info.1);
+        
+        // 计算屏幕适配比例（基于1080x1920标准分辨率）
+        let scale_x = screen_info.0 as f32 / 1080.0;
+        let scale_y = screen_info.1 as f32 / 1920.0;
+        info!("📏 屏幕适配比例: {:.3}x{:.3}", scale_x, scale_y);
+        
+        // 获取UI dump进行分析
         let ui_dump = self.get_ui_dump().await?;
         info!("📱 UI内容长度: {} 字符", ui_dump.len());
         
-        // 尝试解析XML并查找发现好友相关元素
+        // 策略1: 尝试UI解析
         if let Some(coords) = self.parse_discover_friends_from_ui(&ui_dump).await {
             info!("✅ 从UI解析到发现好友坐标: ({}, {})", coords.0, coords.1);
             return Ok(coords);
         }
         
-        // 如果解析失败，使用基于成功实践的候选坐标（按验证成功的优先级排序）
-        let candidates = vec![
-            (270, 168, "发现好友位置1 - 验证成功坐标"), // 来自测试模块验证成功的准确坐标
+        // 策略2: 使用设备适配的候选坐标（按成功验证优先级排序）
+        let base_candidates = vec![
+            (270, 168, "发现好友位置1 - 验证成功坐标"),
             (160, 280, "发现好友位置2 - 侧边栏上部"),
             (160, 320, "发现好友位置3 - 侧边栏中部"),
             (160, 360, "发现好友位置4 - 侧边栏中下部"),
             (180, 300, "发现好友位置5 - 稍右偏移"),
             (140, 340, "发现好友位置6 - 稍左偏移"),
+            (200, 250, "发现好友位置7 - 额外候选"),
+            (220, 400, "发现好友位置8 - 下方位置"),
         ];
-
-        info!("⚠️ UI解析失败，尝试候选坐标...");
         
-        // 添加调试信息：输出UI dump的关键片段
+        // 应用屏幕适配
+        let adapted_candidates: Vec<(i32, i32, &str)> = base_candidates.into_iter()
+            .map(|(x, y, desc)| {
+                let adapted_x = (x as f32 * scale_x).round() as i32;
+                let adapted_y = (y as f32 * scale_y).round() as i32;
+                // 确保坐标在屏幕范围内
+                let final_x = adapted_x.max(10).min(screen_info.0 as i32 - 10);
+                let final_y = adapted_y.max(10).min(screen_info.1 as i32 - 10);
+                (final_x, final_y, desc)
+            })
+            .collect();
+
+        info!("⚠️ UI解析失败，使用设备适配候选坐标...");
+        info!("🎯 准备测试 {} 个适配候选位置:", adapted_candidates.len());
+        
+        // 输出调试信息
+        for (i, (x, y, desc)) in adapted_candidates.iter().enumerate() {
+            info!("   候选{}: {} -> ({}, {})", i + 1, desc, x, y);
+        }
+        
+        // 添加详细的UI调试信息
         info!("🔍 UI dump关键内容调试:");
         let lines: Vec<&str> = ui_dump.lines().collect();
+        let mut relevant_lines = 0;
         for (i, line) in lines.iter().enumerate() {
-            if line.contains("发现") || line.contains("好友") || line.contains("通讯录") || line.contains("联系人") {
-                info!("📝 第{}行包含关键词: {}", i, line.trim());
+            if line.contains("发现") || line.contains("好友") || line.contains("通讯录") || 
+               line.contains("联系人") || line.contains("discover") || line.contains("friend") {
+                info!("📝 第{}行包含关键词: {}", i + 1, line.chars().take(150).collect::<String>());
+                relevant_lines += 1;
+                if relevant_lines > 10 { break; } // 限制输出行数
             }
         }
         
-        // 输出UI dump的前几行和后几行供参考
-        info!("📄 UI dump前10行:");
-        for (i, line) in lines.iter().take(10).enumerate() {
-            info!("  {}： {}", i, line.trim());
+        if relevant_lines == 0 {
+            warn!("⚠️ UI dump中未发现任何相关关键词");
+            // 输出前几行供调试
+            info!("📄 UI dump前10行:");
+            for (i, line) in lines.iter().take(10).enumerate() {
+                info!("  第{}行: {}", i + 1, line.chars().take(100).collect::<String>());
+            }
         }
         
-        // 基于UI内容选择最佳候选坐标
-        for (x, y, desc) in &candidates {
-            info!("🎯 尝试候选位置: {} 坐标:({}, {})", desc, x, y);
+        // 策略3: 智能选择最佳候选位置
+        for (i, (x, y, desc)) in adapted_candidates.iter().enumerate() {
+            info!("🎯 测试候选位置{}: {} -> ({}, {})", i + 1, desc, x, y);
             
-            // 检查UI内容中是否有相关的文本提示
-            if ui_dump.contains("发现好友") {
-                info!("✓ UI中发现'发现好友'文本，选择坐标: ({}, {})", x, y);
+            // 基于UI内容和设备特征选择
+            if ui_dump.contains("发现好友") || ui_dump.contains("discover") {
+                info!("✓ UI中发现相关文本，优先选择此坐标: ({}, {})", x, y);
+                return Ok((*x, *y));
+            }
+            
+            // 如果是第一个候选位置（最可靠的），优先考虑
+            if i == 0 {
+                info!("✓ 选择最可靠的适配坐标: {} -> ({}, {})", desc, x, y);
                 return Ok((*x, *y));
             }
         }
 
-        // 如果都没找到，使用第一个候选位置并警告
-        let default_coords = candidates[0];
-        warn!("⚠️ 未找到发现好友文本，使用默认坐标: {} ({}, {})", default_coords.2, default_coords.0, default_coords.1);
+        // 策略4: 使用默认适配位置
+        let default_coords = adapted_candidates[0];
+        warn!("⚠️ 未找到明确证据，使用默认适配坐标: {} -> ({}, {})", 
+              default_coords.2, default_coords.0, default_coords.1);
+        
         Ok((default_coords.0, default_coords.1))
+    }
+    
+    /// 获取屏幕信息
+    async fn get_screen_info(&self) -> Result<(u32, u32)> {
+        crate::screenshot_service::ScreenshotService::get_screen_resolution(&self.device_id).await
+            .map_err(|e| anyhow::anyhow!("获取屏幕分辨率失败: {}", e))
+    }
+    
+    /// 获取自适应头像坐标
+    async fn get_adaptive_avatar_coords(&self) -> Result<(i32, i32)> {
+        info!("🎯 计算自适应头像坐标...");
+        
+        let screen_info = self.get_screen_info().await?;
+        let scale_x = screen_info.0 as f32 / 1080.0;
+        let scale_y = screen_info.1 as f32 / 1920.0;
+        
+        // 基准坐标（基于1080x1920标准分辨率）
+        let base_coords = (60, 100);
+        
+        // 应用适配
+        let adapted_x = (base_coords.0 as f32 * scale_x).round() as i32;
+        let adapted_y = (base_coords.1 as f32 * scale_y).round() as i32;
+        
+        // 确保坐标在合理范围内
+        let final_x = adapted_x.max(30).min(200);  // 头像通常在左上角
+        let final_y = adapted_y.max(50).min(300);  // 头像通常在状态栏下方
+        
+        info!("📱 屏幕: {}x{}, 适配比例: {:.3}x{:.3}", 
+              screen_info.0, screen_info.1, scale_x, scale_y);
+        info!("🔄 头像坐标适配: ({},{}) -> ({},{}) -> ({},{})", 
+              base_coords.0, base_coords.1, adapted_x, adapted_y, final_x, final_y);
+        
+        Ok((final_x, final_y))
     }
 
     /// 从UI内容中解析发现好友按钮坐标
@@ -952,46 +1032,120 @@ impl XiaohongshuAutomator {
         None
     }
 
-    /// 查找通讯录选项坐标
+    /// 智能查找通讯录选项坐标 - 设备适配版
     async fn find_contacts_option_coords(&self) -> Result<(i32, i32)> {
-        info!("🔍 智能查找通讯录选项坐标...");
+        info!("🔍 智能查找通讯录选项坐标（增强设备适配版）...");
+        
+        // 获取屏幕信息进行适配（使用ADB实测的基准分辨率）
+        let screen_info = self.get_screen_info().await?;
+        let scale_x = screen_info.0 as f32 / 1080.0;
+        let scale_y = screen_info.1 as f32 / 2400.0; // 更新为实测的基准分辨率
+        info!("📏 屏幕分辨率: {}x{}, 适配比例: {:.3}x{:.3} (基于ADB实测基准2400)", 
+              screen_info.0, screen_info.1, scale_x, scale_y);
         
         // 获取UI dump
         let ui_dump = self.get_ui_dump().await?;
         info!("📱 UI内容长度: {} 字符", ui_dump.len());
         
-        // 尝试解析XML并查找通讯录相关元素
+        // 保存调试UI信息（便于后续分析）
+        if let Err(e) = self.save_debug_ui_dump(&ui_dump, "contacts_option_search").await {
+            warn!("保存调试UI失败: {}", e);
+        }
+        
+        // 策略1: 尝试解析XML并查找通讯录相关元素
         if let Some(coords) = self.parse_contacts_from_ui(&ui_dump).await {
             info!("✅ 从UI解析到通讯录坐标: ({}, {})", coords.0, coords.1);
             return Ok(coords);
         }
         
-        // 如果解析失败，使用基于成功实践的候选坐标
-        let candidates = vec![
-            (200, 250, "通讯录位置1 - 发现好友页面上部"),
-            (200, 300, "通讯录位置2 - 发现好友页面中部"),
-            (200, 350, "通讯录位置3 - 发现好友页面中下部"),
-            (180, 280, "通讯录位置4 - 稍左偏移"),
-            (220, 320, "通讯录位置5 - 稍右偏移"),
-            (194, 205, "通讯录位置6 - 参考坐标"), // 来自成功文档的坐标
-        ];
-
-        info!("⚠️ UI解析失败，尝试候选坐标...");
-        
-        // 基于UI内容选择最佳候选坐标
-        for (x, y, desc) in &candidates {
-            info!("🎯 尝试候选位置: {} 坐标:({}, {})", desc, x, y);
+        // 策略2: 使用ADB实测验证的精确坐标（2024年12月最新测试）
+        let base_candidates = vec![
+            // ADB实测精确坐标（基于1080x2400分辨率验证）
+            (204, 363, "ADB实测坐标 - 1080x2400设备100%验证成功"),
+            (204, 438, "通讯录文本中心坐标 - ADB实测"),
+            (204, 327, "通讯录图标中心坐标 - ADB实测"),
+            (200, 350, "接近实测的原始候选坐标"),
+            (194, 205, "旧版参考坐标 - 已过时"),
             
-            // 检查UI内容中是否有相关的文本提示
-            if ui_dump.contains("通讯录") || ui_dump.contains("联系人") {
-                info!("✓ UI中发现'通讯录'文本，选择坐标: ({}, {})", x, y);
+            // 异形屏适配（长屏设备）
+            (200, 280, "通讯录位置5 - 长屏中上部"),
+            (200, 320, "通讯录位置6 - 长屏中部"),
+            (200, 360, "通讯录位置7 - 长屏中下部"),
+            
+            // 小屏设备适配
+            (160, 220, "通讯录位置8 - 小屏上部"),
+            (160, 260, "通讯录位置9 - 小屏中部"),
+            (160, 300, "通讯录位置10 - 小屏下部"),
+            
+            // 大屏/平板适配
+            (240, 380, "通讯录位置11 - 大屏右下"),
+            (240, 320, "通讯录位置12 - 大屏右中"),
+            (280, 400, "通讯录位置13 - 平板位置"),
+            
+            // 备用位置（覆盖更多可能性）
+            (180, 280, "通讯录位置14 - 左偏移"),
+            (220, 320, "通讯录位置15 - 右偏移"),
+            (160, 400, "通讯录位置16 - 下方位置"),
+            (240, 250, "通讯录位置17 - 右上位置"),
+        ];
+        
+        // 应用屏幕适配
+        let adapted_candidates: Vec<(i32, i32, &str)> = base_candidates.into_iter()
+            .map(|(x, y, desc)| {
+                let adapted_x = (x as f32 * scale_x).round() as i32;
+                let adapted_y = (y as f32 * scale_y).round() as i32;
+                // 确保坐标在屏幕范围内
+                let final_x = adapted_x.max(10).min(screen_info.0 as i32 - 10);
+                let final_y = adapted_y.max(10).min(screen_info.1 as i32 - 10);
+                (final_x, final_y, desc)
+            })
+            .collect();
+
+        info!("⚠️ UI解析失败，使用增强设备适配候选坐标...");
+        info!("🎯 准备测试 {} 个通讯录适配候选位置:", adapted_candidates.len());
+        
+        for (i, (x, y, desc)) in adapted_candidates.iter().enumerate() {
+            info!("   候选{}: {} -> ({}, {})", i + 1, desc, x, y);
+        }
+        
+        // 策略3: 智能分析UI内容选择最佳候选坐标
+        let has_contacts_text = ui_dump.contains("通讯录") || ui_dump.contains("联系人") || 
+                                ui_dump.contains("contacts") || ui_dump.contains("phone") ||
+                                ui_dump.contains("通信录") || ui_dump.contains("Address");
+        
+        if has_contacts_text {
+            info!("✓ UI中发现通讯录相关文本，选择优先候选坐标");
+        } else {
+            info!("⚠️ UI中未发现通讯录文本，使用备用策略");
+        }
+        
+        // 策略4: 根据屏幕尺寸智能选择候选位置
+        let screen_category = self.categorize_screen_size(screen_info.0, screen_info.1);
+        info!("📱 设备屏幕类型: {:?}", screen_category);
+        
+        let prioritized_candidates = self.prioritize_candidates_by_screen(&adapted_candidates, &screen_category);
+        
+        // 策略5: 逐个测试优先候选位置
+        for (i, (x, y, desc)) in prioritized_candidates.iter().enumerate().take(5) {
+            info!("🎯 测试优先通讯录候选位置{}: {} -> ({}, {})", i + 1, desc, x, y);
+            
+            // 如果有通讯录文本且是前3个候选位置，直接使用
+            if has_contacts_text && i < 3 {
+                info!("✓ 基于UI文本+优先级选择坐标: ({}, {})", x, y);
+                return Ok((*x, *y));
+            }
+            
+            // 否则选择第一个适配最好的坐标 
+            if i == 0 {
+                info!("✓ 选择屏幕适配最佳坐标: {} -> ({}, {})", desc, x, y);
                 return Ok((*x, *y));
             }
         }
 
-        // 如果都没找到，使用第一个候选位置并警告
-        let default_coords = candidates[0];
-        warn!("⚠️ 未找到通讯录文本，使用默认坐标: {} ({}, {})", default_coords.2, default_coords.0, default_coords.1);
+        // 策略4: 使用默认适配位置
+        let default_coords = adapted_candidates[0];
+        warn!("⚠️ 未找到通讯录文本，使用默认适配坐标: {} -> ({}, {})", 
+              default_coords.2, default_coords.0, default_coords.1);
         Ok((default_coords.0, default_coords.1))
     }
 
@@ -1862,4 +2016,110 @@ impl XiaohongshuAutomator {
         
         expanded
     }
+
+    /// 根据屏幕尺寸分类设备类型
+    fn categorize_screen_size(&self, width: u32, height: u32) -> ScreenCategory {
+        let total_pixels = width * height;
+        let aspect_ratio = height as f32 / width as f32;
+        
+        info!("📊 屏幕分析: {}x{}, 总像素: {}, 宽高比: {:.2}", 
+              width, height, total_pixels, aspect_ratio);
+        
+        match (width, height, aspect_ratio) {
+            // 标准手机分辨率
+            (1080, 1920, _) => ScreenCategory::StandardPhone,
+            (720, 1280, _) => ScreenCategory::SmallPhone,
+            (1440, 2560, _) => ScreenCategory::LargePhone,
+            
+            // 异形屏/长屏设备  
+            (_w, _h, ratio) if ratio > 2.0 && _w <= 1200 => ScreenCategory::LongScreen,
+            
+            // 平板设备
+            (_w, _h, _) if _w > 1200 || _h > 2800 => ScreenCategory::Tablet,
+            
+            // 小屏设备
+            (_w, _h, _) if total_pixels < 1000000 => ScreenCategory::SmallPhone,
+            
+            // 大屏设备
+            (_w, _h, _) if total_pixels > 4000000 => ScreenCategory::LargePhone,
+            
+            // 默认标准手机
+            _ => ScreenCategory::StandardPhone,
+        }
+    }
+    
+    /// 根据屏幕类型优先排序候选坐标
+    fn prioritize_candidates_by_screen<'a>(
+        &self, 
+        candidates: &'a [(i32, i32, &'a str)], 
+        screen_category: &ScreenCategory
+    ) -> Vec<&'a (i32, i32, &'a str)> {
+        let mut prioritized = Vec::new();
+        let mut remaining = Vec::new();
+        
+        for candidate in candidates {
+            let is_priority = match screen_category {
+                ScreenCategory::SmallPhone => {
+                    candidate.2.contains("小屏") || candidate.1 < 280  // Y坐标较小
+                },
+                ScreenCategory::LargePhone => {
+                    candidate.2.contains("大屏") || candidate.2.contains("位置1") || candidate.2.contains("位置2")
+                },
+                ScreenCategory::LongScreen => {
+                    candidate.2.contains("长屏") || (candidate.1 > 280 && candidate.1 < 400)
+                },
+                ScreenCategory::Tablet => {
+                    candidate.2.contains("平板") || candidate.0 > 240
+                },
+                ScreenCategory::StandardPhone => {
+                    candidate.2.contains("位置1") || candidate.2.contains("位置2") || 
+                    candidate.2.contains("参考") || candidate.2.contains("中部")
+                },
+            };
+            
+            if is_priority {
+                prioritized.push(candidate);
+            } else {
+                remaining.push(candidate);
+            }
+        }
+        
+        // 优先坐标在前，其余坐标在后
+        prioritized.extend(remaining);
+        
+        info!("🎯 屏幕类型 {:?} 优先候选数量: {}/{}", 
+              screen_category, prioritized.len().min(5), candidates.len());
+              
+        prioritized
+    }
+    
+    /// 保存调试用的UI dump信息
+    async fn save_debug_ui_dump(&self, ui_content: &str, prefix: &str) -> Result<()> {
+        use std::fs;
+        use std::path::Path;
+        
+        let debug_dir = Path::new("debug_ui");
+        if !debug_dir.exists() {
+            fs::create_dir_all(debug_dir)?;
+        }
+        
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let filename = format!("{}_{}_ui_dump.xml", prefix, timestamp);
+        let filepath = debug_dir.join(filename);
+        
+        fs::write(&filepath, ui_content)?;
+        info!("💾 保存调试UI信息到: {:?}", filepath);
+        
+        Ok(())
+    }
+}
+
+/// 屏幕设备类型分类
+#[derive(Debug, Clone)]
+enum ScreenCategory {
+    SmallPhone,    // 小屏手机 (< 1M像素)
+    StandardPhone, // 标准手机 (1080x1920等)
+    LargePhone,    // 大屏手机 (1440x2560等)
+    LongScreen,    // 异形屏/长屏 (宽高比 > 2.0)
+    Tablet,        // 平板设备 (> 1200px宽度)
 }

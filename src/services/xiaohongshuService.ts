@@ -254,6 +254,16 @@ export class XiaohongshuService {
     // 总时间包含一些缓冲
     return Math.ceil(followTime + navigationTime + 30); // 额外30秒缓冲
   }
+
+  /**
+   * 获取设备屏幕分辨率
+   * @param deviceId 设备ID
+   * @returns 屏幕分辨率 (width, height)
+   */
+  static async getDeviceScreenResolution(deviceId: string): Promise<[number, number]> {
+    console.log("📱 获取设备屏幕分辨率，设备ID:", deviceId);
+    return invoke("get_device_screen_resolution", { deviceId });
+  }
 }
 
 // ===== 导出默认配置 =====

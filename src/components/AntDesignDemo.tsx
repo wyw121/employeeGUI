@@ -2,9 +2,11 @@ import {
     AimOutlined,
     BarChartOutlined,
     BranchesOutlined,
+    CameraOutlined,
     FolderOutlined,
     MobileOutlined,
     SecurityScanOutlined,
+    SearchOutlined,
     SyncOutlined,
     ThunderboltOutlined,
     UserOutlined,
@@ -30,6 +32,7 @@ import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
+import XiaohongshuUIAnalyzerPage from '../pages/XiaohongshuUIAnalyzerPage'; // UI分析器
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import AdbPathTestPage from '../pages/AdbPathTestPage'; // ADB路径测试
 import ScriptBuilderPage from '../pages/ScriptBuilderPage'; // 脚本构建器
@@ -38,6 +41,7 @@ import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
+import ScreenshotPage from '../pages/ScreenshotPage'; // 截图页面
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -62,6 +66,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       label: '设备管理',
     },
     {
+      key: 'screenshot',
+      icon: <CameraOutlined />,
+      label: '设备截图',
+    },
+    {
       key: 'adb-test',
       icon: <ThunderboltOutlined />,
       label: 'ADB诊断',
@@ -80,6 +89,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'xiaohongshu-follow',
       icon: <UserOutlined />,
       label: '小红书关注',
+    },
+    {
+      key: 'xiaohongshu-ui-analyzer',
+      icon: <SearchOutlined />,
+      label: '小红书UI分析器',
     },
     {
       key: 'smart-vcf',
@@ -315,6 +329,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               <XiaohongshuFollowPage />
             )}
 
+            {selectedKey === 'xiaohongshu-ui-analyzer' && (
+              <XiaohongshuUIAnalyzerPage />
+            )}
+
             {selectedKey === 'smart-vcf' && (
               <SmartVcfImporter />
             )}
@@ -366,6 +384,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'template-library' && (
               <TemplateLibrary />
+            )}
+
+            {selectedKey === 'screenshot' && (
+              <ScreenshotPage />
             )}
           </Content>
         </Layout>

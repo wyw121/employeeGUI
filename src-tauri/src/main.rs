@@ -93,6 +93,47 @@ async fn check_file_exists(
     Ok(service.check_file_exists(&path))
 }
 
+// ADB点击坐标
+#[tauri::command]
+async fn adb_tap(
+    device_id: String,
+    x: i32,
+    y: i32,
+    service: State<'_, Mutex<AdbService>>,
+) -> Result<String, String> {
+    let service = service.lock().map_err(|e| e.to_string())?;
+    service
+        .execute_command("adb", &[
+            "-s".to_string(),
+            device_id,
+            "shell".to_string(),
+            "input".to_string(),
+            "tap".to_string(),
+            x.to_string(),
+            y.to_string(),
+        ])
+        .map_err(|e| e.to_string())
+}
+
+// 获取UI dump
+#[tauri::command]
+async fn get_ui_dump(
+    device_id: String,
+    service: State<'_, Mutex<AdbService>>,
+) -> Result<String, String> {
+    let service = service.lock().map_err(|e| e.to_string())?;
+    service
+        .execute_command("adb", &[
+            "-s".to_string(),
+            device_id,
+            "shell".to_string(),
+            "uiautomator".to_string(),
+            "dump".to_string(),
+            "/dev/stdout".to_string(),
+        ])
+        .map_err(|e| e.to_string())
+}
+
 // 检测雷电模拟器ADB路径
 #[tauri::command]
 async fn detect_ldplayer_adb(
@@ -684,6 +725,8 @@ fn main() {
             delete_employee,
             execute_adb_command,
             check_file_exists,
+            adb_tap,                      // ADB点击命令
+            get_ui_dump,                  // 获取UI dump命令
             detect_ldplayer_adb,
             detect_smart_adb_path,
             get_adb_devices,

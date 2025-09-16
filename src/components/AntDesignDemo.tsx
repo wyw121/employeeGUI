@@ -1,11 +1,14 @@
 import {
     AimOutlined,
     BarChartOutlined,
+    BranchesOutlined,
+    FolderOutlined,
     MobileOutlined,
     SecurityScanOutlined,
     SyncOutlined,
     ThunderboltOutlined,
-    UserOutlined
+    UserOutlined,
+    RobotOutlined
 } from '@ant-design/icons';
 import {
     App,
@@ -27,14 +30,20 @@ import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
+import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
+import AdbPathTestPage from '../pages/AdbPathTestPage'; // ADB路径测试
+import ScriptBuilderPage from '../pages/ScriptBuilderPage'; // 脚本构建器
+import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
+import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
+import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 export const AntDesignIntegrationDemo: React.FC = () => {
-  const [selectedKey, setSelectedKey] = useState('dashboard');
+  const [selectedKey, setSelectedKey] = useState('adb-test'); // 默认选中ADB测试
   const [selectedDevice, setSelectedDevice] = useState<string>('');
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -55,7 +64,12 @@ export const AntDesignIntegrationDemo: React.FC = () => {
     {
       key: 'adb-test',
       icon: <ThunderboltOutlined />,
-      label: 'ADB测试',
+      label: 'ADB诊断',
+    },
+    {
+      key: 'adb-path-test',
+      icon: <SecurityScanOutlined />,
+      label: 'ADB路径测试',
     },
     {
       key: 'contacts',
@@ -81,6 +95,26 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'acquisition',
       icon: <AimOutlined />,
       label: '精准获客',
+    },
+    {
+      key: 'script-builder',
+      icon: <SyncOutlined />,
+      label: '脚本构建器',
+    },
+    {
+      key: 'smart-script-builder',
+      icon: <RobotOutlined />,
+      label: '智能脚本构建器',
+    },
+    {
+      key: 'flow-builder',
+      icon: <BranchesOutlined />,
+      label: '流程构建器',
+    },
+    {
+      key: 'template-library',
+      icon: <FolderOutlined />,
+      label: '模板库',
     }
   ];
 
@@ -289,7 +323,18 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               <PermissionTestPage />
             )}
 
-            {['adb-test', 'acquisition'].includes(selectedKey) && (
+            {selectedKey === 'adb-test' && (
+              <>
+                {console.log('🎯 渲染 ADB 诊断模块页面，selectedKey:', selectedKey)}
+                <ComprehensiveAdbPage />
+              </>
+            )}
+
+            {selectedKey === 'adb-path-test' && (
+              <AdbPathTestPage />
+            )}
+
+            {selectedKey === 'acquisition' && (
               <Card title={`${menuItems.find(item => item.key === selectedKey)?.label} 功能`}>
                 <div className="text-center py-16">
                   <div className="text-6xl mb-4">🚧</div>
@@ -305,6 +350,22 @@ export const AntDesignIntegrationDemo: React.FC = () => {
                   </Button>
                 </div>
               </Card>
+            )}
+
+            {selectedKey === 'script-builder' && (
+              <ScriptBuilderPage />
+            )}
+
+            {selectedKey === 'smart-script-builder' && (
+              <SmartScriptBuilderPage />
+            )}
+
+            {selectedKey === 'flow-builder' && (
+              <FlowScriptBuilder />
+            )}
+
+            {selectedKey === 'template-library' && (
+              <TemplateLibrary />
             )}
           </Content>
         </Layout>

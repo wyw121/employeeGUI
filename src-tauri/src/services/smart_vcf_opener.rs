@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use tokio::process::Command as AsyncCommand;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VcfOpenResult {
     pub success: bool,
@@ -70,17 +73,28 @@ struct ActionResult {
 /// 获取当前UI状态
 async fn get_current_ui_state(device_id: &str) -> Result<String, String> {
     // 刷新UI dump
-    let _ = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "uiautomator", "dump"])
-        .output()
-        .await;
+    let mut dump_cmd = AsyncCommand::new("adb");
+    dump_cmd.args(&["-s", device_id, "shell", "uiautomator", "dump"]);
+    
+    #[cfg(windows)]
+    {
+        dump_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let _ = dump_cmd.output().await;
     
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     
     // 读取UI XML
-    let result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "cat", "/sdcard/window_dump.xml"])
-        .output()
+    let mut read_cmd = AsyncCommand::new("adb");
+    read_cmd.args(&["-s", device_id, "shell", "cat", "/sdcard/window_dump.xml"]);
+    
+    #[cfg(windows)]
+    {
+        read_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let result = read_cmd.output()
         .await
         .map_err(|e| format!("执行adb命令失败: {}", e))?;
     
@@ -226,10 +240,15 @@ async fn analyze_and_act(device_id: &str, ui_content: &str) -> Result<ActionResu
 async fn click_element_by_resource_id(device_id: &str, resource_id: &str) -> Result<(), String> {
     println!("👆 点击资源ID: {}", resource_id);
     
-    let result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "uiautomator2", "clickById", resource_id])
-        .output()
-        .await;
+    let mut click_cmd = AsyncCommand::new("adb");
+    click_cmd.args(&["-s", device_id, "shell", "uiautomator2", "clickById", resource_id]);
+    
+    #[cfg(windows)]
+    {
+        click_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let result = click_cmd.output().await;
     
     // 如果uiautomator2不可用，使用坐标点击
     if result.is_err() {
@@ -250,9 +269,15 @@ async fn click_element_by_resource_id(device_id: &str, resource_id: &str) -> Res
 async fn click_coordinates(device_id: &str, x: i32, y: i32) -> Result<(), String> {
     println!("👆 点击坐标: ({}, {})", x, y);
     
-    let result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "input", "tap", &x.to_string(), &y.to_string()])
-        .output()
+    let mut tap_cmd = AsyncCommand::new("adb");
+    tap_cmd.args(&["-s", device_id, "shell", "input", "tap", &x.to_string(), &y.to_string()]);
+    
+    #[cfg(windows)]
+    {
+        tap_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let result = tap_cmd.output()
         .await
         .map_err(|e| format!("执行点击命令失败: {}", e))?;
     
@@ -317,9 +342,15 @@ fn parse_bounds_to_center(bounds_str: &str) -> Result<(i32, i32), String> {
 async fn open_file_manager(device_id: &str) -> Result<(), String> {
     println!("📂 打开文件管理器");
     
-    let result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "am", "start", "-t", "text/vcard", "-d", "file:///sdcard/Download/contacts_import.vcf"])
-        .output()
+    let mut open_cmd = AsyncCommand::new("adb");
+    open_cmd.args(&["-s", device_id, "shell", "am", "start", "-t", "text/vcard", "-d", "file:///sdcard/Download/contacts_import.vcf"]);
+    
+    #[cfg(windows)]
+    {
+        open_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let result = open_cmd.output()
         .await
         .map_err(|e| format!("打开文件管理器失败: {}", e))?;
     

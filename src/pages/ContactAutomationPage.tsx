@@ -1,14 +1,12 @@
-import { AlertCircle, CheckCircle, FileDown, Heart, Smartphone, Users, Sparkles, Zap, Target, BarChart3 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { AlertCircle, FileDown, Heart, Smartphone, Zap } from 'lucide-react';
+import React, { useState } from 'react';
 import { ImportAndFollow, VcfImporter, XiaohongshuAutoFollow } from '../components/contact';
 import { useAdbDevices } from '../hooks/useAdbDevices';
-import { Contact, ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
+import { ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
 
 export const ContactAutomationPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'vcf-import' | 'auto-follow' | 'complete-flow'>('complete-flow');
   const [selectedDevice, setSelectedDevice] = useState<string>('');
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [contactsFilePath, setContactsFilePath] = useState<string>('');
   const [results, setResults] = useState<{
     vcfImport?: VcfImportResult;
     autoFollow?: XiaohongshuFollowResult;
@@ -138,14 +136,14 @@ export const ContactAutomationPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                          device.status === 'online' ? 'animate-pulse' : ''
+                          device.status === 'device' ? 'animate-pulse' : ''
                         }`}
                              style={{ 
-                               background: device.status === 'online' 
+                               background: device.status === 'device' 
                                  ? 'var(--gradient-green)' 
                                  : 'var(--bg-tertiary)' 
                              }}>
-                          {device.status === 'online' ? '📱' : '📴'}
+                          {device.status === 'device' ? '📱' : '📴'}
                         </div>
                         <div>
                           <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -252,13 +250,14 @@ export const ContactAutomationPage: React.FC = () => {
                 {activeTab === 'vcf-import' && (
                   <VcfImporter
                     selectedDevice={selectedDevice}
-                    onComplete={(result) => setResults(prev => ({ ...prev, vcfImport: result }))}
+                    contacts={[]}
+                    onImportComplete={(result) => setResults(prev => ({ ...prev, vcfImport: result }))}
                   />
                 )}
                 {activeTab === 'auto-follow' && (
                   <XiaohongshuAutoFollow
                     selectedDevice={selectedDevice}
-                    onComplete={(result) => setResults(prev => ({ ...prev, autoFollow: result }))}
+                    onWorkflowComplete={(result) => setResults(prev => ({ ...prev, autoFollow: result }))}
                   />
                 )}
               </div>
@@ -290,10 +289,10 @@ export const ContactAutomationPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-sm mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    Contacts: {results.completeFlow.contactsImported}
+                    Contacts: {results.completeFlow.importResult.importedContacts}
                   </p>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    Followed: {results.completeFlow.usersFollowed}
+                    Followed: {results.completeFlow.followResult.totalFollowed}
                   </p>
                 </div>
               )}
@@ -308,7 +307,7 @@ export const ContactAutomationPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {results.vcfImport.contactsImported} contacts imported
+                    {results.vcfImport.importedContacts} contacts imported
                   </p>
                 </div>
               )}
@@ -323,7 +322,7 @@ export const ContactAutomationPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {results.autoFollow.usersFollowed} users followed
+                    {results.autoFollow.totalFollowed} users followed
                   </p>
                 </div>
               )}

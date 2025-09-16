@@ -6,6 +6,9 @@ use tokio::process::Command;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::{error, info, warn};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use crate::services::safe_adb_manager::SafeAdbManager;
 
 // 重用现有的数据结构
@@ -395,6 +398,11 @@ impl VcfImporterAsync {
         cmd.args(args);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
 
         info!("🔧 启动命令: {} {:?}", self.adb_path, args);
         

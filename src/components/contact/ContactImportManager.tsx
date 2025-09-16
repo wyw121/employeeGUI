@@ -66,18 +66,30 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
   // 初始化ADB路径
   const initializeAdb = useCallback(async () => {
     try {
-      // 检测雷电模拟器ADB路径
+      // 使用智能ADB检测
+      const smartPath = await invoke<string>('detect_smart_adb_path');
+      if (smartPath) {
+        setAdbPath(smartPath);
+        console.log('已检测到智能ADB路径:', smartPath);
+        return;
+      }
+    } catch (error) {
+      console.log('智能ADB检测失败:', error);
+    }
+    
+    try {
+      // 回退：检测雷电模拟器ADB路径
       const detectedPath = await invoke<string | null>('detect_ldplayer_adb');
       if (detectedPath) {
         setAdbPath(detectedPath);
         console.log('已检测到雷电模拟器ADB路径:', detectedPath);
       } else {
-        setAdbPath('adb'); // 使用系统默认ADB
-        console.log('未检测到雷电模拟器，使用系统默认ADB');
+        setAdbPath('platform-tools/adb.exe'); // 使用项目中的ADB
+        console.log('未检测到特定ADB，使用项目ADB');
       }
     } catch (error) {
       console.error('初始化ADB失败:', error);
-      setAdbPath('adb');
+      setAdbPath('platform-tools/adb.exe');
     }
   }, []);
 
@@ -160,7 +172,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
     setLoading(true);
     try {
       // 使用与RealDeviceManager相同的方法获取设备
-      const output = await invoke<string>('get_adb_devices', { adbPath });
+      const output = await invoke<string>('get_adb_devices', { adbPath: adbPath });
       const devices = parseDevicesOutput(output);
       
       setAvailableDevices(devices);

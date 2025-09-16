@@ -1,6 +1,10 @@
 use std::process::Command;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command as AsyncCommand;
+use crate::utils::adb_utils::get_adb_path;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UIElement {
@@ -49,11 +53,20 @@ pub async fn read_device_ui(device_id: &str) -> Result<DeviceUIState, String> {
 async fn get_ui_dump(device_id: &str) -> Result<String, String> {
     println!("📱 正在获取设备 {} 的UI dump...", device_id);
     
+    let adb_path = get_adb_path();
+    
     // 先尝试刷新UI dump
-    let refresh_result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "uiautomator", "dump"])
-        .output()
-        .await;
+    let refresh_result = {
+        let mut cmd = AsyncCommand::new(&adb_path);
+        cmd.args(&["-s", device_id, "shell", "uiautomator", "dump"]);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.output().await
+    };
     
     match refresh_result {
         Ok(output) if output.status.success() => {
@@ -72,10 +85,17 @@ async fn get_ui_dump(device_id: &str) -> Result<String, String> {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     
     // 读取UI dump文件
-    let result = AsyncCommand::new("adb")
-        .args(&["-s", device_id, "shell", "cat", "/sdcard/window_dump.xml"])
-        .output()
-        .await;
+    let result = {
+        let mut cmd = AsyncCommand::new(&adb_path);
+        cmd.args(&["-s", device_id, "shell", "cat", "/sdcard/window_dump.xml"]);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.output().await
+    };
     
     match result {
         Ok(output) if output.status.success() => {

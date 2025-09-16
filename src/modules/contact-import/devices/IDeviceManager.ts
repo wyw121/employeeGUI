@@ -85,8 +85,10 @@ export class AndroidDeviceManager implements IDeviceManager {
       // 使用Tauri调用ADB检测设备
       const { invoke } = await import("@tauri-apps/api/core");
 
-      // 这里需要调用后端的ADB设备检测方法
-      const adbOutput = await invoke<string>("get_adb_devices");
+      // 调用后端的ADB设备检测方法
+      const adbOutput = await invoke<string>("get_adb_devices", { 
+        adbPath: "platform-tools/adb.exe"
+      });
       return this.parseAdbDevices(adbOutput);
     } catch (error) {
       console.error("检测Android设备失败:", error);

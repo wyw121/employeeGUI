@@ -1,28 +1,35 @@
 import React from 'react';
 import { List, Card, Avatar, Tag } from 'antd';
 import { MobileOutlined } from '@ant-design/icons';
-import { DeviceInfo } from '../../store/deviceStore';
+import { Device } from '../../types';
 
 interface DeviceListProps {
-  devices: DeviceInfo[];
+  devices: Device[];
   selectedDevice?: string;
   onDeviceSelect?: (deviceId: string) => void;
+  onConnect?: (device: Device) => void;
+  onDisconnect?: (device: Device) => void;
+  isLoading?: boolean;
 }
 
 export const DeviceList: React.FC<DeviceListProps> = ({
   devices,
   selectedDevice,
   onDeviceSelect,
+  onConnect,
+  onDisconnect,
+  isLoading,
 }) => {
   return (
     <List
+      loading={isLoading}
       dataSource={devices}
       renderItem={(device) => (
         <List.Item
-          onClick={() => onDeviceSelect?.(device.id)}
+          onClick={() => onDeviceSelect?.(device.id.toString())}
           style={{
             cursor: 'pointer',
-            backgroundColor: selectedDevice === device.id ? '#f0f8ff' : 'transparent',
+            backgroundColor: selectedDevice === device.id.toString() ? '#f0f8ff' : 'transparent',
           }}
         >
           <Card style={{ width: '100%' }}>
@@ -33,7 +40,7 @@ export const DeviceList: React.FC<DeviceListProps> = ({
                 <div>
                   <div>ID: {device.id}</div>
                   <div>
-                    <Tag color={device.status === 'device' ? 'green' : 'red'}>
+                    <Tag color={device.status === 'connected' ? 'green' : 'red'}>
                       {device.status}
                     </Tag>
                   </div>

@@ -31,6 +31,13 @@ data/
 # 项目特定文件
 # ===============
 
+# 发布版本和打包文件
+employee-gui-v*.zip
+employee-gui-v*/
+employee-gui-release/
+*-release/
+*.exe
+
 # Android UI调试文件
 *.xml
 debug_*.xml
@@ -41,6 +48,27 @@ current_state.xml
 after_permission.xml
 contacts_*.xml
 file_picker_*.xml
+
+# 个人数据和敏感信息
+通讯录示例.txt
+data/
+temp_contacts_*.txt
+test_contacts*.json
+test_contacts*.txt
+
+# 开发和调试文件
+debug.log
+check_bounds.py
+*.pyc
+__pycache__/
+
+# 内部文档（不应交付给甲方）
+联动流程设计.md
+VCF导入应用选择器解决方案.md
+DEVICE_EXCEPTION_HANDLING.md
+小红书*.md
+xiaohongshu_automation/
+xiaohongshu-follow-test/
 
 # 临时和测试文件
 temp_*.txt

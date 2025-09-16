@@ -1,9 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info, warn};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VcfOpenResult {
@@ -502,11 +505,17 @@ impl LDPlayerVcfOpener {
 
         info!("🔧 执行ADB命令: {} {:?}", self.adb_path, full_args);
 
+        let mut cmd = Command::new(&self.adb_path);
+        cmd.args(&full_args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
         let output = timeout(
             self.timeout_duration,
-            Command::new(&self.adb_path)
-                .args(&full_args)
-                .output()
+            cmd.output()
         ).await??;
 
         if output.status.success() {

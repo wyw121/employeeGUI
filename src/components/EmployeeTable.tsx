@@ -1,9 +1,9 @@
 import React from 'react';
-import type { Employee } from '../../types';
+import type { EmployeeData } from '../types';
 
 interface EmployeeTableProps {
-  employees: Employee[];
-  onEdit: (employee: Employee) => void;
+  employees: EmployeeData[];
+  onEdit: (employee: EmployeeData) => void;
   onDelete: (id: number) => void;
   isLoading?: boolean;
 }
@@ -91,7 +91,7 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
                   编辑
                 </button>
                 <button
-                  onClick={() => employee.id && onDelete(employee.id)}
+                  onClick={() => employee.id && onDelete(Number(employee.id))}
                   className="text-red-600 hover:text-red-900"
                 >
                   删除

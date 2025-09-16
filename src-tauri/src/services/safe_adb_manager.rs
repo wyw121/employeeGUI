@@ -2,6 +2,9 @@ use anyhow::Result;
 use std::process::Command;
 use tracing::{error, info, warn};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 /// ADB路径管理器 - 解决雷电模拟器ADB崩溃问题
 pub struct SafeAdbManager {
     preferred_adb_path: Option<String>,
@@ -70,7 +73,15 @@ impl SafeAdbManager {
     fn test_adb_path(&self, path: &str) -> Result<bool> {
         info!("📋 测试ADB命令: {} version", path);
 
-        match Command::new(path).arg("version").output() {
+        let mut cmd = Command::new(path);
+        cmd.arg("version");
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        match cmd.output() {
             Ok(output) => {
                 if output.status.success() {
                     let version_output = String::from_utf8_lossy(&output.stdout);
@@ -98,9 +109,15 @@ impl SafeAdbManager {
 
         info!("🔧 执行ADB命令: {} {}", adb_path, args.join(" "));
 
-        let output = Command::new(adb_path)
-            .args(args)
-            .output()
+        let mut cmd = Command::new(adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        let output = cmd.output()
             .map_err(|e| anyhow::anyhow!("ADB命令执行失败: {}", e))?;
 
         if output.status.success() {
@@ -125,9 +142,15 @@ impl SafeAdbManager {
 
         use tokio::process::Command as AsyncCommand;
 
-        let output = AsyncCommand::new(adb_path)
-            .args(args)
-            .output()
+        let mut cmd = AsyncCommand::new(adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        let output = cmd.output()
             .await
             .map_err(|e| anyhow::anyhow!("异步ADB命令执行失败: {}", e))?;
 

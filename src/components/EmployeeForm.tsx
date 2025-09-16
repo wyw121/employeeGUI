@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import type { Employee, EmployeeFormData } from '../../types';
+import type { EmployeeData, EmployeeFormData } from '../types';
 
 interface EmployeeFormProps {
-  employee?: Employee | null;
+  employee?: EmployeeData | null;
   onSubmit: (employee: EmployeeFormData) => void;
   onCancel: () => void;
   isLoading?: boolean;
@@ -22,6 +22,7 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     name: '',
     email: '',
     department: '',
+    phone: '',
     position: '',
     salary: 0,
     hire_date: new Date().toISOString().split('T')[0]
@@ -34,15 +35,17 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
         name: employee.name,
         email: employee.email,
         department: employee.department,
-        position: employee.position,
-        salary: employee.salary,
-        hire_date: employee.hire_date
+        phone: employee.phone || '',
+        position: employee.position || '',
+        salary: employee.salary || 0,
+        hire_date: employee.hire_date || new Date().toISOString().split('T')[0]
       });
     } else {
       setFormData({
         name: '',
         email: '',
         department: '',
+        phone: '',
         position: '',
         salary: 0,
         hire_date: new Date().toISOString().split('T')[0]

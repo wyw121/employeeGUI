@@ -148,7 +148,9 @@ export class VcfImportService {
    */
   static async getAdbDevices(): Promise<string[]> {
     try {
-      const devices = await invoke<string[]>("get_adb_devices");
+      const devices = await invoke<string[]>("get_adb_devices", { 
+        adbPath: "platform-tools/adb.exe"
+      });
       return devices;
     } catch (error) {
       console.error("获取设备列表失败:", error);

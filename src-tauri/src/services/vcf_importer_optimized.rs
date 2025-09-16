@@ -4,6 +4,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use super::vcf_importer::VcfImportResult;
 
 /// 基于Python脚本优化的VCF导入器
@@ -20,11 +23,22 @@ impl VcfImporterOptimized {
         }
     }
 
+    /// 执行ADB命令并隐藏CMD窗口
+    fn execute_adb_command(&self, args: &[&str]) -> Result<std::process::Output> {
+        let mut cmd = Command::new(&self.adb_path);
+        cmd.args(args);
+        
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        cmd.output().context("执行ADB命令失败")
+    }
+
     /// 检查设备连接状态
     async fn check_device_connection(&self) -> Result<bool> {
-        let output = Command::new(&self.adb_path)
-            .args(&["devices"])
-            .output()
+        let output = self.execute_adb_command(&["devices"])
             .context("检查设备连接失败")?;
 
         if !output.status.success() {
@@ -39,8 +53,7 @@ impl VcfImporterOptimized {
     async fn adb_tap(&self, x: i32, y: i32, description: &str) -> Result<()> {
         info!("🖱️ 点击坐标 ({}, {}) - {}", x, y, description);
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -49,7 +62,6 @@ impl VcfImporterOptimized {
                 &x.to_string(),
                 &y.to_string(),
             ])
-            .output()
             .context("ADB点击失败")?;
 
         if !output.status.success() {
@@ -63,8 +75,7 @@ impl VcfImporterOptimized {
 
     /// 获取UI内容
     async fn get_ui_dump(&self, filename: &str) -> Result<String> {
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -72,22 +83,19 @@ impl VcfImporterOptimized {
                 "dump",
                 &format!("/sdcard/{}", filename),
             ])
-            .output()
             .context("获取UI内容失败")?;
 
         if !output.status.success() {
             return Err(anyhow::anyhow!("UI dump失败"));
         }
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
                 "cat",
                 &format!("/sdcard/{}", filename),
             ])
-            .output()
             .context("读取UI文件失败")?;
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -124,9 +132,7 @@ impl VcfImporterOptimized {
 
         let mut success_count = 0;
         for location in &locations {
-            let output = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "push", &full_path, location])
-                .output()
+            let output = self.execute_adb_command(&["-s", &self.device_id, "push", &full_path, location])
                 .context("文件传输失败")?;
 
             if output.status.success() {
@@ -346,10 +352,9 @@ impl VcfImporterOptimized {
         for (i, (cmd, desc)) in navigation_steps.iter().enumerate() {
             info!("   {}. {}", i + 1, desc);
             let args: Vec<&str> = cmd.split_whitespace().collect();
-            let output = Command::new(&self.adb_path)
-                .args(&["-s", &self.device_id, "shell"])
-                .args(&args)
-                .output()
+            let mut full_args = vec!["-s", &self.device_id, "shell"];
+            full_args.extend(args.iter());
+            let output = self.execute_adb_command(&full_args)
                 .context("ADB命令执行失败")?;
 
             if !output.status.success() {
@@ -410,8 +415,7 @@ impl VcfImporterOptimized {
         sleep(Duration::from_secs(2)).await;
 
         // 启动联系人首页
-        let output = Command::new(&self.adb_path)
-            .args(&[
+        let output = self.execute_adb_command(&[
                 "-s",
                 &self.device_id,
                 "shell",
@@ -420,7 +424,6 @@ impl VcfImporterOptimized {
                 "-n",
                 "com.android.contacts/.activities.PeopleActivity",
             ])
-            .output()
             .context("启动联系人应用失败")?;
 
         if !output.status.success() {

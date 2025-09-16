@@ -31,14 +31,14 @@ export const DeviceManagementPage: React.FC = () => {
   }, []);
 
   // 连接设备
-  const handleConnect = async (deviceId: number) => {
+  const handleConnect = async (device: Device) => {
     try {
       // 这里应该调用后端API连接设备
       // 暂时模拟连接成功
-      setDevices(prev => prev.map(device =>
-        device.id === deviceId
-          ? { ...device, status: 'connected', last_connected: new Date().toISOString() }
-          : device
+      setDevices(prev => prev.map(d =>
+        d.id === device.id
+          ? { ...d, status: 'connected', last_connected: new Date().toISOString() }
+          : d
       ));
     } catch (error) {
       console.error('Failed to connect device:', error);
@@ -47,14 +47,14 @@ export const DeviceManagementPage: React.FC = () => {
   };
 
   // 断开设备
-  const handleDisconnect = async (deviceId: number) => {
+  const handleDisconnect = async (device: Device) => {
     try {
       // 这里应该调用后端API断开设备
       // 暂时模拟断开成功
-      setDevices(prev => prev.map(device =>
-        device.id === deviceId
-          ? { ...device, status: 'disconnected' }
-          : device
+      setDevices(prev => prev.map(d =>
+        d.id === device.id
+          ? { ...d, status: 'disconnected' }
+          : d
       ));
     } catch (error) {
       console.error('Failed to disconnect device:', error);

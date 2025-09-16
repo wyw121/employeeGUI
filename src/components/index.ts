@@ -8,4 +8,16 @@ export * from './common';
 export * from './contact';
 export * from './device';
 export * from './layout';
+
+// Template components
+export { default as TemplateLibrary } from './template/TemplateLibrary';
+export { default as TemplateEditor } from './template/TemplateEditor';
+export { default as TemplateIOManager } from './template/TemplateIOManager';
+
+// Execution components
+export { default as SimpleExecutionMonitor } from './execution/SimpleExecutionMonitor';
+
+// Loop control components
+export * from './loop-control';
+
 export * from './task';

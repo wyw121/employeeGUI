@@ -123,7 +123,10 @@ export class BalancedImportStrategy implements IImportStrategy {
     let deviceIndex = 0;
     while (contactIndex < contacts.length && groups.length > 0) {
       const group = groups[deviceIndex % groups.length];
-      if (group.contacts.length < group.deviceId) {
+      const device = devices.find(d => d.id === group.deviceId);
+      const maxContacts = device?.capabilities?.maxContactsPerImport || 100; // 默认限制
+      
+      if (group.contacts.length < maxContacts) {
         group.contacts.push(contacts[contactIndex++]);
       }
       deviceIndex++;
@@ -433,7 +436,7 @@ export class RandomImportStrategy implements IImportStrategy {
  * 策略工厂
  */
 export class ImportStrategyFactory {
-  private static strategies: Map<string, () => IImportStrategy> = new Map([
+  private static readonly strategies = new Map<string, () => IImportStrategy>([
     ["balanced", () => new BalancedImportStrategy()],
     ["sequential", () => new SequentialImportStrategy()],
     ["random", () => new RandomImportStrategy()],

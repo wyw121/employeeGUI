@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAdb } from '../application/hooks/useAdb';
+import { DeviceStatus } from '../domain/adb/entities/Device';
 import {
   Card,
   Button,
@@ -40,6 +42,7 @@ import {
   ClockCircleOutlined,
   RocketOutlined,
   AndroidOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
 import { SmartActionType } from '../types/smartComponents';
@@ -274,6 +277,9 @@ interface SmartExecutionResult {
 // ==================== 主组件 ====================
 
 const SmartScriptBuilderPage: React.FC = () => {
+  // ADB Hook 获取设备信息
+  const { devices, refreshDevices } = useAdb();
+  
   const [steps, setSteps] = useState<SmartScriptStep[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -290,6 +296,22 @@ const SmartScriptBuilderPage: React.FC = () => {
   });
   const [executionResult, setExecutionResult] = useState<SmartExecutionResult | null>(null);
   const [form] = Form.useForm();
+
+  // 初始化设备选择
+  useEffect(() => {
+    // 刷新设备列表
+    refreshDevices();
+  }, [refreshDevices]);
+
+  // 当设备列表变化时，自动选择第一个设备
+  useEffect(() => {
+    if (devices.length > 0 && !currentDeviceId) {
+      const firstOnlineDevice = devices.find(d => d.status === DeviceStatus.ONLINE);
+      if (firstOnlineDevice) {
+        setCurrentDeviceId(firstOnlineDevice.id);
+      }
+    }
+  }, [devices, currentDeviceId]);
 
   // 添加新步骤
   const handleAddStep = () => {
@@ -557,13 +579,49 @@ const SmartScriptBuilderPage: React.FC = () => {
           <Col>
             <Space>
               <Text type="secondary">目标设备:</Text>
-              <Input
-                placeholder="请输入设备ID"
-                value={currentDeviceId}
-                onChange={(e) => setCurrentDeviceId(e.target.value)}
-                style={{ width: 200 }}
-                prefix={<AndroidOutlined />}
-              />
+              <Select
+                placeholder="选择设备"
+                value={currentDeviceId || undefined}
+                onChange={(value) => setCurrentDeviceId(value)}
+                style={{ width: 240 }}
+                loading={devices.length === 0}
+                dropdownRender={(menu) => (
+                  <>
+                    {menu}
+                    <Divider style={{ margin: '8px 0' }} />
+                    <Space style={{ padding: '0 8px 4px' }}>
+                      <Button
+                        type="text"
+                        icon={<SyncOutlined />}
+                        onClick={() => refreshDevices()}
+                        size="small"
+                      >
+                        刷新设备
+                      </Button>
+                    </Space>
+                  </>
+                )}
+              >
+                {devices.map(device => (
+                  <Option key={device.id} value={device.id}>
+                    <Space>
+                      <AndroidOutlined 
+                        style={{ 
+                          color: device.status === DeviceStatus.ONLINE ? '#52c41a' : '#d9d9d9' 
+                        }} 
+                      />
+                      <Text>
+                        {device.id}
+                      </Text>
+                      <Tag 
+                        color={device.status === DeviceStatus.ONLINE ? 'success' : 'default'}
+                      >
+                        {device.status === DeviceStatus.ONLINE ? '在线' : '离线'}
+                      </Tag>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
               <Button
                 icon={<RocketOutlined />}
                 onClick={() => setShowAppComponent(true)}

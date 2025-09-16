@@ -26,6 +26,11 @@ impl AdbShellSession {
         }
     }
 
+    /// 获取ADB路径（用于调试）
+    pub async fn get_adb_path(&self) -> String {
+        self.adb_path.clone()
+    }
+
     /// 建立到设备的持久shell连接
     pub async fn connect(&self) -> Result<()> {
         let mut process_lock = self.shell_process.lock().await;

@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::services::adb_shell_session::AdbShellSession;
+use crate::utils::adb_utils::get_adb_path;
 use tracing::{info, warn, error};
 
 /// 应用信息结构
@@ -35,8 +36,9 @@ pub struct SmartAppManager {
 
 impl SmartAppManager {
     pub fn new(device_id: String) -> Self {
-        // 使用默认的ADB路径
-        let adb_path = "platform-tools/adb.exe".to_string();
+        // 使用智能ADB路径检测
+        let adb_path = get_adb_path();
+        info!("🛠️ SmartAppManager使用ADB路径: {}", adb_path);
         
         Self {
             shell_session: AdbShellSession::new(device_id, adb_path),
@@ -48,6 +50,13 @@ impl SmartAppManager {
     /// 获取设备上所有已安装的应用
     pub async fn get_installed_apps(&mut self) -> Result<Vec<AppInfo>> {
         info!("📱 开始获取设备已安装应用列表");
+        info!("🔍 SmartAppManager 使用的ADB路径: {}", self.shell_session.get_adb_path().await);
+
+        // 首先确保 ADB Shell 连接已建立
+        if let Err(e) = self.shell_session.connect().await {
+            error!("ADB Shell 连接失败: {}", e);
+            return Err(anyhow::anyhow!("ADB Shell 连接失败: {}", e));
+        }
 
         // 1. 获取所有包名
         let packages_output = self.shell_session.execute_command("pm list packages").await?;

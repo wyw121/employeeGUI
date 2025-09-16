@@ -16,6 +16,9 @@ export { default as OptimizationSummaryPage } from "./OptimizationSummaryPage";
 // 智能脚本构建器页面
 export { default as SmartScriptBuilderPage } from "./SmartScriptBuilderPage";
 
+// 应用启动测试页面
+export { default as AppLaunchTestPage } from "./AppLaunchTestPage";
+
 // 新的业务页面
 export * from "./auth";
 export * from "./contact-management";

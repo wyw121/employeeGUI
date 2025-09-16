@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::services::adb_shell_session::AdbShellSession;
+use crate::services::app_state_detector::{AppStateDetector, AppStateResult, DetectionConfig};
 use crate::utils::adb_utils::get_adb_path;
 use tracing::{info, warn, error};
 
@@ -18,13 +19,16 @@ pub struct AppInfo {
     pub icon_path: Option<String>, // 图标路径
 }
 
-/// 应用启动结果
+/// 应用启动结果（增强版）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppLaunchResult {
     pub success: bool,
     pub message: String,
     pub package_name: String,
     pub launch_time_ms: u64,
+    pub app_state: Option<AppStateResult>,  // 新增：详细的应用状态
+    pub ready_time_ms: Option<u64>,        // 新增：应用就绪时间
+    pub startup_issues: Vec<String>,       // 新增：启动过程中的问题记录
 }
 
 /// 智能应用管理器
@@ -148,35 +152,91 @@ impl SmartAppManager {
         })
     }
 
-    /// 智能启动应用
+    /// 智能启动应用（增强版 - 包含完整状态检测）
     pub async fn launch_app(&self, package_name: &str) -> Result<AppLaunchResult> {
-        let start_time = std::time::Instant::now();
-        info!("🚀 启动应用: {}", package_name);
+        let overall_start_time = std::time::Instant::now();
+        let mut startup_issues = Vec::new();
+        
+        info!("🚀 智能启动应用: {}", package_name);
 
-        // 方法1: 使用monkey命令启动
+        // 第一步：执行启动命令
+        let launch_start_time = std::time::Instant::now();
+        let launch_success = self.execute_launch_commands(package_name, &mut startup_issues).await;
+        let launch_time_ms = launch_start_time.elapsed().as_millis() as u64;
+
+        if !launch_success {
+            return Ok(AppLaunchResult {
+                success: false,
+                message: "应用启动命令执行失败".to_string(),
+                package_name: package_name.to_string(),
+                launch_time_ms,
+                app_state: None,
+                ready_time_ms: None,
+                startup_issues,
+            });
+        }
+
+        // 第二步：等待应用进入可操作状态
+        info!("⏳ 等待应用完全启动并进入可操作状态...");
+        let state_detector = AppStateDetector::new(
+            self.shell_session.clone(), 
+            package_name.to_string()
+        );
+
+        // 针对不同应用调整检测配置
+        let config = self.get_detection_config_for_app(package_name);
+        let state_detector = state_detector.with_config(config);
+
+        let ready_start_time = std::time::Instant::now();
+        let app_state_result = state_detector.wait_for_app_ready().await?;
+        let ready_time_ms = ready_start_time.elapsed().as_millis() as u64;
+
+        // 分析结果
+        let is_ready = app_state_result.is_functional;
+        let total_time_ms = overall_start_time.elapsed().as_millis() as u64;
+
+        // 记录状态检测过程中的问题
+        if !app_state_result.message.is_empty() && !is_ready {
+            startup_issues.push(app_state_result.message.clone());
+        }
+
+        let result = AppLaunchResult {
+            success: is_ready,
+            message: self.generate_launch_message(&app_state_result, launch_time_ms, ready_time_ms, total_time_ms),
+            package_name: package_name.to_string(),
+            launch_time_ms,
+            app_state: Some(app_state_result),
+            ready_time_ms: if is_ready { Some(ready_time_ms) } else { None },
+            startup_issues,
+        };
+
+        if is_ready {
+            info!("✅ 应用启动成功: {} (总计{}ms, 就绪{}ms)", package_name, total_time_ms, ready_time_ms);
+        } else {
+            warn!("⚠️ 应用启动异常: {} - {}", package_name, result.message);
+        }
+
+        Ok(result)
+    }
+
+    /// 执行应用启动命令
+    async fn execute_launch_commands(&self, package_name: &str, startup_issues: &mut Vec<String>) -> bool {
+        // 方法1: 使用monkey命令启动（推荐）
+        info!("📱 尝试使用monkey命令启动应用");
         let monkey_result = self.shell_session.execute_command(&format!(
             "monkey -p {} -c android.intent.category.LAUNCHER 1", package_name
         )).await;
 
         if monkey_result.is_ok() {
-            let launch_time = start_time.elapsed().as_millis() as u64;
-            
-            // 验证启动是否成功
+            // 短暂等待启动
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            
-            if let Ok(current_activity) = self.shell_session.execute_command("dumpsys activity activities | grep mResumedActivity").await {
-                if current_activity.contains(package_name) {
-                    return Ok(AppLaunchResult {
-                        success: true,
-                        message: format!("应用启动成功 ({}ms)", launch_time),
-                        package_name: package_name.to_string(),
-                        launch_time_ms: launch_time,
-                    });
-                }
-            }
+            return true;
+        } else {
+            startup_issues.push("monkey命令启动失败".to_string());
         }
 
-        // 方法2: 尝试使用am start命令
+        // 方法2: 使用am start命令
+        info!("📱 尝试使用am start命令启动应用");
         if let Some(app_info) = self.apps_cache.get(package_name) {
             if let Some(main_activity) = &app_info.main_activity {
                 let am_result = self.shell_session.execute_command(&format!(
@@ -184,38 +244,74 @@ impl SmartAppManager {
                 )).await;
 
                 if am_result.is_ok() {
-                    let launch_time = start_time.elapsed().as_millis() as u64;
-                    return Ok(AppLaunchResult {
-                        success: true,
-                        message: format!("应用启动成功 (am命令, {}ms)", launch_time),
-                        package_name: package_name.to_string(),
-                        launch_time_ms: launch_time,
-                    });
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    return true;
+                } else {
+                    startup_issues.push("am start命令启动失败".to_string());
                 }
             }
         }
 
         // 方法3: 通用启动方式
+        info!("📱 尝试通用启动方式");
         let generic_result = self.shell_session.execute_command(&format!(
-            "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n {}", package_name
+            "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER {}", package_name
         )).await;
 
-        let launch_time = start_time.elapsed().as_millis() as u64;
-        
         if generic_result.is_ok() {
-            Ok(AppLaunchResult {
-                success: true,
-                message: format!("应用启动成功 (通用方式, {}ms)", launch_time),
-                package_name: package_name.to_string(),
-                launch_time_ms: launch_time,
-            })
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            true
         } else {
-            Ok(AppLaunchResult {
-                success: false,
-                message: format!("应用启动失败: 未找到启动方式"),
-                package_name: package_name.to_string(),
-                launch_time_ms: launch_time,
-            })
+            startup_issues.push("所有启动方法都失败".to_string());
+            false
+        }
+    }
+
+    /// 为不同应用获取专用的检测配置
+    fn get_detection_config_for_app(&self, package_name: &str) -> DetectionConfig {
+        match package_name {
+            "com.xingin.xhs" => DetectionConfig {
+                max_wait_time: std::time::Duration::from_secs(45), // 小红书启动较慢
+                check_interval: std::time::Duration::from_millis(1500),
+                splash_timeout: std::time::Duration::from_secs(15),
+                ui_load_timeout: std::time::Duration::from_secs(20),
+            },
+            "com.tencent.mm" => DetectionConfig {
+                max_wait_time: std::time::Duration::from_secs(30), // 微信启动中等
+                check_interval: std::time::Duration::from_millis(1000),
+                splash_timeout: std::time::Duration::from_secs(8),
+                ui_load_timeout: std::time::Duration::from_secs(12),
+            },
+            _ => DetectionConfig::default(), // 默认配置
+        }
+    }
+
+    /// 生成启动结果消息
+    fn generate_launch_message(&self, app_state: &AppStateResult, launch_time_ms: u64, ready_time_ms: u64, total_time_ms: u64) -> String {
+        match &app_state.state {
+            crate::services::app_state_detector::AppLaunchState::Ready => {
+                format!("✅ 应用启动成功并就绪 (启动: {}ms, 就绪: {}ms, 总计: {}ms)", 
+                       launch_time_ms, ready_time_ms, total_time_ms)
+            }
+            crate::services::app_state_detector::AppLaunchState::PermissionDialog => {
+                "⚠️ 应用启动成功，但停留在权限弹窗页面".to_string()
+            }
+            crate::services::app_state_detector::AppLaunchState::LoginRequired => {
+                "⚠️ 应用启动成功，但需要用户登录".to_string()
+            }
+            crate::services::app_state_detector::AppLaunchState::SplashScreen => {
+                "⚠️ 应用可能卡在启动画面".to_string()
+            }
+            crate::services::app_state_detector::AppLaunchState::Loading => {
+                "⚠️ 应用正在加载中，未完全就绪".to_string()
+            }
+            crate::services::app_state_detector::AppLaunchState::NetworkCheck => {
+                "⚠️ 应用停留在网络检查页面".to_string()
+            }
+            crate::services::app_state_detector::AppLaunchState::Error(msg) => {
+                format!("❌ 应用启动过程出错: {}", msg)
+            }
+            _ => format!("⚠️ 应用启动状态未知: {:?}", app_state.state)
         }
     }
 
@@ -330,7 +426,7 @@ impl SmartAppManager {
     }
 
     /// 提取主Activity
-    fn extract_main_activity(&self, line: &str, package_name: &str) -> String {
+    fn extract_main_activity(&self, _line: &str, package_name: &str) -> String {
         // 默认的主Activity模式
         format!("{}.MainActivity", package_name)
     }

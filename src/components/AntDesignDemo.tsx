@@ -8,7 +8,8 @@ import {
     SyncOutlined,
     ThunderboltOutlined,
     UserOutlined,
-    RobotOutlined
+    RobotOutlined,
+    ExperimentOutlined
 } from '@ant-design/icons';
 import {
     App,
@@ -32,6 +33,7 @@ import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
+import AppLaunchTestPage from '../pages/AppLaunchTestPage'; // 应用启动测试页面
 import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
@@ -103,6 +105,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'template-library',
       icon: <FolderOutlined />,
       label: '模板库',
+    },
+    {
+      key: 'app-launch-test',
+      icon: <ExperimentOutlined />,
+      label: '应用启动测试',
     }
   ];
 
@@ -346,6 +353,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'template-library' && (
               <TemplateLibrary />
+            )}
+
+            {selectedKey === 'app-launch-test' && (
+              <AppLaunchTestPage />
             )}
           </Content>
         </Layout>

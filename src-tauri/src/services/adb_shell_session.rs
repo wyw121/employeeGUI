@@ -8,6 +8,7 @@ use tracing::{debug, error, info, warn};
 
 /// ADB Shell长连接会话管理器
 /// 维护到指定设备的持久shell连接，减少命令执行开销
+#[derive(Clone)]
 pub struct AdbShellSession {
     device_id: String,
     adb_path: String,

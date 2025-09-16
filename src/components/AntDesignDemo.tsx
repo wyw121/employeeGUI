@@ -38,6 +38,7 @@ import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
+import RealTimeDeviceMonitor from './device/RealTimeDeviceMonitor'; // 实时设备监控
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -60,6 +61,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'devices',
       icon: <MobileOutlined />,
       label: '设备管理',
+    },
+    {
+      key: 'real-time-devices',
+      icon: <ThunderboltOutlined />,
+      label: '实时设备监控',
     },
     {
       key: 'adb-test',
@@ -305,6 +311,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
                 selectedDevice={selectedDevice}
                 onDeviceSelect={handleDeviceSelect}
               />
+            )}
+
+            {selectedKey === 'real-time-devices' && (
+              <RealTimeDeviceMonitor />
             )}
 
             {selectedKey === 'contacts' && (

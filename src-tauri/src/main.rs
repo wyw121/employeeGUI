@@ -10,12 +10,12 @@ mod xml_judgment_service;
 use std::os::windows::process::CommandExt;
 
 use screenshot_service::*;
+use services::adb_device_tracker::*;
 use services::adb_service::AdbService;
 use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::crash_debugger::*;
-use services::device_state_manager::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
 use services::safe_adb_manager::*;
@@ -666,11 +666,11 @@ fn main() {
     let adb_service = AdbService::new();
     let xiaohongshu_service = XiaohongshuService::new();
     
-    // 初始化全局设备状态管理器
-    initialize_global_device_manager()
-        .expect("Failed to initialize global device state manager");
+    // 初始化实时设备跟踪器 (替代旧的轮询系统)
+    initialize_device_tracker()
+        .expect("Failed to initialize device tracker");
 
-    info!("✅ 所有服务初始化完成");
+    info!("✅ 所有服务初始化完成 (仅实时跟踪，无轮询)");
 
     tauri::Builder::default()
         .setup(|_app| {
@@ -698,6 +698,10 @@ fn main() {
             start_adb_server,
             kill_adb_server,
             get_device_properties,  // 添加设备属性获取命令
+            // 基于host:track-devices的实时设备跟踪
+            start_device_tracking,    // 启动实时设备跟踪
+            stop_device_tracking,     // 停止设备跟踪  
+            get_tracked_devices,      // 获取当前跟踪的设备
             start_adb_server_simple,
             kill_adb_server_simple,
             execute_adb_command_simple,
@@ -750,9 +754,6 @@ fn main() {
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件
-            // 智能设备状态管理功能 - 最佳实践实现
-            get_devices_smart,              // 智能设备状态获取
-            get_device_properties_optimized, // 优化的设备属性获取
             // 脚本执行器功能
             execute_automation_script,  // 执行自动化脚本
             validate_device_connection, // 验证设备连接

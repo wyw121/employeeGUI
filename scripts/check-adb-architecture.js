@@ -16,7 +16,7 @@ const RULES = {
   // 禁止的模式
   FORBIDDEN_PATTERNS: [
     {
-      pattern: /useState.*<.*Device.*\[].*>/g,
+      pattern: /useState.*<.*Device\[\].*>/g,
       message: '发现分散的设备状态管理：useState<Device[]>',
       severity: 'error'
     },
@@ -77,6 +77,11 @@ const RULES = {
       file: /ContactImportWizard\.tsx$/,
       pattern: /useState.*<.*Device.*\[\].*>/,
       reason: '设备选择UI的临时状态，符合架构设计'
+    },
+    {
+      file: /useRealTimeDevices\.ts$/,
+      pattern: /useState.*<.*TrackedDevice\[\].*>/,
+      reason: 'RealTimeDevices Hook管理TrackedDevice[]是合理的'
     }
   ]
 };

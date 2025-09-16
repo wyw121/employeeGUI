@@ -250,9 +250,9 @@ export const useIsInitializing = () => useAdbStore(state => state.isInitializing
 export const useLastError = () => useAdbStore(state => state.lastError);
 
 /**
- * 操作选择器
+ * 操作选择器 - 使用稳定的选择器避免无限重渲染
  */
-export const useAdbActions = () => useAdbStore(state => ({
+const selectAdbActions = (state: AdbState & AdbActions) => ({
   setConnection: state.setConnection,
   updateConnectionStatus: state.updateConnectionStatus,
   setConfig: state.setConfig,
@@ -267,5 +267,13 @@ export const useAdbActions = () => useAdbStore(state => ({
   setError: state.setError,
   incrementRefreshCount: state.incrementRefreshCount,
   reset: state.reset
-}));
+});
+
+// 使用记忆化的actions选择器
+export const useAdbActions = () => {
+  return useMemo(() => {
+    const store = useAdbStore.getState();
+    return selectAdbActions(store);
+  }, []); // 空依赖数组，actions不会改变
+};
 

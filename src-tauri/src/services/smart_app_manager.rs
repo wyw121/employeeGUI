@@ -2,7 +2,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::services::adb_shell_session::AdbShellSession;
-use crate::services::app_state_detector::{AppStateDetector, AppStateResult, DetectionConfig};
+use crate::services::app_detection_framework::{
+    DetectorFactory, DetectionResult, AppLaunchState
+};
 use crate::utils::adb_utils::get_adb_path;
 use tracing::{info, warn, error};
 
@@ -26,7 +28,7 @@ pub struct AppLaunchResult {
     pub message: String,
     pub package_name: String,
     pub launch_time_ms: u64,
-    pub app_state: Option<AppStateResult>,  // 新增：详细的应用状态
+    pub app_state: Option<DetectionResult>,  // 使用新框架：详细的检测结果
     pub ready_time_ms: Option<u64>,        // 新增：应用就绪时间
     pub startup_issues: Vec<String>,       // 新增：启动过程中的问题记录
 }
@@ -178,25 +180,20 @@ impl SmartAppManager {
 
         // 第二步：等待应用进入可操作状态
         info!("⏳ 等待应用完全启动并进入可操作状态...");
-        let state_detector = AppStateDetector::new(
-            self.shell_session.clone(), 
-            package_name.to_string()
-        );
-
-        // 针对不同应用调整检测配置
-        let config = self.get_detection_config_for_app(package_name);
-        let state_detector = state_detector.with_config(config);
+        
+        // 使用新的检测框架
+        let detector = DetectorFactory::create_detector_for(package_name, self.shell_session.get_device_id())?;
 
         let ready_start_time = std::time::Instant::now();
-        let app_state_result = state_detector.wait_for_app_ready().await?;
+        let app_state_result = detector.wait_for_app_ready().await?;
         let ready_time_ms = ready_start_time.elapsed().as_millis() as u64;
 
         // 分析结果
-        let is_ready = app_state_result.is_functional;
+        let is_ready = matches!(app_state_result.state, AppLaunchState::Ready);
         let total_time_ms = overall_start_time.elapsed().as_millis() as u64;
 
         // 记录状态检测过程中的问题
-        if !app_state_result.message.is_empty() && !is_ready {
+        if !app_state_result.is_functional {
             startup_issues.push(app_state_result.message.clone());
         }
 
@@ -267,51 +264,46 @@ impl SmartAppManager {
         }
     }
 
-    /// 为不同应用获取专用的检测配置
-    fn get_detection_config_for_app(&self, package_name: &str) -> DetectionConfig {
-        match package_name {
-            "com.xingin.xhs" => DetectionConfig {
-                max_wait_time: std::time::Duration::from_secs(45), // 小红书启动较慢
-                check_interval: std::time::Duration::from_millis(1500),
-                splash_timeout: std::time::Duration::from_secs(15),
-                ui_load_timeout: std::time::Duration::from_secs(20),
-            },
-            "com.tencent.mm" => DetectionConfig {
-                max_wait_time: std::time::Duration::from_secs(30), // 微信启动中等
-                check_interval: std::time::Duration::from_millis(1000),
-                splash_timeout: std::time::Duration::from_secs(8),
-                ui_load_timeout: std::time::Duration::from_secs(12),
-            },
-            _ => DetectionConfig::default(), // 默认配置
-        }
-    }
-
     /// 生成启动结果消息
-    fn generate_launch_message(&self, app_state: &AppStateResult, launch_time_ms: u64, ready_time_ms: u64, total_time_ms: u64) -> String {
-        match &app_state.state {
-            crate::services::app_state_detector::AppLaunchState::Ready => {
+    fn generate_launch_message(&self, detection_result: &DetectionResult, launch_time_ms: u64, ready_time_ms: u64, total_time_ms: u64) -> String {
+        match &detection_result.state {
+            AppLaunchState::Ready => {
                 format!("✅ 应用启动成功并就绪 (启动: {}ms, 就绪: {}ms, 总计: {}ms)", 
                        launch_time_ms, ready_time_ms, total_time_ms)
             }
-            crate::services::app_state_detector::AppLaunchState::PermissionDialog => {
+            AppLaunchState::PermissionDialog => {
                 "⚠️ 应用启动成功，但停留在权限弹窗页面".to_string()
             }
-            crate::services::app_state_detector::AppLaunchState::LoginRequired => {
+            AppLaunchState::LoginRequired => {
                 "⚠️ 应用启动成功，但需要用户登录".to_string()
             }
-            crate::services::app_state_detector::AppLaunchState::SplashScreen => {
+            AppLaunchState::SplashScreen => {
                 "⚠️ 应用可能卡在启动画面".to_string()
             }
-            crate::services::app_state_detector::AppLaunchState::Loading => {
+            AppLaunchState::Loading => {
                 "⚠️ 应用正在加载中，未完全就绪".to_string()
             }
-            crate::services::app_state_detector::AppLaunchState::NetworkCheck => {
+            AppLaunchState::NetworkCheck => {
                 "⚠️ 应用停留在网络检查页面".to_string()
             }
-            crate::services::app_state_detector::AppLaunchState::Error(msg) => {
+            AppLaunchState::Error(msg) => {
                 format!("❌ 应用启动过程出错: {}", msg)
             }
-            _ => format!("⚠️ 应用启动状态未知: {:?}", app_state.state)
+            AppLaunchState::NotStarted => {
+                "⚠️ 应用尚未启动".to_string()
+            }
+            AppLaunchState::Starting => {
+                "⚠️ 应用正在启动中".to_string()
+            }
+            AppLaunchState::UpdateCheck => {
+                "⚠️ 应用正在检查更新".to_string()
+            }
+            AppLaunchState::Advertisement => {
+                "⚠️ 应用停留在广告页面".to_string()
+            }
+            AppLaunchState::Tutorial => {
+                "⚠️ 应用停留在引导页面".to_string()
+            }
         }
     }
 

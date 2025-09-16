@@ -31,6 +31,11 @@ impl AdbShellSession {
     pub async fn get_adb_path(&self) -> String {
         self.adb_path.clone()
     }
+    
+    /// 获取设备ID
+    pub fn get_device_id(&self) -> &str {
+        &self.device_id
+    }
 
     /// 建立到设备的持久shell连接
     pub async fn connect(&self) -> Result<()> {

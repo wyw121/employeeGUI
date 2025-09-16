@@ -57,13 +57,37 @@ pub async fn generate_vcf_file(
     }
 }
 
+// 定义前端兼容的结果类型
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LegacyVcfImportResult {
+    pub success: bool,
+    pub totalContacts: usize,
+    pub importedContacts: usize,
+    pub failedContacts: usize,
+    pub message: String,
+    pub details: Option<String>,
+}
+
+impl From<VcfImportResult> for LegacyVcfImportResult {
+    fn from(result: VcfImportResult) -> Self {
+        LegacyVcfImportResult {
+            success: result.success,
+            totalContacts: result.total_contacts,
+            importedContacts: result.imported_contacts,
+            failedContacts: result.failed_contacts,
+            message: result.message,
+            details: result.details,
+        }
+    }
+}
+
 /// VCF通讯录导入到Android设备 (异步安全版本 - 修复闪退问题)
 #[command]
 #[allow(non_snake_case)]
 pub async fn import_vcf_contacts_async_safe(
     deviceId: String,
-    contactsFilePath: String,
-) -> Result<VcfImportResult, String> {
+    vcfFilePath: String,
+) -> Result<LegacyVcfImportResult, String> {
     // 在命令开始就添加 panic hook
     std::panic::set_hook(Box::new(|panic_info| {
         error!(
@@ -80,7 +104,7 @@ pub async fn import_vcf_contacts_async_safe(
 
     info!(
         "🚀 开始VCF导入（异步安全版）: 设备 {} 文件 {}",
-        deviceId, contactsFilePath
+        deviceId, vcfFilePath
     );
 
     // 参数验证
@@ -89,30 +113,30 @@ pub async fn import_vcf_contacts_async_safe(
         return Err("设备ID不能为空".to_string());
     }
 
-    if contactsFilePath.is_empty() {
-        error!("❌ 联系人文件路径不能为空");
-        return Err("联系人文件路径不能为空".to_string());
+    if vcfFilePath.is_empty() {
+        error!("❌ VCF文件路径不能为空");
+        return Err("VCF文件路径不能为空".to_string());
     }
 
     // 检查文件是否存在
-    if !std::path::Path::new(&contactsFilePath).exists() {
-        error!("❌ 联系人文件不存在: {}", contactsFilePath);
-        return Err(format!("联系人文件不存在: {}", contactsFilePath));
+    if !std::path::Path::new(&vcfFilePath).exists() {
+        error!("❌ VCF文件不存在: {}", vcfFilePath);
+        return Err(format!("VCF文件不存在: {}", vcfFilePath));
     }
 
     info!("✅ 参数验证通过，开始执行导入...");
 
-    // 使用简化的错误处理，避免复杂的嵌套
-    let device_id_clone = deviceId.clone();
-    let file_path_clone = contactsFilePath.clone();
+    // 使用VcfImporter直接导入VCF文件
+    info!("📋 创建VcfImporter实例...");
+    let importer = VcfImporter::new(deviceId.clone());
 
     let result = tokio::task::spawn_blocking(move || {
         tokio::runtime::Handle::current().block_on(async move {
             info!("📋 创建VcfImporterAsync实例...");
-            let importer = VcfImporterAsync::new(device_id_clone);
+            let importer = VcfImporterAsync::new(deviceId.clone());
 
             info!("⚡ 调用异步导入方法...");
-            match importer.import_vcf_contacts_simple(&file_path_clone).await {
+            match importer.import_vcf_contacts_simple(&vcfFilePath).await {
                 Ok(result) => {
                     info!(
                         "🎉 VCF导入完成（异步安全版）: 成功={} 总数={} 导入={}",
@@ -133,10 +157,20 @@ pub async fn import_vcf_contacts_async_safe(
     match result {
         Ok(import_result) => {
             info!("🎊 整个导入流程成功完成");
-            import_result
+            match import_result {
+                Ok(vcf_result) => {
+                    // 转换为LegacyVcfImportResult格式
+                    let legacy_result = LegacyVcfImportResult::from(vcf_result);
+                    Ok(legacy_result)
+                }
+                Err(e) => {
+                    error!("❌ 导入过程中发生错误: {}", e);
+                    Err(e)
+                }
+            }
         }
         Err(e) => {
-            error!(" 任务执行失败: {}", e);
+            error!("❌ 任务执行失败: {}", e);
             Err(format!("任务执行失败: {}", e))
         }
     }

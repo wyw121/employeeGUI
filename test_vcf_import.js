@@ -38,7 +38,7 @@ async function testImport() {
     
     const vcfFilePath = await invoke("generate_vcf_file", {
       contacts: testContacts,
-      fileName: `test_contacts_${Date.now()}.vcf`
+      output_path: `test_contacts_${Date.now()}.vcf`
     });
     
     console.log(`✅ VCF文件生成成功: ${vcfFilePath}`);

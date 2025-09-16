@@ -178,7 +178,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
             address: contact.notes || '',
             occupation: ''
           })),
-          fileName: `contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`
+          output_path: `contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`
         });
 
         console.log(`✅ VCF文件生成成功: ${vcfFilePath}`);

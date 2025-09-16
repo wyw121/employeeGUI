@@ -14,10 +14,8 @@ use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::crash_debugger::*;
-use services::crash_test::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{LogEntry, AdbCommandLog, LOG_COLLECTOR};
-use services::permission_test::*;
 use services::safe_adb_manager::*;
 use services::script_executor::*;
 use services::smart_script_executor::*;
@@ -709,7 +707,6 @@ fn main() {
             import_vcf_contacts_python_version, // Python移植版本
             import_vcf_contacts_with_intent_fallback, // 新增Intent方法
             verify_vcf_import,
-            test_vcf_import_crash_fix,             // 崩溃测试修复命令
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
             // 雷电模拟器专用VCF打开功能
             open_vcf_file_ldplayer,       // 打开已存在的VCF文件
@@ -731,10 +728,6 @@ fn main() {
             auto_follow_contacts,
             get_xiaohongshu_service_status,
             execute_complete_xiaohongshu_workflow,
-            // 权限处理测试功能
-            test_permission_handling,
-            test_vcf_import_with_permission,
-            test_vcf_import_with_detailed_logs,
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件

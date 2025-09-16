@@ -38,7 +38,7 @@ const OptimizationSummaryPage: React.FC = () => {
         '文件系统操作',
         '权限管理'
       ],
-      components: ['AdbDiagnosticService', 'deviceAPI', 'adbService']
+      components: ['useAdb', 'deviceAPI', 'AdbApplicationService']
     },
     {
       title: '坐标捕获',

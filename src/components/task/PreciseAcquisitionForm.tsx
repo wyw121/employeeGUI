@@ -14,11 +14,11 @@ interface PreciseAcquisitionFormProps {
     targetKeywords: string[];
     targetCount: number;
     preferenceTags: string[];
-    selectedDevices: number[];
+    selectedDevices: string[];
   }) => void;
-  availableDevices: Array<{ id: number; name: string; phone_name: string }>;
-  selectedDevices: number[];
-  onDeviceSelectionChange: (deviceIds: number[]) => void;
+  availableDevices: Array<{ id: string; name: string; phone_name: string }>;
+  selectedDevices: string[];
+  onDeviceSelectionChange: (deviceIds: string[]) => void;
   isLoading?: boolean;
   collectedCount?: number;
 }

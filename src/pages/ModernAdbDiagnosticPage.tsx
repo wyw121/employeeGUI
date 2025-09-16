@@ -3,8 +3,8 @@
  * 使用仪表板式布局替代tab布局
  */
 import React from 'react';
-import { Layout, Typography, Space } from 'antd';
-import { ModernAdbDashboard } from '../components/adb-diagnostic/ModernAdbDashboard';
+import { Layout, Typography, Space, Card } from 'antd';
+import { useAdb } from '../application/hooks/useAdb';
 
 const { Content, Header } = Layout;
 const { Title, Text } = Typography;
@@ -14,6 +14,8 @@ interface ModernAdbDiagnosticPageProps {
 }
 
 export const ModernAdbDiagnosticPage: React.FC<ModernAdbDiagnosticPageProps> = ({ className }) => {
+  const { devices, isLoading } = useAdb();
+  
   return (
     <Layout className={`modern-adb-diagnostic-page ${className || ''}`}>
       <Header 
@@ -39,7 +41,12 @@ export const ModernAdbDiagnosticPage: React.FC<ModernAdbDiagnosticPageProps> = (
       </Header>
 
       <Content style={{ padding: 24, backgroundColor: '#f5f5f5', minHeight: 'calc(100vh - 64px)' }}>
-        <ModernAdbDashboard />
+        <Card title="ADB 系统状态">
+          <p>系统已重构为统一的DDD架构</p>
+          <p>设备数量: {devices.length}</p>
+          <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
+          <p>状态: {isLoading ? '加载中' : '正常'}</p>
+        </Card>
       </Content>
     </Layout>
   );

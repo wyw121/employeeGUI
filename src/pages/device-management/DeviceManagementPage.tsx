@@ -1,75 +1,24 @@
 import { Plus, Smartphone } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { DeviceList } from '../../components/device';
 import { PageWrapper } from '../../components/layout';
-import type { Device } from '../../types';
+import { useAdb } from '../../application/hooks/useAdb';
 
 /**
  * 设备管理页面
- * 允许员工管理最多10台设备的连接状态
+ * 允许员工管理设备的连接状态
  */
 export const DeviceManagementPage: React.FC = () => {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { devices, isLoading, refreshDevices } = useAdb();
 
-  // 初始化设备列表（1-10号设备）
-  useEffect(() => {
-    const initializeDevices = () => {
-      const initialDevices: Device[] = Array.from({ length: 10 }, (_, i) => ({
-        id: i + 1,
-        name: `Device-${String(i + 1).padStart(2, '0')}`,
-        phone_name: `Phone-${i + 1}`,
-        status: 'disconnected' as const,
-        last_connected: undefined
-      }));
-
-      setDevices(initialDevices);
-      setIsLoading(false);
-    };
-
-    initializeDevices();
-  }, []);
-
-  // 连接设备
-  const handleConnect = async (device: Device) => {
-    try {
-      // 这里应该调用后端API连接设备
-      // 暂时模拟连接成功
-      setDevices(prev => prev.map(d =>
-        d.id === device.id
-          ? { ...d, status: 'connected', last_connected: new Date().toISOString() }
-          : d
-      ));
-    } catch (error) {
-      console.error('Failed to connect device:', error);
-      alert('设备连接失败，请重试');
-    }
-  };
-
-  // 断开设备
-  const handleDisconnect = async (device: Device) => {
-    try {
-      // 这里应该调用后端API断开设备
-      // 暂时模拟断开成功
-      setDevices(prev => prev.map(d =>
-        d.id === device.id
-          ? { ...d, status: 'disconnected' }
-          : d
-      ));
-    } catch (error) {
-      console.error('Failed to disconnect device:', error);
-      alert('设备断开失败，请重试');
-    }
-  };
-
-  const connectedCount = devices.filter(d => d.status === 'connected').length;
+  const connectedCount = devices.filter(d => d.isOnline()).length;
 
   return (
     <PageWrapper
       title="设备管理"
       subtitle="管理最多10台设备的连接状态，确保任务正常执行"
       icon={<Smartphone className="w-6 h-6 text-indigo-600" />}
-      onRefresh={() => window.location.reload()}
+      onRefresh={refreshDevices}
       actions={
         <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
           <Plus className="w-4 h-4 mr-1" />
@@ -126,8 +75,6 @@ export const DeviceManagementPage: React.FC = () => {
           </div>
           <DeviceList
             devices={devices}
-            onConnect={handleConnect}
-            onDisconnect={handleDisconnect}
             isLoading={isLoading}
           />
         </div>

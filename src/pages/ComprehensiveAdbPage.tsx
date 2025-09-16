@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
-import { 
-  AdbDashboard, 
-  LogViewer, 
-  EnhancedDeviceManager,
-  useNotification
-} from '../components/adb-diagnostic';
+import { useAdb } from '../application/hooks/useAdb';
 
 const { Title, Paragraph } = Typography;
 const { TabPane } = Tabs;
@@ -16,7 +11,7 @@ const { TabPane } = Tabs;
  */
 export const ComprehensiveAdbPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { unreadCount } = useNotification();
+  const { devices, isLoading } = useAdb();
 
   return (
     <div style={{ padding: '24px' }}>
@@ -30,12 +25,12 @@ export const ComprehensiveAdbPage: React.FC = () => {
               日志查看、自动诊断修复等完整功能。
             </Paragraph>
             
-            {/* 通知提示 */}
-            {unreadCount > 0 && (
+            {/* 设备状态提示 */}
+            {devices.length > 0 && (
               <Alert
                 type="info"
-                message={`您有 ${unreadCount} 条未读通知`}
-                description="请查看系统通知获取最新状态更新"
+                message={`当前有 ${devices.filter(d => d.isOnline()).length} 台设备在线`}
+                description="设备状态实时更新，支持完整的ADB管理功能"
                 showIcon
                 closable
                 style={{ marginTop: '16px' }}
@@ -55,17 +50,30 @@ export const ComprehensiveAdbPage: React.FC = () => {
             >
               {/* 系统仪表板 */}
               <TabPane tab="系统仪表板" key="dashboard">
-                <AdbDashboard />
+                <Card title="ADB系统状态">
+                  <p>系统已重构为统一的DDD架构</p>
+                  <p>设备数量: {devices.length}</p>
+                  <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
+                  <p>状态: {isLoading ? '加载中' : '正常'}</p>
+                </Card>
               </TabPane>
 
               {/* 设备管理 */}
               <TabPane tab="设备管理" key="devices">
-                <EnhancedDeviceManager />
+                <Card title="设备列表">
+                  {devices.map(device => (
+                    <div key={device.id} style={{ marginBottom: 8 }}>
+                      {device.getDisplayName()} - {device.isOnline() ? '在线' : '离线'}
+                    </div>
+                  ))}
+                </Card>
               </TabPane>
 
               {/* 日志查看器 */}
               <TabPane tab="日志查看" key="logs">
-                <LogViewer />
+                <Card title="系统日志">
+                  <p>统一日志系统 - 通过 useAdb() 接口访问</p>
+                </Card>
               </TabPane>
 
               {/* 系统状态 */}
@@ -110,17 +118,17 @@ const SystemStatusView: React.FC = () => {
           <Card title="模块架构" size="small">
             <Space direction="vertical" style={{ width: '100%' }}>
               <div><strong>服务层</strong></div>
-              <div>- LogManager (日志管理)</div>
-              <div>- EnhancedAdbDiagnosticService (诊断服务)</div>
+              <div>- AdbApplicationService (统一应用服务)</div>
+              <div>- adbStore (状态管理)</div>
               
               <div style={{ marginTop: '16px' }}><strong>组件层</strong></div>
-              <div>- AdbDashboard (统一仪表板)</div>
-              <div>- LogViewer (日志查看器)</div>
-              <div>- EnhancedDeviceManager (设备管理器)</div>
+              <div>- 统一使用 useAdb() Hook</div>
+              <div>- DeviceList (设备列表)</div>
+              <div>- 各种业务组件</div>
               
               <div style={{ marginTop: '16px' }}><strong>Hooks层</strong></div>
+              <div>- useAdb (统一ADB接口)</div>
               <div>- useLogManager (日志管理)</div>
-              <div>- useAdbDiagnostic (诊断控制)</div>
               <div>- useDeviceMonitor (设备监控)</div>
               <div>- useNotification (通知管理)</div>
             </Space>

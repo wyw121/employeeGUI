@@ -9,11 +9,11 @@ interface ContactFollowFormProps {
   onSubmit: (data: {
     platform: Platform;
     file: File;
-    selectedDevices: number[];
+    selectedDevices: string[];
   }) => void;
-  availableDevices: Array<{ id: number; name: string; phone_name: string }>;
-  selectedDevices: number[];
-  onDeviceSelectionChange: (deviceIds: number[]) => void;
+  availableDevices: Array<{ id: string; name: string; phone_name: string }>;
+  selectedDevices: string[];
+  onDeviceSelectionChange: (deviceIds: string[]) => void;
   isLoading?: boolean;
   totalContacts?: number;
   processedContacts?: number;
@@ -65,7 +65,7 @@ export const ContactFollowForm: React.FC<ContactFollowFormProps> = ({
     });
   };
 
-  const handleDeviceToggle = (deviceId: number) => {
+  const handleDeviceToggle = (deviceId: string) => {
     const newSelection = selectedDevices.includes(deviceId)
       ? selectedDevices.filter(id => id !== deviceId)
       : [...selectedDevices, deviceId];

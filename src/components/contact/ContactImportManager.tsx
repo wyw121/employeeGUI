@@ -27,10 +27,26 @@ import {
   Typography
 } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Contact, Device, VcfImportResult } from '../../types';
+import { useAdb } from '../../application/hooks/useAdb';
+import { Device } from '../../domain/adb/entities/Device';
 
 const { Text } = Typography;
 const { Step } = Steps;
+const { Option } = Select;
+
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+}
+
+interface VcfImportResult {
+  name: string;
+  phone: string;
+  isValid: boolean;
+  errorMessage?: string;
+}
 
 interface ContactImportManagerProps {
   contacts: Contact[];
@@ -55,784 +71,444 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
-  const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [deviceGroups, setDeviceGroups] = useState<DeviceContactGroup[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [adbPath, setAdbPath] = useState<string>('');
 
-  // 初始化ADB路径
-  const initializeAdb = useCallback(async () => {
-    try {
-      // 使用智能ADB检测
-      const smartPath = await invoke<string>('detect_smart_adb_path');
-      if (smartPath) {
-        setAdbPath(smartPath);
-        console.log('已检测到智能ADB路径:', smartPath);
-        return;
-      }
-    } catch (error) {
-      console.log('智能ADB检测失败:', error);
-    }
-    
-    try {
-      // 回退：检测雷电模拟器ADB路径
-      const detectedPath = await invoke<string | null>('detect_ldplayer_adb');
-      if (detectedPath) {
-        setAdbPath(detectedPath);
-        console.log('已检测到雷电模拟器ADB路径:', detectedPath);
-      } else {
-        setAdbPath('platform-tools/adb.exe'); // 使用项目中的ADB
-        console.log('未检测到特定ADB，使用项目ADB');
-      }
-    } catch (error) {
-      console.error('初始化ADB失败:', error);
-      setAdbPath('platform-tools/adb.exe');
-    }
-  }, []);
+  // 使用统一的ADB接口 - 遵循DDD架构约束
+  const { 
+    devices, 
+    selectedDevice, 
+    selectDevice, 
+    isLoading,
+    refreshDevices,
+    initialize,
+    onlineDevices
+  } = useAdb();
 
-  // 初始化时获取ADB路径和设备列表
+  // 初始化ADB环境
   useEffect(() => {
+    const initializeAdb = async () => {
+      try {
+        await initialize();
+        await refreshDevices();
+      } catch (error) {
+        console.error('ADB初始化失败:', error);
+        onError?.(`ADB初始化失败: ${error}`);
+      }
+    };
+
     initializeAdb();
-  }, [initializeAdb]);
+  }, [initialize, refreshDevices, onError]);
 
-  // 当ADB路径初始化完成后，自动获取设备列表
+  // 初始化选择的联系人
   useEffect(() => {
-    if (adbPath) {
-      loadDevices();
+    if (contacts.length > 0 && selectedContacts.length === 0) {
+      setSelectedContacts(contacts);
     }
-  }, [adbPath]); // 移除 loadDevices 依赖，避免循环引用
+  }, [contacts, selectedContacts.length]);
 
-  // 解析ADB设备输出 - 与RealDeviceManager保持一致
-  const parseDevicesOutput = useCallback((output: string): Device[] => {
-    const lines = output.split('\n').filter(line => 
-      line.trim() && !line.includes('List of devices')
-    );
-
-    const devices: Device[] = [];
-
-    lines.forEach((line, index) => {
-      const parts = line.trim().split(/\s+/);
-      const deviceId = parts[0];
-      const status = parts[1];
-
-      // 只处理已连接的设备
-      if (status !== 'device') {
-        return;
-      }
-
-      // 检测是否为雷电模拟器
-      const isEmulator = deviceId.includes('127.0.0.1') || deviceId.includes('emulator');
-
-      // 解析设备信息
-      let model = '';
-      let product = '';
-      
-      for (let i = 2; i < parts.length; i++) {
-        const part = parts[i];
-        if (part.startsWith('model:')) {
-          model = part.split(':')[1];
-        } else if (part.startsWith('product:')) {
-          product = part.split(':')[1];
-        }
-      }
-
-      // 生成友好的设备名称
-      let deviceName = '';
-      if (isEmulator) {
-        if (deviceId.includes('127.0.0.1')) {
-          deviceName = `雷电模拟器 (${deviceId})`;
-        } else {
-          deviceName = `模拟器 (${deviceId})`;
-        }
-      } else {
-        deviceName = model || product || `设备 ${index + 1}`;
-      }
-
-      devices.push({
-        id: devices.length + 1, // 使用当前设备数量+1作为ID
-        name: deviceName,
-        phone_name: deviceId,
-        status: 'connected'
-      });
-    });
-
-    return devices;
-  }, []);
-
-  // 获取可用设备 - 与RealDeviceManager保持一致
-  const loadDevices = useCallback(async () => {
-    if (!adbPath) {
-      console.log('ADB路径未初始化，跳过设备检测');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // 使用与RealDeviceManager相同的方法获取设备
-      const output = await invoke<string>('get_adb_devices', { adbPath: adbPath });
-      const devices = parseDevicesOutput(output);
-      
-      setAvailableDevices(devices);
-      
-      // 默认选中所有已连接的设备
-      const connectedDeviceIds = devices.map(device => device.id.toString());
-      setSelectedDevices(connectedDeviceIds);
-      
-      // 立即触发设备选择回调，因为我们刚刚设置了设备
-      if (onDeviceSelected && devices.length > 0) {
-        console.log('立即触发设备选择回调，设备数量:', devices.length);
-        onDeviceSelected(devices); // 直接传递设备数组，而不是等待状态更新
-      }
-      
-      if (devices.length === 0) {
-        message.info('未检测到连接的设备，请确保：\n1. 设备已通过USB连接\n2. 启用了USB调试\n3. ADB驱动已正确安装');
-      } else {
-        message.success(`检测到 ${devices.length} 台设备`);
-        console.log('检测到的设备:', devices);
-      }
-      
-    } catch (error) {
-      console.error('获取设备列表失败:', error);
-      const errorMsg = `获取设备列表失败: ${error instanceof Error ? error.message : String(error)}`;
-      onError?.(errorMsg);
-      message.error(errorMsg);
-      
-      // 设置空设备列表，但不阻塞用户操作
-      setAvailableDevices([]);
-      setSelectedDevices([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [adbPath, parseDevicesOutput, onError]);
-
-  // 选择联系人
-  const handleContactSelection = useCallback((selectedKeys: React.Key[]) => {
-    const selected = contacts.filter(contact => selectedKeys.includes(contact.id));
-    setSelectedContacts(selected);
-  }, [contacts]);
-
-  // 全选/取消全选联系人
-  const handleSelectAllContacts = useCallback((checked: boolean) => {
-    setSelectedContacts(checked ? [...contacts] : []);
-  }, [contacts]);
-
-  // 平均分配联系人到设备
-  const distributeContactsToDevices = useCallback(() => {
-    if (selectedContacts.length === 0 || selectedDevices.length === 0) {
-      return [];
-    }
-
-    const deviceCount = selectedDevices.length;
-    const contactsPerDevice = Math.ceil(selectedContacts.length / deviceCount);
-    const groups: DeviceContactGroup[] = [];
-
-    selectedDevices.forEach((deviceId, index) => {
-      const startIndex = index * contactsPerDevice;
-      const endIndex = Math.min(startIndex + contactsPerDevice, selectedContacts.length);
-      const deviceContacts = selectedContacts.slice(startIndex, endIndex);
-      
-      const device = availableDevices.find(d => d.id.toString() === deviceId);
-      
-      if (deviceContacts.length > 0 && device) {
-        groups.push({
-          deviceId: device.phone_name, // 使用真实的ADB设备ID而不是数字ID
-          deviceName: device?.name || `设备 ${deviceId}`,
-          contacts: deviceContacts,
-          status: 'pending'
-        });
-      }
-    });
-
-    return groups;
-  }, [selectedContacts, selectedDevices, availableDevices]);
-
-  // 当设备选择发生变化时，通知父组件
-  useEffect(() => {
-    if (onDeviceSelected && selectedDevices.length > 0 && availableDevices.length > 0) {
-      const selectedDeviceObjects = availableDevices.filter(device => 
-        selectedDevices.includes(device.id.toString())
+  // 处理设备选择
+  const handleDeviceSelection = useCallback((deviceIds: string[]) => {
+    setSelectedDevices(deviceIds);
+    
+    if (onDeviceSelected && deviceIds.length > 0) {
+      const selectedDeviceObjects = devices.filter(device =>
+        deviceIds.includes(device.id)
       );
       onDeviceSelected(selectedDeviceObjects);
     }
-  }, [selectedDevices, availableDevices, onDeviceSelected]);
+  }, [devices, onDeviceSelected]);
 
-  // 准备分配
-  const handlePrepareDistribution = useCallback(() => {
-    const groups = distributeContactsToDevices();
-    if (groups.length === 0) {
-      onError?.('请选择联系人和设备');
+  // 分配联系人到设备
+  const assignContactsToDevices = useCallback(() => {
+    if (selectedContacts.length === 0 || selectedDevices.length === 0) {
+      message.warning('请选择联系人和设备');
       return;
     }
-    setDeviceGroups(groups);
-    setCurrentStep(1);
-  }, [distributeContactsToDevices, onError]);
 
-  // 开始导入
-  const handleStartImport = useCallback(async () => {
+    const contactsPerDevice = Math.ceil(selectedContacts.length / selectedDevices.length);
+    const groups: DeviceContactGroup[] = [];
+
+    selectedDevices.forEach((deviceId, index) => {
+      const device = devices.find(d => d.id === deviceId);
+      if (!device) return;
+
+      const startIndex = index * contactsPerDevice;
+      const endIndex = Math.min(startIndex + contactsPerDevice, selectedContacts.length);
+      const deviceContacts = selectedContacts.slice(startIndex, endIndex);
+
+      groups.push({
+        deviceId: device.id,
+        deviceName: device.getDisplayName(),
+        contacts: deviceContacts,
+        status: 'pending'
+      });
+    });
+
+    setDeviceGroups(groups);
+    setCurrentStep(2);
+    message.success(`已将 ${selectedContacts.length} 个联系人分配给 ${selectedDevices.length} 个设备`);
+  }, [selectedContacts, selectedDevices, devices]);
+
+  // 创建VCF文件内容
+  const createVcfContent = useCallback((contacts: Contact[]): string => {
+    return contacts.map(contact => {
+      return [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${contact.name}`,
+        `N:${contact.name};;;;`,
+        contact.phone ? `TEL:${contact.phone}` : '',
+        contact.email ? `EMAIL:${contact.email}` : '',
+        'END:VCARD'
+      ].filter(line => line).join('\n');
+    }).join('\n\n');
+  }, []);
+
+  // 导入联系人到单个设备
+  const importToDevice = useCallback(async (group: DeviceContactGroup): Promise<VcfImportResult> => {
+    try {
+      console.log(`开始导入到设备: ${group.deviceName} (${group.deviceId})`);
+      
+      const vcfContent = createVcfContent(group.contacts);
+      
+      // 调用Tauri命令导入联系人
+      const result = await invoke<string>('import_vcf_to_device', {
+        deviceId: group.deviceId,
+        vcfContent: vcfContent,
+        contactCount: group.contacts.length
+      });
+
+      console.log(`设备 ${group.deviceName} 导入结果:`, result);
+
+      return {
+        name: group.deviceName,
+        phone: group.deviceId,
+        isValid: true
+      };
+    } catch (error) {
+      console.error(`设备 ${group.deviceName} 导入失败:`, error);
+      return {
+        name: group.deviceName,
+        phone: group.deviceId,
+        isValid: false,
+        errorMessage: `导入失败: ${error}`
+      };
+    }
+  }, [createVcfContent]);
+
+  // 开始导入流程
+  const startImport = useCallback(async () => {
     if (deviceGroups.length === 0) {
-      onError?.('没有准备好的导入任务');
+      message.error('没有设备分组可导入');
       return;
     }
 
     setIsImporting(true);
     setImportProgress(0);
-    setCurrentStep(2);
-
-    const results: VcfImportResult[] = [];
-    const totalGroups = deviceGroups.length;
+    setCurrentStep(3);
 
     try {
-      // 逐个设备执行导入
-      for (let i = 0; i < deviceGroups.length; i++) {
+      const results: VcfImportResult[] = [];
+      const totalGroups = deviceGroups.length;
+
+      for (let i = 0; i < totalGroups; i++) {
         const group = deviceGroups[i];
         
-        // 更新当前设备状态
+        // 更新状态：正在导入
         setDeviceGroups(prev => prev.map(g => 
-          g.deviceId === group.deviceId 
-            ? { ...g, status: 'importing' }
-            : g
+          g.deviceId === group.deviceId ? { ...g, status: 'importing' } : g
         ));
 
         try {
-          console.log(`开始处理设备: ${group.deviceName} (${group.deviceId})`);
-          
-          // 生成临时联系人文本文件（CSV格式，与PermissionTestPage相同）
-          // 格式：姓名,电话,地址,职业,邮箱
-          const contactsContent = group.contacts.map(contact => 
-            `${contact.name},${contact.phone || ''},${contact.notes || ''},,${contact.email || ''}`
-          ).join('\n');
-          
-          // 使用固定的临时文件路径，避免复杂的路径生成
-          const tempPath = `temp_contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
-          
-          console.log(`生成联系人文件: ${tempPath}, 联系人数量: ${group.contacts.length}`);
-          console.log(`联系人内容预览:`, contactsContent.slice(0, 200) + '...');
-          
-          // 直接写入文件，不通过VcfImportService
-          await invoke("write_file", {
-            path: tempPath,
-            content: contactsContent,
-          });
-          
-          // 使用与PermissionTestPage完全相同的方式直接调用API
-          console.log(`🚀 开始使用vcf-import-test成功方法处理设备: ${group.deviceId}`);
-          console.log(`📁 使用联系人文件: ${tempPath}`);
-          
-          // 方法1: 先尝试使用generate_vcf_file + 简单推送的方式（类似vcf-import-test）
-          try {
-            console.log(`📋 尝试方法1: 使用generate_vcf_file方式`);
-            
-            // 生成VCF文件
-            const vcfFilePath = await invoke<string>("generate_vcf_file", {
-              contacts: group.contacts.map(contact => ({
-                id: contact.id?.toString() || '',
-                name: contact.name,
-                phone: contact.phone || '',
-                email: contact.email || '',
-                address: contact.notes || '',
-                occupation: ''
-              })),
-              fileName: `contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`
-            });
-            
-            console.log(`✅ VCF文件生成成功: ${vcfFilePath}`);
-            
-            // 使用异步安全版本导入
-            const importResult = await invoke<VcfImportResult>("import_vcf_contacts_async_safe", {
-              deviceId: group.deviceId,
-              vcfFilePath: vcfFilePath
-            });
-            
-            console.log(`✅ 方法1成功 - 设备 ${group.deviceName} 导入结果:`, importResult);
-            results.push(importResult);
-            
-            // 更新设备导入结果
-            setDeviceGroups(prev => prev.map(g => 
-              g.deviceId === group.deviceId 
-                ? { ...g, status: importResult.success ? 'completed' : 'failed', result: importResult }
-                : g
-            ));
-            
-            if (importResult.success) {
-              message.success(`设备 ${group.deviceName} 导入成功 (${importResult.importedContacts}/${importResult.totalContacts})`);
-            } else {
-              message.error(`设备 ${group.deviceName} 导入失败: ${importResult.message}`);
-            }
-            
-          } catch (method1Error) {
-            console.warn(`⚠️ 方法1失败，尝试方法2:`, method1Error);
-            
-            // 方法2: 回退到权限测试方法
-            try {
-              console.log(`📋 尝试方法2: 使用权限测试方法`);
-              
-              const permissionTestResult = await invoke<string>("test_vcf_import_with_permission", {
-                deviceId: group.deviceId,
-                contactsFile: tempPath,
-              });
-              
-              console.log(`✅ 设备 ${group.deviceName} 方法2原始返回结果:`, permissionTestResult);
-              
-              // 简化结果解析，更加鲁棒
-              const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
-              const parts = regex.exec(permissionTestResult);
-              
-              let result: VcfImportResult;
-              
-              if (parts && parts.length >= 6) {
-                // 成功解析的情况
-                result = {
-                  success: parts[1] === 'true',
-                  totalContacts: parseInt(parts[2]) || 0,
-                  importedContacts: parseInt(parts[3]) || 0,
-                  failedContacts: parseInt(parts[4]) || 0,
-                  message: parts[5] || '导入完成',
-                  details: permissionTestResult
-                };
-              } else {
-                // 解析失败，但可能导入成功了，根据返回内容判断
-                const isSuccess = permissionTestResult.includes('成功') || 
-                                 permissionTestResult.includes('导入结果: 成功=true') ||
-                                 !permissionTestResult.includes('失败');
-                
-                result = {
-                  success: isSuccess,
-                  totalContacts: group.contacts.length,
-                  importedContacts: isSuccess ? group.contacts.length : 0,
-                  failedContacts: isSuccess ? 0 : group.contacts.length,
-                  message: isSuccess ? '导入成功' : '导入失败',
-                  details: permissionTestResult
-                };
-              }
-              
-              results.push(result);
-              
-              console.log(`📊 设备 ${group.deviceName} (${group.deviceId}) 方法2最终解析结果:`, result);
+          const result = await importToDevice(group);
+          results.push(result);
 
-              // 更新设备导入结果
-              setDeviceGroups(prev => prev.map(g => 
-                g.deviceId === group.deviceId 
-                  ? { ...g, status: result.success ? 'completed' : 'failed', result }
-                  : g
-              ));
-
-              if (result.success) {
-                message.success(`设备 ${group.deviceName} 导入成功 (方法2) (${result.importedContacts}/${result.totalContacts})`);
-              } else {
-                message.error(`设备 ${group.deviceName} 导入失败 (方法2): ${result.message}`);
-              }
-              
-            } catch (method2Error) {
-              console.error(`❌ 方法2也失败:`, method2Error);
-              throw method2Error; // 抛出错误以触发通用错误处理
-            }
-          }
-
-          // 清理临时文件
-          try {
-            await invoke("delete_file", { path: tempPath });
-            console.log(`🗑️ 已清理临时文件: ${tempPath}`);
-          } catch (cleanupError) {
-            console.warn('清理临时文件失败:', cleanupError);
-          }
-
-        } catch (error) {
-          console.error(`❌ 设备 ${group.deviceName} 导入失败:`, error);
-          
-          const failedResult: VcfImportResult = {
-            success: false,
-            totalContacts: group.contacts.length,
-            importedContacts: 0,
-            failedContacts: group.contacts.length,
-            message: `导入失败: ${error instanceof Error ? error.message : String(error)}`,
-            details: error instanceof Error ? error.stack : String(error)
-          };
-
-          results.push(failedResult);
-          
-          // 更新设备状态为失败
+          // 更新状态：导入完成
           setDeviceGroups(prev => prev.map(g => 
             g.deviceId === group.deviceId 
-              ? { ...g, status: 'failed', result: failedResult }
+              ? { ...g, status: result.isValid ? 'completed' : 'failed', result }
               : g
           ));
 
-          message.error(`设备 ${group.deviceName} 导入失败: ${failedResult.message}`);
+          if (result.isValid) {
+            message.success(`设备 ${group.deviceName} 导入成功`);
+          } else {
+            message.error(`设备 ${group.deviceName} 导入失败: ${result.errorMessage}`);
+          }
+        } catch (error) {
+          const failedResult: VcfImportResult = {
+            name: group.deviceName,
+            phone: group.deviceId,
+            isValid: false,
+            errorMessage: `导入异常: ${error}`
+          };
+          results.push(failedResult);
+
+          setDeviceGroups(prev => prev.map(g => 
+            g.deviceId === group.deviceId ? { ...g, status: 'failed', result: failedResult } : g
+          ));
+
+          message.error(`设备 ${group.deviceName} 导入失败: ${error}`);
         }
 
         // 更新进度
-        setImportProgress(Math.round(((i + 1) / totalGroups) * 100));
+        setImportProgress((i + 1) / totalGroups * 100);
       }
 
-      const successCount = results.filter(r => r.success).length;
-      const failedCount = results.filter(r => !r.success).length;
-      
-      if (successCount > 0 && failedCount === 0) {
-        message.success(`🎉 所有 ${successCount} 个设备导入成功！`);
-      } else if (successCount > 0 && failedCount > 0) {
-        message.warning(`⚠️ 部分完成：${successCount} 个成功，${failedCount} 个失败`);
-      } else {
-        message.error(`❌ 所有设备导入失败`);
-      }
+      // 导入完成
+      const successCount = results.filter(r => r.isValid).length;
+      message.success(`导入完成！成功: ${successCount}/${totalGroups} 个设备`);
       
       onImportComplete?.(results);
-
     } catch (error) {
       console.error('批量导入失败:', error);
-      onError?.(`批量导入失败: ${error instanceof Error ? error.message : String(error)}`);
+      message.error(`批量导入失败: ${error}`);
+      onError?.(`批量导入失败: ${error}`);
     } finally {
       setIsImporting(false);
+      setImportProgress(100);
     }
-  }, [deviceGroups, onImportComplete, onError]);
+  }, [deviceGroups, importToDevice, onImportComplete, onError]);
 
-  // 重置到第一步
-  const handleReset = useCallback(() => {
-    setCurrentStep(0);
-    setSelectedContacts([]);
-    setDeviceGroups([]);
-    setImportProgress(0);
-    setIsImporting(false);
-  }, []);
+  // 渲染步骤导航
+  const renderSteps = () => (
+    <Steps current={currentStep} style={{ marginBottom: 24 }}>
+      <Step title="选择联系人" icon={<ContactsOutlined />} />
+      <Step title="选择设备" icon={<MobileOutlined />} />
+      <Step title="分配任务" icon={<SettingOutlined />} />
+      <Step title="导入进行中" icon={<PlayCircleOutlined />} />
+      <Step title="完成" icon={<CheckCircleOutlined />} />
+    </Steps>
+  );
 
-  // 渲染联系人选择步骤
-  const renderContactSelection = () => {
-    const columns = [
-      {
-        title: '姓名',
-        dataIndex: 'name',
-        key: 'name',
-        render: (text: string) => <Text strong>{text}</Text>
-      },
-      {
-        title: '电话',
-        dataIndex: 'phone',
-        key: 'phone'
-      },
-      {
-        title: '邮箱',
-        dataIndex: 'email',
-        key: 'email'
-      }
-    ];
-
-    return (
-      <div>
-        <div className="mb-4">
-          <Row gutter={16}>
-            <Col span={12}>
-              <Card size="small">
-                <Statistic title="总联系人" value={contacts.length} prefix={<UserOutlined />} />
-              </Card>
-            </Col>
-            <Col span={12}>
-              <Card size="small">
-                <Statistic 
-                  title="已选择" 
-                  value={selectedContacts.length} 
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: selectedContacts.length > 0 ? '#3f8600' : '#cf1322' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        <div className="mb-4">
-          <Checkbox
-            indeterminate={selectedContacts.length > 0 && selectedContacts.length < contacts.length}
-            onChange={(e) => handleSelectAllContacts(e.target.checked)}
-            checked={selectedContacts.length === contacts.length}
-          >
-            全选联系人 ({contacts.length})
-          </Checkbox>
-        </div>
-
-        <Table
-          size="small"
-          columns={columns}
-          dataSource={contacts}
-          rowKey="id"
-          rowSelection={{
-            selectedRowKeys: selectedContacts.map(c => c.id),
-            onChange: handleContactSelection
+  // 渲染联系人选择界面
+  const renderContactSelection = () => (
+    <Card title="选择要导入的联系人" style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <Checkbox
+          checked={selectedContacts.length === contacts.length}
+          indeterminate={selectedContacts.length > 0 && selectedContacts.length < contacts.length}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedContacts(contacts);
+            } else {
+              setSelectedContacts([]);
+            }
           }}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} 共 ${total} 条`
-          }}
-        />
-
-        <div className="mt-4">
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Space>
-                <Text>设备选择:</Text>
-                <Select
-                  mode="multiple"
-                  style={{ width: 300 }}
-                  placeholder={availableDevices.length === 0 ? "未检测到设备" : "选择目标设备"}
-                  value={selectedDevices}
-                  onChange={setSelectedDevices}
-                  disabled={availableDevices.length === 0}
-                  options={availableDevices
-                    .filter(device => device.status === 'connected')
-                    .map(device => ({
-                      label: `${device.name} (${device.phone_name})`,
-                      value: device.id.toString()
-                    }))}
-                />
-              </Space>
+        >
+          全选 ({contacts.length} 个联系人)
+        </Checkbox>
+      </div>
+      
+      <Checkbox.Group
+        value={selectedContacts.map(c => c.id)}
+        onChange={(checkedValues) => {
+          const selected = contacts.filter(c => checkedValues.includes(c.id));
+          setSelectedContacts(selected);
+        }}
+        style={{ width: '100%' }}
+      >
+        <Row gutter={[8, 8]}>
+          {contacts.map(contact => (
+            <Col span={8} key={contact.id}>
+              <Checkbox value={contact.id}>
+                <Space>
+                  <UserOutlined />
+                  <div>
+                    <div>{contact.name}</div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      {contact.phone}
+                    </Text>
+                  </div>
+                </Space>
+              </Checkbox>
             </Col>
-            <Col>
-              <Button 
-                type="default"
-                icon={<MobileOutlined />}
-                onClick={loadDevices}
-                loading={loading}
-                size="small"
-              >
-                刷新设备
-              </Button>
-            </Col>
-          </Row>
-          
-          {availableDevices.length === 0 && (
-            <Alert
-              type="warning"
-              message="未检测到设备"
-              description={
-                <div>
-                  <p>请确保：</p>
-                  <ul style={{ paddingLeft: '20px', margin: '8px 0' }}>
-                    <li>设备已通过USB连接到电脑</li>
-                    <li>设备已启用"USB调试"选项</li>
-                    <li>ADB驱动已正确安装</li>
-                    <li>设备已授权此电脑进行调试</li>
-                  </ul>
-                  <Button type="link" onClick={loadDevices} loading={loading}>
-                    重新检测设备
-                  </Button>
-                </div>
-              }
-              showIcon
-              style={{ marginTop: '8px' }}
-            />
-          )}
-        </div>
+          ))}
+        </Row>
+      </Checkbox.Group>
 
-        <div className="mt-6">
-          <Button
-            type="primary"
-            size="large"
-            disabled={selectedContacts.length === 0 || selectedDevices.length === 0}
-            onClick={handlePrepareDistribution}
-            icon={<SettingOutlined />}
-          >
-            准备分配 ({selectedContacts.length} 个联系人 → {selectedDevices.length} 台设备)
+      {selectedContacts.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <Button type="primary" onClick={() => setCurrentStep(1)}>
+            下一步：选择设备 ({selectedContacts.length} 个联系人)
           </Button>
         </div>
-      </div>
-    );
-  };
+      )}
+    </Card>
+  );
 
-  // 渲染分配预览步骤
-  const renderDistributionPreview = () => {
-    return (
-      <div>
-        <Alert
-          type="info"
-          message="分配预览"
-          description={`将 ${selectedContacts.length} 个联系人平均分配到 ${selectedDevices.length} 台设备中。`}
-          showIcon
-          className="mb-4"
-        />
-
-        <Row gutter={16}>
-          {deviceGroups.map(group => (
-            <Col span={24} key={group.deviceId} className="mb-4">
-              <Card
-                title={
-                  <Space>
-                    <MobileOutlined />
-                    {group.deviceName}
-                    <Tag color="blue">{group.deviceId}</Tag>
-                  </Space>
-                }
-                extra={
-                  <Tag color="green">{group.contacts.length} 个联系人</Tag>
-                }
-                size="small"
-              >
-                <div className="max-h-32 overflow-y-auto">
-                  {group.contacts.map(contact => (
-                    <Tag key={contact.id} className="mb-1">
-                      {contact.name} ({contact.phone})
-                    </Tag>
-                  ))}
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        <div className="mt-4">
-          <Space>
-            <Button onClick={() => setCurrentStep(0)}>
-              返回修改
-            </Button>
-            <Button
-              type="primary"
-              size="large"
-              onClick={handleStartImport}
-              disabled={deviceGroups.length === 0}
-              icon={<PlayCircleOutlined />}
-            >
-              开始导入
-            </Button>
-          </Space>
+  // 渲染设备选择界面
+  const renderDeviceSelection = () => (
+    <Card title="选择目标设备" style={{ marginBottom: 16 }}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Select
+            mode="multiple"
+            style={{ flex: 1 }}
+            placeholder="选择要导入的设备"
+            value={selectedDevices}
+            onChange={handleDeviceSelection}
+            loading={isLoading}
+          >
+            {onlineDevices.map(device => (
+              <Option key={device.id} value={device.id}>
+                <Space>
+                  <MobileOutlined />
+                  <span>{device.getDisplayName()}</span>
+                  <Tag color="green">在线</Tag>
+                </Space>
+              </Option>
+            ))}
+          </Select>
+          <Button icon={<SettingOutlined />} onClick={refreshDevices} loading={isLoading}>
+            刷新设备
+          </Button>
         </div>
-      </div>
-    );
-  };
 
-  // 渲染导入进度步骤
-  const renderImportProgress = () => {
-    const completedCount = deviceGroups.filter(g => g.status === 'completed').length;
-    const failedCount = deviceGroups.filter(g => g.status === 'failed').length;
-    const totalImported = deviceGroups.reduce((sum, g) => sum + (g.result?.importedContacts || 0), 0);
-
-    return (
-      <div>
-        <div className="mb-6">
-          <Progress
-            percent={importProgress}
-            status={isImporting ? 'active' : 'success'}
-            strokeColor={{
-              '0%': '#108ee9',
-              '100%': '#87d068',
-            }}
+        {devices.length === 0 && (
+          <Alert
+            message="未检测到设备"
+            description="请确保设备已连接并启用USB调试"
+            type="warning"
+            showIcon
           />
-        </div>
+        )}
 
-        <Row gutter={16} className="mb-4">
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="总设备" value={deviceGroups.length} />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="完成" value={completedCount} valueStyle={{ color: '#3f8600' }} />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="失败" value={failedCount} valueStyle={{ color: '#cf1322' }} />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="总导入" value={totalImported} />
-            </Card>
-          </Col>
-        </Row>
+        {selectedDevices.length > 0 && (
+          <Alert
+            message={`已选择 ${selectedDevices.length} 个设备`}
+            description={`将把 ${selectedContacts.length} 个联系人分配给这些设备`}
+            type="info"
+            showIcon
+          />
+        )}
 
-        <div className="space-y-3">
-          {deviceGroups.map(group => (
-            <Card key={group.deviceId} size="small">
-              <Row align="middle" justify="space-between">
-                <Col>
-                  <Space>
-                    <MobileOutlined />
-                    <Text strong>{group.deviceName}</Text>
-                    <Tag>{group.contacts.length} 联系人</Tag>
-                  </Space>
-                </Col>
-                <Col>
-                  {group.status === 'pending' && <Tag color="default">等待中</Tag>}
-                  {group.status === 'importing' && <Tag color="processing">导入中</Tag>}
-                  {group.status === 'completed' && <Tag color="success">完成</Tag>}
-                  {group.status === 'failed' && <Tag color="error">失败</Tag>}
-                </Col>
-              </Row>
-              
-              {group.result && (
-                <div className="mt-2 text-sm">
-                  <Text type={group.result.success ? 'success' : 'danger'}>
-                    {group.result.message}
-                  </Text>
-                  {group.result.success && (
-                    <Text type="secondary" className="ml-2">
-                      (成功: {group.result.importedContacts}/{group.result.totalContacts})
-                    </Text>
-                  )}
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
+        {selectedDevices.length > 0 && (
+          <Button type="primary" onClick={assignContactsToDevices}>
+            下一步：分配任务
+          </Button>
+        )}
+      </Space>
+    </Card>
+  );
 
-        <div className="mt-6">
-          <Space>
-            <Button onClick={handleReset} disabled={isImporting}>
-              重新开始
-            </Button>
-            {!isImporting && (
-              <Button type="primary" onClick={() => setCurrentStep(0)}>
-                完成
-              </Button>
-            )}
-          </Space>
-        </div>
+  // 渲染分配预览
+  const renderAssignmentPreview = () => (
+    <Card title="导入任务分配" style={{ marginBottom: 16 }}>
+      <Table
+        dataSource={deviceGroups}
+        rowKey="deviceId"
+        pagination={false}
+        columns={[
+          {
+            title: '设备',
+            dataIndex: 'deviceName',
+            key: 'deviceName',
+            render: (name, record) => (
+              <Space>
+                <MobileOutlined />
+                <span>{name}</span>
+                <Tag color={
+                  record.status === 'completed' ? 'green' :
+                  record.status === 'failed' ? 'red' :
+                  record.status === 'importing' ? 'blue' : 'default'
+                }>
+                  {record.status === 'pending' ? '待导入' :
+                   record.status === 'importing' ? '导入中' :
+                   record.status === 'completed' ? '已完成' : '失败'}
+                </Tag>
+              </Space>
+            )
+          },
+          {
+            title: '联系人数量',
+            dataIndex: 'contacts',
+            key: 'contactCount',
+            render: (contacts: Contact[]) => contacts.length
+          },
+          {
+            title: '联系人列表',
+            dataIndex: 'contacts',
+            key: 'contacts',
+            render: (contacts: Contact[]) => (
+              <div>
+                {contacts.slice(0, 3).map(c => c.name).join(', ')}
+                {contacts.length > 3 && ` 等${contacts.length}个联系人`}
+              </div>
+            )
+          }
+        ]}
+      />
+
+      <div style={{ marginTop: 16 }}>
+        <Space>
+          <Button type="primary" onClick={startImport} disabled={isImporting}>
+            开始导入
+          </Button>
+          <Button onClick={() => setCurrentStep(1)}>
+            返回设备选择
+          </Button>
+        </Space>
       </div>
-    );
-  };
+    </Card>
+  );
+
+  // 渲染导入进度
+  const renderImportProgress = () => (
+    <Card title="导入进度" style={{ marginBottom: 16 }}>
+      <Progress
+        percent={importProgress}
+        status={isImporting ? "active" : "normal"}
+        style={{ marginBottom: 16 }}
+      />
+      
+      <Row gutter={16}>
+        <Col span={8}>
+          <Statistic
+            title="总设备数"
+            value={deviceGroups.length}
+            prefix={<MobileOutlined />}
+          />
+        </Col>
+        <Col span={8}>
+          <Statistic
+            title="已完成"
+            value={deviceGroups.filter(g => g.status === 'completed').length}
+            valueStyle={{ color: '#3f8600' }}
+            prefix={<CheckCircleOutlined />}
+          />
+        </Col>
+        <Col span={8}>
+          <Statistic
+            title="失败"
+            value={deviceGroups.filter(g => g.status === 'failed').length}
+            valueStyle={{ color: '#cf1322' }}
+            prefix={<InfoCircleOutlined />}
+          />
+        </Col>
+      </Row>
+    </Card>
+  );
 
   return (
-    <div className="contact-import-manager">
-      <Card
-        title={
-          <Space>
-            <ContactsOutlined />
-            通讯录导入管理
-          </Space>
-        }
-        extra={
-          <Space>
-            <InfoCircleOutlined />
-            <Text type="secondary">多设备平均分配导入</Text>
-          </Space>
-        }
-      >
-        <Spin spinning={loading}>
-          <Steps current={currentStep} className="mb-6">
-            <Step
-              title="选择联系人和设备"
-              description="选择要导入的联系人和目标设备"
-              icon={<UserOutlined />}
-            />
-            <Step
-              title="分配预览"
-              description="查看联系人分配方案"
-              icon={<SettingOutlined />}
-            />
-            <Step
-              title="执行导入"
-              description="批量导入到各设备"
-              icon={<MobileOutlined />}
-            />
-          </Steps>
-
-          {currentStep === 0 && renderContactSelection()}
-          {currentStep === 1 && renderDistributionPreview()}
-          {currentStep === 2 && renderImportProgress()}
-        </Spin>
-      </Card>
+    <div style={{ padding: 16 }}>
+      {renderSteps()}
+      
+      {currentStep === 0 && renderContactSelection()}
+      {currentStep === 1 && renderDeviceSelection()}
+      {currentStep === 2 && renderAssignmentPreview()}
+      {currentStep >= 3 && renderImportProgress()}
+      
+      <Spin spinning={isImporting}>
+        <div style={{ minHeight: 100 }}>
+          {/* 内容区域 */}
+        </div>
+      </Spin>
     </div>
   );
 };
+
+export default ContactImportManager;

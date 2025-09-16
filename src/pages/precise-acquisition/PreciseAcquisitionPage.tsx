@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { PreciseAcquisitionForm } from '../../components/task';
-import type { Device, Platform } from '../../types';
+import { useAdb } from '../../application/hooks/useAdb';
+import { Platform } from '../../types';
 
 /**
  * 精准获客页面
@@ -9,20 +10,16 @@ import type { Device, Platform } from '../../types';
 export const PreciseAcquisitionPage: React.FC = () => {
   const [platform, setPlatform] = useState<Platform>('xiaohongshu');
   const [balance] = useState(1000); // 示例余额
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevices, setSelectedDevices] = useState<number[]>([]);
+  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 获取可用设备列表（仅已连接的设备）
-  useEffect(() => {
-    // 模拟获取已连接设备
-    const connectedDevices: Device[] = [
-      { id: 1, name: 'Device-01', phone_name: 'Phone-1', status: 'connected' },
-      { id: 2, name: 'Device-02', phone_name: 'Phone-2', status: 'connected' },
-      { id: 3, name: 'Device-03', phone_name: 'Phone-3', status: 'connected' }
-    ];
-    setDevices(connectedDevices);
-  }, []);
+  // 使用统一的ADB接口 - 遵循DDD架构约束
+  const { 
+    devices, 
+    onlineDevices,
+    refreshDevices,
+    initialize
+  } = useAdb();
 
   // 精准获客提交
   const handleAcquisitionSubmit = async (data: {
@@ -32,7 +29,7 @@ export const PreciseAcquisitionPage: React.FC = () => {
     targetKeywords: string[];
     targetCount: number;
     preferenceTags: string[];
-    selectedDevices: number[];
+    selectedDevices: string[];
   }) => {
     setIsLoading(true);
     try {
@@ -47,14 +44,14 @@ export const PreciseAcquisitionPage: React.FC = () => {
     }
   };
 
-  // 转换设备数据格式
-  const availableDevices = devices.map(d => ({
+  // 转换设备数据格式以兼容现有组件
+  const availableDevices = onlineDevices.map(d => ({
     id: d.id,
-    name: d.name,
-    phone_name: d.phone_name
+    name: d.getDisplayName(),
+    phone_name: d.id
   }));
 
-  if (devices.length === 0) {
+  if (onlineDevices.length === 0) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">精准获客</h1>
@@ -66,6 +63,12 @@ export const PreciseAcquisitionPage: React.FC = () => {
           <p className="text-yellow-700">
             请先到设备管理页面连接设备后再执行获客操作。
           </p>
+          <button
+            onClick={refreshDevices}
+            className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+          >
+            刷新设备列表
+          </button>
         </div>
       </div>
     );

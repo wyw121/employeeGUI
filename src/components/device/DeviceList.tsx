@@ -1,7 +1,7 @@
 import React from 'react';
 import { List, Card, Avatar, Tag } from 'antd';
 import { MobileOutlined } from '@ant-design/icons';
-import { Device } from '../../types';
+import { Device } from '../../domain/adb/entities/Device';
 
 interface DeviceListProps {
   devices: Device[];
@@ -26,22 +26,22 @@ export const DeviceList: React.FC<DeviceListProps> = ({
       dataSource={devices}
       renderItem={(device) => (
         <List.Item
-          onClick={() => onDeviceSelect?.(device.id.toString())}
+          onClick={() => onDeviceSelect?.(device.id)}
           style={{
             cursor: 'pointer',
-            backgroundColor: selectedDevice === device.id.toString() ? '#f0f8ff' : 'transparent',
+            backgroundColor: selectedDevice === device.id ? '#f0f8ff' : 'transparent',
           }}
         >
           <Card style={{ width: '100%' }}>
             <Card.Meta
               avatar={<Avatar icon={<MobileOutlined />} />}
-              title={device.name}
+              title={device.getDisplayName()}
               description={
                 <div>
                   <div>ID: {device.id}</div>
                   <div>
-                    <Tag color={device.status === 'connected' ? 'green' : 'red'}>
-                      {device.status}
+                    <Tag color={device.isOnline() ? 'green' : 'red'}>
+                      {device.isOnline() ? 'online' : 'offline'}
                     </Tag>
                   </div>
                 </div>

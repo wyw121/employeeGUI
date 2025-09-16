@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useAdb } from '../application/hooks/useAdb';
 
 interface VcfOpenResult {
   success: boolean;
@@ -33,8 +34,6 @@ interface DeviceUIState {
 }
 
 const SmartVcfImporter: React.FC = () => {
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [contactsFile, setContactsFile] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -43,27 +42,38 @@ const SmartVcfImporter: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [autoMonitor, setAutoMonitor] = useState(false);
 
-  // 获取连接的设备列表
-  const loadDevices = async () => {
-    try {
-      addLog('📱 正在获取设备列表...');
-      
-      // 这里应该调用您现有的设备管理API
-      // 暂时使用模拟数据
-      const mockDevices: DeviceInfo[] = [
-        { id: 'emulator-5554', name: '雷电模拟器-1', status: 'connected', type: 'LDPlayer' },
-        { id: 'emulator-5556', name: '雷电模拟器-2', status: 'connected', type: 'LDPlayer' },
-      ];
-      
-      setDevices(mockDevices);
-      if (mockDevices.length > 0 && !selectedDevice) {
-        setSelectedDevice(mockDevices[0].id);
+  // 使用统一的ADB接口 - 遵循DDD架构约束
+  const { 
+    devices, 
+    selectedDevice, 
+    selectDevice, 
+    onlineDevices,
+    refreshDevices,
+    initialize
+  } = useAdb();
+
+  // 初始化ADB环境
+  useEffect(() => {
+    const initializeAdb = async () => {
+      try {
+        await initialize();
+        await refreshDevices();
+        addLog('📱 ADB环境初始化完成');
+      } catch (error) {
+        addLog(`❌ ADB初始化失败: ${error}`);
       }
-      addLog(`✅ 发现 ${mockDevices.length} 个连接的设备`);
-    } catch (error) {
-      addLog(`❌ 获取设备列表失败: ${error}`);
+    };
+
+    initializeAdb();
+  }, [initialize, refreshDevices]);
+
+  // 当有在线设备时自动选择第一个
+  useEffect(() => {
+    if (onlineDevices.length > 0 && !selectedDevice) {
+      selectDevice(onlineDevices[0].id);
+      addLog(`🎯 自动选择设备: ${onlineDevices[0].getDisplayName()}`);
     }
-  };
+  }, [onlineDevices, selectedDevice, selectDevice]);
 
   // 读取当前UI状态
   const readCurrentUIState = async () => {
@@ -73,10 +83,10 @@ const SmartVcfImporter: React.FC = () => {
     }
 
     try {
-      addLog(`🔍 正在读取设备 ${selectedDevice} 的UI状态...`);
+      addLog(`🔍 正在读取设备 ${selectedDevice.id} 的UI状态...`);
       
       const state = await invoke<DeviceUIState>('read_device_ui_state', {
-        deviceId: selectedDevice,
+        deviceId: selectedDevice.id,
       });
       
       setUiState(state);
@@ -198,7 +208,7 @@ const SmartVcfImporter: React.FC = () => {
 
   // 初始化时获取设备列表
   useEffect(() => {
-    loadDevices();
+    // 组件挂载时不需要手动加载设备，useAdb会自动处理
   }, []);
 
   return (
@@ -208,7 +218,7 @@ const SmartVcfImporter: React.FC = () => {
           <h1 className="text-3xl font-bold text-blue-600">🤖 智能VCF联系人导入器</h1>
           <div className="flex-1"></div>
           <button
-            onClick={loadDevices}
+            onClick={refreshDevices}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
             🔄 刷新设备
@@ -222,14 +232,20 @@ const SmartVcfImporter: React.FC = () => {
             <div>
               <label className="block font-medium mb-2">选择设备:</label>
               <select
-                value={selectedDevice}
-                onChange={(e) => setSelectedDevice(e.target.value)}
+                value={selectedDevice?.id || ''}
+                onChange={(e) => {
+                  const deviceId = e.target.value;
+                  const device = onlineDevices.find(d => d.id === deviceId);
+                  if (device) {
+                    selectDevice(deviceId);
+                  }
+                }}
                 className="w-full border border-gray-300 rounded px-3 py-2"
               >
                 <option value="">请选择设备</option>
-                {devices.map((device) => (
+                {onlineDevices.map((device) => (
                   <option key={device.id} value={device.id}>
-                    {device.name} ({device.id}) - {device.status}
+                    {device.getDisplayName()} ({device.id}) - 在线
                   </option>
                 ))}
               </select>

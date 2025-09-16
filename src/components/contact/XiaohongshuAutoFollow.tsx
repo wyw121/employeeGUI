@@ -19,6 +19,7 @@ import {
     message,
     Progress,
     Row,
+    Select,
     Space,
     Spin,
     Steps,
@@ -26,17 +27,32 @@ import {
     Tag,
     Typography
 } from 'antd';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { XiaohongshuService } from '../../services/xiaohongshuService';
 import { useAdb } from '../../application/hooks/useAdb';
-import { Device, VcfImportResult, XiaohongshuFollowResult } from '../../types';
+import { Device, DeviceStatus } from '../../domain/adb/entities/Device';
 
 const { Text, Title } = Typography;
 const { Step } = Steps;
+const { Option } = Select;
+
+interface VcfImportResult {
+  name: string;
+  phone: string;
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+interface XiaohongshuFollowResult {
+  totalAttempts: number;
+  successfulFollows: number;
+  errors: string[];
+  duration: number;
+}
 
 interface XiaohongshuAutoFollowProps {
   importResults?: VcfImportResult[];
-  selectedDevice?: string;  // 改为字符串设备ID
+  selectedDevice?: string;  // 设备ID
   onWorkflowComplete?: (result: XiaohongshuFollowResult) => void;
   onError?: (error: string) => void;
 }
@@ -66,558 +82,321 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   const [statusMessage, setStatusMessage] = useState('');
   const [followResult, setFollowResult] = useState<XiaohongshuFollowResult | null>(null);
   
-  // 设备检测相关状态
-  const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 使用统一的ADB接口 - 遵循DDD架构约束
+  const { 
+    devices, 
+    selectedDevice, 
+    selectDevice, 
+    isLoading: adbLoading,
+    refreshDevices,
+    connectToEmulators,
+    initialize,
+    onlineDevices
+  } = useAdb();
   
-  // 使用新的统一ADB状态
-  const adbHook = useAdb();
-  const currentAdbPath = adbHook.adbPath || 'platform-tools/adb.exe';
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 解析ADB设备输出 - 与ContactImportManager保持一致
-  const parseDevicesOutput = useCallback((output: string): Device[] => {
-    const lines = output.split('\n').filter(line => 
-      line.trim() && !line.includes('List of devices')
-    );
-
-    const devices: Device[] = [];
-
-    lines.forEach((line, index) => {
-      const parts = line.trim().split(/\s+/);
-      const deviceId = parts[0];
-      const status = parts[1];
-
-      // 只处理已连接的设备
-      if (status !== 'device') {
-        return;
-      }
-
-      // 检测是否为雷电模拟器
-      const isEmulator = deviceId.includes('127.0.0.1') || deviceId.includes('emulator');
-
-      // 解析设备信息
-      let model = '';
-      let product = '';
-      
-      for (let i = 2; i < parts.length; i++) {
-        const part = parts[i];
-        if (part.startsWith('model:')) {
-          model = part.split(':')[1];
-        } else if (part.startsWith('product:')) {
-          product = part.split(':')[1];
-        }
-      }
-
-      // 生成友好的设备名称
-      let deviceName = '';
-      if (isEmulator) {
-        if (deviceId.includes('127.0.0.1')) {
-          deviceName = `雷电模拟器 (${deviceId})`;
-        } else {
-          deviceName = `模拟器 (${deviceId})`;
-        }
-      } else {
-        deviceName = model || product || `设备 ${index + 1}`;
-      }
-
-      devices.push({
-        id: devices.length + 1, // 使用当前设备数量+1作为ID
-        name: deviceName,
-        phone_name: deviceId,
-        status: 'connected'
-      });
-    });
-
-    return devices;
-  }, []);
-
-  // 初始化ADB路径
+  // 初始化ADB环境
   useEffect(() => {
-    const initAdbPath = async () => {
-      // 初始化全局设备状态
-      await adbHook.initialize();
-      
+    const initializeAdb = async () => {
       try {
-        // 使用智能ADB检测
-        const smartPath = await invoke<string>('detect_smart_adb_path');
-        if (smartPath) {
-          console.log('已检测到智能ADB路径:', smartPath);
-          // TODO: 新架构中需要实现setAdbPath功能
-          // deviceStore.setAdbPath(smartPath);
-          console.log('会使用智能检测的ADB路径:', smartPath);
-          return;
-        }
+        await initialize();
+        await refreshDevices();
       } catch (error) {
-        console.log('智能ADB检测失败:', error);
+        console.error('ADB初始化失败:', error);
+        onError?.(`ADB初始化失败: ${error}`);
       }
-      
-      try {
-        // 回退：首先尝试检测雷电模拟器ADB
-        const ldPlayerAdb = await invoke<string>('detect_ldplayer_adb');
-        if (ldPlayerAdb) {
-          console.log('已检测到雷电模拟器ADB路径:', ldPlayerAdb);
-          // TODO: 新架构中需要实现setAdbPath功能
-          // deviceStore.setAdbPath(ldPlayerAdb);
-          console.log('会使用LDPlayer的ADB路径:', ldPlayerAdb);
-          return;
-        }
-      } catch (error) {
-        console.log('雷电模拟器ADB检测失败:', error);
-      }
-
-      try {
-        // 使用系统ADB
-        const systemAdb = await invoke<string>('detect_system_adb');
-        if (systemAdb) {
-          console.log('已检测到系统ADB路径:', systemAdb);
-          // TODO: 新架构中需要实现setAdbPath功能
-          // deviceStore.setAdbPath(systemAdb);
-          console.log('会使用系统的ADB路径:', systemAdb);
-          return;
-        }
-      } catch (error) {
-        console.log('系统ADB检测失败:', error);
-      }
-
-      // 使用最后的默认路径
-      // TODO: 新架构中需要实现setAdbPath功能
-      // deviceStore.setAdbPath('adb.exe');
-      console.log('使用默认ADB路径: adb.exe');
     };
 
-    initAdbPath();
-  }, [adbHook]);
+    initializeAdb();
+  }, [initialize, refreshDevices, onError]);
 
-  // 检测可用设备
-  const detectDevices = useCallback(async () => {
-    if (!currentAdbPath) {
-      console.log('ADB路径未初始化，跳过设备检测');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // 刷新全局设备状态
-      await adbHook.refreshDevices();
-      
-      // 同时获取当前设备用于本地显示
-      const output = await invoke<string>('get_adb_devices', { adbPath: currentAdbPath });
-      const devices = parseDevicesOutput(output);
-      
-      setAvailableDevices(devices);
-      
-      // 如果从props传递了设备ID，在可用设备中查找
-      if (propSelectedDevice && devices.length > 0) {
-        const foundDevice = devices.find(d => d.id.toString() === propSelectedDevice);
-        if (foundDevice) {
-          setSelectedDevice(foundDevice);
-          setSelectedDevices([foundDevice.id.toString()]);
-        }
-      } else if (devices.length > 0) {
-        // 默认选中第一个设备
-        setSelectedDevice(devices[0]);
-        setSelectedDevices([devices[0].id.toString()]);
-      }
-      
-      if (devices.length === 0) {
-        message.info('未检测到连接的设备，请确保设备已连接并启用USB调试');
-      } else {
-        message.success(`检测到 ${devices.length} 台设备`);
-        console.log('检测到的设备:', devices);
-      }
-      
-    } catch (error) {
-      console.error('获取设备列表失败:', error);
-      onError?.(`设备检测失败: ${error}`);
-      message.error(`设备检测失败: ${error}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentAdbPath, parseDevicesOutput, onError, propSelectedDevice]);
-
-  // 当ADB路径初始化完成后自动检测设备
+  // 自动选择设备
   useEffect(() => {
-    if (currentAdbPath) {
-      detectDevices();
-    }
-  }, [currentAdbPath, detectDevices]);
-
-  // 当props中的selectedDevice改变时，在设备列表中查找对应设备
-  useEffect(() => {
-    if (propSelectedDevice && availableDevices.length > 0) {
-      const foundDevice = availableDevices.find(d => d.id.toString() === propSelectedDevice);
+    if (propSelectedDevice && devices.length > 0) {
+      const foundDevice = devices.find(d => d.id === propSelectedDevice);
       if (foundDevice) {
-        setSelectedDevice(foundDevice);
-        setSelectedDevices([foundDevice.id.toString()]);
+        selectDevice(foundDevice.id);
+      }
+    } else if (devices.length > 0 && !selectedDevice) {
+      // 自动选择第一个在线设备
+      const firstOnlineDevice = onlineDevices[0];
+      if (firstOnlineDevice) {
+        selectDevice(firstOnlineDevice.id);
       }
     }
-  }, [propSelectedDevice, availableDevices]);
+  }, [propSelectedDevice, devices, selectedDevice, selectDevice, onlineDevices]);
 
-  // 调试：监听 selectedDevice 的变化
-  useEffect(() => {
-    console.log('XiaohongshuAutoFollow: selectedDevice 发生变化:', selectedDevice);
-    console.log('XiaohongshuAutoFollow: selectedDevice 类型:', typeof selectedDevice);
-    console.log('XiaohongshuAutoFollow: selectedDevice 是否为空:', selectedDevice === null || selectedDevice === undefined);
-    if (selectedDevice) {
-      console.log('XiaohongshuAutoFollow: 设备详情:', {
-        id: selectedDevice.id,
-        name: selectedDevice.name,
-        status: selectedDevice.status
-      });
+  // 刷新设备列表
+  const handleRefreshDevices = useCallback(async () => {
+    try {
+      await refreshDevices();
+      message.success('设备列表已刷新');
+    } catch (error) {
+      console.error('刷新设备失败:', error);
+      message.error('刷新设备失败');
     }
-  }, [selectedDevice]);
+  }, [refreshDevices]);
 
-  const startWorkflow = async () => {
+  // 开始关注流程
+  const handleStartFollow = useCallback(async () => {
     if (!selectedDevice) {
-      onError?.('请先选择设备');
+      message.error('请选择一个设备');
       return;
     }
 
+    if (!importResults || importResults.length === 0) {
+      message.error('没有可关注的用户');
+      return;
+    }
+
+    setIsFollowing(true);
+    setProgress(0);
+    setStatusMessage('开始初始化小红书服务...');
+
     try {
-      setIsFollowing(true);
-      setCurrentStep(0);
-      setProgress(0);
-      setStatusMessage('开始自动关注流程...');
-
-      // 初始化服务
-      setStatusMessage('初始化小红书服务...');
-      console.log('🔍 DEBUG: selectedDevice 对象:', selectedDevice);
-      console.log('🔍 DEBUG: selectedDevice.phone_name:', selectedDevice.phone_name);
-      console.log('🔍 DEBUG: selectedDevice.id:', selectedDevice.id);
-      await XiaohongshuService.initializeService(selectedDevice.phone_name);
-      setProgress(10);
-
-      // 步骤1: 检查应用状态
-      setStatusMessage('检查小红书应用状态...');
-      const appStatus = await XiaohongshuService.checkAppStatus();
+      console.log('🔍 DEBUG: selectedDevice:', selectedDevice);
       
-      if (!appStatus.app_installed) {
-        throw new Error('小红书应用未安装');
-      }
+      // 使用新架构的设备ID
+      await XiaohongshuService.initializeService(selectedDevice.id);
       
+      setStatusMessage('开始执行关注操作...');
       setCurrentStep(1);
-      setProgress(25);
 
-      // 步骤2: 导航到通讯录页面
-      setStatusMessage('导航到通讯录页面...');
-      const navResult = await XiaohongshuService.navigateToContacts();
-      
-      if (!navResult.success) {
-        throw new Error(navResult.message);
-      }
-      
-      setCurrentStep(2);
-      setProgress(50);
-
-      // 步骤3: 执行自动关注
-      setStatusMessage('执行自动关注...');
-      const followOptions = {
+      const result = await XiaohongshuService.autoFollowContacts({
         max_pages: followConfig.maxPages,
         follow_interval: followConfig.followInterval,
         skip_existing: followConfig.skipExisting,
         return_to_home: followConfig.returnToHome
-      };
+      });
 
-      const result = await XiaohongshuService.autoFollowContacts(followOptions);
-
-      // 转换结果格式以匹配类型
+      // 转换结果格式
       const convertedResult: XiaohongshuFollowResult = {
-        success: result.success,
-        totalFollowed: result.total_followed,
-        pagesProcessed: result.pages_processed,
-        duration: result.duration,
-        details: result.details.map(detail => ({
-          userPosition: { x: detail.user_position[0], y: detail.user_position[1] },
-          followSuccess: detail.follow_success,
-          buttonTextBefore: detail.button_text_before,
-          buttonTextAfter: detail.button_text_after,
-          error: detail.error
-        })),
-        message: result.message
+        totalAttempts: result.pages_processed || 0,
+        successfulFollows: result.total_followed || 0,
+        errors: result.details?.filter(d => !d.follow_success).map(d => d.error || 'Unknown error') || [],
+        duration: result.duration || 0
       };
 
       setFollowResult(convertedResult);
-      setCurrentStep(3);
-      setProgress(100);
-      setStatusMessage(`关注完成: 成功关注 ${convertedResult.totalFollowed} 个用户`);
+      setCurrentStep(2);
+      setStatusMessage(`关注完成: 成功关注 ${convertedResult.successfulFollows} 个用户`);
       
-      message.success(`成功关注 ${convertedResult.totalFollowed} 个用户！`);
+      message.success(`成功关注 ${convertedResult.successfulFollows} 个用户！`);
+      
       onWorkflowComplete?.(convertedResult);
-
     } catch (error) {
-      const errorMsg = `自动关注失败: ${error}`;
-      setStatusMessage(errorMsg);
-      onError?.(errorMsg);
-      message.error(errorMsg);
+      console.error('关注操作失败:', error);
+      const errorMessage = `关注操作失败: ${error}`;
+      setStatusMessage(errorMessage);
+      message.error(errorMessage);
+      onError?.(errorMessage);
     } finally {
       setIsFollowing(false);
+      setProgress(100);
     }
-  };
+  }, [selectedDevice, importResults, followConfig, onWorkflowComplete, onError]);
 
-  const resetWorkflow = () => {
-    setCurrentStep(0);
-    setProgress(0);
-    setFollowResult(null);
-    setStatusMessage('');
-  };
+  // 停止关注
+  const handleStopFollow = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsFollowing(false);
+    setStatusMessage('用户已停止关注操作');
+    message.info('已停止关注操作');
+  }, []);
 
-  return (
-    <div className="xiaohongshu-auto-follow">
-      <div className="mb-4">
-        <Title level={4}>
-          <HeartOutlined className="mr-2" />
-          小红书自动关注
-        </Title>
-      </div>
-
-      <Steps current={currentStep} className="mb-6">
-        <Step
-          title="检查应用"
-          description="验证小红书应用状态"
-          icon={<AndroidOutlined />}
-        />
-        <Step
-          title="导航页面"
-          description="前往通讯录页面"
-          icon={<ClockCircleOutlined />}
-        />
-        <Step
-          title="自动关注"
-          description="执行关注操作"
-          icon={<HeartOutlined />}
-        />
-        <Step
-          title="完成"
-          description="关注流程完成"
-          icon={<CheckCircleOutlined />}
-        />
-      </Steps>
-
-      <Card 
-        title={
-          <div className="flex items-center justify-between">
-            <span>设备信息</span>
-            <Button
-              type="text"
-              size="small"
-              icon={<ReloadOutlined />}
-              onClick={detectDevices}
-              loading={loading}
-            >
-              刷新设备
-            </Button>
-          </div>
-        }
-        className="mb-4" 
-        size="small"
-      >
-        {availableDevices.length > 0 && (
-          <div>
-            <div className="mb-3">
-              <Text>选择设备：</Text>
-              <Checkbox.Group
-                value={selectedDevices}
-                onChange={(values) => {
-                  setSelectedDevices(values);
-                  if (values.length > 0) {
-                    // 使用第一个选中的设备
-                    const firstSelectedId = values[0];
-                    const device = availableDevices.find(d => d.id.toString() === firstSelectedId);
-                    if (device) {
-                      setSelectedDevice(device);
-                    }
-                  } else {
-                    setSelectedDevice(null);
-                  }
-                }}
-                className="w-full"
-              >
-                <Row>
-                  {availableDevices.map(device => (
-                    <Col span={24} key={device.id} className="mb-2">
-                      <Checkbox value={device.id.toString()}>
-                        <Tag color="blue" icon={<AndroidOutlined />}>
-                          {device.name}
-                        </Tag>
-                        <Text className="ml-2">状态: </Text>
-                        <Tag color={device.status === 'connected' ? 'green' : 'red'}>
-                          {device.status === 'connected' ? '已连接' : '未连接'}
-                        </Tag>
-                      </Checkbox>
-                    </Col>
-                  ))}
-                </Row>
-              </Checkbox.Group>
-            </div>
-            
-            {selectedDevice && (
-              <div className="mt-3 p-2 bg-gray-50 rounded">
-                <Text strong>当前选中设备：</Text>
-                <br />
-                <Tag color="blue" icon={<AndroidOutlined />}>
-                  {selectedDevice.name}
-                </Tag>
-                <Text className="ml-2">状态: </Text>
-                <Tag color={selectedDevice.status === 'connected' ? 'green' : 'red'}>
-                  {selectedDevice.status === 'connected' ? '已连接' : '未连接'}
-                </Tag>
-              </div>
-            )}
-          </div>
-        )}
+  // 渲染设备选择器
+  const renderDeviceSelector = () => (
+    <Card title="设备选择" size="small" style={{ marginBottom: 16 }}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Select
+            style={{ flex: 1 }}
+            placeholder="选择设备"
+            value={selectedDevice?.id}
+            onChange={(deviceId) => selectDevice(deviceId)}
+            loading={adbLoading}
+          >
+            {devices.map(device => (
+              <Option key={device.id} value={device.id}>
+                <Space>
+                  <AndroidOutlined />
+                  <span>{device.getDisplayName()}</span>
+                  <Tag color={device.isOnline() ? 'green' : 'red'}>
+                    {device.isOnline() ? '在线' : '离线'}
+                  </Tag>
+                </Space>
+              </Option>
+            ))}
+          </Select>
+          <Button icon={<ReloadOutlined />} onClick={handleRefreshDevices} loading={adbLoading}>
+            刷新
+          </Button>
+        </div>
         
-        {availableDevices.length === 0 && loading && (
-          <div className="text-center py-4">
-            <Spin />
-            <Text className="ml-2">正在检测设备...</Text>
-          </div>
-        )}
-        
-        {availableDevices.length === 0 && !loading && (
-          <Alert 
-            type="warning" 
-            message="未检测到设备" 
-            description="请确保设备已连接并启用USB调试，然后点击刷新设备"
-            action={
-              <Button size="small" onClick={detectDevices}>
-                重新检测
-              </Button>
-            }
+        {devices.length === 0 && (
+          <Alert
+            message="未检测到设备"
+            description="请确保设备已连接并启用USB调试"
+            type="warning"
+            showIcon
           />
         )}
-      </Card>
+        
+        {selectedDevice && (
+          <Alert
+            message={`已选择设备: ${selectedDevice.getDisplayName()}`}
+            type="success"
+            showIcon
+          />
+        )}
+      </Space>
+    </Card>
+  );
 
-      {importResults && importResults.length > 0 && (
-        <Card title="导入结果" className="mb-4" size="small">
-          <Text>
-            已导入 <Text strong>{importResults.reduce((sum, result) => sum + result.importedContacts, 0)}</Text> 个联系人到 <Text strong>{importResults.length}</Text> 台设备
+  // 渲染配置面板
+  const renderConfigPanel = () => (
+    <Card title="关注配置" size="small" style={{ marginBottom: 16 }}>
+      <Row gutter={[16, 16]}>
+        <Col span={12}>
+          <div>
+            <Text>最大页面数:</Text>
+            <InputNumber
+              min={1}
+              max={10}
+              value={followConfig.maxPages}
+              onChange={(value) => setFollowConfig({...followConfig, maxPages: value || 3})}
+              style={{ width: '100%', marginTop: 4 }}
+            />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div>
+            <Text>关注间隔(毫秒):</Text>
+            <InputNumber
+              min={1000}
+              max={10000}
+              step={500}
+              value={followConfig.followInterval}
+              onChange={(value) => setFollowConfig({...followConfig, followInterval: value || 2000})}
+              style={{ width: '100%', marginTop: 4 }}
+            />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text>跳过已关注:</Text>
+            <Switch
+              checked={followConfig.skipExisting}
+              onChange={(checked) => setFollowConfig({...followConfig, skipExisting: checked})}
+            />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text>完成后返回首页:</Text>
+            <Switch
+              checked={followConfig.returnToHome}
+              onChange={(checked) => setFollowConfig({...followConfig, returnToHome: checked})}
+            />
+          </div>
+        </Col>
+      </Row>
+    </Card>
+  );
+
+  // 渲染操作面板
+  const renderActionPanel = () => (
+    <Card title="操作控制" size="small" style={{ marginBottom: 16 }}>
+      <Space>
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          onClick={handleStartFollow}
+          disabled={!selectedDevice || !importResults || importResults.length === 0 || isFollowing}
+          loading={isFollowing}
+        >
+          开始关注
+        </Button>
+        <Button
+          danger
+          onClick={handleStopFollow}
+          disabled={!isFollowing}
+        >
+          停止关注
+        </Button>
+      </Space>
+      
+      {importResults && (
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary">
+            共 {importResults.length} 个用户待关注
           </Text>
-        </Card>
+        </div>
       )}
+    </Card>
+  );
 
-      <Card title="关注配置" className="mb-4" size="small">
-        <Row gutter={16}>
-          <Col span={6}>
-            <div className="mb-3">
-              <Text>最大页数:</Text>
-              <InputNumber
-                min={1}
-                max={10}
-                value={followConfig.maxPages}
-                onChange={(value) => setFollowConfig(prev => ({ ...prev, maxPages: value || 3 }))}
-                className="w-full"
-              />
-            </div>
-          </Col>
-          <Col span={6}>
-            <div className="mb-3">
-              <Text>关注间隔(ms):</Text>
-              <InputNumber
-                min={1000}
-                max={10000}
-                step={500}
-                value={followConfig.followInterval}
-                onChange={(value) => setFollowConfig(prev => ({ ...prev, followInterval: value || 2000 }))}
-                className="w-full"
-              />
-            </div>
-          </Col>
-          <Col span={6}>
-            <div className="mb-3">
-              <Text>跳过已关注:</Text>
-              <Switch
-                checked={followConfig.skipExisting}
-                onChange={(checked) => setFollowConfig(prev => ({ ...prev, skipExisting: checked }))}
-                className="ml-2"
-              />
-            </div>
-          </Col>
-          <Col span={6}>
-            <div className="mb-3">
-              <Text>完成后返回:</Text>
-              <Switch
-                checked={followConfig.returnToHome}
-                onChange={(checked) => setFollowConfig(prev => ({ ...prev, returnToHome: checked }))}
-                className="ml-2"
-              />
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card title="执行进度" className="mb-4" size="small">
-        <Progress 
-          percent={progress}
-          status={isFollowing ? 'active' : 'normal'}
-          className="mb-2"
+  // 渲染进度面板
+  const renderProgressPanel = () => (
+    <Card title="关注进度" size="small" style={{ marginBottom: 16 }}>
+      <Steps current={currentStep} size="small" style={{ marginBottom: 16 }}>
+        <Step title="准备" icon={<SettingOutlined />} />
+        <Step title="执行" icon={<HeartOutlined />} />
+        <Step title="完成" icon={<CheckCircleOutlined />} />
+      </Steps>
+      
+      <Progress percent={progress} status={isFollowing ? "active" : "normal"} />
+      
+      {statusMessage && (
+        <Alert
+          message={statusMessage}
+          type={isFollowing ? "info" : "success"}
+          style={{ marginTop: 8 }}
         />
-        <Text>{statusMessage}</Text>
-      </Card>
-
+      )}
+      
       {followResult && (
-        <Card title="关注结果" className="mb-4" size="small">
+        <div style={{ marginTop: 16 }}>
+          <Title level={5}>关注结果</Title>
           <Row gutter={16}>
-            <Col span={6}>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-pink-600">{followResult.totalFollowed}</div>
-                <div className="text-sm text-gray-600">关注用户</div>
-              </div>
+            <Col span={8}>
+              <Tag color="blue">总尝试: {followResult.totalAttempts}</Tag>
             </Col>
-            <Col span={6}>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{followResult.pagesProcessed}</div>
-                <div className="text-sm text-gray-600">处理页面</div>
-              </div>
+            <Col span={8}>
+              <Tag color="green">成功: {followResult.successfulFollows}</Tag>
             </Col>
-            <Col span={6}>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{Math.round(followResult.duration)}s</div>
-                <div className="text-sm text-gray-600">耗时</div>
-              </div>
-            </Col>
-            <Col span={6}>
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${followResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                  {followResult.success ? '成功' : '失败'}
-                </div>
-                <div className="text-sm text-gray-600">状态</div>
-              </div>
+            <Col span={8}>
+              <Tag color="red">失败: {followResult.errors.length}</Tag>
             </Col>
           </Row>
-          
-          <Divider />
-          
-          <div className="mb-3">
-            <Text>{followResult.message}</Text>
-          </div>
-        </Card>
-      )}
-
-      <div className="text-center">
-        <Space>
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            onClick={startWorkflow}
-            loading={isFollowing}
-            disabled={!selectedDevice || selectedDevice.status !== 'connected'}
-            size="large"
-          >
-            {isFollowing ? '执行中...' : '开始自动关注'}
-          </Button>
-          
-          {followResult && (
-            <Button
-              icon={<SettingOutlined />}
-              onClick={resetWorkflow}
-            >
-              重新配置
-            </Button>
+          {followResult.errors.length > 0 && (
+            <Alert
+              message="错误详情"
+              description={followResult.errors.join('; ')}
+              type="error"
+              style={{ marginTop: 8 }}
+            />
           )}
-        </Space>
-      </div>
+        </div>
+      )}
+    </Card>
+  );
+
+  return (
+    <div style={{ padding: 16 }}>
+      <Title level={3}>
+        <HeartOutlined /> 小红书自动关注
+      </Title>
+      <Divider />
+      
+      {renderDeviceSelector()}
+      {renderConfigPanel()}
+      {renderActionPanel()}
+      {renderProgressPanel()}
     </div>
   );
 };

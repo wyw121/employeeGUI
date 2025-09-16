@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Button,
   Card,
@@ -13,26 +13,14 @@ import {
   PlayCircleOutlined,
   SettingOutlined
 } from '@ant-design/icons';
+import { useAdb } from '../../application/hooks/useAdb';
 
 const { Step } = Steps;
 const { Text } = Typography;
 
-interface DeviceInfo {
-  id: string;
-  name: string;
-  status: 'online' | 'offline';
-}
-
 const XiaohongshuFollowManager: React.FC = () => {
   const [currentStep] = useState(0);
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-
-  useEffect(() => {
-    setDevices([
-      { id: 'device1', name: '模拟器 1', status: 'online' },
-      { id: 'device2', name: '模拟器 2', status: 'offline' }
-    ]);
-  }, []);
+  const { devices } = useAdb();
 
   return (
     <div>
@@ -56,9 +44,9 @@ const XiaohongshuFollowManager: React.FC = () => {
             <Card title="设备状态" size="small">
               {devices.map(device => (
                 <div key={device.id} style={{ marginBottom: 8 }}>
-                  <Text>{device.name}</Text>
-                  <Tag color={device.status === 'online' ? 'green' : 'red'}>
-                    {device.status}
+                  <Text>{device.getDisplayName()}</Text>
+                  <Tag color={device.isOnline() ? 'green' : 'red'}>
+                    {device.isOnline() ? 'online' : 'offline'}
                   </Tag>
                 </div>
               ))}

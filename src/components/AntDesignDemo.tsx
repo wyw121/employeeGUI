@@ -1,7 +1,6 @@
 import {
     AimOutlined,
     BarChartOutlined,
-    BranchesOutlined,
     FolderOutlined,
     MobileOutlined,
     SecurityScanOutlined,
@@ -34,7 +33,6 @@ import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import AppLaunchTestPage from '../pages/AppLaunchTestPage'; // 应用启动测试页面
-import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
@@ -95,11 +93,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'smart-script-builder',
       icon: <RobotOutlined />,
       label: '智能脚本构建器',
-    },
-    {
-      key: 'flow-builder',
-      icon: <BranchesOutlined />,
-      label: '流程构建器',
     },
     {
       key: 'template-library',
@@ -345,10 +338,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'smart-script-builder' && (
               <SmartScriptBuilderPage />
-            )}
-
-            {selectedKey === 'flow-builder' && (
-              <FlowScriptBuilder />
             )}
 
             {selectedKey === 'template-library' && (

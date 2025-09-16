@@ -47,6 +47,9 @@ import {
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
 import { SmartActionType } from '../types/smartComponents';
 import type { LaunchAppComponentParams } from '../types/smartComponents';
+import type { SmartScriptStep } from '../types/smartScript';
+import StepTestButton from '../components/StepTestButton';
+import TestResultsDisplay from '../components/TestResultsDisplay';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -235,22 +238,6 @@ const SMART_ACTION_CONFIGS = {
 };
 
 // ==================== 接口定义 ====================
-
-interface SmartScriptStep {
-  id: string;
-  step_type: SmartActionType;
-  name: string;
-  description: string;
-  parameters: Record<string, any>;
-  enabled: boolean;
-  order: number;
-  find_condition?: any;
-  verification?: any;
-  retry_config?: any;
-  fallback_actions?: SmartScriptStep[];
-  pre_conditions?: string[];
-  post_conditions?: string[];
-}
 
 interface ExecutorConfig {
   default_timeout_ms: number;
@@ -731,6 +718,11 @@ const SmartScriptBuilderPage: React.FC = () => {
                             {!step.enabled && <Tag>已禁用</Tag>}
                           </div>
                           <Space>
+                            <StepTestButton 
+                              step={step} 
+                              deviceId={currentDeviceId}
+                              disabled={!currentDeviceId || devices.filter(d => d.status === DeviceStatus.ONLINE).length === 0}
+                            />
                             <Switch
                               size="small"
                               checked={step.enabled}
@@ -821,6 +813,9 @@ const SmartScriptBuilderPage: React.FC = () => {
                 )}
               </Space>
             </Card>
+
+            {/* 单步测试结果 */}
+            <TestResultsDisplay />
 
             {/* 智能功能说明 */}
             <Card title={<><BulbOutlined className="mr-2" />智能功能特性</>}>

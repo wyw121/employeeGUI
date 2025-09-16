@@ -6,4 +6,5 @@ export {
 } from './useContacts';
 export { usePermissions } from './usePermissions';
 export { useLogManager } from './useLogManager';
+export { useSingleStepTest } from './useSingleStepTest';
 

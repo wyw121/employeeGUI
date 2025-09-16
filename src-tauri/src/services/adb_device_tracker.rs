@@ -8,6 +8,12 @@ use tracing::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
+#[cfg(windows)]
+use std::sync::Once;
+
+#[cfg(windows)]
+static WINSOCK_INIT: Once = Once::new();
+
 /// ADB设备变化事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceChangeEvent {
@@ -41,6 +47,24 @@ pub struct AdbDeviceTracker {
 }
 
 impl AdbDeviceTracker {
+    /// Windows-specific: 确保网络连接准备就绪
+    #[cfg(windows)]
+    fn ensure_network_ready() {
+        WINSOCK_INIT.call_once(|| {
+            // 尝试创建一个测试连接以确保网络栈初始化
+            let _ = std::net::TcpStream::connect_timeout(
+                &"127.0.0.1:1".parse().unwrap(),
+                Duration::from_millis(1)
+            );
+            info!("✅ 网络栈初始化检查完成");
+        });
+    }
+    
+    #[cfg(not(windows))]
+    fn ensure_network_ready() {
+        // 非Windows平台无需特殊初始化
+    }
+
     /// 创建新的设备跟踪器
     pub fn new() -> Self {
         let (sender, _receiver) = broadcast::channel(100);
@@ -70,6 +94,9 @@ impl AdbDeviceTracker {
         drop(is_running);
 
         info!("🎯 启动ADB设备实时跟踪 (host:track-devices协议)");
+        
+        // 确保网络栈正确初始化（Windows专用修复）
+        Self::ensure_network_ready();
 
         let sender = self.sender.clone();
         let is_running_clone = self.is_running.clone();
@@ -148,9 +175,20 @@ impl AdbDeviceTracker {
     ) -> Result<(), String> {
         info!("🔌 连接到ADB server (127.0.0.1:5037)");
 
-        // 连接到ADB server
-        let mut stream = TcpStream::connect("127.0.0.1:5037")
-            .map_err(|e| format!("无法连接到ADB server: {}", e))?;
+        // 确保网络栈正确初始化（Windows专用修复）
+        Self::ensure_network_ready();
+
+        // 连接到ADB server，添加重试机制
+        let mut stream = match TcpStream::connect("127.0.0.1:5037") {
+            Ok(stream) => stream,
+            Err(e) => {
+                warn!("⚠️ 首次连接失败，等待1秒后重试: {}", e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                
+                TcpStream::connect("127.0.0.1:5037")
+                    .map_err(|e| format!("无法连接到ADB server: {}", e))?
+            }
+        };
 
         // 设置读取超时
         stream.set_read_timeout(Some(Duration::from_secs(30)))

@@ -25,3 +25,7 @@ export * from './task';
 // Smart components
 export * from './smart';
 
+// Test components
+export { default as StepTestButton } from './StepTestButton';
+export { default as TestResultsDisplay } from './TestResultsDisplay';
+

@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::services::adb_shell_session::AdbShellSession;
+use crate::services::adb_session_manager::get_device_session;
 use crate::services::app_detection_framework::{
     DetectorFactory, DetectionResult, AppLaunchState
 };
@@ -35,19 +36,17 @@ pub struct AppLaunchResult {
 
 /// 智能应用管理器
 pub struct SmartAppManager {
-    shell_session: AdbShellSession,
+    device_id: String,
     apps_cache: HashMap<String, AppInfo>,
     cache_valid: bool,
 }
 
 impl SmartAppManager {
     pub fn new(device_id: String) -> Self {
-        // 使用智能ADB路径检测
-        let adb_path = get_adb_path();
-        info!("🛠️ SmartAppManager使用ADB路径: {}", adb_path);
+        info!("🛠️ SmartAppManager初始化 - 设备: {}", device_id);
         
         Self {
-            shell_session: AdbShellSession::new(device_id, adb_path),
+            device_id,
             apps_cache: HashMap::new(),
             cache_valid: false,
         }
@@ -56,16 +55,12 @@ impl SmartAppManager {
     /// 获取设备上所有已安装的应用
     pub async fn get_installed_apps(&mut self) -> Result<Vec<AppInfo>> {
         info!("📱 开始获取设备已安装应用列表");
-        info!("🔍 SmartAppManager 使用的ADB路径: {}", self.shell_session.get_adb_path().await);
-
-        // 首先确保 ADB Shell 连接已建立
-        if let Err(e) = self.shell_session.connect().await {
-            error!("ADB Shell 连接失败: {}", e);
-            return Err(anyhow::anyhow!("ADB Shell 连接失败: {}", e));
-        }
+        
+        // 使用会话管理器获取ADB Shell会话
+        let session = get_device_session(&self.device_id).await?;
 
         // 1. 获取所有包名
-        let packages_output = self.shell_session.execute_command("pm list packages").await?;
+        let packages_output = session.execute_command("pm list packages").await?;
         let mut apps = Vec::new();
 
         for line in packages_output.lines() {
@@ -96,8 +91,11 @@ impl SmartAppManager {
 
     /// 获取应用详细信息
     async fn get_app_detailed_info(&self, package_name: &str) -> Result<AppInfo> {
+        // 使用会话管理器获取ADB Shell会话
+        let session = get_device_session(&self.device_id).await?;
+        
         // 获取应用基本信息
-        let info_output = self.shell_session.execute_command(&format!("dumpsys package {}", package_name)).await?;
+        let info_output = session.execute_command(&format!("dumpsys package {}", package_name)).await?;
         
         let mut app_name = package_name.to_string();
         let mut version_name = None;
@@ -127,9 +125,9 @@ impl SmartAppManager {
         }
 
         // 尝试获取应用显示名称
-        if let Ok(label_output) = self.shell_session.execute_command(&format!("pm list packages -f {} | head -1", package_name)).await {
+        if let Ok(label_output) = session.execute_command(&format!("pm list packages -f {} | head -1", package_name)).await {
             if let Some(apk_path) = self.extract_apk_path(&label_output) {
-                if let Ok(label) = self.shell_session.execute_command(&format!("aapt dump badging {} | grep application-label", apk_path)).await {
+                if let Ok(label) = session.execute_command(&format!("aapt dump badging {} | grep application-label", apk_path)).await {
                     if let Some(extracted_name) = self.extract_app_name(&label) {
                         app_name = extracted_name;
                     }
@@ -182,7 +180,7 @@ impl SmartAppManager {
         info!("⏳ 等待应用完全启动并进入可操作状态...");
         
         // 使用新的检测框架
-        let detector = DetectorFactory::create_detector_for(package_name, self.shell_session.get_device_id())?;
+        let detector = DetectorFactory::create_detector_for(package_name, &self.device_id)?;
 
         let ready_start_time = std::time::Instant::now();
         let app_state_result = detector.wait_for_app_ready().await?;
@@ -218,9 +216,18 @@ impl SmartAppManager {
 
     /// 执行应用启动命令
     async fn execute_launch_commands(&self, package_name: &str, startup_issues: &mut Vec<String>) -> bool {
+        // 使用会话管理器获取ADB Shell会话
+        let session = match get_device_session(&self.device_id).await {
+            Ok(session) => session,
+            Err(e) => {
+                startup_issues.push(format!("获取ADB会话失败: {}", e));
+                return false;
+            }
+        };
+        
         // 方法1: 使用monkey命令启动（推荐）
         info!("📱 尝试使用monkey命令启动应用");
-        let monkey_result = self.shell_session.execute_command(&format!(
+        let monkey_result = session.execute_command(&format!(
             "monkey -p {} -c android.intent.category.LAUNCHER 1", package_name
         )).await;
 
@@ -236,7 +243,7 @@ impl SmartAppManager {
         info!("📱 尝试使用am start命令启动应用");
         if let Some(app_info) = self.apps_cache.get(package_name) {
             if let Some(main_activity) = &app_info.main_activity {
-                let am_result = self.shell_session.execute_command(&format!(
+                let am_result = session.execute_command(&format!(
                     "am start -n {}/{}", package_name, main_activity
                 )).await;
 
@@ -251,7 +258,7 @@ impl SmartAppManager {
 
         // 方法3: 通用启动方式
         info!("📱 尝试通用启动方式");
-        let generic_result = self.shell_session.execute_command(&format!(
+        let generic_result = session.execute_command(&format!(
             "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER {}", package_name
         )).await;
 

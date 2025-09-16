@@ -1,7 +1,7 @@
 import { AlertCircle, BarChart3, CheckCircle, FileDown, Heart, RefreshCw, Smartphone, Sparkles, Target, Zap } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { ImportAndFollow, VcfImporter, XiaohongshuAutoFollow } from '../components/contact';
-import { useAdbDevices } from '../hooks/useAdbDevices';
+import { useAdb } from '../application/hooks/useAdb';
 import { Contact, ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
 
 export const ContactAutomationPage: React.FC = () => {
@@ -14,7 +14,7 @@ export const ContactAutomationPage: React.FC = () => {
     completeFlow?: ImportAndFollowResult;
   }>({});
 
-  const { devices, isLoading: devicesLoading, error: devicesError, refreshDevices } = useAdbDevices();
+  const { devices, isLoading: devicesLoading, lastError: devicesError, refreshDevices } = useAdb();
 
   // 处理设备选择
   const handleDeviceSelect = (deviceId: string) => {
@@ -79,7 +79,7 @@ export const ContactAutomationPage: React.FC = () => {
             </div>
             <div>
               <div className="text-red-800 font-bold text-lg">设备连接失败</div>
-              <div className="text-red-600 text-sm">{devicesError}</div>
+              <div className="text-red-600 text-sm">{devicesError?.message || 'Unknown error'}</div>
             </div>
           </div>
         </div>

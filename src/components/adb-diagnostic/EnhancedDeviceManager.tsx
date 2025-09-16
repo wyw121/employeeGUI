@@ -40,7 +40,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { ColumnsType } from 'antd/lib/table';
-import { useAdbDevices } from '../../hooks/useAdbDevices';
+import { useAdb } from '../../application/hooks/useAdb';
 import { useLogManager } from './hooks/useLogManager';
 import { LogCategory } from '../../services/adb-diagnostic/LogManager';
 
@@ -99,7 +99,7 @@ const DeviceDetailDrawer: React.FC<{
 }> = ({ visible, deviceId, onClose }) => {
   const [deviceDetails, setDeviceDetails] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(false);
-  const { getDeviceDetails } = useAdbDevices();
+  const { getDeviceInfo } = useAdb();
 
   useEffect(() => {
     if (visible && deviceId) {
@@ -112,7 +112,7 @@ const DeviceDetailDrawer: React.FC<{
     
     setLoading(true);
     try {
-      const details = await getDeviceDetails(deviceId);
+      const details = await getDeviceInfo(deviceId);
       setDeviceDetails(details);
     } catch (error) {
       message.error('获取设备详情失败');
@@ -196,12 +196,13 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
   const {
     devices,
     isLoading,
-    error,
+    lastError: error,
     refreshDevices,
-    connectToLdPlayer,
-    disconnectDevice,
+    // Note: 这些方法可能需要从新架构中获取
+    // connectToLdPlayer,
+    // disconnectDevice,
     restartAdbServer
-  } = useAdbDevices();
+  } = useAdb();
 
   const { info, warn } = useLogManager();
   
@@ -236,7 +237,10 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
   // 断开设备连接
   const handleDisconnectDevice = async (deviceId: string) => {
     try {
-      const success = await disconnectDevice(deviceId);
+      // TODO: 实现新架构中的断开连接功能
+      // const success = await disconnectDevice(deviceId);
+      const success = false; // 临时处理
+      console.warn('断开连接功能待实现');
       if (success) {
         message.success(`设备 ${deviceId} 断开成功`);
         info(LogCategory.DEVICE, 'EnhancedDeviceManager', '设备断开成功', { deviceId });
@@ -254,7 +258,10 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
   const handleConnectLdPlayer = async () => {
     setIsConnecting(true);
     try {
-      const success = await connectToLdPlayer();
+      // TODO: 实现新架构中的LDPlayer连接功能
+      // const success = await connectToLdPlayer();
+      const success = false; // 临时处理
+      console.warn('LDPlayer连接功能待实现');
       if (success) {
         message.success('雷电模拟器连接成功');
         info(LogCategory.DEVICE, 'EnhancedDeviceManager', '雷电模拟器连接成功');
@@ -273,14 +280,9 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
   // 重启ADB服务器
   const handleRestartAdbServer = async () => {
     try {
-      const success = await restartAdbServer();
-      if (success) {
-        message.success('ADB服务器重启成功');
-        info(LogCategory.SYSTEM, 'EnhancedDeviceManager', 'ADB服务器重启成功');
-      } else {
-        message.error('ADB服务器重启失败');
-        warn(LogCategory.SYSTEM, 'EnhancedDeviceManager', 'ADB服务器重启失败');
-      }
+      await restartAdbServer();
+      message.success('ADB服务器重启成功');
+      info(LogCategory.SYSTEM, 'EnhancedDeviceManager', 'ADB服务器重启成功');
     } catch (error) {
       message.error('重启ADB服务器时发生错误');
       warn(LogCategory.SYSTEM, 'EnhancedDeviceManager', 'ADB服务器重启异常', { error });
@@ -394,7 +396,7 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
   // 设备统计
   const deviceStats = {
     total: devices.length,
-    online: devices.filter(d => d.status === 'device').length,
+    online: devices.filter(d => d.status === 'online').length,
     offline: devices.filter(d => d.status === 'offline').length,
     unauthorized: devices.filter(d => d.status === 'unauthorized').length
   };
@@ -516,7 +518,7 @@ export const EnhancedDeviceManager: React.FC<EnhancedDeviceManagerProps> = ({
       {error && (
         <Alert
           message="设备连接错误"
-          description={error}
+          description={error?.message || 'Unknown error'}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}

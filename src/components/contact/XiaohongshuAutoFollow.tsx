@@ -28,7 +28,7 @@ import {
 } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
 import { XiaohongshuService } from '../../services/xiaohongshuService';
-import { useDeviceStore } from '../../store/deviceStore';
+import { useAdb } from '../../application/hooks/useAdb';
 import { Device, VcfImportResult, XiaohongshuFollowResult } from '../../types';
 
 const { Text, Title } = Typography;
@@ -72,9 +72,9 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(false);
   
-  // 使用全局设备状态的ADB路径
-  const deviceStore = useDeviceStore();
-  const adbPath = deviceStore.adbPath || 'platform-tools/adb.exe';
+  // 使用新的统一ADB状态
+  const adbHook = useAdb();
+  const currentAdbPath = adbHook.adbPath || 'platform-tools/adb.exe';
 
   // 解析ADB设备输出 - 与ContactImportManager保持一致
   const parseDevicesOutput = useCallback((output: string): Device[] => {
@@ -137,14 +137,16 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
   useEffect(() => {
     const initAdbPath = async () => {
       // 初始化全局设备状态
-      await deviceStore.initializeAdb();
+      await adbHook.initialize();
       
       try {
         // 使用智能ADB检测
         const smartPath = await invoke<string>('detect_smart_adb_path');
         if (smartPath) {
           console.log('已检测到智能ADB路径:', smartPath);
-          deviceStore.setAdbPath(smartPath);
+          // TODO: 新架构中需要实现setAdbPath功能
+          // deviceStore.setAdbPath(smartPath);
+          console.log('会使用智能检测的ADB路径:', smartPath);
           return;
         }
       } catch (error) {
@@ -156,7 +158,9 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
         const ldPlayerAdb = await invoke<string>('detect_ldplayer_adb');
         if (ldPlayerAdb) {
           console.log('已检测到雷电模拟器ADB路径:', ldPlayerAdb);
-          deviceStore.setAdbPath(ldPlayerAdb);
+          // TODO: 新架构中需要实现setAdbPath功能
+          // deviceStore.setAdbPath(ldPlayerAdb);
+          console.log('会使用LDPlayer的ADB路径:', ldPlayerAdb);
           return;
         }
       } catch (error) {
@@ -168,7 +172,9 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
         const systemAdb = await invoke<string>('detect_system_adb');
         if (systemAdb) {
           console.log('已检测到系统ADB路径:', systemAdb);
-          deviceStore.setAdbPath(systemAdb);
+          // TODO: 新架构中需要实现setAdbPath功能
+          // deviceStore.setAdbPath(systemAdb);
+          console.log('会使用系统的ADB路径:', systemAdb);
           return;
         }
       } catch (error) {
@@ -176,15 +182,17 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
       }
 
       // 使用最后的默认路径
-      deviceStore.setAdbPath('adb.exe');
+      // TODO: 新架构中需要实现setAdbPath功能
+      // deviceStore.setAdbPath('adb.exe');
+      console.log('使用默认ADB路径: adb.exe');
     };
 
     initAdbPath();
-  }, [deviceStore]);
+  }, [adbHook]);
 
   // 检测可用设备
   const detectDevices = useCallback(async () => {
-    if (!adbPath) {
+    if (!currentAdbPath) {
       console.log('ADB路径未初始化，跳过设备检测');
       return;
     }
@@ -192,10 +200,10 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
     setLoading(true);
     try {
       // 刷新全局设备状态
-      await deviceStore.refreshDevices();
+      await adbHook.refreshDevices();
       
       // 同时获取当前设备用于本地显示
-      const output = await invoke<string>('get_adb_devices', { adbPath: adbPath });
+      const output = await invoke<string>('get_adb_devices', { adbPath: currentAdbPath });
       const devices = parseDevicesOutput(output);
       
       setAvailableDevices(devices);
@@ -227,14 +235,14 @@ export const XiaohongshuAutoFollow: React.FC<XiaohongshuAutoFollowProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [adbPath, parseDevicesOutput, onError, propSelectedDevice]);
+  }, [currentAdbPath, parseDevicesOutput, onError, propSelectedDevice]);
 
   // 当ADB路径初始化完成后自动检测设备
   useEffect(() => {
-    if (adbPath) {
+    if (currentAdbPath) {
       detectDevices();
     }
-  }, [adbPath, detectDevices]);
+  }, [currentAdbPath, detectDevices]);
 
   // 当props中的selectedDevice改变时，在设备列表中查找对应设备
   useEffect(() => {

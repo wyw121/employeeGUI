@@ -22,7 +22,8 @@ import {
     SettingOutlined,
     SyncOutlined,
 } from '@ant-design/icons';
-import { useDevices, useSelectedDevice, useDeviceLoading, useDeviceActions, DeviceInfo } from '../../store/deviceStore';
+import { useAdb } from '../../application/hooks/useAdb';
+import { Device } from '../../domain/adb';
 
 const { Text } = Typography;
 
@@ -35,10 +36,16 @@ export const RealDeviceManager: React.FC<DeviceManagerProps> = ({
   onDeviceSelect,
 }) => {
   // 使用全局设备状态
-  const devices = useDevices();
-  const globalSelectedDevice = useSelectedDevice();
-  const deviceLoading = useDeviceLoading();
-  const { refreshDevices, setSelectedDevice, connectToDevice, disconnectDevice, initializeAdb } = useDeviceActions();
+  // 使用新的统一ADB状态
+  const { 
+    devices, 
+    selectedDevice: globalSelectedDevice, 
+    isLoading: deviceLoading, 
+    refreshDevices, 
+    selectDevice: setSelectedDevice, 
+    // 注意：connectToDevice, disconnectDevice 在新架构中可能有不同的实现
+    initialize: initializeAdb 
+  } = useAdb();
   
   // 本地状态只保留模态框相关
   const [connectModalVisible, setConnectModalVisible] = useState(false);
@@ -61,7 +68,10 @@ export const RealDeviceManager: React.FC<DeviceManagerProps> = ({
 
   // 处理连接新设备
   const handleConnect = async () => {
-    const success = await connectToDevice(connectAddress);
+    // TODO: 在新架构中实现设备连接功能
+    // const success = await connectToDevice(connectAddress);
+    console.warn('设备连接功能需要在新架构中实现');
+    const success = false;
     if (success) {
       setConnectModalVisible(false);
       setConnectAddress('127.0.0.1:5555');
@@ -70,7 +80,9 @@ export const RealDeviceManager: React.FC<DeviceManagerProps> = ({
 
   // 处理断开连接
   const handleDisconnect = async (deviceId: string) => {
-    await disconnectDevice(deviceId);
+    // TODO: 在新架构中实现设备断开功能
+    // await disconnectDevice(deviceId);
+    console.warn('设备断开功能需要在新架构中实现');
   };
 
   return (
@@ -129,7 +141,7 @@ export const RealDeviceManager: React.FC<DeviceManagerProps> = ({
             <div>
               <Text type="secondary">在线设备</Text>
               <div className="text-2xl font-bold text-green-500">
-                {devices.filter(d => d.status === 'device').length}
+                {devices.filter(d => d.status === 'online').length}
               </div>
             </div>
             <CheckCircleOutlined className="text-3xl text-green-500" />

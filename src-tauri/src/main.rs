@@ -1,33 +1,33 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod screenshot_service;
 mod services;
 mod utils;
-mod screenshot_service;
 mod xml_judgment_service;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+use screenshot_service::*;
 use services::adb_service::AdbService;
 use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::crash_debugger::*;
 use services::employee_service::{Employee, EmployeeService};
-use services::log_bridge::{LogEntry, AdbCommandLog, LOG_COLLECTOR};
+use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
 use services::safe_adb_manager::*;
 use services::script_executor::*;
 use services::smart_script_executor::*;
-use screenshot_service::*;
-use xml_judgment_service::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use std::sync::Mutex;
 use tauri::State;
-use tracing::{info};
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use xml_judgment_service::*;
 
 // Tauri命令：获取所有员工
 #[tauri::command]
@@ -104,11 +104,9 @@ async fn detect_ldplayer_adb(
 
 // 智能检测最佳ADB路径 (环境感知)
 #[tauri::command]
-async fn detect_smart_adb_path(
-    service: State<'_, Mutex<AdbService>>,
-) -> Result<String, String> {
+async fn detect_smart_adb_path(service: State<'_, Mutex<AdbService>>) -> Result<String, String> {
     let service = service.lock().map_err(|e| e.to_string())?;
-    
+
     // 使用智能检测逻辑
     if let Some(detected_path) = service.detect_ldplayer_adb() {
         Ok(detected_path)
@@ -120,14 +118,14 @@ async fn detect_smart_adb_path(
                 // 最后回退到项目绝对路径
                 let current_dir = std::env::current_dir()
                     .map_err(|e| format!("Failed to get current directory: {}", e))?;
-                
+
                 println!("当前工作目录: {:?}", current_dir);
-                
+
                 // 在开发模式下，当前目录应该是工作空间根目录
                 let adb_path = current_dir.join("platform-tools").join("adb.exe");
-                
+
                 println!("尝试ADB路径: {:?}", adb_path);
-                
+
                 // 检查文件是否存在
                 if adb_path.exists() {
                     let abs_path = adb_path.to_string_lossy().to_string();
@@ -135,13 +133,14 @@ async fn detect_smart_adb_path(
                     Ok(abs_path)
                 } else {
                     // 如果在工作空间根目录找不到，尝试上一级目录（处理在src-tauri目录运行的情况）
-                    let parent_adb_path = current_dir.parent()
+                    let parent_adb_path = current_dir
+                        .parent()
                         .ok_or("No parent directory")?
                         .join("platform-tools")
                         .join("adb.exe");
-                    
+
                     println!("尝试父级目录ADB路径: {:?}", parent_adb_path);
-                    
+
                     if parent_adb_path.exists() {
                         let abs_path = parent_adb_path.to_string_lossy().to_string();
                         println!("找到父级ADB路径: {}", abs_path);
@@ -170,16 +169,16 @@ async fn get_adb_devices(
 #[tauri::command]
 async fn get_adb_version() -> Result<String, String> {
     use std::process::Command;
-    
+
     let adb_path = "platform-tools/adb.exe";
     let mut cmd = Command::new(adb_path);
     cmd.arg("version");
-    
+
     #[cfg(windows)]
     {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match cmd.output() {
         Ok(output) => {
             if output.status.success() {
@@ -192,7 +191,7 @@ async fn get_adb_version() -> Result<String, String> {
                 Err(format!("ADB版本获取失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
     }
 }
 
@@ -200,16 +199,16 @@ async fn get_adb_version() -> Result<String, String> {
 #[tauri::command]
 async fn start_adb_server_simple() -> Result<String, String> {
     use std::process::Command;
-    
+
     let adb_path = "platform-tools/adb.exe";
     let mut cmd = Command::new(adb_path);
     cmd.arg("start-server");
-    
+
     #[cfg(windows)]
     {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match cmd.output() {
         Ok(output) => {
             if output.status.success() {
@@ -219,7 +218,7 @@ async fn start_adb_server_simple() -> Result<String, String> {
                 Err(format!("ADB服务器启动失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
     }
 }
 
@@ -227,16 +226,16 @@ async fn start_adb_server_simple() -> Result<String, String> {
 #[tauri::command]
 async fn kill_adb_server_simple() -> Result<String, String> {
     use std::process::Command;
-    
+
     let adb_path = "platform-tools/adb.exe";
     let mut cmd = Command::new(adb_path);
     cmd.arg("kill-server");
-    
+
     #[cfg(windows)]
     {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match cmd.output() {
         Ok(output) => {
             if output.status.success() {
@@ -246,7 +245,7 @@ async fn kill_adb_server_simple() -> Result<String, String> {
                 Err(format!("ADB服务器停止失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
     }
 }
 
@@ -254,18 +253,18 @@ async fn kill_adb_server_simple() -> Result<String, String> {
 #[tauri::command]
 async fn execute_adb_command_simple(command: String) -> Result<String, String> {
     use std::process::Command;
-    
+
     let adb_path = "platform-tools/adb.exe";
     let args: Vec<&str> = command.split_whitespace().collect();
-    
+
     let mut cmd = Command::new(adb_path);
     cmd.args(&args);
-    
+
     #[cfg(windows)]
     {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match cmd.output() {
         Ok(output) => {
             if output.status.success() {
@@ -276,7 +275,7 @@ async fn execute_adb_command_simple(command: String) -> Result<String, String> {
                 Err(format!("ADB命令执行失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e))
+        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
     }
 }
 
@@ -425,12 +424,12 @@ async fn xiaohongshu_follow_contacts(
             .arg(&request.device)
             .arg("--max-follows")
             .arg(max_follows.to_string());
-        
+
         #[cfg(windows)]
         {
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
-        
+
         cmd.arg("--contacts-json")
             .arg(&serde_json::to_string(&contacts_to_follow).unwrap_or_default())
             .current_dir(&xiaohongshu_test_path)
@@ -515,12 +514,12 @@ async fn get_xiaohongshu_devices() -> Result<Vec<DeviceInfo>, String> {
     let output = {
         let mut cmd = Command::new("adb");
         cmd.arg("devices");
-        
+
         #[cfg(windows)]
         {
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
-        
+
         cmd.output()
             .map_err(|e| format!("执行adb devices失败: {}", e))?
     };
@@ -733,18 +732,18 @@ fn main() {
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件
             // 脚本执行器功能
-            execute_automation_script,   // 执行自动化脚本
-            validate_device_connection,  // 验证设备连接
-            // 智能脚本执行器功能  
+            execute_automation_script,  // 执行自动化脚本
+            validate_device_connection, // 验证设备连接
+            // 智能脚本执行器功能
             execute_smart_automation_script, // 执行智能自动化脚本
             // 截图服务功能
-            capture_device_screenshot,   // 捕获设备截图
+            capture_device_screenshot,    // 捕获设备截图
             get_device_screen_resolution, // 获取设备分辨率
             // XML判断服务功能
-            get_device_ui_xml,           // 获取UI XML结构
-            find_xml_ui_elements,        // 查找XML UI元素
-            wait_for_ui_element,         // 等待元素出现
-            check_device_page_state      // 检查页面状态
+            get_device_ui_xml,       // 获取UI XML结构
+            find_xml_ui_elements,    // 查找XML UI元素
+            wait_for_ui_element,     // 等待元素出现
+            check_device_page_state  // 检查页面状态
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

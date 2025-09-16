@@ -1,7 +1,7 @@
 import { AlertCircle, FileDown, Heart, Smartphone, Zap } from 'lucide-react';
 import React, { useState } from 'react';
 import { ImportAndFollow, VcfImporter, XiaohongshuAutoFollow } from '../components/contact';
-import { useAdbDevices } from '../hooks/useAdbDevices';
+import { useAdb } from '../application/hooks/useAdb';
 import { ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
 
 export const ContactAutomationPage: React.FC = () => {
@@ -13,7 +13,7 @@ export const ContactAutomationPage: React.FC = () => {
     completeFlow?: ImportAndFollowResult;
   }>({});
 
-  const { devices, isLoading: devicesLoading, error: devicesError, refreshDevices } = useAdbDevices();
+  const { devices, isLoading: devicesLoading, lastError: devicesError, refreshDevices } = useAdb();
 
   // 处理设备选择
   const handleDeviceSelect = (deviceId: string) => {
@@ -107,7 +107,7 @@ export const ContactAutomationPage: React.FC = () => {
                      border: '1px solid rgba(239, 68, 68, 0.2)' 
                    }}>
                 <AlertCircle className="w-5 h-5 text-red-400" />
-                <span className="text-red-400 text-sm">{devicesError}</span>
+                <span className="text-red-400 text-sm">{devicesError?.message || 'Unknown error'}</span>
               </div>
             )}
 
@@ -136,14 +136,14 @@ export const ContactAutomationPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                          device.status === 'device' ? 'animate-pulse' : ''
+                          device.status === 'online' ? 'animate-pulse' : ''
                         }`}
                              style={{ 
-                               background: device.status === 'device' 
+                               background: device.status === 'online' 
                                  ? 'var(--gradient-green)' 
                                  : 'var(--bg-tertiary)' 
                              }}>
-                          {device.status === 'device' ? '📱' : '📴'}
+                          {device.status === 'online' ? '📱' : '📴'}
                         </div>
                         <div>
                           <div className="font-medium" style={{ color: 'var(--text-primary)' }}>

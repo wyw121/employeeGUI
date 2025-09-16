@@ -25,7 +25,8 @@ import {
 } from 'antd';
 import React, { useEffect, useState } from 'react';
 import { XiaohongshuService } from '../services/xiaohongshuService';
-import { useDevices, useSelectedDevice, useDeviceLoading, useDeviceActions, DeviceInfo } from '../store/deviceStore';
+import { useAdb } from '../application/hooks/useAdb';
+import { Device } from '../domain/adb';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -45,11 +46,15 @@ interface SimpleFollowResult {
 }
 
 const XiaohongshuFollowPage: React.FC = () => {
-  // 使用全局设备状态
-  const devices = useDevices();
-  const selectedDevice = useSelectedDevice();
-  const deviceLoading = useDeviceLoading();
-  const { refreshDevices, setSelectedDevice, initializeAdb } = useDeviceActions();
+  // 使用新的统一ADB状态
+  const { 
+    devices, 
+    selectedDevice, 
+    isLoading: deviceLoading, 
+    refreshDevices, 
+    selectDevice: setSelectedDevice, 
+    initialize: initializeAdb 
+  } = useAdb();
   
   // 本地状态
   const [isFollowing, setIsFollowing] = useState(false);
@@ -87,7 +92,7 @@ const XiaohongshuFollowPage: React.FC = () => {
 
       // 调用后端的小红书自动关注功能
       const result = await XiaohongshuService.executeCompleteWorkflow(
-        selectedDevice,
+        selectedDevice?.id,
         followConfig
       );
 
@@ -161,18 +166,18 @@ const XiaohongshuFollowPage: React.FC = () => {
                 <Text strong>选择设备:</Text>
                 <Space className="w-full mt-2" direction="vertical">
                   <Select
-                    value={selectedDevice}
-                    onChange={setSelectedDevice}
+                    value={selectedDevice?.id}
+                    onChange={(value) => setSelectedDevice(value)}
                     className="w-full"
                     loading={deviceLoading}
                     placeholder="请选择设备"
                   >
-                    {devices.map((device: DeviceInfo) => (
+                    {devices.map((device: Device) => (
                       <Option key={device.id} value={device.id}>
                         <Space>
                           <MobileOutlined />
                           {device.name || device.id}
-                          <Tag color={device.status === 'device' ? 'green' : 'orange'}>
+                          <Tag color={device.status === 'online' ? 'green' : 'orange'}>
                             {device.status}
                           </Tag>
                         </Space>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAdbDevices } from '../../../hooks/useAdbDevices';
+import { useAdb } from '../../../application/hooks/useAdb';
 import { useLogManager } from './useLogManager';
 import { LogCategory } from '../../../services/adb-diagnostic/LogManager';
 
@@ -57,7 +57,7 @@ export const useDeviceMonitor = (
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorInterval, setMonitorIntervalState] = useState(initialInterval);
   
-  const { devices, getDeviceDetails } = useAdbDevices();
+  const { devices, getDeviceInfo } = useAdb();
   const { info, warn, error } = useLogManager();
   const monitorTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -83,12 +83,12 @@ export const useDeviceMonitor = (
       
       return {
         id: device.id,
-        status: device.status === 'device' ? 'online' : 'offline',
+        status: device.status === 'online' ? 'online' : 'offline',
         lastSeen: device.lastSeen || new Date(),
         connectionType: device.type || 'usb',
-        isHealthy: device.status === 'device',
-        healthScore: device.status === 'device' ? 100 : 0,
-        issues: device.status !== 'device' ? ['设备离线或未连接'] : [],
+        isHealthy: device.status === 'online',
+        healthScore: device.status === 'online' ? 100 : 0,
+        issues: device.status !== 'online' ? ['设备离线或未连接'] : [],
         // 保留现有的性能数据
         ...(existingData && {
           batteryLevel: existingData.batteryLevel,
@@ -106,7 +106,7 @@ export const useDeviceMonitor = (
 
     try {
       // 获取设备详细信息
-      const deviceDetails = await getDeviceDetails(deviceId);
+      const deviceDetails = await getDeviceInfo(deviceId);
       
       const issues: string[] = [];
       let healthScore = 100;
@@ -191,7 +191,7 @@ export const useDeviceMonitor = (
 
       return errorData;
     }
-  }, [getDeviceDetails, info, error]);
+  }, [getDeviceInfo, info, error]);
 
   // 开始监控
   const startMonitoring = useCallback(() => {

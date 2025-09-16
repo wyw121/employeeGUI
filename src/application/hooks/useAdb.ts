@@ -1,0 +1,358 @@
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { 
+  useAdbStore,
+  useDevices,
+  useSelectedDevice,
+  useOnlineDevices,
+  useConnection,
+  useIsConnected,
+  useAdbPath,
+  useDiagnosticResults,
+  useDiagnosticSummary,
+  useHasErrors,
+  useIsLoading,
+  useIsInitializing,
+  useLastError,
+  useAdbActions
+} from '../store/adbStore';
+import { AdbConfig } from '../../domain/adb';
+import { ServiceFactory } from '../services/ServiceFactory';
+
+/**
+ * 统一的ADB Hook
+ * 
+ * 作为React组件与ADB功能的唯一接口，
+ * 提供所有ADB相关的状态和操作方法
+ */
+export const useAdb = () => {
+  const applicationService = useMemo(() => ServiceFactory.getAdbApplicationService(), []);
+  const initializeRef = useRef<Promise<void> | null>(null);
+
+  // ===== 状态选择器 =====
+  
+  // 设备相关状态
+  const devices = useDevices();
+  const selectedDevice = useSelectedDevice();
+  const onlineDevices = useOnlineDevices();
+  
+  // 连接相关状态
+  const connection = useConnection();
+  const isConnected = useIsConnected();
+  const adbPath = useAdbPath();
+  
+  // 诊断相关状态
+  const diagnosticResults = useDiagnosticResults();
+  const diagnosticSummary = useDiagnosticSummary();
+  const hasErrors = useHasErrors();
+  
+  // UI状态
+  const isLoading = useIsLoading();
+  const isInitializing = useIsInitializing();
+  const lastError = useLastError();
+  
+  // Store操作
+  const actions = useAdbActions();
+
+  // ===== 计算属性 =====
+  
+  const deviceCount = devices.length;
+  const onlineDeviceCount = onlineDevices.length;
+  const hasDevices = deviceCount > 0;
+  const hasOnlineDevices = onlineDeviceCount > 0;
+  const isReady = isConnected && !isInitializing && !isLoading;
+  
+  // 健康状态
+  const isHealthy = useMemo(() => {
+    return isConnected && !hasErrors && hasOnlineDevices;
+  }, [isConnected, hasErrors, hasOnlineDevices]);
+
+  // ===== 初始化 =====
+  
+  /**
+   * 初始化ADB环境
+   */
+  const initialize = useCallback(async (config?: AdbConfig) => {
+    // 防止重复初始化
+    if (initializeRef.current) {
+      return initializeRef.current;
+    }
+
+    initializeRef.current = applicationService.initialize(config);
+    
+    try {
+      await initializeRef.current;
+    } finally {
+      initializeRef.current = null;
+    }
+  }, [applicationService]);
+
+  /**
+   * 更新配置
+   */
+  const updateConfig = useCallback(async (config: AdbConfig) => {
+    return await applicationService.updateConfig(config);
+  }, [applicationService]);
+
+  /**
+   * 重置状态
+   */
+  const reset = useCallback(() => {
+    applicationService.reset();
+  }, [applicationService]);
+
+  // ===== 设备操作 =====
+  
+  /**
+   * 刷新设备列表
+   */
+  const refreshDevices = useCallback(async () => {
+    return await applicationService.refreshDevices();
+  }, [applicationService]);
+
+  /**
+   * 连接到设备
+   */
+  const connectToDevice = useCallback(async (address: string) => {
+    return await applicationService.connectToDevice(address);
+  }, [applicationService]);
+
+  /**
+   * 断开设备连接
+   */
+  const disconnectDevice = useCallback(async (deviceId: string) => {
+    return await applicationService.disconnectDevice(deviceId);
+  }, [applicationService]);
+
+  /**
+   * 连接到模拟器
+   */
+  const connectToEmulators = useCallback(async () => {
+    return await applicationService.connectToEmulators();
+  }, [applicationService]);
+
+  /**
+   * 选择设备
+   */
+  const selectDevice = useCallback((deviceId: string | null) => {
+    applicationService.selectDevice(deviceId);
+  }, [applicationService]);
+
+  /**
+   * 获取设备详细信息
+   */
+  const getDeviceInfo = useCallback(async (deviceId: string) => {
+    return await applicationService.getDeviceInfo(deviceId);
+  }, [applicationService]);
+
+  /**
+   * 批量设备操作
+   */
+  const batchDeviceOperation = useCallback(async (
+    deviceIds: string[], 
+    operation: 'connect' | 'disconnect'
+  ) => {
+    return await applicationService.batchDeviceOperation(deviceIds, operation);
+  }, [applicationService]);
+
+  // ===== 连接管理 =====
+  
+  /**
+   * 测试连接
+   */
+  const testConnection = useCallback(async () => {
+    return await applicationService.testConnection();
+  }, [applicationService]);
+
+  /**
+   * 启动ADB服务器
+   */
+  const startAdbServer = useCallback(async () => {
+    return await applicationService.startAdbServer();
+  }, [applicationService]);
+
+  /**
+   * 停止ADB服务器
+   */
+  const stopAdbServer = useCallback(async () => {
+    return await applicationService.stopAdbServer();
+  }, [applicationService]);
+
+  /**
+   * 重启ADB服务器
+   */
+  const restartAdbServer = useCallback(async () => {
+    return await applicationService.restartAdbServer();
+  }, [applicationService]);
+
+  /**
+   * 自动检测ADB路径
+   */
+  const autoDetectAdbPath = useCallback(async () => {
+    return await applicationService.autoDetectAdbPath();
+  }, [applicationService]);
+
+  // ===== 诊断功能 =====
+  
+  /**
+   * 运行完整诊断
+   */
+  const runFullDiagnostic = useCallback(async () => {
+    return await applicationService.runFullDiagnostic();
+  }, [applicationService]);
+
+  /**
+   * 运行快速诊断
+   */
+  const runQuickDiagnostic = useCallback(async () => {
+    return await applicationService.runQuickDiagnostic();
+  }, [applicationService]);
+
+  /**
+   * 执行自动修复
+   */
+  const executeAutoFix = useCallback(async (diagnosticId?: string) => {
+    return await applicationService.executeAutoFix(diagnosticId);
+  }, [applicationService]);
+
+  /**
+   * 获取诊断报告
+   */
+  const getDiagnosticReport = useCallback(() => {
+    return applicationService.getDiagnosticReport();
+  }, [applicationService]);
+
+  // ===== 高级功能 =====
+  
+  /**
+   * 获取健康状态
+   */
+  const getHealthStatus = useCallback(async () => {
+    return await applicationService.getHealthStatus();
+  }, [applicationService]);
+
+  /**
+   * 获取设备统计信息
+   */
+  const getDeviceStats = useCallback(async () => {
+    return await applicationService.getDeviceStats();
+  }, [applicationService]);
+
+  // ===== 工具方法 =====
+  
+  /**
+   * 清除错误
+   */
+  const clearError = useCallback(() => {
+    actions.setError(null);
+  }, [actions]);
+
+  /**
+   * 快速操作 - 一键连接模拟器并刷新
+   */
+  const quickConnect = useCallback(async () => {
+    try {
+      await connectToEmulators();
+      await refreshDevices();
+    } catch (error) {
+      console.error('Quick connect failed:', error);
+      throw error;
+    }
+  }, [connectToEmulators, refreshDevices]);
+
+  /**
+   * 快速修复 - 运行诊断并自动修复
+   */
+  const quickFix = useCallback(async () => {
+    try {
+      await runQuickDiagnostic();
+      const hasAutoFixableIssues = diagnosticResults.some(r => r.isAutoFixable());
+      if (hasAutoFixableIssues) {
+        await executeAutoFix();
+      }
+      return true;
+    } catch (error) {
+      console.error('Quick fix failed:', error);
+      return false;
+    }
+  }, [runQuickDiagnostic, executeAutoFix, diagnosticResults]);
+
+  // ===== 生命周期 =====
+  
+  /**
+   * 自动初始化
+   */
+  useEffect(() => {
+    // 组件挂载时自动初始化（如果还没有连接）
+    if (!isConnected && !isInitializing && !initializeRef.current) {
+      initialize().catch(error => {
+        console.error('Auto initialization failed:', error);
+      });
+    }
+  }, []); // 空依赖数组，只在挂载时执行一次
+
+  // ===== 返回接口 =====
+  
+  return {
+    // === 状态 ===
+    devices,
+    selectedDevice,
+    onlineDevices,
+    connection,
+    diagnosticResults,
+    diagnosticSummary,
+    
+    // === 计算属性 ===
+    deviceCount,
+    onlineDeviceCount,
+    hasDevices,
+    hasOnlineDevices,
+    isConnected,
+    isReady,
+    isHealthy,
+    hasErrors,
+    adbPath,
+    
+    // === UI状态 ===
+    isLoading,
+    isInitializing,
+    lastError,
+    
+    // === 初始化 ===
+    initialize,
+    updateConfig,
+    reset,
+    
+    // === 设备操作 ===
+    refreshDevices,
+    connectToDevice,
+    disconnectDevice,
+    connectToEmulators,
+    selectDevice,
+    getDeviceInfo,
+    batchDeviceOperation,
+    
+    // === 连接管理 ===
+    testConnection,
+    startAdbServer,
+    stopAdbServer,
+    restartAdbServer,
+    autoDetectAdbPath,
+    
+    // === 诊断功能 ===
+    runFullDiagnostic,
+    runQuickDiagnostic,
+    executeAutoFix,
+    getDiagnosticReport,
+    
+    // === 高级功能 ===
+    getHealthStatus,
+    getDeviceStats,
+    
+    // === 工具方法 ===
+    clearError,
+    quickConnect,
+    quickFix
+  };
+};
+
+export default useAdb;

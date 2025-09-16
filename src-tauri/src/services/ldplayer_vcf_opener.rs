@@ -5,9 +5,6 @@ use tokio::process::Command;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info, warn};
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VcfOpenResult {
     pub success: bool,

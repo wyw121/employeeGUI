@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tokio::process::Command as AsyncCommand;
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VcfOpenResult {
     pub success: bool,

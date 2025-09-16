@@ -181,10 +181,9 @@ import { useAdbDevices } from '@/hooks/useAdbDevices';
 
 ## 📚 相关文档
 
-- [架构迁移指南](./ARCHITECTURE_MIGRATION_GUIDE.md)
-- [发布说明](./RELEASE_NOTES.md)
-- [开发工作流程](./DEVELOPMENT_WORKFLOW.md)
-- [团队通知模板](./TEAM_NOTIFICATION_TEMPLATES.md)
+- [项目README](../README.md)
+- [ADB架构统一报告](../ADB_ARCHITECTURE_UNIFICATION_REPORT.md)
+- [架构检查脚本](../scripts/check-adb-architecture.js)
 
 ---
 

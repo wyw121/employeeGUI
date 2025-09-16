@@ -320,7 +320,7 @@ impl ScriptExecutor {
         let click_if_found = params.get("click_if_found")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
-        let timeout = params.get("timeout")
+        let _timeout = params.get("timeout")
             .and_then(|v| v.as_i64())
             .unwrap_or(5000);
 
@@ -382,7 +382,7 @@ impl ScriptExecutor {
     }
 
     // 执行截图操作
-    async fn execute_screenshot(&self, step: &ScriptStep) -> Result<()> {
+    async fn execute_screenshot(&self, _step: &ScriptStep) -> Result<()> {
         info!("📸 执行截图");
 
         let output = Command::new(&self.adb_path)

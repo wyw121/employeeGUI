@@ -49,7 +49,7 @@ impl XmlJudgmentService {
     /// 获取设备当前UI的XML结构
     pub async fn get_ui_xml(device_id: &str) -> Result<String, String> {
         // 先dump UI hierarchy
-        let dump_result = execute_adb_with_result(&["-s", device_id, "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]).await?;
+        let _dump_result = execute_adb_with_result(&["-s", device_id, "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]).await?;
 
         // 等待文件生成
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;

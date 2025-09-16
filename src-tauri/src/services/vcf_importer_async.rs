@@ -6,9 +6,6 @@ use tokio::process::Command;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::{error, info, warn};
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
 use crate::services::safe_adb_manager::SafeAdbManager;
 
 // 重用现有的数据结构

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { IAdbRepository } from '../../domain/adb/repositories/IAdbRepository';
 import { AdbConnection, AdbConfig, ConnectionStatus } from '../../domain/adb/entities/AdbConnection';
 
@@ -10,6 +10,9 @@ export class TauriAdbRepository implements IAdbRepository {
 
   async detectSmartAdbPath(): Promise<string> {
     try {
+      if (!isTauri()) {
+        throw new Error('Not running in Tauri environment');
+      }
       const result = await invoke<string>('detect_smart_adb_path');
       return result;
     } catch (error) {
@@ -20,6 +23,10 @@ export class TauriAdbRepository implements IAdbRepository {
 
   async detectLdPlayerAdbPath(): Promise<string | null> {
     try {
+      if (!isTauri()) {
+        console.warn('Not running in Tauri environment, LDPlayer detection unavailable');
+        return null;
+      }
       const result = await invoke<string | null>('detect_ldplayer_adb');
       return result;
     } catch (error) {

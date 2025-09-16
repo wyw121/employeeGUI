@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { IDeviceRepository } from '../../domain/adb/repositories/IDeviceRepository';
 import { Device, DeviceQuery } from '../../domain/adb/entities/Device';
 
@@ -10,6 +10,10 @@ export class TauriDeviceRepository implements IDeviceRepository {
   
   async getDevices(): Promise<Device[]> {
     try {
+      if (!isTauri()) {
+        console.warn('Not running in Tauri environment, returning empty device list');
+        return [];
+      }
       // 使用安全的ADB设备获取命令
       const deviceIds = await invoke<string[]>('get_adb_devices_safe');
       const devices: Device[] = [];

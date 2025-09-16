@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { IDiagnosticRepository } from '../../domain/adb/repositories/IDiagnosticRepository';
 import { 
   DiagnosticResult, 
@@ -14,6 +14,11 @@ export class TauriDiagnosticRepository implements IDiagnosticRepository {
 
   async runAllDiagnostics(): Promise<DiagnosticResult[]> {
     const diagnostics: DiagnosticResult[] = [];
+
+    if (!isTauri()) {
+      console.warn('Not running in Tauri environment, returning empty diagnostics');
+      return diagnostics;
+    }
 
     try {
       // 并行执行所有诊断检查

@@ -1,5 +1,6 @@
 pub mod adb_device_tracker;
 pub mod adb_service;
+pub mod adb_shell_session;
 pub mod auth_service;
 pub mod contact_automation;
 pub mod contact_service;
@@ -17,4 +18,6 @@ pub mod vcf_importer_async;
 pub mod vcf_importer_optimized;
 pub mod xiaohongshu_automator;
 pub mod xiaohongshu_follow_service;
+pub mod xiaohongshu_long_connection_automator;
+pub mod xiaohongshu_long_connection_service;
 pub mod xiaohongshu_service;

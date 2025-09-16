@@ -24,6 +24,7 @@ use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
+use services::xiaohongshu_long_connection_service::{XiaohongshuLongConnectionService, *};
 use std::sync::Mutex;
 use tauri::State;
 use tracing::info;
@@ -665,6 +666,7 @@ fn main() {
     let employee_service = EmployeeService::new().expect("Failed to initialize employee service");
     let adb_service = AdbService::new();
     let xiaohongshu_service = XiaohongshuService::new();
+    let xiaohongshu_long_connection_service = XiaohongshuLongConnectionService::new();
     
     // 初始化实时设备跟踪器 (替代旧的轮询系统)
     initialize_device_tracker()
@@ -682,6 +684,7 @@ fn main() {
         .manage(Mutex::new(employee_service))
         .manage(Mutex::new(adb_service))
         .manage(tokio::sync::Mutex::new(xiaohongshu_service))
+        .manage(tokio::sync::Mutex::new(xiaohongshu_long_connection_service))
         .invoke_handler(tauri::generate_handler![
             get_employees,
             add_employee,
@@ -751,6 +754,14 @@ fn main() {
             auto_follow_contacts,
             get_xiaohongshu_service_status,
             execute_complete_xiaohongshu_workflow,
+            // 小红书长连接服务命令
+            initialize_xiaohongshu_long_connection_service,
+            check_xiaohongshu_app_status_long_connection,
+            launch_xiaohongshu_app_long_connection,
+            navigate_to_discover_friends_long_connection,
+            execute_auto_follow_long_connection,
+            execute_complete_workflow_long_connection,
+            cleanup_xiaohongshu_long_connection_service,
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件

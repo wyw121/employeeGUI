@@ -31,14 +31,12 @@ import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
-import AdbPathTestPage from '../pages/AdbPathTestPage'; // ADB路径测试
 import ScriptBuilderPage from '../pages/ScriptBuilderPage'; // 脚本构建器
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import FlowScriptBuilder from './flow/FlowScriptBuilder'; // 流程构建器
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
-import RealTimeDeviceMonitor from './device/RealTimeDeviceMonitor'; // 实时设备监控
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -63,19 +61,9 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       label: '设备管理',
     },
     {
-      key: 'real-time-devices',
-      icon: <ThunderboltOutlined />,
-      label: '实时设备监控',
-    },
-    {
       key: 'adb-test',
       icon: <ThunderboltOutlined />,
       label: 'ADB诊断',
-    },
-    {
-      key: 'adb-path-test',
-      icon: <SecurityScanOutlined />,
-      label: 'ADB路径测试',
     },
     {
       key: 'contacts',
@@ -313,10 +301,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               />
             )}
 
-            {selectedKey === 'real-time-devices' && (
-              <RealTimeDeviceMonitor />
-            )}
-
             {selectedKey === 'contacts' && (
               <ContactManagementPage />
             )}
@@ -338,10 +322,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
                 {console.log('🎯 渲染 ADB 诊断模块页面，selectedKey:', selectedKey)}
                 <ComprehensiveAdbPage />
               </>
-            )}
-
-            {selectedKey === 'adb-path-test' && (
-              <AdbPathTestPage />
             )}
 
             {selectedKey === 'acquisition' && (

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
 import { useAdb } from '../application/hooks/useAdb';
+import RealTimeDeviceMonitor from '../components/device/RealTimeDeviceMonitor';
+import AdbPathTestPage from './AdbPathTestPage';
 
 const { Title, Paragraph } = Typography;
 
@@ -24,6 +26,24 @@ export const ComprehensiveAdbPage: React.FC = () => {
           <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
           <p>状态: {isLoading ? '加载中' : '正常'}</p>
         </Card>
+      )
+    },
+    {
+      key: 'realtime-monitor',
+      label: '实时设备监控',
+      children: (
+        <div style={{ padding: '0', background: 'transparent' }}>
+          <RealTimeDeviceMonitor />
+        </div>
+      )
+    },
+    {
+      key: 'adb-path-test',
+      label: 'ADB路径检测',
+      children: (
+        <div style={{ padding: '0', background: 'transparent' }}>
+          <AdbPathTestPage />
+        </div>
       )
     },
     {
@@ -63,8 +83,8 @@ export const ComprehensiveAdbPage: React.FC = () => {
           <Card>
             <Title level={2}>ADB 诊断管理系统</Title>
             <Paragraph>
-              集成化的 ADB 设备诊断、监控和管理平台。提供设备连接检测、健康状态监控、
-              日志查看、自动诊断修复等完整功能。
+              集成化的 ADB 设备诊断、监控和管理平台。包含实时设备监控、ADB路径自动检测、
+              设备连接管理、健康状态监控、日志查看、自动诊断修复等完整功能。
             </Paragraph>
             
             {/* 设备状态提示 */}

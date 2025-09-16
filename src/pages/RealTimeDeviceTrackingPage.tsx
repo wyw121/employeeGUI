@@ -1,5 +1,5 @@
 import React from 'react';
-import RealTimeDeviceMonitor from '../components/device/RealTimeDeviceMonitor';
+import RealTimeDeviceMonitor from '../components/device/RealTimeDeviceMonitor.tsx';
 
 /**
  * 实时ADB设备跟踪演示页面

@@ -30,6 +30,9 @@ export {
   type IDeviceManager,
 } from "./devices/IDeviceManager";
 
+// ===== 统一ADB适配器导出 =====
+export { UnifiedAdbDeviceManager } from "./adapters/UnifiedAdbDeviceManager";
+
 // ===== 导入策略导出 =====
 export {
   BalancedImportStrategy,
@@ -44,11 +47,11 @@ export {
   useContactImport,
   useDeviceMonitoring,
   useImportStats,
-} from "./hooks/useContactImport";
+} from "./hooks/useUnifiedContactImport";
 export type {
   UseContactImportOptions,
   UseContactImportReturn,
-} from "./hooks/useContactImport";
+} from "./hooks/useUnifiedContactImport";
 
 // ===== UI组件导出 =====
 export { ContactImportWizard } from "./ui/ContactImportWizard";

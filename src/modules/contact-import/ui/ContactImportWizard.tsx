@@ -6,7 +6,7 @@
 import { CheckCircleOutlined, FileTextOutlined, InboxOutlined, MobileOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Progress, Select, Space, Steps, Table, Typography, Upload } from 'antd';
 import React, { useCallback, useState } from 'react';
-import { useContactImport, useImportStats } from '../hooks/useContactImport';
+import { useContactImport, useImportStats } from '../hooks/useUnifiedContactImport';
 import { ImportStrategyFactory } from '../strategies/ImportStrategies';
 import { Device, ImportPhase, ImportStrategyType } from '../types';
 
@@ -65,7 +65,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   const [selectedStrategy, setSelectedStrategy] = useState<ImportStrategyType>(ImportStrategyType.BALANCED);
 
   // 统计信息
-  const stats = useImportStats(result);
+  const { stats } = useImportStats();
 
   // 步骤定义
   const steps = [
@@ -402,10 +402,10 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
                   <Title level={4}>导入统计</Title>
                   <ul>
                     <li>总计联系人: {result.totalContacts}</li>
-                    <li>成功导入: {result.importedContacts} ({stats.successRate}%)</li>
-                    <li>导入失败: {result.failedContacts} ({stats.failureRate}%)</li>
-                    <li>跳过联系人: {result.skippedContacts} ({stats.skipRate}%)</li>
-                    <li>重复联系人: {result.duplicateContacts} ({stats.duplicateRate}%)</li>
+                    <li>成功导入: {result.importedContacts} ({Math.round((result.importedContacts / result.totalContacts) * 100)}%)</li>
+                    <li>导入失败: {result.failedContacts} ({Math.round((result.failedContacts / result.totalContacts) * 100)}%)</li>
+                    <li>跳过联系人: {result.skippedContacts} ({Math.round((result.skippedContacts / result.totalContacts) * 100)}%)</li>
+                    <li>重复联系人: {result.duplicateContacts} ({Math.round((result.duplicateContacts / result.totalContacts) * 100)}%)</li>
                     <li>总耗时: {Math.round(result.duration / 1000)}秒</li>
                   </ul>
                 </div>

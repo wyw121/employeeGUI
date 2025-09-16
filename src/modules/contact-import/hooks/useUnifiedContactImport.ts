@@ -1,41 +1,44 @@
 /**
- * 联系人导入自定义Hook
- * 提供完整的联系人导入功能，包括状态管理和事件处理
+ * 重构后的联系人导入 Hook
+ * 使用统一的 ADB 设备管理器适配器
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ContactImporter,
-  ContactImporterEventListener,
-} from "../core/ContactImporter";
-import { AndroidDeviceManager } from "../devices/IDeviceManager";
-import { VcfParser } from "../parsers/VcfParser";
-import { ImportStrategyFactory } from "../strategies/ImportStrategies";
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { ContactImporter, ContactImporterEventListener } from '../core/ContactImporter';
+import { UnifiedAdbDeviceManager } from '../adapters/UnifiedAdbDeviceManager';
+import { VcfParser } from '../parsers/VcfParser';
+import { ImportStrategyFactory } from '../strategies/ImportStrategies';
 import {
   Contact,
   Device,
   ImportConfiguration,
-  ImportFormat,
-  ImportPhase,
-  ImportProgress,
   ImportResult,
+  ImportPhase,
   ImportStrategyType,
+  ImportProgress,
   ParseOptions,
-} from "../types";
+} from '../types';
+
+// 默认配置
+const defaultConfiguration: ImportConfiguration = {
+  strategy: ImportStrategyType.BALANCED,
+  batchSize: 50,
+  allowDuplicates: false,
+  skipInvalidContacts: true,
+  format: 'vcf' as any,
+  options: {
+    preserveGroups: true,
+    mergeStrategy: 'skip',
+    photoHandling: 'reference',
+  },
+};
 
 export interface UseContactImportOptions {
-  /**
-   * 导入配置
-   */
   configuration?: Partial<ImportConfiguration>;
-
-  /**
-   * 事件回调
-   */
   onProgress?: (progress: ImportProgress) => void;
   onPhaseChange?: (phase: ImportPhase) => void;
-  onComplete?: (result: ImportResult) => void;
   onError?: (error: Error) => void;
+  onComplete?: (result: ImportResult) => void;
 }
 
 export interface UseContactImportReturn {
@@ -51,76 +54,54 @@ export interface UseContactImportReturn {
   devices: Device[];
 
   // 操作方法
-  parseContacts: (
-    fileContent: string,
-    options?: ParseOptions
-  ) => Promise<Contact[]>;
+  parseContacts: (fileContent: string, parseOptions?: ParseOptions) => Promise<Contact[]>;
   detectDevices: () => Promise<Device[]>;
-  importContacts: (
-    fileContent: string,
-    targetDevices: Device[]
-  ) => Promise<ImportResult>;
+  importContacts: (fileContent: string, targetDevices: Device[]) => Promise<ImportResult>;
   cancelImport: () => void;
   clearError: () => void;
   reset: () => void;
 
-  // 配置方法
+  // 配置
   setStrategy: (strategy: ImportStrategyType) => void;
   setConfiguration: (config: Partial<ImportConfiguration>) => void;
+  configuration: ImportConfiguration;
 }
 
-const defaultConfiguration: ImportConfiguration = {
-  strategy: ImportStrategyType.BALANCED,
-  batchSize: 50,
-  allowDuplicates: false,
-  skipInvalidContacts: true,
-  format: ImportFormat.VCF,
-  options: {
-    preserveGroups: false,
-    mergeStrategy: "skip",
-    photoHandling: "skip",
-  },
-};
-
-export function useContactImport(
-  options: UseContactImportOptions = {}
-): UseContactImportReturn {
-  // 状态管理
+/**
+ * 联系人导入Hook - 使用统一ADB架构
+ */
+export function useContactImport(options: UseContactImportOptions = {}): UseContactImportReturn {
+  // 状态
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
-  const [currentPhase, setCurrentPhase] = useState<ImportPhase>(
-    ImportPhase.INITIALIZING
-  );
+  const [currentPhase, setCurrentPhase] = useState<ImportPhase>(ImportPhase.INITIALIZING);
   const [error, setError] = useState<Error | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  
+  // 数据状态
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
-  // Configuration state
-  // eslint-disable-next-line prefer-const
-  const [configuration, setConfigurationState] = useState<ImportConfiguration>(
-    () => ({
-      ...defaultConfiguration,
-      ...options.configuration,
-    })
-  );
+  
+  // 配置状态
+  const [configuration, setConfigurationState] = useState<ImportConfiguration>(() => ({
+    ...defaultConfiguration,
+    ...options.configuration,
+  }));
 
   // Refs
   const importerRef = useRef<ContactImporter | null>(null);
-  const deviceManagerRef = useRef<AndroidDeviceManager | null>(null);
+  const deviceManagerRef = useRef<UnifiedAdbDeviceManager | null>(null);
 
-  // 初始化设备管理器
+  // 初始化统一设备管理器
   useEffect(() => {
     if (!deviceManagerRef.current) {
-      deviceManagerRef.current = new AndroidDeviceManager();
+      deviceManagerRef.current = new UnifiedAdbDeviceManager();
     }
   }, []);
 
   // 解析联系人
   const parseContacts = useCallback(
-    async (
-      fileContent: string,
-      parseOptions?: ParseOptions
-    ): Promise<Contact[]> => {
+    async (fileContent: string, parseOptions?: ParseOptions): Promise<Contact[]> => {
       try {
         setError(null);
         const parser = new VcfParser();
@@ -144,7 +125,7 @@ export function useContactImport(
     [options]
   );
 
-  // 检测设备
+  // 检测设备 - 使用统一的设备管理器
   const detectDevices = useCallback(async (): Promise<Device[]> => {
     try {
       setError(null);
@@ -166,10 +147,7 @@ export function useContactImport(
 
   // 导入联系人
   const importContacts = useCallback(
-    async (
-      fileContent: string,
-      targetDevices: Device[]
-    ): Promise<ImportResult> => {
+    async (fileContent: string, targetDevices: Device[]): Promise<ImportResult> => {
       try {
         setError(null);
         setResult(null);
@@ -179,7 +157,7 @@ export function useContactImport(
           throw new Error("设备管理器未初始化");
         }
 
-        // 创建导入器
+        // 创建导入器 - 使用统一的设备管理器
         const parser = new VcfParser();
         const strategy = ImportStrategyFactory.create(configuration.strategy);
 
@@ -215,10 +193,7 @@ export function useContactImport(
         importer.addEventListener(eventListener);
 
         // 执行导入
-        const importResult = await importer.importContacts(
-          fileContent,
-          targetDevices
-        );
+        const importResult = await importer.importContacts(fileContent, targetDevices);
 
         setResult(importResult);
         return importResult;
@@ -298,56 +273,23 @@ export function useContactImport(
     clearError,
     reset,
 
-    // 配置方法
+    // 配置
     setStrategy,
     setConfiguration,
+    configuration,
   };
 }
 
 /**
- * 联系人导入统计Hook
- * 提供导入过程的统计信息
- */
-export function useImportStats(result: ImportResult | null) {
-  const stats = {
-    successRate:
-      result && result.totalContacts > 0
-        ? Math.round((result.importedContacts / result.totalContacts) * 100)
-        : 0,
-    failureRate:
-      result && result.totalContacts > 0
-        ? Math.round((result.failedContacts / result.totalContacts) * 100)
-        : 0,
-    skipRate:
-      result && result.totalContacts > 0
-        ? Math.round((result.skippedContacts / result.totalContacts) * 100)
-        : 0,
-    duplicateRate:
-      result && result.totalContacts > 0
-        ? Math.round((result.duplicateContacts / result.totalContacts) * 100)
-        : 0,
-    totalDuration: result?.duration || 0,
-    averageTimePerContact:
-      result && result.totalContacts > 0
-        ? Math.round(result.duration / result.totalContacts)
-        : 0,
-  };
-
-  return stats;
-}
-
-/**
- * 设备状态监控Hook
+ * 设备状态监控Hook - 使用统一ADB架构
  */
 export function useDeviceMonitoring() {
-  const [deviceStatuses, setDeviceStatuses] = useState<Map<string, Device>>(
-    new Map()
-  );
-  const deviceManagerRef = useRef<AndroidDeviceManager | null>(null);
+  const [deviceStatuses, setDeviceStatuses] = useState<Map<string, Device>>(new Map());
+  const deviceManagerRef = useRef<UnifiedAdbDeviceManager | null>(null);
 
   useEffect(() => {
     if (!deviceManagerRef.current) {
-      deviceManagerRef.current = new AndroidDeviceManager();
+      deviceManagerRef.current = new UnifiedAdbDeviceManager();
     }
 
     const deviceManager = deviceManagerRef.current;
@@ -384,5 +326,48 @@ export function useDeviceMonitoring() {
     deviceStatuses: Array.from(deviceStatuses.values()),
     getDeviceStatus,
     refreshDeviceStatus,
+  };
+}
+
+/**
+ * 导入统计Hook - 增强功能
+ */
+export function useImportStats() {
+  const [stats, setStats] = useState({
+    totalImports: 0,
+    successfulImports: 0,
+    failedImports: 0,
+    totalContacts: 0,
+    averageImportTime: 0,
+    deviceUsage: new Map<string, number>(),
+  });
+
+  const recordImport = useCallback((result: ImportResult, deviceId: string, duration: number) => {
+    setStats((prev) => ({
+      ...prev,
+      totalImports: prev.totalImports + 1,
+      successfulImports: result.success ? prev.successfulImports + 1 : prev.successfulImports,
+      failedImports: result.success ? prev.failedImports : prev.failedImports + 1,
+      totalContacts: prev.totalContacts + result.importedContacts,
+      averageImportTime: (prev.averageImportTime * (prev.totalImports - 1) + duration) / prev.totalImports,
+      deviceUsage: new Map(prev.deviceUsage.set(deviceId, (prev.deviceUsage.get(deviceId) || 0) + 1)),
+    }));
+  }, []);
+
+  const resetStats = useCallback(() => {
+    setStats({
+      totalImports: 0,
+      successfulImports: 0,
+      failedImports: 0,
+      totalContacts: 0,
+      averageImportTime: 0,
+      deviceUsage: new Map(),
+    });
+  }, []);
+
+  return {
+    stats,
+    recordImport,
+    resetStats,
   };
 }

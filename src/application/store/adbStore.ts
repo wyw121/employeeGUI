@@ -206,7 +206,15 @@ export const useAdbStore = create<AdbState & AdbActions>()(
  */
 // export const useDevices = () => useAdbStore(state => state.devices); // ✅ 废弃：直接使用 useAdbStore
 export const useSelectedDevice = () => useAdbStore(state => state.getSelectedDevice());
-export const useOnlineDevices = () => useAdbStore(state => state.getOnlineDevices());
+
+// ✅ 修复：创建稳定的选择器，避免无限重渲染
+const selectOnlineDevices = (state: AdbState & AdbActions) => 
+  state.devices.filter(device => device.isOnline());
+
+export const useOnlineDevices = () => {
+  return useAdbStore(selectOnlineDevices);
+};
+
 export const useDeviceCount = () => useAdbStore(state => state.devices.length);
 
 /**

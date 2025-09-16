@@ -282,12 +282,22 @@ export const useAdb = () => {
    * 自动初始化
    */
   useEffect(() => {
+    let isMounted = true;
+    
     // 组件挂载时自动初始化（如果还没有连接）
-    if (!isConnected && !isInitializing && !initializeRef.current) {
+    const shouldInitialize = !isConnected && !isInitializing && !initializeRef.current;
+    
+    if (shouldInitialize) {
       initialize().catch(error => {
-        console.error('Auto initialization failed:', error);
+        if (isMounted) {
+          console.error('Auto initialization failed:', error);
+        }
       });
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [isConnected, isInitializing, initialize]); // 修复依赖数组
 
   // ===== 返回接口 =====

@@ -39,6 +39,17 @@ export class AdbApplicationService {
   async initialize(config?: AdbConfig): Promise<void> {
     const store = useAdbStore.getState();
     
+    // ✅ 检查Tauri环境
+    const { isTauri } = await import('@tauri-apps/api/core');
+    if (!isTauri()) {
+      console.warn('🌐 运行在浏览器环境中，ADB功能将受限');
+      // 在浏览器环境中，设置模拟状态但不执行实际ADB操作
+      store.setInitializing(false);
+      store.setDevices([]); // 空设备列表
+      store.setError(null);
+      return;
+    }
+    
     try {
       store.setInitializing(true);
       store.setError(null);

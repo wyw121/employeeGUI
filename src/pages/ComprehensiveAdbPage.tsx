@@ -3,7 +3,6 @@ import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
 import { useAdb } from '../application/hooks/useAdb';
 
 const { Title, Paragraph } = Typography;
-const { TabPane } = Tabs;
 
 /**
  * 完整的 ADB 诊断模块页面
@@ -12,6 +11,49 @@ const { TabPane } = Tabs;
 export const ComprehensiveAdbPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { devices, isLoading } = useAdb();
+
+  // 定义 Tab 项目
+  const tabItems = [
+    {
+      key: 'dashboard',
+      label: '系统仪表板',
+      children: (
+        <Card title="ADB系统状态">
+          <p>系统已重构为统一的DDD架构</p>
+          <p>设备数量: {devices.length}</p>
+          <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
+          <p>状态: {isLoading ? '加载中' : '正常'}</p>
+        </Card>
+      )
+    },
+    {
+      key: 'devices',
+      label: '设备管理',
+      children: (
+        <Card title="设备列表">
+          {devices.map(device => (
+            <div key={device.id} style={{ marginBottom: 8 }}>
+              {device.getDisplayName()} - {device.isOnline() ? '在线' : '离线'}
+            </div>
+          ))}
+        </Card>
+      )
+    },
+    {
+      key: 'logs',
+      label: '日志查看',
+      children: (
+        <Card title="系统日志">
+          <p>统一日志系统 - 通过 useAdb() 接口访问</p>
+        </Card>
+      )
+    },
+    {
+      key: 'status',
+      label: '系统状态',
+      children: <SystemStatusView />
+    }
+  ];
 
   return (
     <div style={{ padding: '24px' }}>
@@ -46,41 +88,9 @@ export const ComprehensiveAdbPage: React.FC = () => {
               activeKey={activeTab} 
               onChange={setActiveTab}
               size="large"
-              destroyInactiveTabPane={false}
-            >
-              {/* 系统仪表板 */}
-              <TabPane tab="系统仪表板" key="dashboard">
-                <Card title="ADB系统状态">
-                  <p>系统已重构为统一的DDD架构</p>
-                  <p>设备数量: {devices.length}</p>
-                  <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
-                  <p>状态: {isLoading ? '加载中' : '正常'}</p>
-                </Card>
-              </TabPane>
-
-              {/* 设备管理 */}
-              <TabPane tab="设备管理" key="devices">
-                <Card title="设备列表">
-                  {devices.map(device => (
-                    <div key={device.id} style={{ marginBottom: 8 }}>
-                      {device.getDisplayName()} - {device.isOnline() ? '在线' : '离线'}
-                    </div>
-                  ))}
-                </Card>
-              </TabPane>
-
-              {/* 日志查看器 */}
-              <TabPane tab="日志查看" key="logs">
-                <Card title="系统日志">
-                  <p>统一日志系统 - 通过 useAdb() 接口访问</p>
-                </Card>
-              </TabPane>
-
-              {/* 系统状态 */}
-              <TabPane tab="系统状态" key="status">
-                <SystemStatusView />
-              </TabPane>
-            </Tabs>
+              destroyOnHidden={false}
+              items={tabItems}
+            />
           </Card>
         </Col>
       </Row>

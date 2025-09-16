@@ -1,4 +1,5 @@
 import { TauriDeviceRepository } from '../../infrastructure/repositories/TauriDeviceRepository';
+import { SmartDeviceRepository } from '../../infrastructure/repositories/SmartDeviceRepository';
 import { TauriAdbRepository } from '../../infrastructure/repositories/TauriAdbRepository';
 import { TauriDiagnosticRepository } from '../../infrastructure/repositories/TauriDiagnosticRepository';
 import { IDeviceRepository } from '../../domain/adb/repositories/IDeviceRepository';
@@ -62,8 +63,8 @@ class ServiceContainer {
    * 注册默认服务
    */
   registerDefaultServices(): void {
-    // 注册Repository层
-    this.register('deviceRepository', () => new TauriDeviceRepository());
+    // 注册Repository层 - 使用智能设备仓储实现最佳实践
+    this.register('deviceRepository', () => new SmartDeviceRepository());
     this.register('adbRepository', () => new TauriAdbRepository());
     this.register('diagnosticRepository', () => new TauriDiagnosticRepository());
 

@@ -15,6 +15,7 @@ use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::crash_debugger::*;
+use services::device_state_manager::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
 use services::safe_adb_manager::*;
@@ -664,6 +665,10 @@ fn main() {
     let employee_service = EmployeeService::new().expect("Failed to initialize employee service");
     let adb_service = AdbService::new();
     let xiaohongshu_service = XiaohongshuService::new();
+    
+    // 初始化全局设备状态管理器
+    initialize_global_device_manager()
+        .expect("Failed to initialize global device state manager");
 
     info!("✅ 所有服务初始化完成");
 
@@ -745,6 +750,9 @@ fn main() {
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件
+            // 智能设备状态管理功能 - 最佳实践实现
+            get_devices_smart,              // 智能设备状态获取
+            get_device_properties_optimized, // 优化的设备属性获取
             // 脚本执行器功能
             execute_automation_script,  // 执行自动化脚本
             validate_device_connection, // 验证设备连接

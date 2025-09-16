@@ -204,7 +204,7 @@ export const useAdbStore = create<AdbState & AdbActions>()(
 /**
  * 设备相关选择器
  */
-export const useDevices = () => useAdbStore(state => state.devices);
+// export const useDevices = () => useAdbStore(state => state.devices); // ✅ 废弃：直接使用 useAdbStore
 export const useSelectedDevice = () => useAdbStore(state => state.getSelectedDevice());
 export const useOnlineDevices = () => useAdbStore(state => state.getOnlineDevices());
 export const useDeviceCount = () => useAdbStore(state => state.devices.length);

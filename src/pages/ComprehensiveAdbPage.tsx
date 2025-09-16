@@ -129,7 +129,7 @@ const SystemStatusView: React.FC = () => {
               <div style={{ marginTop: '16px' }}><strong>Hooks层</strong></div>
               <div>- useAdb (统一ADB接口)</div>
               <div>- useLogManager (日志管理)</div>
-              <div>- useDeviceMonitor (设备监控)</div>
+              <div>- ✅ 设备监控已统一到 useAdb() 中</div>
               <div>- useNotification (通知管理)</div>
             </Space>
           </Card>

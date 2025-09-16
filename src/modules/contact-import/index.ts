@@ -45,7 +45,7 @@ export {
 // ===== React Hooks导出 =====
 export {
   useContactImport,
-  useDeviceMonitoring,
+  // useDeviceMonitoring, // ✅ 已删除 - 设备状态现在通过统一架构管理
   useImportStats,
 } from "./hooks/useUnifiedContactImport";
 export type {

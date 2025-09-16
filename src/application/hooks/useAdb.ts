@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   useAdbStore,
-  useDevices,
+  // useDevices, // ✅ 移除废弃的导出，直接使用 useAdbStore
   useSelectedDevice,
   useOnlineDevices,
   useConnection,
@@ -31,7 +31,7 @@ export const useAdb = () => {
   // ===== 状态选择器 =====
   
   // 设备相关状态
-  const devices = useDevices();
+  const devices = useAdbStore(state => state.devices); // ✅ 直接使用 store
   const selectedDevice = useSelectedDevice();
   const onlineDevices = useOnlineDevices();
   

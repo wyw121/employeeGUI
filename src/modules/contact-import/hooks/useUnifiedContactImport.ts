@@ -51,7 +51,7 @@ export interface UseContactImportReturn {
 
   // 数据
   contacts: Contact[];
-  devices: Device[];
+  // ✅ devices 现在通过 detectDevices() 方法按需获取，不再提供响应式状态
 
   // 操作方法
   parseContacts: (fileContent: string, parseOptions?: ParseOptions) => Promise<Contact[]>;
@@ -80,7 +80,7 @@ export function useContactImport(options: UseContactImportOptions = {}): UseCont
   
   // 数据状态
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
+  // ✅ 删除分散的设备状态，使用统一的设备管理器获取
   
   // 配置状态
   const [configuration, setConfigurationState] = useState<ImportConfiguration>(() => ({
@@ -134,7 +134,7 @@ export function useContactImport(options: UseContactImportOptions = {}): UseCont
       }
 
       const detectedDevices = await deviceManagerRef.current.detectDevices();
-      setDevices(detectedDevices);
+      // ✅ 不再维护本地devices状态，直接返回检测结果
 
       return detectedDevices;
     } catch (err) {
@@ -230,7 +230,7 @@ export function useContactImport(options: UseContactImportOptions = {}): UseCont
     setError(null);
     setResult(null);
     setContacts([]);
-    setDevices([]);
+    // ✅ 不再重置devices状态，因为设备状态由统一管理器维护
     importerRef.current = null;
   }, []);
 
@@ -263,7 +263,7 @@ export function useContactImport(options: UseContactImportOptions = {}): UseCont
 
     // 数据
     contacts,
-    devices,
+    // ✅ devices 现在通过 detectDevices() 方法获取，不再直接提供状态
 
     // 操作方法
     parseContacts,
@@ -280,54 +280,7 @@ export function useContactImport(options: UseContactImportOptions = {}): UseCont
   };
 }
 
-/**
- * 设备状态监控Hook - 使用统一ADB架构
- */
-export function useDeviceMonitoring() {
-  const [deviceStatuses, setDeviceStatuses] = useState<Map<string, Device>>(new Map());
-  const deviceManagerRef = useRef<UnifiedAdbDeviceManager | null>(null);
-
-  useEffect(() => {
-    if (!deviceManagerRef.current) {
-      deviceManagerRef.current = new UnifiedAdbDeviceManager();
-    }
-
-    const deviceManager = deviceManagerRef.current;
-
-    // 监听设备状态变化
-    const unsubscribe = deviceManager.onDeviceStatusChange((device) => {
-      setDeviceStatuses((prev) => new Map(prev.set(device.id, device)));
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const getDeviceStatus = useCallback(
-    (deviceId: string): Device | undefined => {
-      return deviceStatuses.get(deviceId);
-    },
-    [deviceStatuses]
-  );
-
-  const refreshDeviceStatus = useCallback(
-    async (deviceId: string): Promise<Device | null> => {
-      if (!deviceManagerRef.current) return null;
-
-      const device = await deviceManagerRef.current.getDeviceStatus(deviceId);
-      if (device) {
-        setDeviceStatuses((prev) => new Map(prev.set(device.id, device)));
-      }
-      return device;
-    },
-    []
-  );
-
-  return {
-    deviceStatuses: Array.from(deviceStatuses.values()),
-    getDeviceStatus,
-    refreshDeviceStatus,
-  };
-}
+// ✅ useDeviceMonitoring 已删除 - 设备状态现在通过统一架构管理
 
 /**
  * 导入统计Hook - 增强功能

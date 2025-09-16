@@ -32,7 +32,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
     error,
     result,
     contacts,
-    devices,
+    // ✅ devices 现在通过 detectDevices() 方法获取
     parseContacts,
     detectDevices,
     importContacts,
@@ -62,6 +62,8 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [fileContent, setFileContent] = useState<string>('');
   const [selectedDevices, setSelectedDevices] = useState<Device[]>([]);
+  // ✅ 检测到的设备列表，用于UI显示和用户选择
+  const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<ImportStrategyType>(ImportStrategyType.BALANCED);
 
   // 统计信息
@@ -125,7 +127,8 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   // 检测设备
   const handleDetectDevices = useCallback(async () => {
     try {
-      await detectDevices();
+      const detected = await detectDevices();
+      setAvailableDevices(detected); // ✅ 将检测结果存储到本地状态
       setCurrentStep(2);
     } catch (err) {
       console.error('设备检测失败:', err);
@@ -152,6 +155,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
     setCurrentStep(0);
     setFileContent('');
     setSelectedDevices([]);
+    setAvailableDevices([]); // ✅ 同时清理检测到的设备
   }, [reset]);
 
   // 联系人表格列定义
@@ -280,11 +284,11 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
               检测设备
             </Button>
 
-            {devices.length > 0 && (
+            {availableDevices.length > 0 && (
               <div>
-                <Text strong>检测到 {devices.length} 台设备</Text>
+                <Text strong>检测到 {availableDevices.length} 台设备</Text>
                 <Table
-                  dataSource={devices}
+                  dataSource={availableDevices}
                   columns={deviceColumns}
                   pagination={false}
                   size="small"
@@ -292,7 +296,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
                   rowSelection={{
                     selectedRowKeys: selectedDevices.map(d => d.id),
                     onChange: (selectedRowKeys) => {
-                      const selected = devices.filter(d => 
+                      const selected = availableDevices.filter(d =>
                         selectedRowKeys.includes(d.id)
                       );
                       setSelectedDevices(selected);
@@ -302,7 +306,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
               </div>
             )}
 
-            {devices.length > 0 && selectedDevices.length > 0 && (
+            {availableDevices.length > 0 && selectedDevices.length > 0 && (
               <Button type="primary" onClick={() => setCurrentStep(2)}>
                 下一步
               </Button>

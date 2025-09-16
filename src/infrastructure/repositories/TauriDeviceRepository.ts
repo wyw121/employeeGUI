@@ -184,3 +184,4 @@ export class TauriDeviceRepository implements IDeviceRepository {
     return properties;
   }
 }
+

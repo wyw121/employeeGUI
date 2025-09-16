@@ -430,3 +430,4 @@ export class VcfParser extends AbstractContactParser {
     }
   }
 }
+

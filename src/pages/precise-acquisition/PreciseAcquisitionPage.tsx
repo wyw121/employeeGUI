@@ -100,3 +100,4 @@ export const PreciseAcquisitionPage: React.FC = () => {
     </div>
   );
 };
+

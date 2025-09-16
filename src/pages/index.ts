@@ -22,3 +22,4 @@ export * from './contact-management';
 export * from './device-management';
 export * from './precise-acquisition';
 export * from './statistics';
+

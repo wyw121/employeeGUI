@@ -13,22 +13,84 @@ pub struct SafeAdbManager {
 
 impl SafeAdbManager {
     pub fn new() -> Self {
+        // 动态构建项目内的ADB路径
+        let project_adb_path = Self::get_project_adb_path();
+        
+        let mut fallback_paths = vec![];
+        
+        // 1. 优先使用项目内的官方Google Platform Tools (最安全)
+        if let Some(path) = project_adb_path {
+            fallback_paths.push(path);
+        }
+        
+        // 2. 系统PATH中的ADB
+        fallback_paths.push("adb.exe".to_string());
+        fallback_paths.push("adb".to_string());
+        
+        // 3. 标准Android SDK安装路径
+        fallback_paths.push(r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe".to_string());
+        fallback_paths.push(r"C:\Android\Sdk\platform-tools\adb.exe".to_string());
+        fallback_paths.push(r"D:\Android\Sdk\platform-tools\adb.exe".to_string());
+        
+        // 注意：故意不包含雷电模拟器的ADB路径，因为它有崩溃问题
+        // r"D:\leidian\LDPlayer9\adb.exe" - 已知不稳定，不使用
+
         Self {
             preferred_adb_path: None,
-            fallback_paths: vec![
-                // 1. 优先使用项目内的官方Google Platform Tools (最安全)
-                r"D:\repositories\employeeGUI\platform-tools\adb.exe".to_string(),
-                // 2. 系统PATH中的ADB
-                "adb.exe".to_string(),
-                "adb".to_string(),
-                // 3. 标准Android SDK安装路径
-                r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe".to_string(),
-                r"C:\Android\Sdk\platform-tools\adb.exe".to_string(),
-                r"D:\Android\Sdk\platform-tools\adb.exe".to_string(),
-                // 注意：故意不包含雷电模拟器的ADB路径，因为它有崩溃问题
-                // r"D:\leidian\LDPlayer9\adb.exe" - 已知不稳定，不使用
-            ],
+            fallback_paths,
         }
+    }
+
+    /// 动态获取项目内的ADB路径
+    fn get_project_adb_path() -> Option<String> {
+        // 尝试从当前工作目录开始查找
+        if let Ok(current_dir) = std::env::current_dir() {
+            // 首先尝试当前目录的 platform-tools
+            let adb_path = current_dir.join("platform-tools").join("adb.exe");
+            info!("🔍 检查当前目录ADB路径: {:?}", adb_path);
+            if adb_path.exists() {
+                info!("✅ 找到当前目录ADB路径");
+                return adb_path.to_str().map(|s| s.to_string());
+            }
+            
+            // 然后尝试上级目录的 platform-tools（处理从src-tauri运行的情况）
+            if let Some(parent_dir) = current_dir.parent() {
+                let parent_adb_path = parent_dir.join("platform-tools").join("adb.exe");
+                info!("🔍 检查父级目录ADB路径: {:?}", parent_adb_path);
+                if parent_adb_path.exists() {
+                    info!("✅ 找到父级目录ADB路径");
+                    return parent_adb_path.to_str().map(|s| s.to_string());
+                }
+            }
+        }
+
+        // 尝试从可执行文件路径查找
+        if let Ok(exe_path) = std::env::current_exe() {
+            info!("🔍 从可执行文件路径查找: {:?}", exe_path);
+            // 从exe路径向上查找项目根目录
+            let mut parent = exe_path.parent();
+            while let Some(dir) = parent {
+                let adb_path = dir.join("platform-tools").join("adb.exe");
+                if adb_path.exists() {
+                    info!("✅ 找到可执行文件相对ADB路径");
+                    return adb_path.to_str().map(|s| s.to_string());
+                }
+                
+                // 也检查上级目录
+                if let Some(parent_dir) = dir.parent() {
+                    let parent_adb_path = parent_dir.join("platform-tools").join("adb.exe");
+                    if parent_adb_path.exists() {
+                        info!("✅ 找到可执行文件上级相对ADB路径");
+                        return parent_adb_path.to_str().map(|s| s.to_string());
+                    }
+                }
+                
+                parent = dir.parent();
+            }
+        }
+
+        warn!("⚠️ 未找到项目内的ADB路径");
+        None
     }
 
     /// 查找可用的ADB路径，避免使用有问题的版本

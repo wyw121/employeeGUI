@@ -392,3 +392,4 @@ export class AndroidDeviceManager implements IDeviceManager {
     });
   }
 }
+

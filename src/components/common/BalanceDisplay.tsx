@@ -30,3 +30,4 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     </div>
   );
 };
+

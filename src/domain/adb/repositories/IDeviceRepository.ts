@@ -50,3 +50,4 @@ export interface IDeviceRepository {
    */
   watchDeviceChanges(callback: (devices: Device[]) => void): () => void;
 }
+

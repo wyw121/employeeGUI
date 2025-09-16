@@ -55,3 +55,4 @@ export interface IDiagnosticRepository {
    */
   getFixSuggestions(diagnosticResult: DiagnosticResult): Promise<string[]>;
 }
+

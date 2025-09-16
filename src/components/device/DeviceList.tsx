@@ -53,3 +53,4 @@ export const DeviceList: React.FC<DeviceListProps> = ({
     />
   );
 };
+

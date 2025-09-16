@@ -222,3 +222,4 @@ export abstract class AbstractContactParser implements IContactParser {
     return Math.abs(hash).toString(36);
   }
 }
+

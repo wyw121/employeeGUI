@@ -58,3 +58,4 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     </div>
   );
 };
+

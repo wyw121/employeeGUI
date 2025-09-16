@@ -13,3 +13,4 @@ export * from './repositories/IDiagnosticRepository';
 export * from './services/DeviceManagerService';
 export * from './services/ConnectionService';
 export * from './services/DiagnosticService';
+

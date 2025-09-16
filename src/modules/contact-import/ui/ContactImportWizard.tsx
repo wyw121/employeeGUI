@@ -445,3 +445,4 @@ function readFileAsText(file: File): Promise<string> {
     reader.readAsText(file, 'UTF-8');
   });
 }
+

@@ -111,3 +111,4 @@ export const AdbLayoutComparisonPage: React.FC = () => {
 };
 
 export default AdbLayoutComparisonPage;
+

@@ -314,3 +314,4 @@ const CoordinateCapture: React.FC<CoordinateCaptureProps> = ({
 };
 
 export default CoordinateCapture;
+

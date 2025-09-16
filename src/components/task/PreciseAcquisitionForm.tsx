@@ -400,3 +400,4 @@ export const PreciseAcquisitionForm: React.FC<PreciseAcquisitionFormProps> = ({
     </div>
   );
 };
+

@@ -108,3 +108,4 @@ export const DeviceManagementPage: React.FC = () => {
     </PageWrapper>
   );
 };
+

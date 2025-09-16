@@ -294,3 +294,4 @@ export class TauriDiagnosticRepository implements IDiagnosticRepository {
     return suggestions;
   }
 }
+

@@ -56,3 +56,4 @@ export class DeviceAPI {
 }
 
 export default DeviceAPI;
+

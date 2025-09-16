@@ -278,3 +278,4 @@ export const AGGRESSIVE_FOLLOW_OPTIONS: XiaohongshuFollowOptions = {
   skip_existing: true,
   return_to_home: true,
 };
+

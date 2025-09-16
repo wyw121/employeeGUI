@@ -228,3 +228,4 @@ export function getModuleInfo() {
     defaultConfiguration: DEFAULT_IMPORT_CONFIGURATION,
   };
 }
+

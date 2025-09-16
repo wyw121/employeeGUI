@@ -191,3 +191,4 @@ export class DiagnosticSummary {
     return Math.round((this.successCount / this.totalChecks) * 100);
   }
 }
+

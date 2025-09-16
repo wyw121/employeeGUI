@@ -100,3 +100,4 @@ export interface TaskProgress {
   status: TaskStatus;
   error_message?: string;
 }
+

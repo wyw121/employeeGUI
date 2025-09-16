@@ -107,3 +107,4 @@ export interface EventBus {
     handler: DomainEventHandler<T>
   ): void;
 }
+

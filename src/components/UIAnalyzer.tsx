@@ -255,3 +255,4 @@ const UIAnalyzer: React.FC = () => {
 };
 
 export default UIAnalyzer;
+

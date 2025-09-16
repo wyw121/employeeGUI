@@ -288,7 +288,7 @@ export const useAdb = () => {
         console.error('Auto initialization failed:', error);
       });
     }
-  }, []); // 空依赖数组，只在挂载时执行一次
+  }, [isConnected, isInitializing, initialize]); // 修复依赖数组
 
   // ===== 返回接口 =====
   
@@ -356,3 +356,4 @@ export const useAdb = () => {
 };
 
 export default useAdb;
+

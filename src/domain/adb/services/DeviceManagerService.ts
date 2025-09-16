@@ -256,3 +256,4 @@ export class DeviceManagerService {
     this.previousDevices = [...currentDevices];
   }
 }
+

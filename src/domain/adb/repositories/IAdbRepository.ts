@@ -60,3 +60,4 @@ export interface IAdbRepository {
    */
   testConnection(adbPath: string): Promise<boolean>;
 }
+

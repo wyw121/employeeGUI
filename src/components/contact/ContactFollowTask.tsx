@@ -476,3 +476,4 @@ export const ContactFollowTask: React.FC<ContactFollowTaskProps> = ({ contacts }
 };
 
 export default ContactFollowTask;
+

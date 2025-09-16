@@ -153,3 +153,4 @@ export interface DeviceQuery {
   type?: DeviceType;
   onlineOnly?: boolean;
 }
+

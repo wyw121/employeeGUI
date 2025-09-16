@@ -119,37 +119,117 @@ impl XiaohongshuLongConnectionAutomator {
         })
     }
 
-    /// 导航到发现好友页面（使用长连接）
+    /// 导航到通讯录页面（使用长连接，参考旧版本成功经验）
     pub async fn navigate_to_discover_friends(&self) -> Result<NavigationResult> {
         self.ensure_initialized().await?;
         
-        info!("🧭 导航到发现好友页面（长连接模式）");
+        info!("🧭 导航到通讯录页面（长连接模式）");
 
-        // 获取当前UI结构
-        let ui_content = self.shell_session.dump_ui().await?;
+        // 步骤1: 确保小红书应用正在运行
+        info!("📱 步骤1: 检查小红书应用状态");
+        let _current_activity = self.shell_session.get_current_activity().await.unwrap_or_default();
         
-        // 查找"发现"按钮坐标
-        if let Some(discover_coords) = self.find_discover_button(&ui_content) {
-            // 使用长连接点击
-            self.shell_session.tap(discover_coords.0, discover_coords.1).await?;
+        // 步骤2: 检查当前页面状态
+        let ui_content = self.shell_session.dump_ui().await?;
+        info!("📄 当前UI内容长度: {} 字符", ui_content.len());
+
+        // 步骤3: 如果不在侧边栏，先点击头像打开侧边栏
+        if !ui_content.contains("设置") && !ui_content.contains("我的主页") {
+            info!("👤 步骤3: 点击头像打开侧边栏");
+            // 使用旧版本验证的坐标 (60, 100)
+            self.shell_session.tap(60, 100).await?;
             sleep(Duration::from_secs(2)).await;
             
-            // 再次获取UI查找"通讯录朋友"
-            let ui_content2 = self.shell_session.dump_ui().await?;
-            if let Some(contacts_coords) = self.find_contacts_option(&ui_content2) {
-                self.shell_session.tap(contacts_coords.0, contacts_coords.1).await?;
-                sleep(Duration::from_secs(2)).await;
-                
+            // 验证侧边栏是否打开
+            let sidebar_ui = self.shell_session.dump_ui().await?;
+            if !sidebar_ui.contains("设置") && !sidebar_ui.contains("我的主页") {
                 return Ok(NavigationResult {
-                    success: true,
-                    message: "成功导航到发现好友页面".to_string(),
+                    success: false,
+                    message: "无法打开侧边栏".to_string(),
                 });
+            }
+            info!("✅ 侧边栏已打开");
+        } else {
+            info!("✅ 侧边栏已经打开");
+        }
+
+        // 步骤4: 在侧边栏中查找并点击"发现好友"
+        info!("👥 步骤4: 查找并点击发现好友选项");
+        let sidebar_ui = self.shell_session.dump_ui().await?;
+        
+        // 使用旧版本的成功坐标作为首选
+        let discover_friends_coords = vec![
+            (270, 168), // 旧版本验证成功的坐标
+            (160, 280),
+            (160, 320),
+            (180, 300),
+        ];
+
+        let mut navigation_success = false;
+        for (x, y) in discover_friends_coords {
+            info!("🎯 尝试发现好友坐标: ({}, {})", x, y);
+            match self.shell_session.tap(x, y).await {
+                Ok(_) => {
+                    sleep(Duration::from_secs(2)).await;
+                    
+                    // 检查是否成功进入发现好友页面
+                    let discover_ui = self.shell_session.dump_ui().await?;
+                    if discover_ui.contains("通讯录") || discover_ui.contains("联系人") {
+                        info!("✅ 成功进入发现好友页面");
+                        navigation_success = true;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("⚠️ 点击坐标 ({}, {}) 失败: {}", x, y, e);
+                }
+            }
+        }
+
+        if !navigation_success {
+            return Ok(NavigationResult {
+                success: false,
+                message: "无法找到或点击发现好友选项".to_string(),
+            });
+        }
+
+        // 步骤5: 在发现好友页面查找并点击"通讯录朋友"
+        info!("📋 步骤5: 查找并点击通讯录朋友选项");
+        let discover_ui = self.shell_session.dump_ui().await?;
+        
+        // 使用多个候选坐标
+        let contacts_coords = vec![
+            (200, 250),
+            (200, 300),
+            (200, 350),
+            (194, 205), // 旧版本参考坐标
+        ];
+
+        for (x, y) in contacts_coords {
+            info!("🎯 尝试通讯录坐标: ({}, {})", x, y);
+            match self.shell_session.tap(x, y).await {
+                Ok(_) => {
+                    sleep(Duration::from_secs(3)).await; // 联系人加载需要更长时间
+                    
+                    // 验证是否成功进入通讯录页面
+                    let contacts_ui = self.shell_session.dump_ui().await?;
+                    if contacts_ui.contains("关注") || contacts_ui.contains("已关注") {
+                        info!("✅ 成功导航到通讯录页面");
+                        return Ok(NavigationResult {
+                            success: true,
+                            message: "成功导航到通讯录页面".to_string(),
+                        });
+                    }
+                }
+                Err(e) => {
+                    warn!("⚠️ 点击通讯录坐标 ({}, {}) 失败: {}", x, y, e);
+                }
             }
         }
 
         Ok(NavigationResult {
             success: false,
-            message: "未能找到发现好友页面入口".to_string(),
+            message: "无法进入通讯录页面".to_string(),
         })
     }
 
@@ -165,6 +245,21 @@ impl XiaohongshuLongConnectionAutomator {
 
         info!("🚀 开始自动关注流程（长连接模式）");
         info!("最大页数: {}, 关注间隔: {}ms", max_pages, follow_interval);
+
+        // 🔥 关键修复：在开始关注前，先导航到正确的页面
+        info!("🧭 首先导航到通讯录页面...");
+        let navigation_result = self.navigate_to_discover_friends().await?;
+        if !navigation_result.success {
+            return Ok(XiaohongshuFollowResult {
+                success: false,
+                total_followed: 0,
+                pages_processed: 0,
+                duration: start_time.elapsed().as_secs(),
+                details: vec![],
+                message: format!("导航失败: {}", navigation_result.message),
+            });
+        }
+        info!("✅ 成功导航到通讯录页面，开始关注流程");
 
         let mut total_followed = 0;
         let mut pages_processed = 0;

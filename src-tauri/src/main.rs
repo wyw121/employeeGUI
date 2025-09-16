@@ -20,6 +20,7 @@ use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
 use services::safe_adb_manager::*;
 use services::script_executor::*;
+use services::smart_app_service::*;
 use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
@@ -667,6 +668,7 @@ fn main() {
     let adb_service = AdbService::new();
     let xiaohongshu_service = XiaohongshuService::new();
     let xiaohongshu_long_connection_service = XiaohongshuLongConnectionService::new();
+    let smart_app_service = SmartAppManagerState::new();
     
     // 初始化实时设备跟踪器 (替代旧的轮询系统)
     initialize_device_tracker()
@@ -685,6 +687,7 @@ fn main() {
         .manage(Mutex::new(adb_service))
         .manage(tokio::sync::Mutex::new(xiaohongshu_service))
         .manage(tokio::sync::Mutex::new(xiaohongshu_long_connection_service))
+        .manage(smart_app_service)
         .invoke_handler(tauri::generate_handler![
             get_employees,
             add_employee,
@@ -777,7 +780,13 @@ fn main() {
             get_device_ui_xml,       // 获取UI XML结构
             find_xml_ui_elements,    // 查找XML UI元素
             wait_for_ui_element,     // 等待元素出现
-            check_device_page_state  // 检查页面状态
+            check_device_page_state, // 检查页面状态
+            // 智能应用管理功能
+            get_device_apps,         // 获取设备应用列表
+            search_device_apps,      // 搜索设备应用
+            launch_device_app,       // 启动应用
+            get_cached_device_apps,  // 获取缓存的应用列表
+            get_popular_apps         // 获取常用应用列表
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

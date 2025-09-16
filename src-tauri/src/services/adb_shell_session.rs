@@ -212,10 +212,18 @@ impl AdbShellSession {
 
     /// 获取当前界面UI层次结构
     pub async fn dump_ui(&self) -> Result<String> {
-        let command = "uiautomator dump --compressed /dev/stdout";
+        // 使用标准方法：dump到文件然后读取文件内容
+        let command = "uiautomator dump && cat /sdcard/window_dump.xml";
         let result = self.execute_command_with_timeout(command, Duration::from_secs(15)).await?;
-        debug!("📱 UI结构获取成功，长度: {} 字符", result.len());
-        Ok(result)
+        
+        // 检查是否包含XML内容
+        if result.contains("<?xml") {
+            debug!("📱 UI结构获取成功，长度: {} 字符", result.len());
+            Ok(result)
+        } else {
+            debug!("⚠️  UI dump 失败，输出: {}", result);
+            Err(anyhow::anyhow!("UI dump 未返回有效的XML内容: {}", result))
+        }
     }
 
     /// 获取屏幕分辨率

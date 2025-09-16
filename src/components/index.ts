@@ -22,3 +22,6 @@ export * from './loop-control';
 
 export * from './task';
 
+// Smart components
+export * from './smart';
+

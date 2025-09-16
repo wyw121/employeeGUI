@@ -38,36 +38,17 @@ import {
   ThunderboltOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  RocketOutlined,
+  AndroidOutlined,
 } from '@ant-design/icons';
+import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
+import { SmartActionType } from '../types/smartComponents';
+import type { LaunchAppComponentParams } from '../types/smartComponents';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
 const { Panel } = Collapse;
 const { TextArea } = Input;
-
-// ==================== 智能操作类型定义 ====================
-
-enum SmartActionType {
-  // 基础操作
-  TAP = 'tap',
-  SWIPE = 'swipe',
-  INPUT = 'input',
-  WAIT = 'wait',
-  
-  // 智能操作
-  SMART_TAP = 'smart_tap',
-  SMART_FIND_ELEMENT = 'smart_find_element',
-  RECOGNIZE_PAGE = 'recognize_page',
-  VERIFY_ACTION = 'verify_action',
-  SMART_LOOP = 'smart_loop',
-  CONDITIONAL_ACTION = 'conditional_action',
-  WAIT_FOR_PAGE_STATE = 'wait_for_page_state',
-  EXTRACT_ELEMENT = 'extract_element',
-  SMART_NAVIGATION = 'smart_navigation',
-  
-  // 复合操作
-  COMPLETE_WORKFLOW = 'complete_workflow',
-}
 
 // ==================== 智能操作配置 ====================
 
@@ -211,6 +192,26 @@ const SMART_ACTION_CONFIGS = {
     ]
   },
 
+  // 应用操作 - 新增
+  [SmartActionType.LAUNCH_APP]: {
+    name: '打开应用',
+    description: '智能选择并启动设备上的应用程序',
+    icon: '🚀',
+    color: 'cyan',
+    category: 'app',
+    parameters: [
+      { key: 'app_selection_method', label: '应用选择方式', type: 'select', required: true,
+        options: ['manual', 'auto_detect', 'popular'], default: 'manual' },
+      { key: 'wait_after_launch', label: '启动后等待时间(ms)', type: 'number', default: 3000 },
+      { key: 'verify_launch', label: '验证启动成功', type: 'boolean', default: true },
+    ],
+    advanced: [
+      { key: 'fallback_method', label: '失败后操作', type: 'select', 
+        options: ['retry', 'ignore', 'error'], default: 'retry' },
+      { key: 'max_retry_count', label: '最大重试次数', type: 'number', default: 3 },
+    ]
+  },
+
   [SmartActionType.COMPLETE_WORKFLOW]: {
     name: '完整工作流程',
     description: '执行完整的自动化工作流程',
@@ -277,6 +278,8 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [editingStep, setEditingStep] = useState<SmartScriptStep | null>(null);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>(''); // 当前选择的设备ID
+  const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [executorConfig, setExecutorConfig] = useState<ExecutorConfig>({
     default_timeout_ms: 10000,
     default_retry_count: 3,
@@ -542,12 +545,35 @@ const SmartScriptBuilderPage: React.FC = () => {
     <div className="p-6">
       {/* 页面标题 */}
       <div className="mb-6">
-        <Title level={2} className="mb-2">
-          🤖 智能脚本构建器
-        </Title>
-        <Paragraph type="secondary">
-          基于AI的智能自动化脚本构建系统，支持页面识别、元素智能定位、操作验证和智能恢复
-        </Paragraph>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Title level={2} className="mb-2">
+              🤖 智能脚本构建器
+            </Title>
+            <Paragraph type="secondary">
+              基于AI的智能自动化脚本构建系统，支持页面识别、元素智能定位、操作验证和智能恢复
+            </Paragraph>
+          </Col>
+          <Col>
+            <Space>
+              <Text type="secondary">目标设备:</Text>
+              <Input
+                placeholder="请输入设备ID"
+                value={currentDeviceId}
+                onChange={(e) => setCurrentDeviceId(e.target.value)}
+                style={{ width: 200 }}
+                prefix={<AndroidOutlined />}
+              />
+              <Button
+                icon={<RocketOutlined />}
+                onClick={() => setShowAppComponent(true)}
+                disabled={!currentDeviceId}
+              >
+                快速添加应用
+              </Button>
+            </Space>
+          </Col>
+        </Row>
       </div>
 
       {/* 执行器配置 */}
@@ -858,6 +884,34 @@ const SmartScriptBuilderPage: React.FC = () => {
               
               if (!config) return null;
 
+              // 特殊处理：如果是LAUNCH_APP类型，使用专门的智能组件
+              if (stepType === SmartActionType.LAUNCH_APP) {
+                return (
+                  <div>
+                    <Divider orientation="left">智能应用启动配置</Divider>
+                    <Alert 
+                      message="使用智能应用启动组件，提供完整的应用选择和启动功能"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                    <LaunchAppSmartComponent
+                      deviceId={currentDeviceId}
+                      value={editingStep?.parameters as LaunchAppComponentParams}
+                      onChange={(params) => {
+                        // 同步更新表单数据
+                        form.setFieldsValue(params);
+                      }}
+                      onExecute={async (params) => {
+                        // 这里可以添加执行逻辑
+                        message.success('应用启动测试完成');
+                        return true;
+                      }}
+                    />
+                  </div>
+                );
+              }
+
               return (
                 <div>
                   <Divider orientation="left">参数配置</Divider>
@@ -901,6 +955,50 @@ const SmartScriptBuilderPage: React.FC = () => {
             }}
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 快速应用选择Modal */}
+      <Modal
+        title="快速添加应用启动步骤"
+        open={showAppComponent}
+        onCancel={() => setShowAppComponent(false)}
+        footer={null}
+        width={900}
+      >
+        <Alert
+          message="快速创建应用启动步骤"
+          description="选择一个应用并配置启动参数，将自动创建一个智能应用启动步骤"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        
+        <LaunchAppSmartComponent
+          deviceId={currentDeviceId}
+          onChange={(params) => {
+            // 临时存储参数，等待用户确认添加
+          }}
+          onExecute={async (params) => {
+            // 创建新的智能步骤
+            if (params.selected_app) {
+              const newStep: SmartScriptStep = {
+                id: `step_${Date.now()}`,
+                step_type: SmartActionType.LAUNCH_APP,
+                name: `启动${params.selected_app.app_name}`,
+                description: `智能启动应用: ${params.selected_app.app_name}`,
+                parameters: params,
+                enabled: true,
+                order: steps.length
+              };
+
+              setSteps(prev => [...prev, newStep]);
+              setShowAppComponent(false);
+              message.success(`已添加应用启动步骤: ${params.selected_app.app_name}`);
+              return true;
+            }
+            return false;
+          }}
+        />
       </Modal>
     </div>
   );

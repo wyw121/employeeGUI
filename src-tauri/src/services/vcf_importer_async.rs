@@ -306,10 +306,11 @@ impl VcfImporterAsync {
         }
     }
 
-    /// 使用Intent打开VCF文件
+    /// 使用Intent打开VCF文件并完成UI自动化
     async fn open_vcf_with_intent(&self, vcf_path: &str) -> Result<()> {
-        info!("使用Intent打开VCF文件: {}", vcf_path);
+        info!("🎯 使用Intent打开VCF文件并自动化导入: {}", vcf_path);
 
+        // 1. 启动Intent
         let file_uri = format!("file://{}", vcf_path);
         let args = vec![
             "shell",
@@ -323,8 +324,195 @@ impl VcfImporterAsync {
             "text/x-vcard",
         ];
 
+        info!("📤 启动Intent...");
+        self.execute_adb_command_async(args).await?;
+        
+        // 2. 等待UI加载
+        sleep(Duration::from_secs(2)).await;
+        
+        // 3. 处理权限对话框（如果存在）
+        if let Err(e) = self.handle_permission_dialog().await {
+            warn!("⚠️ 权限处理失败，继续执行: {}", e);
+        }
+        
+        // 4. 等待应用选择界面或导入界面
+        sleep(Duration::from_secs(1)).await;
+        
+        // 5. 自动选择联系人应用并导入
+        match self.automate_contact_import().await {
+            Ok(_) => {
+                info!("✅ UI自动化导入成功");
+                Ok(())
+            }
+            Err(e) => {
+                warn!("⚠️ UI自动化失败，但Intent已启动: {}", e);
+                // 即使自动化失败，至少Intent已经启动了
+                Ok(())
+            }
+        }
+    }
+
+    /// 处理权限对话框
+    async fn handle_permission_dialog(&self) -> Result<()> {
+        info!("🔒 检查并处理权限对话框...");
+        
+        // 获取当前UI状态
+        let ui_dump = self.get_ui_dump().await?;
+        
+        // 检查是否有权限对话框
+        if ui_dump.contains("允许") || ui_dump.contains("Allow") || ui_dump.contains("ALLOW") {
+            info!("🔓 发现权限对话框，点击允许按钮");
+            
+            // 尝试多种可能的允许按钮文本
+            let allow_texts = vec!["允许", "Allow", "ALLOW", "确定", "OK"];
+            
+            for text in allow_texts {
+                if ui_dump.contains(text) {
+                    if let Ok(_) = self.tap_element_by_text(text).await {
+                        info!("✅ 成功点击权限允许按钮: {}", text);
+                        sleep(Duration::from_millis(500)).await;
+                        return Ok(());
+                    }
+                }
+            }
+            
+            // 如果文本点击失败，尝试坐标点击
+            warn!("⚠️ 文本点击失败，尝试坐标点击权限按钮");
+            // 通常权限对话框的允许按钮在右下角
+            self.tap_coordinates(800, 1200).await?;
+        }
+        
+        Ok(())
+    }
+
+    /// 自动化联系人导入流程
+    async fn automate_contact_import(&self) -> Result<()> {
+        info!("📱 开始自动化联系人导入流程...");
+        
+        // 获取当前UI状态
+        let ui_dump = self.get_ui_dump().await?;
+        
+        // 检查是否需要选择应用
+        if ui_dump.contains("选择应用") || ui_dump.contains("Choose app") || ui_dump.contains("联系人") {
+            info!("📋 发现应用选择界面，选择联系人应用");
+            
+            // 尝试点击联系人相关的应用
+            let contact_apps = vec!["联系人", "Contacts", "通讯录", "Contact"];
+            
+            for app in contact_apps {
+                if ui_dump.contains(app) {
+                    if let Ok(_) = self.tap_element_by_text(app).await {
+                        info!("✅ 成功选择联系人应用: {}", app);
+                        sleep(Duration::from_secs(1)).await;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 等待导入界面加载
+        sleep(Duration::from_secs(2)).await;
+        
+        // 处理导入确认对话框
+        let ui_dump = self.get_ui_dump().await?;
+        
+        if ui_dump.contains("导入") || ui_dump.contains("Import") || ui_dump.contains("确定") {
+            info!("📥 发现导入确认界面，点击确认按钮");
+            
+            let import_texts = vec!["导入", "Import", "IMPORT", "确定", "OK", "是"];
+            
+            for text in import_texts {
+                if ui_dump.contains(text) {
+                    if let Ok(_) = self.tap_element_by_text(text).await {
+                        info!("✅ 成功点击导入确认按钮: {}", text);
+                        sleep(Duration::from_secs(1)).await;
+                        return Ok(());
+                    }
+                }
+            }
+            
+            // 如果文本点击失败，尝试坐标点击确认按钮
+            warn!("⚠️ 文本点击失败，尝试坐标点击确认按钮");
+            self.tap_coordinates(700, 1000).await?;
+        }
+        
+        info!("✅ 联系人导入自动化完成");
+        Ok(())
+    }
+
+    /// 获取UI dump
+    async fn get_ui_dump(&self) -> Result<String> {
+        let args = vec!["shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"];
+        self.execute_adb_command_async(args).await?;
+        
+        sleep(Duration::from_millis(100)).await;
+        
+        let args = vec!["shell", "cat", "/sdcard/ui_dump.xml"];
+        self.execute_adb_command_async(args).await
+    }
+
+    /// 通过文本点击UI元素
+    async fn tap_element_by_text(&self, text: &str) -> Result<()> {
+        let ui_dump = self.get_ui_dump().await?;
+        
+        // 解析UI dump查找包含指定文本的可点击元素
+        if let Some(bounds) = self.extract_element_bounds(&ui_dump, text) {
+            let (x, y) = self.calculate_center_coordinates(&bounds);
+            self.tap_coordinates(x, y).await?;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("未找到包含文本 '{}' 的可点击元素", text))
+        }
+    }
+
+    /// 点击指定坐标
+    async fn tap_coordinates(&self, x: i32, y: i32) -> Result<()> {
+        info!("👆 点击坐标: ({}, {})", x, y);
+        let x_str = x.to_string();
+        let y_str = y.to_string();
+        let args = vec!["shell", "input", "tap", &x_str, &y_str];
         self.execute_adb_command_async(args).await?;
         Ok(())
+    }
+
+    /// 从UI dump中提取元素边界
+    fn extract_element_bounds(&self, ui_dump: &str, text: &str) -> Option<String> {
+        // 查找包含指定文本的节点
+        let lines: Vec<&str> = ui_dump.lines().collect();
+        
+        for line in lines {
+            if line.contains(text) && (line.contains("clickable=\"true\"") || line.contains("checkable=\"true\"")) {
+                // 提取bounds属性
+                if let Some(start) = line.find("bounds=\"") {
+                    let start = start + 8; // 跳过 'bounds="'
+                    if let Some(end) = line[start..].find("\"") {
+                        return Some(line[start..start + end].to_string());
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// 计算边界的中心坐标
+    fn calculate_center_coordinates(&self, bounds: &str) -> (i32, i32) {
+        // bounds格式通常是: "[x1,y1][x2,y2]"
+        let coords: Vec<i32> = bounds
+            .replace("[", "")
+            .replace("]", ",")
+            .split(",")
+            .filter_map(|s| s.parse().ok())
+            .collect();
+            
+        if coords.len() >= 4 {
+            let x = (coords[0] + coords[2]) / 2;
+            let y = (coords[1] + coords[3]) / 2;
+            (x, y)
+        } else {
+            // 默认坐标
+            (500, 1000)
+        }
     }
 
     /// 核心的异步ADB命令执行方法

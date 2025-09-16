@@ -864,3 +864,76 @@ pub async fn import_and_follow_xiaohongshu_enhanced(
     );
     Ok(result)
 }
+
+/// 专门处理前端VCF内容导入的命令 (修复前后端接口不匹配问题)
+#[command]
+#[allow(non_snake_case)]
+pub async fn import_vcf_to_device(
+    deviceId: String,
+    vcfContent: String,
+    contactCount: u32,
+) -> Result<String, String> {
+    info!("🚀 开始VCF内容导入: 设备 {} 联系人数 {}", deviceId, contactCount);
+    
+    // 1. 创建临时文件
+    let timestamp = chrono::Utc::now().timestamp();
+    let temp_file = format!("contacts_import_{}.vcf", timestamp);
+    let temp_dir = std::env::temp_dir();
+    let temp_path = temp_dir.join(&temp_file);
+    
+    info!("📄 创建临时VCF文件: {:?}", temp_path);
+    
+    // 2. 写入VCF内容到临时文件
+    match std::fs::write(&temp_path, &vcfContent) {
+        Ok(_) => info!("✅ VCF内容写入成功: {} bytes", vcfContent.len()),
+        Err(e) => {
+            error!("❌ 创建临时文件失败: {}", e);
+            return Err(format!("创建临时文件失败: {}", e));
+        }
+    }
+    
+    // 3. 调用现有的导入逻辑 (使用Intent回退方法，因为ADB测试证明Intent方式有效)
+    let importer = VcfImporter::new(deviceId.clone());
+    let temp_path_str = temp_path.to_string_lossy().to_string();
+    
+    info!("🔄 开始调用VCF导入服务...");
+    let import_result = match importer.import_vcf_contacts_with_intent_fallback(&temp_path_str).await {
+        Ok(result) => {
+            info!("📊 导入结果: 成功={} 总数={} 导入数={}", 
+                  result.success, result.total_contacts, result.imported_contacts);
+            result
+        }
+        Err(e) => {
+            error!("❌ VCF导入异常: {}", e);
+            // 清理临时文件
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(format!("VCF导入异常: {}", e));
+        }
+    };
+    
+    // 4. 清理临时文件
+    match std::fs::remove_file(&temp_path) {
+        Ok(_) => info!("🧹 临时文件清理成功"),
+        Err(e) => warn!("⚠️ 临时文件清理失败: {}", e),
+    }
+    
+    // 5. 返回结果
+    if import_result.success {
+        let success_msg = format!(
+            "✅ 导入成功: {}/{} 个联系人已导入到设备 {}",
+            import_result.imported_contacts,
+            import_result.total_contacts,
+            deviceId
+        );
+        info!("{}", success_msg);
+        Ok(success_msg)
+    } else {
+        let error_msg = format!(
+            "❌ 导入失败: {} (设备: {})",
+            import_result.message,
+            deviceId
+        );
+        error!("{}", error_msg);
+        Err(error_msg)
+    }
+}

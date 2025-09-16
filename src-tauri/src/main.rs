@@ -755,6 +755,7 @@ fn main() {
             change_password,
             parse_contact_file,
             get_contact_file_info,
+            test_vcf_import_with_permission,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts,
@@ -762,6 +763,7 @@ fn main() {
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             import_vcf_contacts_with_intent_fallback, // 新增Intent方法
+            import_vcf_to_device,               // 🔧 新增: 前端VCF内容导入命令
             verify_vcf_import,
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
             // 雷电模拟器专用VCF打开功能

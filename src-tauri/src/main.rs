@@ -763,6 +763,8 @@ fn main() {
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             import_vcf_contacts_with_intent_fallback, // 新增Intent方法
+            import_vcf_contacts_multi_device,   // 🌟 新增: 多设备兼容导入
+            test_multi_device_import_strategies, // 🧪 测试多设备导入策略
             import_vcf_to_device,               // 🔧 新增: 前端VCF内容导入命令
             verify_vcf_import,
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令

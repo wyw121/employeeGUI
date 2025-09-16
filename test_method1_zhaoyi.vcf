@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:赵一
+N:赵;一;;;
+TEL;TYPE=CELL:13811111111
+ORG:测试导入方式1
+TITLE:ADB Intent 测试
+EMAIL:zhaoyi@test.com
+NOTE:通过ADB Intent方式导入的测试联系人
+END:VCARD

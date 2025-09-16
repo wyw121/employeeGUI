@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:测试方式3-孙三
+N:孙;三;;;
+TEL;TYPE=CELL:13800000003
+EMAIL:sunsan@test.com
+END:VCARD

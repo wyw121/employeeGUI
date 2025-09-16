@@ -373,6 +373,33 @@ export class AdbAPI {
   }
 
   /**
+   * 🌟 多设备兼容VCF通讯录导入
+   * 支持华为、小米、OPPO、vivo、三星等多品牌设备
+   * 自动尝试所有导入策略，直到找到适合当前设备的方法
+   */
+  static async importVcfContactsMultiDevice(
+    deviceId: string,
+    contactsFilePath: string
+  ): Promise<VcfImportResult> {
+    return await invoke<VcfImportResult>("import_vcf_contacts_multi_device", {
+      deviceId: deviceId,
+      contactsFilePath: contactsFilePath,
+    });
+  }
+
+  /**
+   * 🧪 测试多设备导入策略
+   * 检测当前设备支持哪些导入方式，用于调试和分析
+   */
+  static async testMultiDeviceImportStrategies(
+    deviceId: string
+  ): Promise<string> {
+    return await invoke<string>("test_multi_device_import_strategies", {
+      deviceId: deviceId,
+    });
+  }
+
+  /**
    * 生成VCF文件从联系人列表
    */
   static async generateVcfFile(

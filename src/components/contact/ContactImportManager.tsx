@@ -159,14 +159,14 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
 
 
 
-  // 导入联系人到单个设备 - 使用已验证工作的旧版本方式
+  // 导入联系人到单个设备 - 增强版，支持多设备兼容
   const importToDevice = useCallback(async (group: DeviceContactGroup): Promise<LocalVcfImportResult> => {
     try {
       console.log(`开始导入到设备: ${group.deviceName} (${group.deviceId})`);
       
-      // 方法1: 使用generate_vcf_file + import_vcf_contacts_async_safe（旧版本已验证方式）
+      // 🌟 方法1: 优先使用新的多设备兼容导入（推荐）
       try {
-        console.log(`📋 尝试方法1: 使用generate_vcf_file方式`);
+        console.log(`🌟 尝试方法1: 多设备兼容导入`);
         
         // 生成VCF文件
         const vcfFilePath = await invoke<string>("generate_vcf_file", {
@@ -181,15 +181,15 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
           output_path: `contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`
         });
 
-        console.log(`✅ VCF文件生成成功: ${vcfFilePath}`);
+        console.log(`📄 VCF文件生成成功: ${vcfFilePath}`);
 
-        // 使用异步安全版本导入
-        const importResult = await invoke<LegacyVcfImportResult>("import_vcf_contacts_async_safe", {
+        // 使用新的多设备兼容导入
+        const importResult = await invoke<LegacyVcfImportResult>("import_vcf_contacts_multi_device", {
           deviceId: group.deviceId,
-          vcfFilePath: vcfFilePath
+          contactsFilePath: vcfFilePath
         });
 
-        console.log(`✅ 方法1成功 - 设备 ${group.deviceName} 导入结果:`, importResult);
+        console.log(`🎉 方法1成功 - 设备 ${group.deviceName} 多设备导入结果:`, importResult);
         
         return {
           name: group.deviceName,
@@ -199,63 +199,101 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
         };
 
       } catch (method1Error) {
-        console.warn(`⚠️ 方法1失败，尝试方法2:`, method1Error);
+        console.warn(`⚠️ 多设备导入失败，回退到传统方法:`, method1Error);
         
-        // 方法2: 回退到权限测试方法
+        // 方法2: 回退到旧版本异步安全方式
         try {
-          console.log(`📋 尝试方法2: 使用权限测试方法`);
+          console.log(`📋 尝试方法2: 传统generate_vcf_file方式`);
           
-          // 生成临时联系人文件
-          const contactsContent = group.contacts.map(contact =>
-            `${contact.name},${contact.phone || ''},${contact.notes || ''},,${contact.email || ''}`
-          ).join('\n');
-
-          const tempPath = `temp_contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
-          
-          await invoke("write_file", {
-            path: tempPath,
-            content: contactsContent,
+          // 生成VCF文件
+          const vcfFilePath = await invoke<string>("generate_vcf_file", {
+            contacts: group.contacts.map(contact => ({
+              id: contact.id?.toString() || '',
+              name: contact.name,
+              phone: contact.phone || '',
+              email: contact.email || '',
+              address: contact.notes || '',
+              occupation: ''
+            })),
+            output_path: `contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`
           });
 
-          const permissionTestResult = await invoke<string>("test_vcf_import_with_permission", {
+          console.log(`✅ VCF文件生成成功: ${vcfFilePath}`);
+
+          // 使用异步安全版本导入
+          const importResult = await invoke<LegacyVcfImportResult>("import_vcf_contacts_async_safe", {
             deviceId: group.deviceId,
-            contactsFile: tempPath,
+            vcfFilePath: vcfFilePath
           });
 
-          console.log(`✅ 设备 ${group.deviceName} 方法2原始返回结果:`, permissionTestResult);
-
-          // 解析结果
-          const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
-          const parts = regex.exec(permissionTestResult);
-
-          let success = false;
-          if (parts && parts.length >= 6) {
-            success = parts[1] === 'true';
-          } else {
-            // 解析失败，根据返回内容判断
-            success = permissionTestResult.includes('成功') ||
-                     permissionTestResult.includes('导入结果: 成功=true') ||
-                     !permissionTestResult.includes('失败');
-          }
-
-          // 清理临时文件
-          try {
-            await invoke("delete_file", { path: tempPath });
-            console.log(`🗑️ 已清理临时文件: ${tempPath}`);
-          } catch (cleanupError) {
-            console.warn('清理临时文件失败:', cleanupError);
-          }
-
+          console.log(`✅ 方法2成功 - 设备 ${group.deviceName} 传统导入结果:`, importResult);
+          
           return {
             name: group.deviceName,
             phone: group.deviceId,
-            isValid: success,
-            errorMessage: success ? undefined : '导入失败'
+            isValid: importResult.success,
+            errorMessage: importResult.success ? undefined : importResult.message
           };
 
         } catch (method2Error) {
-          console.error(`❌ 方法2也失败:`, method2Error);
-          throw method2Error;
+          console.warn(`⚠️ 传统方法失败，尝试权限测试方法:`, method2Error);
+          
+          // 方法3: 最后回退到权限测试方法
+          try {
+            console.log(`📋 尝试方法3: 权限测试方法`);
+            
+            // 生成临时联系人文件
+            const contactsContent = group.contacts.map(contact =>
+              `${contact.name},${contact.phone || ''},${contact.notes || ''},,${contact.email || ''}`
+            ).join('\n');
+
+            const tempPath = `temp_contacts_${Date.now()}_${group.deviceId.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+            
+            await invoke("write_file", {
+              path: tempPath,
+              content: contactsContent,
+            });
+
+            const permissionTestResult = await invoke<string>("test_vcf_import_with_permission", {
+              deviceId: group.deviceId,
+              contactsFile: tempPath,
+            });
+
+            console.log(`✅ 设备 ${group.deviceName} 方法3原始返回结果:`, permissionTestResult);
+
+            // 解析结果
+            const regex = /成功=(\w+), 总数=(\d+), 导入=(\d+), 失败=(\d+), 消息='([^']*)'/;
+            const parts = regex.exec(permissionTestResult);
+
+            let success = false;
+            if (parts && parts.length >= 6) {
+              success = parts[1] === 'true';
+            } else {
+              // 解析失败，根据返回内容判断
+              success = permissionTestResult.includes('成功') ||
+                       permissionTestResult.includes('导入结果: 成功=true') ||
+                       !permissionTestResult.includes('失败');
+            }
+
+            // 清理临时文件
+            try {
+              await invoke("delete_file", { path: tempPath });
+              console.log(`🗑️ 已清理临时文件: ${tempPath}`);
+            } catch (cleanupError) {
+              console.warn('清理临时文件失败:', cleanupError);
+            }
+
+            return {
+              name: group.deviceName,
+              phone: group.deviceId,
+              isValid: success,
+              errorMessage: success ? undefined : '导入失败'
+            };
+
+          } catch (method3Error) {
+            console.error(`❌ 所有方法都失败:`, method3Error);
+            throw method3Error;
+          }
         }
       }
     } catch (error) {

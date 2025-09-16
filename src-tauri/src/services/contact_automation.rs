@@ -971,3 +971,113 @@ pub async fn import_vcf_to_device(
         Err(error_msg)
     }
 }
+
+/// 🌟 多设备兼容VCF联系人导入
+/// 支持华为、小米、OPPO、vivo、三星等多品牌设备
+/// 自动尝试所有导入策略，直到找到适合当前设备的方法
+#[command]
+pub async fn import_vcf_contacts_multi_device(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<OriginalVcfImportResult, String> {
+    info!("🚀 启动多设备兼容VCF导入: 设备={}, 文件={}", device_id, contacts_file_path);
+    
+    // 创建VCF导入器
+    let importer = VcfImporter::new(device_id.clone());
+    
+    // 使用新的多设备导入方法
+    match importer.import_vcf_contacts_multi_device(&contacts_file_path).await {
+        Ok(result) => {
+            if result.success {
+                info!("🎉 多设备VCF导入成功: {}", result.message);
+            } else {
+                warn!("😞 多设备VCF导入失败: {}", result.message);
+            }
+            Ok(result)
+        }
+        Err(e) => {
+            let error_msg = format!("多设备VCF导入系统错误: {}", e);
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 🔍 测试多设备导入策略
+/// 检测当前设备支持哪些导入方式，用于调试和分析
+#[command]
+pub async fn test_multi_device_import_strategies(
+    device_id: String,
+) -> Result<String, String> {
+    info!("🧪 测试多设备导入策略: 设备={}", device_id);
+    
+    use crate::services::multi_device_importer::MultiDeviceVcfImporter;
+    
+    // 创建多设备导入器
+    let multi_device_importer = MultiDeviceVcfImporter::new(device_id.clone());
+    
+    // 创建测试VCF文件
+    let test_contacts = vec![
+        Contact {
+            id: "test1".to_string(),
+            name: "测试联系人".to_string(),
+            phone: "13900000000".to_string(),
+            email: "test@example.com".to_string(),
+            address: "测试地址".to_string(),
+            occupation: "测试".to_string(),
+        }
+    ];
+    
+    let temp_dir = std::env::temp_dir();
+    let test_vcf = temp_dir.join("test_multi_device.vcf");
+    let test_vcf_str = test_vcf.to_string_lossy();
+    
+    // 生成测试VCF文件
+    match VcfImporter::generate_vcf_file(test_contacts, &test_vcf_str).await {
+        Ok(_) => {
+            // 测试所有导入策略
+            match multi_device_importer.import_with_all_strategies(&test_vcf_str).await {
+                Ok(strategy_result) => {
+                    let mut report = format!("📊 多设备导入策略测试报告\n");
+                    report.push_str(&format!("🔧 总尝试策略数: {}\n", strategy_result.total_attempts));
+                    
+                    if let Some(successful) = &strategy_result.successful_strategy {
+                        report.push_str(&format!("✅ 成功策略: {}\n", successful));
+                    } else {
+                        report.push_str("❌ 所有策略都失败了\n");
+                    }
+                    
+                    report.push_str("\n📋 详细结果:\n");
+                    for result in &strategy_result.results {
+                        let status = if result.success { "✅" } else { "❌" };
+                        report.push_str(&format!(
+                            "{} {}: {}ms\n", 
+                            status, 
+                            result.strategy_name, 
+                            result.execution_time_ms
+                        ));
+                        
+                        if !result.success {
+                            if let Some(error) = &result.error_message {
+                                report.push_str(&format!("   错误: {}\n", error));
+                            }
+                        }
+                    }
+                    
+                    info!("🎉 多设备策略测试完成");
+                    Ok(report)
+                }
+                Err(e) => {
+                    let error_msg = format!("多设备策略测试失败: {}", e);
+                    error!("{}", error_msg);
+                    Err(error_msg)
+                }
+            }
+        }
+        Err(e) => {
+            let error_msg = format!("创建测试VCF文件失败: {}", e);
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}

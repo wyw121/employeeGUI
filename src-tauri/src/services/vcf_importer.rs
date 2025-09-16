@@ -8,6 +8,8 @@ use tracing::{error, info, warn};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+use super::multi_device_importer::MultiDeviceVcfImporter;
+
 // 从Flow_Farm项目复制的核心结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Contact {
@@ -1738,6 +1740,83 @@ impl VcfImporter {
                     imported_contacts: 0,
                     failed_contacts: total_contacts,
                     message: format!("VCF导入失败: {}", e),
+                    details: Some(e.to_string()),
+                    duration: Some(start_time.elapsed().as_secs()),
+                })
+            }
+        }
+    }
+
+    /// 🚀 全新的多设备兼容VCF导入方法
+    /// 支持华为、小米、OPPO、vivo、三星等多品牌设备
+    pub async fn import_vcf_contacts_multi_device(&self, contacts_file_path: &str) -> Result<VcfImportResult> {
+        let start_time = std::time::Instant::now();
+        info!("🌟 开始多设备兼容VCF导入流程: {}", contacts_file_path);
+
+        // 1. 读取联系人数据
+        let contacts = self.read_contacts_from_file(contacts_file_path)?;
+        let total_contacts = contacts.len();
+        info!("📊 读取到 {} 个联系人", total_contacts);
+
+        // 2. 生成VCF文件
+        let temp_dir = std::env::temp_dir();
+        let vcf_filename = temp_dir.join("contacts_import.vcf");
+        let vcf_filename_str = vcf_filename.to_string_lossy();
+        Self::generate_vcf_file(contacts.clone(), &vcf_filename_str).await?;
+        info!("📄 VCF文件生成完成: {}", vcf_filename_str);
+
+        // 3. 使用多设备导入策略
+        let multi_device_importer = MultiDeviceVcfImporter::new(self.device_id.clone());
+        
+        match multi_device_importer.import_with_all_strategies(&vcf_filename_str).await {
+            Ok(import_strategy) => {
+                let duration = start_time.elapsed().as_secs();
+                
+                if import_strategy.successful_strategy.is_some() {
+                    let successful_strategy = import_strategy.successful_strategy.unwrap();
+                    info!("🎉 多设备导入成功! 使用策略: {}", successful_strategy);
+                    
+                    Ok(VcfImportResult {
+                        success: true,
+                        total_contacts,
+                        imported_contacts: total_contacts,
+                        failed_contacts: 0,
+                        message: format!("VCF联系人导入成功 - 使用策略: {}", successful_strategy),
+                        details: Some(format!(
+                            "成功导入 {} 个联系人，共尝试 {} 种策略，成功策略: {}",
+                            total_contacts, import_strategy.total_attempts, successful_strategy
+                        )),
+                        duration: Some(duration),
+                    })
+                } else {
+                    warn!("😞 所有多设备导入策略都失败了");
+                    
+                    // 收集失败详情
+                    let failed_strategies: Vec<String> = import_strategy.results
+                        .iter()
+                        .map(|r| format!("- {}: {}", r.strategy_name, 
+                            r.error_message.as_ref().unwrap_or(&"未知错误".to_string())))
+                        .collect();
+                    
+                    Ok(VcfImportResult {
+                        success: false,
+                        total_contacts,
+                        imported_contacts: 0,
+                        failed_contacts: total_contacts,
+                        message: format!("多设备VCF导入失败 - 尝试了 {} 种策略", import_strategy.total_attempts),
+                        details: Some(format!("失败的策略详情:\n{}", failed_strategies.join("\n"))),
+                        duration: Some(duration),
+                    })
+                }
+            }
+            Err(e) => {
+                error!("❌ 多设备导入系统错误: {}", e);
+                Ok(VcfImportResult {
+                    success: false,
+                    total_contacts,
+                    imported_contacts: 0,
+                    failed_contacts: total_contacts,
+                    message: format!("多设备导入系统错误: {}", e),
                     details: Some(e.to_string()),
                     duration: Some(start_time.elapsed().as_secs()),
                 })

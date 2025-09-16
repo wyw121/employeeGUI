@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:钱二
+N:钱;二;;;
+TEL;TYPE=CELL:13822222222
+ORG:测试导入方式2
+TITLE:Activity 测试
+EMAIL:qianer@test.com
+NOTE:通过荣耀ImportVCardActivity方式导入的测试联系人
+END:VCARD

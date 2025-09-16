@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Test User
+N:Test;User;;;
+TEL;TYPE=CELL:13900000000
+EMAIL:test@example.com
+END:VCARD

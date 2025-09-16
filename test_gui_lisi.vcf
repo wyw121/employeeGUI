@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:李四
+N:李;四;;;
+TEL;TYPE=CELL:13844444444
+ORG:测试导入方式3
+TITLE:GUI 测试
+EMAIL:lisi@test.com
+NOTE:通过GUI程序导入的测试联系人
+END:VCARD

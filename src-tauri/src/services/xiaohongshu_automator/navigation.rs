@@ -400,7 +400,7 @@ impl XiaohongshuAutomator {
                     return self.handle_webview_discover_friends().await;
                 }
                 
-                // 步骤5: 点击"通讯录"选项
+                // 步骤5: 查找并点击通讯录选项（带验证）
                 info!("📋 步骤5: 查找并点击通讯录选项");
                 let contacts_coords = self.get_adaptive_contacts_coords().await?;
                 
@@ -413,9 +413,11 @@ impl XiaohongshuAutomator {
                         message: error_msg,
                     });
                 }
+                
+                info!("⏳ 等待通讯录页面加载...");
                 sleep(Duration::from_millis(3000)).await; // 联系人加载可能需要更长时间
                 
-                // 验证最终是否到达联系人页面
+                // 🔍 验证是否成功进入通讯录页面
                 let final_check = match self.recognize_current_page().await {
                     Ok(state) => state,
                     Err(e) => {
@@ -428,22 +430,58 @@ impl XiaohongshuAutomator {
                     }
                 };
                 
-                info!("📋 最终页面检查结果: {:?}, 置信度: {:.2}", final_check.current_state, final_check.confidence);
+                info!("📋 点击通讯录后页面检查结果: {:?}, 置信度: {:.2}", final_check.current_state, final_check.confidence);
                 
-                if matches!(final_check.current_state, PageState::ContactsList) {
-                    info!("✅ 成功导航到联系人页面");
-                    Ok(NavigationResult {
-                        success: true,
-                        message: "成功导航到通讯录页面".to_string(),
-                    })
-                } else {
-                    let error_msg = format!("导航失败，最终状态: {:?}，置信度: {:.2}", final_check.current_state, final_check.confidence);
-                    error!("❌ {}", error_msg);
-                    Ok(NavigationResult {
-                        success: false,
-                        message: error_msg,
-                    })
+                // 🛡️ 页面验证保险机制
+                if !matches!(final_check.current_state, PageState::ContactsList) {
+                    warn!("⚠️ 点击通讯录后未能正确进入通讯录页面，当前状态: {:?}", final_check.current_state);
+                    
+                    // 尝试重新点击通讯录
+                    warn!("🔄 尝试重新点击通讯录选项...");
+                    if let Err(e) = self.adb_tap(contacts_coords.0, contacts_coords.1).await {
+                        let error_msg = format!("重新点击通讯录选项失败: {}", e);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                    
+                    sleep(Duration::from_millis(4000)).await; // 多等一秒
+                    
+                    // 再次验证
+                    let retry_check = match self.recognize_current_page().await {
+                        Ok(state) => state,
+                        Err(e) => {
+                            let error_msg = format!("重试后页面状态检查失败: {}", e);
+                            error!("❌ {}", error_msg);
+                            return Ok(NavigationResult {
+                                success: false,
+                                message: error_msg,
+                            });
+                        }
+                    };
+                    
+                    info!("📋 重试后页面检查结果: {:?}, 置信度: {:.2}", retry_check.current_state, retry_check.confidence);
+                    
+                    if !matches!(retry_check.current_state, PageState::ContactsList) {
+                        let error_msg = format!("重试后仍未能进入通讯录页面，当前状态: {:?}，程序将停止避免乱点", retry_check.current_state);
+                        error!("❌ {}", error_msg);
+                        return Ok(NavigationResult {
+                            success: false,
+                            message: error_msg,
+                        });
+                    }
+                    
+                    info!("✅ 重试成功，已进入通讯录页面");
                 }
+                
+                // 最终确认成功导航到通讯录页面
+                info!("✅ 成功导航到通讯录页面");
+                Ok(NavigationResult {
+                    success: true,
+                    message: "成功导航到通讯录页面".to_string(),
+                })
             },
             PageState::ContactsList => {
                 info!("✅ 直接进入了联系人页面，导航成功！");
@@ -620,16 +658,54 @@ impl XiaohongshuAutomator {
         Ok(baseline_coords)
     }
 
-    /// 获取适配的通讯录按钮坐标
+    /// 获取适配的通讯录按钮坐标（带保险机制）
     async fn get_adaptive_contacts_coords(&self) -> Result<(i32, i32)> {
         let (screen_width, screen_height) = self.get_screen_size().await?;
         
-        // 基于测试结果：通讯录按钮在发现好友页面，相对位置约为 (18.9%, 15.6%)
-        let x = (screen_width as f32 * 0.189) as i32;
-        let y = (screen_height as f32 * 0.156) as i32;
+        // 🛡️ 硬编码基准坐标（基于ADB实际测试）
+        // 屏幕尺寸 1080x2316，实际测试坐标 (204, 362)，相对位置 (18.9%, 15.6%)
+        let baseline_x = (screen_width as f32 * 0.189) as i32;
+        let baseline_y = (screen_height as f32 * 0.156) as i32;
+        let baseline_coords = (baseline_x, baseline_y);
         
-        info!("📱 屏幕适配 - 通讯录坐标: ({}, {})", x, y);
-        Ok((x, y))
+        info!("🎯 通讯录硬编码基准坐标: ({}, {})", baseline_x, baseline_y);
+        
+        // 🔍 尝试动态搜索通讯录按钮
+        if let Ok(ui_dump) = self.get_ui_dump().await {
+            info!("🔍 尝试动态搜索通讯录按钮...");
+            
+            if let Some(coord) = self.find_specific_element(&ui_dump, "contacts_button").await {
+                let dynamic_center = coord.center();
+                let dynamic_x = dynamic_center.0;
+                let dynamic_y = dynamic_center.1;
+                
+                info!("🎯 动态搜索到通讯录按钮: ({}, {})", dynamic_x, dynamic_y);
+                
+                // 🛡️ 坐标差异检查（保险机制）
+                let diff_x = (dynamic_x - baseline_x).abs();
+                let diff_y = (dynamic_y - baseline_y).abs();
+                let max_diff_threshold = std::cmp::max(screen_width / 10, screen_height / 10); // 10%屏幕尺寸
+                
+                info!("� 坐标差异检查: 动态({}, {}) vs 基准({}, {}), 差异({}, {}), 阈值({})", 
+                      dynamic_x, dynamic_y, baseline_x, baseline_y, diff_x, diff_y, max_diff_threshold);
+                
+                if diff_x > max_diff_threshold || diff_y > max_diff_threshold {
+                    warn!("⚠️ 通讯录动态坐标({}, {})与基准坐标({}, {})差异过大(x差异:{}, y差异:{})", 
+                          dynamic_x, dynamic_y, baseline_x, baseline_y, diff_x, diff_y);
+                    warn!("🛡️ 启用坐标保险机制，使用基准坐标: ({}, {})", baseline_x, baseline_y);
+                    return Ok(baseline_coords);
+                } else {
+                    info!("✅ 通讯录动态坐标通过差异检验，差异范围合理(x差异:{}, y差异:{})", diff_x, diff_y);
+                    return Ok((dynamic_x, dynamic_y));
+                }
+            } else {
+                info!("⚠️ 动态搜索未找到通讯录按钮，使用基准坐标");
+            }
+        }
+        
+        // 🔧 使用基准坐标（基于成功ADB测试结果）
+        info!("�📱 屏幕适配 - 通讯录坐标: ({}, {}) [实际测试验证]", baseline_x, baseline_y);
+        Ok(baseline_coords)
     }
 
     /// 处理菜单点击失败的情况

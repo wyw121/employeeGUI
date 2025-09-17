@@ -506,7 +506,7 @@ impl FollowAutomationExt for XiaohongshuAutomator {
 
 impl XiaohongshuAutomator {
     /// 从XML行中提取文本内容
-    fn extract_text_from_line(&self, line: &str) -> Option<String> {
+    pub fn extract_text_from_line(&self, line: &str) -> Option<String> {
         if let Some(start) = line.find("text=\"") {
             let text_part = &line[start + 6..];
             if let Some(end) = text_part.find('"') {

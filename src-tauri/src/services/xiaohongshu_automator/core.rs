@@ -212,27 +212,61 @@ impl XiaohongshuAutomator {
     /// 自动关注功能（兼容旧版本接口）
     pub async fn auto_follow(&self, options: Option<super::types::XiaohongshuFollowOptions>) -> Result<super::types::XiaohongshuFollowResult> {
         use super::follow_automation::FollowAutomationExt;
+        use super::navigation::NavigationExt;
         
         let actual_options = options.unwrap_or_default();
+        let start_time = std::time::Instant::now();
         info!("🚀 开始自动关注流程，配置: {:?}", actual_options);
         
-        // 这里可以添加默认的联系人列表，或者从配置中获取
-        let contacts = vec![]; // 实际应用中应该从某处获取联系人列表
-        let max_follows = actual_options.max_pages.unwrap_or(5);
+        // 新逻辑：直接从通讯录页面批量关注所有联系人
+        let max_follows = actual_options.max_pages.unwrap_or(10); // 默认最多关注10个
         
-        let results = self.batch_follow_from_contacts(contacts, max_follows).await?;
+        // 1. 导航到通讯录页面
+        info!("📱 步骤1: 导航到小红书通讯录页面");
+        match self.navigate_to_contacts().await {
+            Ok(nav_result) => {
+                if !nav_result.success {
+                    return Ok(super::types::XiaohongshuFollowResult {
+                        success: false,
+                        total_followed: 0,
+                        pages_processed: 0,
+                        duration: start_time.elapsed().as_secs(),
+                        details: vec![],
+                        message: format!("导航到通讯录失败: {}", nav_result.message),
+                    });
+                }
+                info!("✅ 成功导航到通讯录页面");
+            }
+            Err(e) => {
+                return Ok(super::types::XiaohongshuFollowResult {
+                    success: false,
+                    total_followed: 0,
+                    pages_processed: 0,
+                    duration: start_time.elapsed().as_secs(),
+                    details: vec![],
+                    message: format!("导航异常: {}", e),
+                });
+            }
+        }
+        
+        // 2. 批量关注通讯录页面中的所有联系人
+        info!("👥 步骤2: 批量关注通讯录页面中的所有联系人");
+        let results = self.batch_follow_all_contacts_in_page(max_follows).await?;
         
         // 转换结果格式以保持向后兼容
-        let success = !results.is_empty();
+        let success = !results.is_empty() && results.iter().any(|r| r.status == super::types::FollowStatus::Success);
         let total_followed = results.iter().filter(|r| r.status == super::types::FollowStatus::Success).count();
+        let duration = start_time.elapsed().as_secs();
+        
+        info!("🎉 自动关注流程完成！成功关注: {}/{}, 耗时: {}秒", total_followed, results.len(), duration);
         
         Ok(super::types::XiaohongshuFollowResult {
             success,
             total_followed,
             pages_processed: 1,
-            duration: 0, // TODO: 计算实际耗时
+            duration,
             details: vec![], // TODO: 转换详细信息
-            message: format!("处理完成，成功关注 {} 个用户", total_followed),
+            message: format!("从通讯录批量关注完成，成功关注 {} 个联系人", total_followed),
         })
     }
 }

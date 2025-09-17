@@ -185,6 +185,15 @@ impl PageRecognitionExt for XiaohongshuAutomator {
             }
         }
 
+        // 🎯 基于ADB实际测试结果：检查发现好友页面特征（包含通讯录选项）
+        if ui_dump.contains("text=\"添加好友\"") && 
+           ui_dump.contains("text=\"通讯录\"") && 
+           ui_dump.contains("你可能感兴趣的人") {
+            key_elements.push("发现好友页面（含通讯录选项）".to_string());
+            confidence_scores.push((PageState::DiscoverFriends, 0.98));
+            info!("✓ 检测到发现好友页面特征 - 需要点击通讯录选项");
+        }
+
         // 检查通讯录页面特征 (通讯录好友页面)
         if ui_dump.contains("通讯录好友") || 
            (ui_dump.contains("通讯录") && ui_dump.contains("wang")) ||
@@ -303,21 +312,110 @@ impl PageRecognitionExt for XiaohongshuAutomator {
         Ok(elements)
     }
 
-    /// 查找所有关注按钮及对应的联系人姓名
+    /// 查找所有关注按钮及对应的联系人姓名（增强版 - 支持多种按钮类型）
     async fn find_follow_buttons(&self, ui_dump: &str) -> Result<Vec<(String, ScreenCoordinate)>> {
         let mut follow_buttons = Vec::new();
         let lines: Vec<&str> = ui_dump.lines().collect();
         
+        info!("🔍 开始查找通讯录页面中的关注按钮...");
+        info!("📄 UI dump总行数: {}", lines.len());
+        
+        // 可关注的按钮模式（需要点击）
+        let follow_button_patterns = [
+            "text=\"关注\"",      // 标准关注按钮
+            "text=\"+ 关注\"",    // 带加号的关注按钮
+            "text=\"+\"",         // 纯加号按钮
+            "text=\"Follow\"",    // 英文关注按钮
+            "content-desc=\"关注\"", // 无障碍描述
+            "content-desc=\"添加好友\"", // 添加好友描述
+        ];
+        
+        // 已关注的按钮模式（跳过不点击）
+        let already_followed_patterns = [
+            "text=\"已关注\"",    // 已关注状态
+            "text=\"已加好友\"",  // 已加好友状态
+            "text=\"Followed\"",  // 英文已关注
+            "text=\"Following\"", // 英文正在关注
+        ];
+        
         for (i, line) in lines.iter().enumerate() {
-            // 查找关注按钮
-            if line.contains("text=\"关注\"") && line.contains("clickable=\"true\"") {
+            // 首先检查是否是已关注状态（需要跳过）
+            let is_already_followed = already_followed_patterns.iter().any(|pattern| line.contains(pattern));
+            
+            if is_already_followed && line.contains("clickable=\"true\"") {
+                // 找到已关注的联系人，记录但不点击
+                if let Some(button_coord) = self.parse_bounds_from_line(line) {
+                    let contact_name = self.find_contact_name_near_line(&lines, i);
+                    info!("✅ 跳过已关注联系人: {} -> 坐标: {:?}", contact_name, button_coord);
+                }
+                continue;
+            }
+            
+            // 检查是否包含需要关注的按钮模式
+            let is_follow_button = follow_button_patterns.iter().any(|pattern| line.contains(pattern));
+            
+            if is_follow_button && line.contains("clickable=\"true\"") {
                 if let Some(button_coord) = self.parse_bounds_from_line(line) {
                     // 向前查找联系人姓名（通常在关注按钮前几行）
                     let contact_name = self.find_contact_name_near_line(&lines, i);
-                    info!("👤 找到关注按钮: {} -> {:?}", contact_name, button_coord);
-                    follow_buttons.push((contact_name, button_coord));
+                    
+                    // 过滤掉明显不是联系人的条目
+                    if !contact_name.is_empty() && 
+                       !contact_name.contains("关注") && 
+                       !contact_name.contains("已关注") &&
+                       !contact_name.contains("粉丝") &&
+                       !contact_name.contains("获赞") &&
+                       contact_name != "未知联系人" {
+                        info!("👤 找到关注按钮: {} -> 坐标: {:?}", contact_name, button_coord);
+                        follow_buttons.push((contact_name, button_coord));
+                    } else {
+                        info!("⚠️ 跳过无效联系人: {}", contact_name);
+                    }
                 }
             }
+        }
+        
+        // 如果没有找到关注按钮，尝试其他策略
+        if follow_buttons.is_empty() {
+            info!("⚠️ 未找到标准关注按钮，尝试备用策略...");
+            
+            // 备用策略1: 查找通讯录条目并推断关注按钮位置
+            for (i, line) in lines.iter().enumerate() {
+                // 查找包含联系人信息的行
+                if line.contains("android.widget.TextView") && 
+                   line.contains("text=\"") && 
+                   !line.contains("通讯录好友") && 
+                   !line.contains("关注") {
+                    
+                    if let Some(contact_name) = self.extract_text_from_line(line) {
+                        // 检查联系人名称的合理性
+                        if !contact_name.is_empty() && 
+                           contact_name.len() > 1 && 
+                           contact_name.len() < 20 &&
+                           !contact_name.contains("小红薯") {
+                            
+                            // 在同一行或附近查找可点击的元素
+                            let search_range = i.saturating_sub(2)..=(i + 3).min(lines.len() - 1);
+                            for j in search_range {
+                                if let Some(check_line) = lines.get(j) {
+                                    if check_line.contains("clickable=\"true\"") {
+                                        if let Some(button_coord) = self.parse_bounds_from_line(check_line) {
+                                            info!("🔄 备用策略找到潜在关注按钮: {} -> 坐标: {:?}", contact_name, button_coord);
+                                            follow_buttons.push((contact_name.clone(), button_coord));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        info!("📊 关注按钮搜索结果: 找到 {} 个关注按钮", follow_buttons.len());
+        if follow_buttons.is_empty() {
+            warn!("⚠️ 未找到任何关注按钮，可能页面还未加载完成或不在通讯录页面");
         }
         
         Ok(follow_buttons)

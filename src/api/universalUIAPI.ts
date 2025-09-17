@@ -63,7 +63,7 @@ export class UniversalUIService {
     params: SmartNavigationParams
   ): Promise<UniversalClickResult> {
     return await invoke<UniversalClickResult>('execute_universal_ui_click', {
-      deviceId,
+      deviceId: deviceId,
       params,
     });
   }
@@ -78,9 +78,9 @@ export class UniversalUIService {
     buttonText: string
   ): Promise<UniversalClickResult> {
     return await invoke<UniversalClickResult>('execute_universal_quick_click', {
-      deviceId,
-      appName,
-      buttonText,
+      deviceId: deviceId,
+      appName: appName,
+      buttonText: buttonText,
     });
   }
 
@@ -94,9 +94,9 @@ export class UniversalUIService {
     positionHint?: string
   ): Promise<UniversalClickResult> {
     return await invoke<UniversalClickResult>('execute_universal_direct_click', {
-      deviceId,
-      buttonText,
-      positionHint,
+      deviceId: deviceId,
+      buttonText: buttonText,
+      positionHint: positionHint,
     });
   }
 

@@ -62,6 +62,25 @@ interface SmartNavigationStepBuilderProps {
     onConfigChange?: (config: { app: string; navType: string }) => void; // 新增：配置变化回调
 }
 
+// 测试模式类型
+type TestMode = 'app_specific' | 'direct_adb';
+
+// 测试模式配置
+const TEST_MODE_CONFIG = {
+  app_specific: {
+    label: '指定应用模式',
+    description: '根据选择的应用进行检测，会验证应用状态',
+    icon: '📱',
+    color: 'blue' as const
+  },
+  direct_adb: {
+    label: '直接ADB模式', 
+    description: '直接在当前界面查找，不管是什么应用',
+    icon: '⚡',
+    color: 'green' as const
+  }
+};
+
 // 导航栏类型配置
 const NAVIGATION_TYPES = {
   '下方导航栏': {
@@ -129,6 +148,7 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
   const [selectedApp, setSelectedApp] = useState<string>('小红书');
   const [buttonInputMode, setButtonInputMode] = useState<'preset' | 'custom'>('preset');
   const [selectedButtonPreset, setSelectedButtonPreset] = useState<string>('个人中心');
+  const [testMode, setTestMode] = useState<TestMode>('app_specific'); // 新增：测试模式状态
 
   // 初始化表单
   useEffect(() => {
@@ -237,7 +257,12 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
 
   // 执行智能检测
   const handleSmartDetection = async () => {
-    if (!deviceId) {
+    console.log('🔧 执行智能检测 - deviceId:', deviceId);
+    
+    // 如果没有提供deviceId，使用默认的模拟器ID进行测试
+    const testDeviceId = deviceId || 'emulator-5554';
+    
+    if (!testDeviceId) {
       message.error('请先选择设备');
       return;
     }
@@ -251,19 +276,23 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
         navigation_type: selectedNavType,
         target_button: formValues.target_button || '我',
         click_action: formValues.click_action || 'single_tap',
-        app_name: selectedApp, // 指定应用模式
+        // 根据测试模式决定是否传递app_name
+        app_name: testMode === 'app_specific' ? selectedApp : undefined, // 关键修改
       };
       
-      console.log('🔧 Universal UI 智能检测参数:', navigationParams);
+      console.log(`🔧 Universal UI 智能检测 [${TEST_MODE_CONFIG[testMode].label}]:`, {
+        deviceId: testDeviceId,
+        navigationParams
+      });
       
       // 使用新的Universal UI API进行检测（仅查找，不执行点击）
-      const result = await UniversalUIService.executeUIClick(deviceId, navigationParams);
+      const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
 
       // 将结果转换为前端格式
       const elementFinderResult: ElementFinderResult = {
         success: result.element_found,
         message: result.element_found 
-          ? `成功找到目标按钮 "${navigationParams.target_button}"` 
+          ? `✅ [${result.mode}] 成功找到目标按钮 "${navigationParams.target_button}"` 
           : (result.error_message || '未找到目标按钮'),
         found_elements: result.found_element ? [{
           text: result.found_element.text,
@@ -455,28 +484,89 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
           </Form.Item>
         </div>
 
+        {/* 第五步：选择测试模式 */}
+        <div>
+          <Text strong>5. 选择测试模式</Text>
+          <div style={{ marginTop: 8, marginBottom: 16 }}>
+            <Radio.Group 
+              value={testMode} 
+              onChange={(e) => setTestMode(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              {Object.entries(TEST_MODE_CONFIG).map(([key, config]) => (
+                <Radio.Button 
+                  key={key} 
+                  value={key}
+                  style={{ 
+                    marginRight: 8, 
+                    marginBottom: 8,
+                    borderColor: config.color === 'blue' ? '#1890ff' : '#52c41a'
+                  }}
+                >
+                  <Space size="small">
+                    <span>{config.icon}</span>
+                    <span>{config.label}</span>
+                  </Space>
+                </Radio.Button>
+              ))}
+            </Radio.Group>
+            
+            {/* 模式说明 */}
+            <Alert
+              message={
+                <Space>
+                  <span style={{ fontSize: 14 }}>
+                    {TEST_MODE_CONFIG[testMode].icon} <strong>{TEST_MODE_CONFIG[testMode].label}</strong>
+                  </span>
+                </Space>
+              }
+              description={TEST_MODE_CONFIG[testMode].description}
+              type={testMode === 'app_specific' ? 'info' : 'success'}
+              showIcon={false}
+              style={{ marginTop: 8, fontSize: 12 }}
+            />
+          </div>
+        </div>
+
         <Divider />
 
         {/* 操作按钮 */}
-        <Space>
-          <Button 
-            type="primary" 
-            icon={<AimOutlined />}
-            loading={loading}
-            onClick={handleSmartDetection}
-          >
-            智能检测
-          </Button>
-          
-          {detectionResult?.success && detectionResult.target_element && (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Space>
             <Button 
-              type="default" 
-              icon={<CheckCircleOutlined />}
-              onClick={handleConfirmConfiguration}
+              type="primary" 
+              icon={<AimOutlined />}
+              loading={loading}
+              onClick={handleSmartDetection}
             >
-              确认配置
+              {TEST_MODE_CONFIG[testMode].icon} 智能检测
+              {testMode === 'app_specific' ? ` (${selectedApp})` : ' (当前界面)'}
             </Button>
-          )}
+            
+            {detectionResult?.success && detectionResult.target_element && (
+              <Button 
+                type="default" 
+                icon={<CheckCircleOutlined />}
+                onClick={handleConfirmConfiguration}
+              >
+                确认配置
+              </Button>
+            )}
+          </Space>
+
+          {/* 当前模式提示 */}
+          <div style={{ fontSize: 12, color: '#666' }}>
+            <Space>
+              <span>{TEST_MODE_CONFIG[testMode].icon}</span>
+              <span>当前模式: {TEST_MODE_CONFIG[testMode].label}</span>
+              {testMode === 'app_specific' && (
+                <Tag color="blue">目标应用: {selectedApp}</Tag>
+              )}
+              {testMode === 'direct_adb' && (
+                <Tag color="green">直接检测当前界面</Tag>
+              )}
+            </Space>
+          </div>
         </Space>
 
         {/* 检测结果显示 */}

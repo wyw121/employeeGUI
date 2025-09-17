@@ -22,6 +22,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
+import UniversalUIService, { type UniversalClickResult } from '../../api/universalUIAPI';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -100,6 +101,25 @@ interface SmartNavigationFinderProps {
   onStepGenerated?: (step: any) => void; // 用于生成智能脚本步骤
 }
 
+// 测试模式类型
+type TestMode = 'app_specific' | 'direct_adb';
+
+// 测试模式配置
+const TEST_MODE_CONFIG = {
+  app_specific: {
+    label: '指定应用模式',
+    description: '根据选择的应用进行检测，会验证应用状态',
+    icon: '📱',
+    color: 'blue' as const
+  },
+  direct_adb: {
+    label: '直接ADB模式', 
+    description: '直接在当前界面查找，不管是什么应用',
+    icon: '⚡',
+    color: 'green' as const
+  }
+};
+
 const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
   deviceId,
   onStepGenerated
@@ -110,6 +130,7 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
   const [selectedPreset, setSelectedPreset] = useState<string>('小红书_底部导航');
   const [customMode, setCustomMode] = useState(false);
   const [buttonInputMode, setButtonInputMode] = useState<'preset' | 'custom'>('preset');
+  const [testMode, setTestMode] = useState<TestMode>('app_specific'); // 新增：测试模式状态
 
   // 初始化表单
   useEffect(() => {
@@ -154,7 +175,12 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
 
   // 执行智能导航查找
   const handleSmartFind = async () => {
-    if (!deviceId) {
+    console.log('🔧 执行智能导航查找 - deviceId:', deviceId);
+    
+    // 如果没有提供deviceId，使用默认的模拟器ID进行测试
+    const testDeviceId = deviceId || 'emulator-5554';
+    
+    if (!testDeviceId) {
       message.error('请先选择设备');
       return;
     }
@@ -163,24 +189,59 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
       setLoading(true);
       const config = getCurrentConfig();
       
-      console.log('Calling smart navigation finder with config:', config);
+      // 从预设名称中提取应用名称 (如 "小红书_底部导航" -> "小红书")
+      const appName = selectedPreset !== '自定义配置' 
+        ? selectedPreset.split('_')[0] 
+        : undefined;
       
-      const result = await invoke<NavigationFinderResult>('smart_navigation_finder', {
-        deviceId,
-        config
+      // 构建Universal UI参数
+      const navigationParams = {
+        navigation_type: config.position_type,
+        target_button: config.target_button,
+        click_action: config.click_action,
+        // 根据测试模式决定是否传递app_name
+        app_name: testMode === 'app_specific' ? appName : undefined,
+        position_ratio: config.position_ratio
+      };
+      
+      console.log(`🔧 Universal UI 智能导航查找 [${TEST_MODE_CONFIG[testMode].label}]:`, {
+        deviceId: testDeviceId,
+        navigationParams
       });
+      
+      // 使用Universal UI API
+      const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
 
-      console.log('Navigation finder result:', result);
-      setResult(result);
+      console.log('Universal UI result:', result);
+      
+      // 转换结果格式
+      const navigationResult: NavigationFinderResult = {
+        success: result.element_found,
+        message: result.element_found 
+          ? `✅ [${result.mode}] 成功找到目标按钮 "${navigationParams.target_button}"` 
+          : (result.error_message || '未找到目标按钮'),
+        found_elements: result.found_element ? [{
+          text: result.found_element.text,
+          bounds: result.found_element.bounds,
+          position: result.found_element.position
+        }] : [],
+        target_element: result.found_element ? {
+          text: result.found_element.text,
+          bounds: result.found_element.bounds,
+          position: result.found_element.position
+        } : undefined
+      };
 
-      if (result.success) {
-        message.success('成功找到导航栏元素！');
+      setResult(navigationResult);
+
+      if (result.element_found) {
+        message.success(`✅ 成功检测到导航元素！(${result.mode}, ${result.execution_time_ms}ms)`);
       } else {
-        message.warning(result.message);
+        message.warning(result.error_message || '未找到目标按钮');
       }
     } catch (error) {
-      console.error('Navigation finder error:', error);
-      message.error(`查找失败: ${error}`);
+      console.error('智能检测失败:', error);
+      message.error(`检测失败: ${error}`);
       setResult({
         success: false,
         message: `错误: ${error}`,
@@ -370,28 +431,93 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
           </Form.Item>
         )}
 
+        {/* 测试模式选择 */}
+        <Form.Item label="测试模式">
+          <div style={{ marginBottom: 16 }}>
+            <Radio.Group 
+              value={testMode} 
+              onChange={(e) => setTestMode(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              {Object.entries(TEST_MODE_CONFIG).map(([key, config]) => (
+                <Radio.Button 
+                  key={key} 
+                  value={key}
+                  style={{ marginRight: 8, marginBottom: 8 }}
+                >
+                  <Space size="small">
+                    <span>{config.icon}</span>
+                    <span>{config.label}</span>
+                  </Space>
+                </Radio.Button>
+              ))}
+            </Radio.Group>
+            
+            {/* 模式说明 */}
+            <Alert
+              message={
+                <Space>
+                  <span style={{ fontSize: 14 }}>
+                    {TEST_MODE_CONFIG[testMode].icon} <strong>{TEST_MODE_CONFIG[testMode].label}</strong>
+                  </span>
+                </Space>
+              }
+              description={TEST_MODE_CONFIG[testMode].description}
+              type={testMode === 'app_specific' ? 'info' : 'success'}
+              showIcon={false}
+              style={{ marginTop: 8, fontSize: 12 }}
+            />
+          </div>
+        </Form.Item>
+
         <Divider />
 
         {/* 操作按钮 */}
-        <Space>
-          <Button
-            type="primary"
-            icon={<AimOutlined />}
-            loading={loading}
-            onClick={handleSmartFind}
-          >
-            {loading ? '检测中...' : '智能检测'}
-          </Button>
-          
-          {result?.success && result.target_element && onStepGenerated && (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Space>
             <Button
-              type="default"
-              icon={<PlayCircleOutlined />}
-              onClick={handleGenerateStep}
+              type="primary"
+              icon={<AimOutlined />}
+              loading={loading}
+              onClick={handleSmartFind}
             >
-              生成脚本步骤
+              {loading ? '检测中...' : (
+                <>
+                  {TEST_MODE_CONFIG[testMode].icon} 智能检测
+                  {testMode === 'app_specific' && selectedPreset !== '自定义配置' 
+                    ? ` (${selectedPreset.split('_')[0]})` 
+                    : testMode === 'direct_adb' 
+                    ? ' (当前界面)' 
+                    : ''
+                  }
+                </>
+              )}
             </Button>
-          )}
+            
+            {result?.success && result.target_element && onStepGenerated && (
+              <Button
+                type="default"
+                icon={<PlayCircleOutlined />}
+                onClick={handleGenerateStep}
+              >
+                生成脚本步骤
+              </Button>
+            )}
+          </Space>
+
+          {/* 当前模式提示 */}
+          <div style={{ fontSize: 12, color: '#666' }}>
+            <Space>
+              <span>{TEST_MODE_CONFIG[testMode].icon}</span>
+              <span>当前模式: {TEST_MODE_CONFIG[testMode].label}</span>
+              {testMode === 'app_specific' && selectedPreset !== '自定义配置' && (
+                <Tag color="blue">目标应用: {selectedPreset.split('_')[0]}</Tag>
+              )}
+              {testMode === 'direct_adb' && (
+                <Tag color="green">直接检测当前界面</Tag>
+              )}
+            </Space>
+          </div>
         </Space>
       </Form>
 
@@ -414,7 +540,7 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
           title="检测结果"
           size="small"
           style={{ marginTop: 16 }}
-          type={result.success ? 'inner' : 'default'}
+          type="inner"
         >
           <Alert
             message={result.message}

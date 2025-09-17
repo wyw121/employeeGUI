@@ -8,6 +8,7 @@ use crate::services::smart_element_finder_service::{
     DetectedElement, ElementFinderResult, ClickResult
 };
 use crate::services::adb_service::AdbService;
+use crate::services::app_lifecycle_manager::{AppLifecycleManager, AppLaunchConfig};
 
 /// 前端智能导航参数结构 
 /// 对应SmartScriptStep的parameters字段
@@ -151,7 +152,7 @@ impl UniversalUIService {
 
 /// 执行智能导航点击（统一入口）
 /// 支持双模式：指定应用模式 vs 直接ADB模式
-#[command]
+#[tauri::command]
 pub async fn execute_universal_ui_click(
     device_id: String,
     params: SmartNavigationParams,
@@ -180,12 +181,50 @@ pub async fn execute_universal_ui_click(
         let lock = adb_service.lock().map_err(|e| e.to_string())?;
         lock.clone()
     };
-    let finder_service = SmartElementFinderService::new(adb_svc);
+    let finder_service = SmartElementFinderService::new(adb_svc.clone());
 
-    // TODO: 在指定应用模式下，可以添加应用检测和切换逻辑
-    if params.app_name.is_some() {
-        println!("   📱 应用模式：将来可以添加应用检测逻辑");
-        // 这里可以集成app_state_detector或其他应用检测服务
+    // 在指定应用模式下，使用专门的应用生命周期管理器
+    if let Some(app_name) = &params.app_name {
+        println!("   📱 应用模式：使用生命周期管理器确保 {} 应用运行", app_name);
+        
+        // 创建应用生命周期管理器
+        let lifecycle_manager = AppLifecycleManager::new(adb_svc.clone());
+        
+        // 使用生命周期管理器确保应用运行
+        let lifecycle_result = lifecycle_manager.ensure_app_running(
+            &device_id, 
+            app_name, 
+            Some(AppLaunchConfig::default())
+        ).await;
+        
+        // 输出生命周期管理的详细日志
+        for log in &lifecycle_result.logs {
+            println!("   {}", log);
+        }
+        
+        // 如果应用启动失败，直接返回错误
+        if !lifecycle_result.success {
+            let error_msg = format!("应用 {} 启动失败: {}", 
+                app_name, 
+                lifecycle_result.error_message.as_deref().unwrap_or("未知错误"));
+            
+            let failed_result = service.convert_result(
+                ElementFinderResult {
+                    success: false,
+                    message: error_msg.clone(),
+                    found_elements: None,
+                    target_element: None,
+                },
+                None,
+                mode,
+                start_time
+            );
+            
+            return Ok(failed_result);
+        }
+        
+        // 应用启动成功，继续后续的UI查找操作
+        println!("   ✅ {} 应用已就绪，继续执行UI导航", app_name);
     }
 
     // 执行元素查找

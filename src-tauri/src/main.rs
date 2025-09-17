@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// mod commands;
 mod screenshot_service;
 mod services;
 mod utils;
@@ -13,6 +14,7 @@ mod xml_judgment_service;
 use std::os::windows::process::CommandExt;
 
 use screenshot_service::*;
+// use commands::app_lifecycle_commands::*;
 use services::adb_device_tracker::*;
 use services::adb_service::AdbService;
 use services::auth_service::*;
@@ -29,7 +31,7 @@ use services::smart_element_finder_service::{smart_element_finder, click_detecte
 use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
-use services::universal_ui_service::*; // 新增：Universal UI Finder 服务
+use services::universal_ui_service::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use services::xiaohongshu_long_connection_service::{XiaohongshuLongConnectionService, *};
 use std::sync::Mutex;
@@ -800,11 +802,11 @@ fn main() {
             // 智能元素查找功能
             smart_element_finder,    // 智能元素查找
             click_detected_element,  // 点击检测到的元素
-            // Universal UI Finder 功能 - 智能导航桥接
-            execute_universal_ui_click,      // 执行智能导航点击（统一入口）
-            execute_universal_quick_click,   // 快速点击（简化接口）
-            execute_universal_direct_click,  // 直接ADB点击（跳过应用检测）
-            get_universal_navigation_presets // 获取预设配置信息
+            // Universal UI 智能导航功能
+            execute_universal_ui_click,  // 执行智能导航点击
+            // 应用生命周期管理功能
+            // ensure_app_running,              // 确保应用运行（独立模块）
+            // detect_app_state                 // 检测应用状态（独立模块）
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

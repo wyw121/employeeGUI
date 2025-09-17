@@ -53,24 +53,22 @@ impl AdbService {
 
     /// 执行ADB命令（用于智能元素查找服务等异步操作）
     pub async fn execute_adb_command(&self, device_id: &str, command: &str) -> Result<String, Box<dyn std::error::Error>> {
-        // 使用默认ADB路径
-        let adb_path = "platform-tools/adb.exe";
-        let args = if command.starts_with("shell ") {
-            vec![
-                "-s".to_string(),
-                device_id.to_string(),
-                command.to_string(),
-            ]
-        } else {
-            vec![
-                "-s".to_string(),
-                device_id.to_string(),
-                "shell".to_string(),
-                command.to_string(),
-            ]
-        };
+        // 使用智能检测的ADB路径
+        let adb_path = crate::utils::adb_utils::get_adb_path();
+        
+        // 构建完整的参数列表
+        let mut args = vec![
+            "-s".to_string(),
+            device_id.to_string(),
+        ];
 
-        self.execute_command(adb_path, &args)
+        // 将命令字符串分解为独立的参数
+        let command_parts: Vec<&str> = command.split_whitespace().collect();
+        for part in command_parts {
+            args.push(part.to_string());
+        }
+
+        self.execute_command(&adb_path, &args)
     }
 
     /// 启动ADB服务器

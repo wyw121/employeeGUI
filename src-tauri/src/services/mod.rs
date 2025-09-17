@@ -5,6 +5,7 @@ pub mod adb_shell_session;
 pub mod navigation_bar_detector;  // 新增：通用导航栏检测器
 pub mod app_state_detector;
 pub mod app_detection_framework;  // 新增：应用检测框架
+pub mod app_lifecycle_manager;  // 新增：应用生命周期管理器
 pub mod auth_service;
 pub mod contact_automation;
 pub mod contact_service;

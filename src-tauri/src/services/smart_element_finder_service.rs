@@ -52,6 +52,65 @@ impl SmartElementFinderService {
         Self { adb_service }
     }
 
+    /// 检查应用是否在前台
+    pub async fn check_app_foreground(&self, device_id: &str, app_name: &str) -> Result<bool, String> {
+        // 获取当前UI信息判断是否为指定应用
+        let ui_xml = self.adb_service.dump_ui_hierarchy(device_id).await
+            .map_err(|e| format!("Failed to dump UI: {}", e))?;
+            
+        // 检查XML中是否包含应用包名（简单检测）
+        let package_name = match app_name {
+            "小红书" => "com.xingin.xhs",
+            "微信" => "com.tencent.mm", 
+            "抖音" => "com.ss.android.ugc.aweme",
+            _ => return Ok(false), // 未知应用
+        };
+        
+        let is_foreground = ui_xml.contains(&format!("package=\"{}\"", package_name));
+        Ok(is_foreground)
+    }
+    
+    /// 从桌面启动应用
+    pub async fn launch_app_from_desktop(&self, device_id: &str, app_name: &str) -> Result<(), String> {
+        // 获取当前UI信息
+        let ui_xml = self.adb_service.dump_ui_hierarchy(device_id).await
+            .map_err(|e| format!("Failed to dump UI: {}", e))?;
+            
+        // 查找应用图标位置
+        if let Some(app_bounds) = self.find_app_icon_bounds(&ui_xml, app_name) {
+            // 计算点击位置（中心点）
+            match Self::calculate_center_position(&app_bounds) {
+                Ok(center) => {
+                    // 点击应用图标
+                    self.adb_service.tap_screen(device_id, center.0, center.1).await
+                        .map_err(|e| format!("Failed to tap app icon: {}", e))?;
+                    Ok(())
+                }
+                Err(e) => Err(format!("无法计算 {} 图标的中心位置: {}", app_name, e))
+            }
+        } else {
+            Err(format!("在桌面上未找到 {} 应用图标", app_name))
+        }
+    }
+    
+    /// 在XML中查找应用图标的bounds
+    fn find_app_icon_bounds(&self, ui_xml: &str, app_name: &str) -> Option<String> {
+        let lines: Vec<&str> = ui_xml.lines().collect();
+        
+        for line in lines {
+            if line.trim().starts_with("<node") && line.contains(&format!("text=\"{}\"", app_name)) {
+                // 提取bounds属性
+                if let Some(start) = line.find("bounds=\"") {
+                    let start = start + 8; // "bounds=\"".len()
+                    if let Some(end) = line[start..].find("\"") {
+                        return Some(line[start..start + end].to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// 解析bounds字符串 "[x1,y1][x2,y2]" -> ((x1, y1), (x2, y2))
     fn parse_bounds(bounds_str: &str) -> Result<((i32, i32), (i32, i32)), String> {
         let bounds_str = bounds_str.trim_matches(|c| c == '[' || c == ']');
@@ -192,19 +251,84 @@ impl SmartElementFinderService {
     fn parse_navigation_elements(&self, ui_xml: &str, screen_size: (i32, i32), region: &PositionRatio) -> Result<Vec<UIElement>, String> {
         let mut elements = Vec::new();
         
-        // 使用简单的字符串解析（生产环境建议使用proper XML parser）
-        let lines: Vec<&str> = ui_xml.lines().collect();
+        println!("🔍 开始解析导航元素，屏幕尺寸: {:?}, 区域: {:?}", screen_size, region);
         
-        for line in lines {
-            if line.trim().starts_with("<node") {
-                if let Some(element) = self.parse_ui_element_from_line(line) {
-                    if Self::is_in_region(&element.bounds, screen_size, region) {
-                        elements.push(element);
+        // 计算实际区域范围
+        let (screen_width, screen_height) = screen_size;
+        let region_y1 = (region.y_start * screen_height as f64) as i32;
+        let region_y2 = (region.y_end * screen_height as f64) as i32;
+        println!("📍 目标区域Y范围: {} - {}", region_y1, region_y2);
+        
+        // 处理单行XML格式 - 将所有node标签分离
+        let mut xml_nodes = Vec::new();
+        let mut current_pos = 0;
+        
+        while let Some(start) = ui_xml[current_pos..].find("<node ") {
+            let absolute_start = current_pos + start;
+            // 查找对应的结束标签
+            let mut bracket_count = 0;
+            let mut end_pos = absolute_start;
+            let mut in_quotes = false;
+            let mut escape_next = false;
+            
+            for (i, ch) in ui_xml[absolute_start..].char_indices() {
+                let abs_i = absolute_start + i;
+                
+                if escape_next {
+                    escape_next = false;
+                    continue;
+                }
+                
+                match ch {
+                    '\\' => escape_next = true,
+                    '"' => in_quotes = !in_quotes,
+                    '<' if !in_quotes => bracket_count += 1,
+                    '>' if !in_quotes => {
+                        bracket_count -= 1;
+                        if bracket_count == 0 {
+                            end_pos = abs_i + 1;
+                            break;
+                        }
+                    },
+                    _ => {}
+                }
+            }
+            
+            if end_pos > absolute_start {
+                let node_xml = &ui_xml[absolute_start..end_pos];
+                xml_nodes.push(node_xml);
+                current_pos = end_pos;
+            } else {
+                // 如果没找到结束，跳过这个开始位置
+                current_pos = absolute_start + 5;
+            }
+        }
+        
+        println!("🔍 分离得到 {} 个XML节点", xml_nodes.len());
+        
+        // 解析每个节点
+        for node_xml in &xml_nodes {
+            if let Some(element) = self.parse_ui_element_from_line(node_xml) {
+                if Self::is_in_region(&element.bounds, screen_size, region) {
+                    println!("✅ 找到区域内元素: text='{}', desc='{}', bounds='{}', clickable={}", 
+                        element.text, element.content_desc, element.bounds, element.clickable);
+                    elements.push(element);
+                } else {
+                    // 如果有文本内容，但不在区域内，也打印出来用于调试
+                    if !element.text.is_empty() || !element.content_desc.is_empty() {
+                        if let Ok(((_, y1), (_, y2))) = Self::parse_bounds(&element.bounds) {
+                            let center_y = (y1 + y2) / 2;
+                            if center_y > region_y1 - 200 && center_y < region_y2 + 200 {
+                                println!("⚠️ 区域外相关元素: text='{}', desc='{}', bounds='{}', center_y={}, clickable={}", 
+                                    element.text, element.content_desc, element.bounds, center_y, element.clickable);
+                            }
+                        }
                     }
                 }
             }
         }
 
+        println!("📊 解析完成，找到 {} 个区域内元素", elements.len());
         Ok(elements)
     }
 
@@ -225,7 +349,8 @@ impl SmartElementFinderService {
         let bounds = get_attribute(line, "bounds");
         let clickable = get_attribute(line, "clickable") == "true";
 
-        if !bounds.is_empty() && (!text.is_empty() || !content_desc.is_empty()) {
+        // 只要有bounds就认为是有效元素
+        if !bounds.is_empty() {
             Some(UIElement {
                 text,
                 content_desc,
@@ -239,21 +364,48 @@ impl SmartElementFinderService {
 
     /// 检查是否为导航按钮
     fn is_navigation_button(&self, element: &UIElement, patterns: &[String]) -> bool {
+        // 首先输出调试信息
+        println!("🔍 检查导航按钮: text='{}' desc='{}' clickable={} patterns={:?}", 
+            element.text, element.content_desc, element.clickable, patterns);
+
         if patterns.is_empty() {
-            return element.clickable; // 如果没有指定模式，则所有可点击元素都算导航按钮
+            // 如果没有指定模式，检查是否为常见的导航按钮
+            // 只要是可点击的，就认为是潜在的导航元素
+            let has_any_identifier = !element.text.is_empty() || !element.content_desc.is_empty();
+            let is_clickable = element.clickable;
+            
+            let is_nav = is_clickable && has_any_identifier;
+            
+            if is_nav {
+                println!("✅ 识别为导航按钮: text='{}' desc='{}' clickable={}", 
+                    element.text, element.content_desc, is_clickable);
+            }
+            
+            return is_nav;
         }
 
+        // 检查是否匹配指定的模式
         for pattern in patterns {
-            if element.text.contains(pattern) || element.content_desc.contains(pattern) {
+            let text_match = element.text.contains(pattern);
+            let desc_match = element.content_desc.contains(pattern);
+            
+            if text_match || desc_match {
+                println!("🎯 匹配导航模式 '{}': text='{}' desc='{}' text_match={} desc_match={}", 
+                    pattern, element.text, element.content_desc, text_match, desc_match);
                 return true;
             }
         }
+        
+        println!("❌ 未匹配任何导航模式");
         false
     }
 
     /// 检查是否为目标按钮
     fn is_target_button(&self, element: &UIElement, target: &str) -> bool {
-        element.text.contains(target) || element.content_desc.contains(target)
+        let result = element.text.contains(target) || element.content_desc.contains(target);
+        println!("🔍 检查目标按钮 '{}' vs 元素 text:'{}' desc:'{}' -> {}", 
+            target, element.text, element.content_desc, result);
+        result
     }
 
     /// 点击检测到的元素

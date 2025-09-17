@@ -27,7 +27,14 @@ impl InteractiveLogger {
         
         println!("{}", "🚀 开始UI自动化查找任务".bright_blue().bold());
         println!("{}", "=".repeat(50).bright_blue());
-        println!("📱 目标应用: {}", request.app_name.bright_green());
+        
+        // 显示应用信息（如果有）
+        if let Some(app_name) = &request.app_name {
+            println!("📱 目标应用: {}", app_name.bright_green());
+        } else {
+            println!("🔧 模式: {}", "直接ADB操作 (跳过应用检测)".bright_cyan());
+        }
+        
         println!("🎯 目标元素: {}", request.target_text.bright_yellow());
         
         if let Some(pos) = &request.position_hint {

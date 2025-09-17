@@ -44,7 +44,7 @@ impl AppConfigManager {
         let pre_actions = self.infer_pre_actions(button_text, position_hint, app_config);
         
         Ok(crate::FindRequest {
-            app_name: app_name.to_string(),
+            app_name: Some(app_name.to_string()), // 指定应用模式
             target_text: button_text.to_string(),
             position_hint: position_hint.map(|s| s.to_string()),
             pre_actions,

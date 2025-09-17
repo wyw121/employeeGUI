@@ -33,7 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // === 示例4: 批量操作演示 ===
     run_batch_operations(&mut finder).await?;
     
-    // === 示例5: 自定义应用配置 ===
+    // === 示例5: 🆕 直接ADB操作模式 ===
+    run_direct_adb_examples(&mut finder).await?;
+    
+    // === 示例6: 自定义应用配置 ===
     run_custom_app_example(&mut finder).await?;
     
     println!("\n🎉 所有示例演示完成！");
@@ -299,6 +302,93 @@ async fn example_error_handling(finder: &mut UniversalUIFinder)
             }
         }
     }
+    
+    Ok(())
+}
+
+/// 🆕 直接ADB操作示例 - 跳过应用检测
+async fn run_direct_adb_examples(finder: &mut UniversalUIFinder) 
+    -> Result<(), Box<dyn std::error::Error>> {
+    
+    println!("\n🔧 === 直接ADB操作示例 ===");
+    println!("   💡 此模式跳过应用检测，直接执行UI操作");
+    println!("   🎯 适用场景：测试当前界面、调试UI元素、快速验证");
+    
+    // 1. 简单的直接点击
+    println!("\n1️⃣ 直接点击按钮 (无应用检测):");
+    match finder.direct_click("我", Some("下方导航栏")).await {
+        Ok(result) => {
+            println!("   ✅ 直接点击成功 - 耗时: {:?}", result.execution_time);
+            println!("   📍 跳过了应用检测步骤，直接定位并点击");
+        },
+        Err(e) => println!("   ⚠️ 直接点击: {}", e),
+    }
+    
+    // 2. 带预操作的直接点击
+    println!("\n2️⃣ 直接点击 + 预操作 (侧边栏展开):");
+    let pre_actions = vec![
+        "右滑展开".to_string(),
+        "等待动画800ms".to_string(),
+    ];
+    
+    match finder.direct_click_with_actions("关注好友", Some("左侧边栏"), pre_actions).await {
+        Ok(result) => {
+            println!("   ✅ 复杂直接操作成功");
+            if let Some(element) = &result.found_element {
+                println!("   📍 元素位置: ({}, {})", 
+                         element.bounds.center().0, element.bounds.center().1);
+                println!("   🎯 置信度: {:.1}%", element.confidence);
+            }
+        },
+        Err(e) => println!("   ⚠️ 复杂直接操作: {}", e),
+    }
+    
+    // 3. 手动构建直接ADB请求
+    println!("\n3️⃣ 自定义直接ADB请求:");
+    let direct_request = FindRequest {
+        app_name: None, // 🔑 关键：设为None跳过应用检测
+        target_text: "搜索".to_string(),
+        position_hint: Some("顶部工具栏".to_string()),
+        pre_actions: Some(vec!["等待页面加载".to_string()]),
+        user_guidance: false, // 禁用用户交互，加快测试
+        timeout: Some(10),
+        retry_count: Some(1),
+    };
+    
+    match finder.find_and_click(direct_request).await {
+        Ok(result) => {
+            println!("   ✅ 自定义直接请求成功");
+            println!("   ⚡ 模式验证: 无应用检测 + 快速执行");
+        },
+        Err(e) => println!("   ⚠️ 自定义直接请求: {}", e),
+    }
+    
+    // 4. 性能对比测试
+    println!("\n4️⃣ 性能对比：指定应用 vs 直接ADB");
+    
+    // 测试指定应用模式的耗时
+    let start_time = std::time::Instant::now();
+    let _result1 = finder.quick_click("小红书", "我").await;
+    let app_mode_time = start_time.elapsed();
+    
+    // 测试直接ADB模式的耗时
+    let start_time = std::time::Instant::now();
+    let _result2 = finder.direct_click("我", Some("下方导航栏")).await;
+    let direct_mode_time = start_time.elapsed();
+    
+    println!("   📊 性能对比结果:");
+    println!("      🏷️  指定应用模式: {:?}", app_mode_time);
+    println!("      🔧 直接ADB模式: {:?}", direct_mode_time);
+    
+    if direct_mode_time < app_mode_time {
+        let speedup = app_mode_time.as_millis() as f64 / direct_mode_time.as_millis() as f64;
+        println!("      🚀 直接模式快 {:.1}x", speedup);
+    }
+    
+    println!("\n💡 直接ADB模式使用建议:");
+    println!("   ✅ 适用场景: UI测试、调试验证、当前界面操作");
+    println!("   ❌ 不适用: 跨应用切换、需要应用状态管理的场景");
+    println!("   ⚡ 优势: 跳过应用检测，执行速度更快");
     
     Ok(())
 }

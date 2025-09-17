@@ -22,38 +22,42 @@ impl AppDetector {
     pub async fn detect_and_prepare_app(&self, request: &FindRequest, logger: &mut InteractiveLogger) 
         -> Result<AppStatus, FindError> {
         
-        logger.log_app_detection(&request.app_name, AppDetectionStep::Checking);
+        // 确保request.app_name不为None，因为只有在有应用名时才调用此方法
+        let app_name = request.app_name.as_ref()
+            .ok_or_else(|| FindError::ExecutionFailed("应用检测方法不应在直接ADB模式下被调用".to_string()))?;
+        
+        logger.log_app_detection(app_name, AppDetectionStep::Checking);
         
         // 步骤1: 根据应用名获取包名
-        let package_name = self.get_package_name(&request.app_name)?;
-        logger.log_app_detection(&request.app_name, AppDetectionStep::Found(package_name.clone()));
+        let package_name = self.get_package_name(app_name)?;
+        logger.log_app_detection(app_name, AppDetectionStep::Found(package_name.clone()));
         
         // 步骤2: 检查应用是否安装
         if !self.is_app_installed(&package_name)? {
-            logger.log_app_detection(&request.app_name, AppDetectionStep::NotFound);
+            logger.log_app_detection(app_name, AppDetectionStep::NotFound);
             
             if request.user_guidance {
-                return self.handle_app_not_found(&request.app_name, logger).await;
+                return self.handle_app_not_found(app_name, logger).await;
             } else {
-                return Err(FindError::AppNotFound(format!("应用未安装: {}", request.app_name)));
+                return Err(FindError::AppNotFound(format!("应用未安装: {}", app_name)));
             }
         }
         
         // 步骤3: 检查应用是否在前台运行
         if !self.is_app_in_foreground(&package_name)? {
-            logger.log_app_detection(&request.app_name, AppDetectionStep::NotRunning);
+            logger.log_app_detection(app_name, AppDetectionStep::NotRunning);
             
             if request.user_guidance {
-                return self.handle_app_not_running(&request.app_name, &package_name, logger).await;
+                return self.handle_app_not_running(app_name, &package_name, logger).await;
             } else {
-                return Err(FindError::AppNotOpened(format!("应用未在前台: {}", request.app_name)));
+                return Err(FindError::AppNotOpened(format!("应用未在前台: {}", app_name)));
             }
         }
         
-        logger.log_app_detection(&request.app_name, AppDetectionStep::Ready);
+        logger.log_app_detection(app_name, AppDetectionStep::Ready);
         
         Ok(AppStatus {
-            app_name: request.app_name.clone(),
+            app_name: app_name.clone(),
             package_name,
             is_running: true,
             is_foreground: true,

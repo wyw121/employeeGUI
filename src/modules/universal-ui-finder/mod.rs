@@ -60,12 +60,21 @@ impl UniversalUIFinder {
         })
     }
     
-    /// 主要的查找并点击方法 - 适配所有应用
+    /// 主要的查找并点击方法 - 适配所有应用和直接ADB模式
     pub async fn find_and_click(&mut self, request: FindRequest) -> Result<ClickResult, FindError> {
         self.logger.start_session(&request);
         
-        // 第一步：应用检测与启动
-        let _app_status = self.detector.detect_and_prepare_app(&request, &mut self.logger).await?;
+        // 第一步：应用检测与启动 (可选)
+        if let Some(app_name) = &request.app_name {
+            // 指定程序模式：执行应用检测和准备步骤
+            let _app_status = self.detector.detect_and_prepare_app(&request, &mut self.logger).await?;
+        } else {
+            // 直接ADB模式：跳过应用检测，记录日志
+            if self.logger.enabled {
+                println!("🔧 直接ADB模式：跳过应用检测步骤");
+                println!("   ⚡ 假设当前界面已准备就绪");
+            }
+        }
         
         // 第二步：UI元素查找与交互式处理
         let element = self.core.find_element_with_guidance(&request, &mut self.logger).await?;
@@ -96,6 +105,40 @@ impl UniversalUIFinder {
             .create_find_request(app_name, button_text, Some(position_hint))
             .map_err(|e| FindError::ExecutionFailed(e))?;
             
+        self.find_and_click(request).await
+    }
+    
+    /// 🆕 直接ADB点击 (跳过应用检测)
+    pub async fn direct_click(&mut self, button_text: &str, position_hint: Option<&str>) 
+        -> Result<ClickResult, FindError> {
+        
+        let request = FindRequest {
+            app_name: None, // 关键：不指定应用名，跳过应用检测
+            target_text: button_text.to_string(),
+            position_hint: position_hint.map(|s| s.to_string()),
+            pre_actions: None, // 直接ADB模式通常不需要预操作
+            user_guidance: true, // 保持用户交互
+            timeout: Some(30),
+            retry_count: Some(3),
+        };
+        
+        self.find_and_click(request).await
+    }
+    
+    /// 🆕 直接ADB点击 (带预操作)
+    pub async fn direct_click_with_actions(&mut self, button_text: &str, position_hint: Option<&str>, pre_actions: Vec<String>) 
+        -> Result<ClickResult, FindError> {
+        
+        let request = FindRequest {
+            app_name: None, // 跳过应用检测
+            target_text: button_text.to_string(),
+            position_hint: position_hint.map(|s| s.to_string()),
+            pre_actions: Some(pre_actions),
+            user_guidance: true,
+            timeout: Some(30),
+            retry_count: Some(3),
+        };
+        
         self.find_and_click(request).await
     }
     
@@ -143,7 +186,11 @@ impl UniversalUIFinder {
     
     /// 仅查找元素，不执行点击
     pub async fn find_element_only(&mut self, request: FindRequest) -> Result<UIElement, FindError> {
-        let _app_status = self.detector.detect_and_prepare_app(&request, &mut self.logger).await?;
+        // 如果指定了应用名，执行应用检测；否则跳过
+        if let Some(_app_name) = &request.app_name {
+            let _app_status = self.detector.detect_and_prepare_app(&request, &mut self.logger).await?;
+        }
+        
         self.core.find_element_with_guidance(&request, &mut self.logger).await
     }
 }
@@ -152,7 +199,8 @@ impl UniversalUIFinder {
 #[derive(Debug, Clone)]
 pub struct FindRequest {
     /// 目标应用名称 (如 "小红书", "微信", "支付宝")
-    pub app_name: String,
+    /// None 表示跳过应用检测，直接执行ADB操作
+    pub app_name: Option<String>,
     
     /// 目标按钮文本 (如 "我", "关注好友", "设置")  
     pub target_text: String,

@@ -44,17 +44,37 @@ src/modules/universal-ui-finder/
 
 ## 🚀 快速开始
 
+### 🎯 两种使用模式
+
+**本模块支持两种灵活的使用模式：**
+
+#### 📱 **模式一：指定应用模式** (完整功能)
+- ✅ 自动应用检测与切换
+- ✅ 应用状态验证
+- ✅ 智能预操作推断
+- 💡 适用于：跨应用操作、生产环境
+
+#### 🔧 **模式二：直接ADB模式** (快速测试)
+- ⚡ 跳过应用检测步骤
+- ⚡ 直接执行UI查找和点击
+- ⚡ 执行速度更快
+- 💡 适用于：UI测试、调试验证、当前界面操作
+
+---
+
 ### 基础使用
+
+#### 📱 指定应用模式
 
 ```rust
 use crate::modules::universal_ui_finder::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. 创建查找器实例
+    // 创建查找器实例
     let mut finder = UniversalUIFinder::new("adb", None)?;
     
-    // 2. 快速点击任意应用按钮
+    // 指定应用模式：自动检测小红书应用状态
     let result = finder.quick_click("小红书", "我").await?;
     
     println!("点击结果: {:?}", result.success);
@@ -62,12 +82,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 高级配置使用
+#### 🔧 直接ADB模式
 
 ```rust
-// 复杂UI查找配置
+// 直接ADB模式：跳过应用检测，直接操作当前界面
+let result = finder.direct_click("我", Some("下方导航栏")).await?;
+
+// 或者带预操作的直接模式
+let result = finder.direct_click_with_actions(
+    "关注好友", 
+    Some("左侧边栏"),
+    vec!["右滑展开".to_string(), "等待动画800ms".to_string()]
+).await?;
+```
+
+### 高级配置使用
+
+#### 📱 指定应用的复杂配置
+
+```rust
+// 完整的应用模式配置
 let request = FindRequest {
-    app_name: "小红书".to_string(),
+    app_name: Some("小红书".to_string()), // 🔑 指定应用，启用应用检测
     target_text: "关注好友".to_string(),
     position_hint: Some("左侧边栏".to_string()),
     pre_actions: Some(vec![
@@ -77,6 +113,23 @@ let request = FindRequest {
     user_guidance: true,  // 启用交互式错误处理
     timeout: Some(30),
     retry_count: Some(3),
+};
+
+let result = finder.find_and_click(request).await?;
+```
+
+#### 🔧 直接ADB的自定义配置
+
+```rust
+// 直接ADB模式：跳过应用检测
+let request = FindRequest {
+    app_name: None, // 🔑 设为None，跳过应用检测步骤
+    target_text: "搜索".to_string(),
+    position_hint: Some("顶部工具栏".to_string()),
+    pre_actions: Some(vec!["等待页面加载".to_string()]),
+    user_guidance: false, // 快速模式，禁用用户交互
+    timeout: Some(10),    // 更短的超时时间
+    retry_count: Some(1), // 更少的重试次数
 };
 
 let result = finder.find_and_click(request).await?;
@@ -229,8 +282,10 @@ finder.add_custom_app("自定义应用".to_string(), custom_config);
 
 #### `find_and_click(request: FindRequest)`
 - 完整的查找并点击流程
-- 支持所有配置选项
+- 支持所有配置选项（指定应用/直接ADB）
 - 包含详细日志输出
+
+#### 📱 **指定应用模式方法**
 
 #### `quick_click(app_name: &str, button_text: &str)` 
 - 快速点击方法
@@ -242,6 +297,18 @@ finder.add_custom_app("自定义应用".to_string(), custom_config);
 - 带位置提示
 - 自动预操作
 
+#### 🔧 **直接ADB模式方法** 🆕
+
+#### `direct_click(button_text: &str, position_hint: Option<&str>)`
+- ⚡ **跳过应用检测**，直接点击
+- 适用于当前界面操作
+- 执行速度更快
+
+#### `direct_click_with_actions(button_text: &str, position_hint: Option<&str>, pre_actions: Vec<String>)`
+- ⚡ **跳过应用检测** + 预操作支持
+- 支持复杂UI交互（如侧边栏展开）
+- 灵活自定义操作序列
+
 #### `batch_click(operations: Vec<BatchOperation>)`
 - 批量操作方法
 - 支持操作间隔
@@ -249,10 +316,10 @@ finder.add_custom_app("自定义应用".to_string(), custom_config);
 
 ### 配置结构
 
-#### `FindRequest`
+#### `FindRequest` 🆕 双模式支持
 ```rust
 pub struct FindRequest {
-    pub app_name: String,        // 应用名称
+    pub app_name: Option<String>, // 🔑 应用名称 (None=直接ADB模式)
     pub target_text: String,     // 目标文本
     pub position_hint: Option<String>, // 位置提示
     pub pre_actions: Option<Vec<String>>, // 预操作
@@ -261,6 +328,10 @@ pub struct FindRequest {
     pub retry_count: Option<u32>, // 重试次数
 }
 ```
+
+**🎯 app_name 字段说明：**
+- **`Some("小红书")`** → 📱 **指定应用模式**：执行应用检测、状态验证等完整流程
+- **`None`** → 🔧 **直接ADB模式**：跳过应用检测，直接执行UI查找和点击
 
 #### `ClickResult`
 ```rust

@@ -10,15 +10,10 @@
     "devUrl": "http://localhost:1421"
   },
   "bundle": {
-    "active": true,
+    "active": false,
     "targets": "all",
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon.png"
-    ],
-    "resources": [
-      "../platform-tools/*"
-    ],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "resources": ["../platform-tools/*"],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",

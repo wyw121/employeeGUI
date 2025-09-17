@@ -647,18 +647,21 @@ impl XiaohongshuAutomator {
             info!("✓ 检测到侧边栏特征");
         }
 
-        // 检查发现好友页面特征
-        if ui_dump.contains("发现好友") || (ui_dump.contains("通讯录") && ui_dump.contains("好友")) {
+        // 检查发现好友页面特征 (添加好友页面)
+        if ui_dump.contains("添加好友") || 
+           (ui_dump.contains("通讯录") && ui_dump.contains("你可能感兴趣的人")) ||
+           (ui_dump.contains("通讯录") && !ui_dump.contains("通讯录好友")) {
             key_elements.push("发现好友页面".to_string());
-            confidence_scores.push((PageState::DiscoverFriends, 0.85));
+            confidence_scores.push((PageState::DiscoverFriends, 0.92));
             info!("✓ 检测到发现好友页面特征");
         }
 
-        // 检查通讯录页面特征
-        if (ui_dump.contains("通讯录") || ui_dump.contains("联系人")) && 
-           (ui_dump.contains("关注") || ui_dump.contains("已关注") || ui_dump.contains("follow")) {
+        // 检查通讯录页面特征 (通讯录好友页面)
+        if ui_dump.contains("通讯录好友") || 
+           (ui_dump.contains("通讯录") && ui_dump.contains("wang")) ||
+           (ui_dump.contains("通讯录") && ui_dump.contains("小红薯")) {
             key_elements.push("通讯录关注列表".to_string());
-            confidence_scores.push((PageState::ContactsList, 0.9));
+            confidence_scores.push((PageState::ContactsList, 0.95));
             info!("✓ 检测到通讯录页面特征");
         }
 
@@ -798,9 +801,9 @@ impl XiaohongshuAutomator {
         let screen_info = self.get_screen_info().await?;
         info!("📱 设备屏幕信息: {}x{}", screen_info.0, screen_info.1);
         
-        // 计算屏幕适配比例（基于1080x1920标准分辨率）
+        // 计算屏幕适配比例（基于ADB实测的1080x2316 UI区域）
         let scale_x = screen_info.0 as f32 / 1080.0;
-        let scale_y = screen_info.1 as f32 / 1920.0;
+        let scale_y = screen_info.1 as f32 / 2316.0;
         info!("📏 屏幕适配比例: {:.3}x{:.3}", scale_x, scale_y);
         
         // 获取UI dump进行分析
@@ -813,16 +816,16 @@ impl XiaohongshuAutomator {
             return Ok(coords);
         }
         
-        // 策略2: 使用设备适配的候选坐标（按成功验证优先级排序）
+        // 策略2: 使用设备适配的候选坐标（按最新ADB XML解析验证优先级排序，基于1080x2316）
         let base_candidates = vec![
-            (270, 168, "发现好友位置1 - 验证成功坐标"),
-            (160, 280, "发现好友位置2 - 侧边栏上部"),
-            (160, 320, "发现好友位置3 - 侧边栏中部"),
-            (160, 360, "发现好友位置4 - 侧边栏中下部"),
-            (180, 300, "发现好友位置5 - 稍右偏移"),
-            (140, 340, "发现好友位置6 - 稍左偏移"),
-            (200, 250, "发现好友位置7 - 额外候选"),
-            (220, 400, "发现好友位置8 - 下方位置"),
+            (405, 288, "发现好友位置1 - 最新XML解析验证 bounds=[36,204][774,372] 中心点"),
+            (400, 290, "发现好友位置2 - XML解析备选坐标"),
+            (410, 285, "发现好友位置3 - 略右偏移"),
+            (405, 280, "发现好友位置4 - 上偏移"),
+            (405, 295, "发现好友位置5 - 下偏移"),
+            (200, 288, "发现好友位置6 - 左侧安全区域（防误点）"),
+            (160, 280, "发现好友位置7 - 侧边栏上部"),
+            (160, 320, "发现好友位置8 - 侧边栏中部"),
         ];
         
         // 应用屏幕适配
@@ -893,36 +896,94 @@ impl XiaohongshuAutomator {
     }
     
     /// 获取屏幕信息
-    async fn get_screen_info(&self) -> Result<(u32, u32)> {
+    pub async fn get_screen_info(&self) -> Result<(u32, u32)> {
         crate::screenshot_service::ScreenshotService::get_screen_resolution(&self.device_id).await
             .map_err(|e| anyhow::anyhow!("获取屏幕分辨率失败: {}", e))
     }
     
-    /// 获取自适应头像坐标
+    /// 获取自适应头像坐标 - 增强设备适配版
     async fn get_adaptive_avatar_coords(&self) -> Result<(i32, i32)> {
-        info!("🎯 计算自适应头像坐标...");
+        info!("🎯 智能计算自适应头像坐标...");
         
         let screen_info = self.get_screen_info().await?;
         let scale_x = screen_info.0 as f32 / 1080.0;
-        let scale_y = screen_info.1 as f32 / 1920.0;
+        let scale_y = screen_info.1 as f32 / 2316.0; // 使用UI可视区域高度
         
-        // 基准坐标（基于1080x1920标准分辨率）
-        let base_coords = (60, 100);
+        // 获取UI dump进行动态分析
+        let ui_dump = self.get_ui_dump().await?;
+        info!("📱 UI内容长度: {} 字符", ui_dump.len());
         
-        // 应用适配
-        let adapted_x = (base_coords.0 as f32 * scale_x).round() as i32;
-        let adapted_y = (base_coords.1 as f32 * scale_y).round() as i32;
+        // 策略1: 从UI中查找菜单按钮
+        if let Some(coords) = self.parse_menu_from_ui(&ui_dump).await {
+            info!("✅ 从UI动态解析到菜单按钮坐标: ({}, {})", coords.0, coords.1);
+            return Ok(coords);
+        }
         
-        // 确保坐标在合理范围内
-        let final_x = adapted_x.max(30).min(200);  // 头像通常在左上角
-        let final_y = adapted_y.max(50).min(300);  // 头像通常在状态栏下方
+        // 策略2: 多候选坐标适配（基于不同设备的实测数据）
+        let base_candidates = vec![
+            // 标准位置 - 基于ADB实测
+            (81, 150, "标准菜单位置 - 基于XML解析 bounds=[27,96][135,204]"),
+            (60, 100, "原版头像位置 - 旧设备验证"),
+            (81, 120, "菜单按钮上偏移"),
+            (81, 180, "菜单按钮下偏移"),
+            (50, 150, "左偏移菜单位置"),
+            (100, 150, "右偏移菜单位置"),
+        ];
         
-        info!("📱 屏幕: {}x{}, 适配比例: {:.3}x{:.3}", 
+        // 应用屏幕适配
+        let adapted_candidates: Vec<(i32, i32, &str)> = base_candidates.into_iter()
+            .map(|(x, y, desc)| {
+                let adapted_x = (x as f32 * scale_x).round() as i32;
+                let adapted_y = (y as f32 * scale_y).round() as i32;
+                // 确保坐标在合理范围内
+                let final_x = adapted_x.max(20).min(200);
+                let final_y = adapted_y.max(50).min(300);
+                (final_x, final_y, desc)
+            })
+            .collect();
+        
+        info!("📱 屏幕: {}x{} (UI区域), 适配比例: {:.3}x{:.3}", 
               screen_info.0, screen_info.1, scale_x, scale_y);
-        info!("🔄 头像坐标适配: ({},{}) -> ({},{}) -> ({},{})", 
-              base_coords.0, base_coords.1, adapted_x, adapted_y, final_x, final_y);
+        info!("🎯 准备测试 {} 个菜单按钮候选位置:", adapted_candidates.len());
+        
+        for (i, (x, y, desc)) in adapted_candidates.iter().enumerate() {
+            info!("   候选{}: {} -> ({}, {})", i + 1, desc, x, y);
+        }
+        
+        // 返回第一个候选坐标（最可能的位置）
+        let (final_x, final_y, desc) = adapted_candidates[0];
+        info!("✓ 选择菜单按钮坐标: {} -> ({}, {})", desc, final_x, final_y);
         
         Ok((final_x, final_y))
+    }
+
+    /// 从UI内容中动态解析菜单按钮坐标
+    async fn parse_menu_from_ui(&self, ui_dump: &str) -> Option<(i32, i32)> {
+        info!("🔧 动态解析UI XML内容查找菜单按钮...");
+        
+        // 查找包含"菜单"内容描述的XML节点
+        let lines: Vec<&str> = ui_dump.lines().collect();
+        
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("菜单") || line.contains("content-desc=\"菜单\"") {
+                info!("📍 找到包含'菜单'的行 {}: {}", i, line.trim());
+                
+                // 尝试从当前行解析bounds属性
+                if let Some(bounds) = self.extract_bounds_from_line(line) {
+                    let center_x = (bounds.0 + bounds.2) / 2;
+                    let center_y = (bounds.1 + bounds.3) / 2;
+                    info!("✅ 解析到菜单边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                    
+                    // 验证坐标合理性（菜单按钮通常在左上角）
+                    if center_x > 20 && center_x < 200 && center_y > 50 && center_y < 300 {
+                        return Some((center_x, center_y));
+                    }
+                }
+            }
+        }
+        
+        info!("❌ 未能从UI解析到菜单按钮坐标");
+        None
     }
 
     /// 从UI内容中解析发现好友按钮坐标
@@ -1036,11 +1097,11 @@ impl XiaohongshuAutomator {
     async fn find_contacts_option_coords(&self) -> Result<(i32, i32)> {
         info!("🔍 智能查找通讯录选项坐标（增强设备适配版）...");
         
-        // 获取屏幕信息进行适配（使用ADB实测的基准分辨率）
+        // 获取屏幕信息进行适配（使用ADB实测的基准分辨率1080x2316）
         let screen_info = self.get_screen_info().await?;
         let scale_x = screen_info.0 as f32 / 1080.0;
-        let scale_y = screen_info.1 as f32 / 2400.0; // 更新为实测的基准分辨率
-        info!("📏 屏幕分辨率: {}x{}, 适配比例: {:.3}x{:.3} (基于ADB实测基准2400)", 
+        let scale_y = screen_info.1 as f32 / 2316.0; // 使用实际UI可视区域2316而非物理分辨率2400
+        info!("📏 屏幕分辨率: {}x{}, 适配比例: {:.3}x{:.3} (基于ADB实测UI区域1080x2316)", 
               screen_info.0, screen_info.1, scale_x, scale_y);
         
         // 获取UI dump
@@ -1058,14 +1119,14 @@ impl XiaohongshuAutomator {
             return Ok(coords);
         }
         
-        // 策略2: 使用ADB实测验证的精确坐标（2024年12月最新测试）
+        // 策略2: 基于2025年9月真机测试的精确坐标（设备A2TB6R3308000938验证通过）
         let base_candidates = vec![
-            // ADB实测精确坐标（基于1080x2400分辨率验证）
-            (204, 363, "ADB实测坐标 - 1080x2400设备100%验证成功"),
-            (204, 438, "通讯录文本中心坐标 - ADB实测"),
-            (204, 327, "通讯录图标中心坐标 - ADB实测"),
-            (200, 350, "接近实测的原始候选坐标"),
-            (194, 205, "旧版参考坐标 - 已过时"),
+            // 真机ADB测试验证的精确坐标: bounds="[48,228][360,497]", center=(204,362)
+            (204, 362, "真机测试验证：通讯录按钮精确位置 - bounds=[48,228][360,497]"),
+            (204, 327, "真机微调：通讯录按钮上偏移 - 避免重叠区域"),
+            (204, 397, "真机微调：通讯录按钮下偏移 - 安全边缘"),
+            (180, 362, "真机备选：通讯录左偏移位置 - 防止误点"),
+            (228, 362, "真机备选：通讯录右偏移位置 - 中心安全区"),
             
             // 异形屏适配（长屏设备）
             (200, 280, "通讯录位置5 - 长屏中上部"),
@@ -1149,27 +1210,89 @@ impl XiaohongshuAutomator {
         Ok((default_coords.0, default_coords.1))
     }
 
-    /// 从UI内容中解析通讯录选项坐标
-    async fn parse_contacts_from_ui(&self, ui_dump: &str) -> Option<(i32, i32)> {
-        info!("🔧 解析UI XML内容查找通讯录选项...");
+    /// 从UI内容中解析通讯录选项坐标 - 基于真机测试的增强版
+    pub async fn parse_contacts_from_ui(&self, ui_dump: &str) -> Option<(i32, i32)> {
+        info!("🔧 基于真机测试结果的智能UI解析查找通讯录选项...");
         
-        // 查找包含"通讯录"或"联系人"文本的XML节点
+        // 优先策略：查找添加好友页面中的通讯录按钮
+        // 实测：通讯录按钮位于添加好友页面，bounds="[48,228][360,484]"
+        if ui_dump.contains("添加好友") {
+            info!("✅ 检测到添加好友页面，查找通讯录按钮...");
+            
+            // 查找包含"通讯录"文本且可点击的元素
+            let lines: Vec<&str> = ui_dump.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
+                if line.contains("text=\"通讯录\"") && line.contains("clickable=\"") {
+                    info!("📍 找到通讯录文本行 {}: {}", i, line.trim());
+                    
+                    // 检查前后几行的bounds信息
+                    for j in i.saturating_sub(5)..=(i + 5).min(lines.len() - 1) {
+                        let check_line = lines[j];
+                        if let Some(bounds) = self.extract_bounds_from_line(check_line) {
+                            let center_x = (bounds.0 + bounds.2) / 2;
+                            let center_y = (bounds.1 + bounds.3) / 2;
+                            info!("✅ 发现相关bounds [{},{}][{},{}], 中心点: ({}, {})", 
+                                  bounds.0, bounds.1, bounds.2, bounds.3, center_x, center_y);
+                            
+                            // 验证是否为通讯录按钮的合理位置
+                            // 实测：通讯录按钮中心点约为(204, 356)，左侧上部位置
+                            if center_x > 100 && center_x < 400 && center_y > 200 && center_y < 600 {
+                                info!("🎯 找到通讯录按钮！位置: ({}, {})", center_x, center_y);
+                                return Some((center_x, center_y));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 备用策略：通用文本搜索
+        let search_patterns = vec!["通讯录", "联系人", "contacts", "phone", "通信录"];
         let lines: Vec<&str> = ui_dump.lines().collect();
         
+        for pattern in &search_patterns {
+            for (i, line) in lines.iter().enumerate() {
+                if line.contains(pattern) {
+                    info!("📍 找到包含'{}'的行 {}: {}", pattern, i, line.trim());
+                    
+                    // 尝试从当前行或相邻行解析bounds属性
+                    for check_line in &lines[i.saturating_sub(3)..=(i + 3).min(lines.len() - 1)] {
+                        if let Some(bounds) = self.extract_bounds_from_line(check_line) {
+                            let center_x = (bounds.0 + bounds.2) / 2;
+                            let center_y = (bounds.1 + bounds.3) / 2;
+                            info!("✅ 动态解析到边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
+                            
+                            // 基于真机测试优化坐标验证：实测结果 bounds="[48,228][360,484]", center=(204,356)
+                            // 通讯录按钮位于左侧中上部位置，坐标范围相对稳定
+                            if center_x > 30 && center_x < 600 && center_y > 200 && center_y < 1000 {
+                                // 真机验证：通讯录按钮位置稳定，不在屏幕底部导航栏
+                                if center_y < 2000 {
+                                    info!("🎯 动态定位成功！通讯录按钮位置: ({}, {})", center_x, center_y);
+                                    return Some((center_x, center_y));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 策略2: 查找可能的横向布局元素（发现好友页面通常有横向滚动的选项）
+        info!("🔍 尝试查找横向布局中的通讯录选项...");
         for (i, line) in lines.iter().enumerate() {
-            if line.contains("通讯录") || line.contains("联系人") {
-                info!("📍 找到包含'通讯录/联系人'的行 {}: {}", i, line.trim());
-                
-                // 尝试从当前行或相邻行解析bounds属性
-                for check_line in &lines[i.saturating_sub(2)..=(i + 2).min(lines.len() - 1)] {
-                    if let Some(bounds) = self.extract_bounds_from_line(check_line) {
-                        let center_x = (bounds.0 + bounds.2) / 2;
-                        let center_y = (bounds.1 + bounds.3) / 2;
-                        info!("✅ 解析到边界: {:?}, 中心点: ({}, {})", bounds, center_x, center_y);
-                        
-                        // 验证坐标合理性
-                        if center_x > 50 && center_x < 500 && center_y > 50 && center_y < 800 {
-                            return Some((center_x, center_y));
+            if line.contains("HorizontalScrollView") || line.contains("LinearLayout") {
+                // 检查周围是否有可点击的元素
+                for check_line in &lines[i..=(i + 10).min(lines.len() - 1)] {
+                    if check_line.contains("clickable=\"true\"") {
+                        if let Some(bounds) = self.extract_bounds_from_line(check_line) {
+                            let center_x = (bounds.0 + bounds.2) / 2;
+                            let center_y = (bounds.1 + bounds.3) / 2;
+                            
+                            // 检查是否在发现好友页面的选项区域
+                            if center_x > 50 && center_x < 400 && center_y > 200 && center_y < 600 {
+                                info!("🎯 找到可能的通讯录选项: 边界={:?}, 中心=({}, {})", bounds, center_x, center_y);
+                                return Some((center_x, center_y));
+                            }
                         }
                     }
                 }
@@ -1810,7 +1933,7 @@ impl XiaohongshuAutomator {
     }
 
     /// 获取UI dump（带重试机制）
-    async fn get_ui_dump(&self) -> Result<String> {
+    pub async fn get_ui_dump(&self) -> Result<String> {
         const MAX_RETRIES: u32 = 3;
         
         for attempt in 1..=MAX_RETRIES {

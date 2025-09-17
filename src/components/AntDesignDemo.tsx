@@ -29,6 +29,7 @@ import {
 import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
+import SmartElementFinderTestPage from '../pages/SmartElementFinderTestPage'; // 智能元素查找测试页面
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
@@ -93,6 +94,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'smart-script-builder',
       icon: <RobotOutlined />,
       label: '智能脚本构建器',
+    },
+    {
+      key: 'smart-element-finder',
+      icon: <AimOutlined />,
+      label: '智能元素查找',
     },
     {
       key: 'template-library',
@@ -338,6 +344,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'smart-script-builder' && (
               <SmartScriptBuilderPage />
+            )}
+
+            {selectedKey === 'smart-element-finder' && (
+              <SmartElementFinderTestPage />
             )}
 
             {selectedKey === 'template-library' && (

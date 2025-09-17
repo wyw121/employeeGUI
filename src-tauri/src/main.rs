@@ -22,6 +22,7 @@ use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_
 use services::safe_adb_manager::*;
 use services::script_executor::*;
 use services::smart_app_service::*;
+use services::smart_element_finder_service::{smart_element_finder, click_detected_element};
 use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
@@ -791,7 +792,10 @@ fn main() {
             // 导航栏检测功能
             detect_navigation_bar,   // 检测导航栏
             click_navigation_button, // 点击导航按钮
-            get_navigation_configs   // 获取预设配置
+            get_navigation_configs,  // 获取预设配置
+            // 智能元素查找功能
+            smart_element_finder,    // 智能元素查找
+            click_detected_element   // 点击检测到的元素
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

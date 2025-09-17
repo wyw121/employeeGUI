@@ -18,6 +18,7 @@ use services::contact_service::*;
 use services::crash_debugger::*;
 use services::employee_service::{Employee, EmployeeService};
 use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
+use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_button, get_navigation_configs};
 use services::safe_adb_manager::*;
 use services::script_executor::*;
 use services::smart_app_service::*;
@@ -786,7 +787,11 @@ fn main() {
             search_device_apps,      // 搜索设备应用
             launch_device_app,       // 启动应用
             get_cached_device_apps,  // 获取缓存的应用列表
-            get_popular_apps         // 获取常用应用列表
+            get_popular_apps,        // 获取常用应用列表
+            // 导航栏检测功能
+            detect_navigation_bar,   // 检测导航栏
+            click_navigation_button, // 点击导航按钮
+            get_navigation_configs   // 获取预设配置
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

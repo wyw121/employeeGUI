@@ -2,6 +2,7 @@ pub mod adb_device_tracker;
 pub mod adb_service;
 pub mod adb_session_manager;  // 新增：ADB会话管理器
 pub mod adb_shell_session;
+pub mod navigation_bar_detector;  // 新增：通用导航栏检测器
 pub mod app_state_detector;
 pub mod app_detection_framework;  // 新增：应用检测框架
 pub mod auth_service;

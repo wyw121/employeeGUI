@@ -58,6 +58,7 @@ export interface ElementFinderResult {
 interface SmartNavigationStepBuilderProps {
     deviceId?: string;
     onStepGenerated: (step: any) => void; // 生成智能脚本步骤的回调
+    onConfigChange?: (config: { app: string; navType: string }) => void; // 新增：配置变化回调
 }
 
 // 导航栏类型配置
@@ -115,7 +116,8 @@ const COMMON_BUTTONS = {
 
 const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
   deviceId,
-  onStepGenerated
+  onStepGenerated,
+  onConfigChange
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -134,6 +136,61 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
       click_action: 'single_tap'
     });
   }, []);
+
+  // 监听配置变化，通知父组件
+  useEffect(() => {
+    const formValues = form.getFieldsValue();
+    
+    // 操作类型映射
+    const actionTypeMap = {
+      'single_tap': '单击',
+      'double_tap': '双击', 
+      'long_press': '长按'
+    };
+    const actionType = actionTypeMap[formValues.click_action as keyof typeof actionTypeMap] || '点击';
+    const targetButton = formValues.target_button || '我';
+    
+    // 组合完整的步骤描述：操作方式 + 位置类型 + 目标按钮
+    const detailedDescription = `${actionType} ${selectedNavType} "${targetButton}"`;
+    
+    console.log('📊 向导模式配置变化:', { 
+      app: selectedApp, 
+      navType: detailedDescription 
+    }); // 调试信息
+    
+    onConfigChange?.({
+      app: selectedApp,
+      navType: detailedDescription
+    });
+  }, [selectedApp, selectedNavType, form, onConfigChange]);
+
+  // 表单值变化时也通知配置更新
+  const handleFormValuesChange = () => {
+    // 延迟一点点让表单值更新
+    setTimeout(() => {
+      const formValues = form.getFieldsValue();
+      
+      const actionTypeMap = {
+        'single_tap': '单击',
+        'double_tap': '双击', 
+        'long_press': '长按'
+      };
+      const actionType = actionTypeMap[formValues.click_action as keyof typeof actionTypeMap] || '点击';
+      const targetButton = formValues.target_button || '我';
+      
+      const detailedDescription = `${actionType} ${selectedNavType} "${targetButton}"`;
+      
+      console.log('📊 向导模式表单变化:', { 
+        app: selectedApp, 
+        navType: detailedDescription 
+      }); // 调试信息
+      
+      onConfigChange?.({
+        app: selectedApp,
+        navType: detailedDescription
+      });
+    }, 0);
+  };
 
   // 获取当前按钮选项
   const getCurrentButtons = () => {
@@ -225,18 +282,27 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
       type: 'smart_navigation',
       name: `导航操作: ${config.target_button}`,
       description: `在${selectedApp}的${selectedNavType}中查找并${formValues.click_action === 'single_tap' ? '点击' : formValues.click_action === 'long_press' ? '长按' : '双击'}"${config.target_button}"`,
-      config: {
-        app: selectedApp,
+      // 为表单自动填充提供必要信息
+      parameters: {
+        app_name: selectedApp,
         navigation_type: selectedNavType,
         target_button: config.target_button,
         click_action: config.click_action,
-        detected_element: detectionResult.target_element
-      },
-      // 用于脚本执行的完整配置
-      execution_config: config
+        detected_element: detectionResult.target_element,
+        // 传递完整配置
+        config: {
+          app: selectedApp,
+          navigation_type: selectedNavType,
+          target_button: config.target_button,
+          click_action: config.click_action,
+          detected_element: detectionResult.target_element
+        },
+        execution_config: config
+      }
     };
 
     onStepGenerated(step);
+    console.log('🎯 SmartNavigationStepBuilder 调用 onStepGenerated:', step); // 调试信息
     message.success(`配置已确认，请点击底部"确定添加"按钮完成步骤添加`);
   };
 
@@ -251,7 +317,7 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
       }
       size="small"
     >
-      <Form form={form} layout="vertical">
+      <Form form={form} layout="vertical" onValuesChange={handleFormValuesChange}>
         {/* 第一步：选择导航栏类型 */}
         <div>
           <Text strong>1. 选择导航栏类型</Text>

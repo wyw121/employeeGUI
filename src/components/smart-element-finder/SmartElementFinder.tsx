@@ -39,6 +39,7 @@ export interface ElementFinderResult {
 interface SmartElementFinderProps {
     deviceId: string;
     onStepCreated?: (step: any) => void;
+    onConfigChange?: (config: { app: string; navType: string }) => void; // 新增：配置变化回调
 }
 
 // 预设配置
@@ -77,7 +78,7 @@ const NAVIGATION_PRESETS = {
     }
 };
 
-const SmartElementFinder: React.FC<SmartElementFinderProps> = ({ deviceId, onStepCreated }) => {
+const SmartElementFinder: React.FC<SmartElementFinderProps> = ({ deviceId, onStepCreated, onConfigChange }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [detectionResult, setDetectionResult] = useState<ElementFinderResult | null>(null);
@@ -103,6 +104,41 @@ const SmartElementFinder: React.FC<SmartElementFinderProps> = ({ deviceId, onSte
             setCustomPatterns(preset.button_patterns.join(', '));
         }
     }, [selectedPreset, form]);
+
+    // 监听配置变化，通知父组件
+    useEffect(() => {
+        const appName = selectedPreset === '自定义配置' 
+            ? '专业模式' 
+            : selectedPreset.split('_')[0] || '未知应用';
+        const positionTypeMap = {
+            'bottom': '下方导航栏',
+            'top': '顶部导航栏', 
+            'side': '侧边导航栏',
+            'floating': '浮动导航栏'
+        };
+        const navType = positionTypeMap[config.position_type] || '导航栏';
+        
+        // 操作类型映射
+        const actionTypeMap = {
+            'single_tap': '单击',
+            'double_tap': '双击', 
+            'long_press': '长按'
+        };
+        const actionType = actionTypeMap[config.click_action] || '点击';
+        
+        // 组合完整的步骤描述：操作方式 + 位置类型 + 目标按钮
+        const detailedDescription = `${actionType} ${navType} "${config.target_button}"`;
+        
+        console.log('📊 专业模式配置变化:', { 
+            app: appName, 
+            navType: detailedDescription 
+        }); // 调试信息
+        
+        onConfigChange?.({
+            app: appName,
+            navType: detailedDescription
+        });
+    }, [selectedPreset, config.position_type, config.click_action, config.target_button, onConfigChange]);
 
     // 实时检测导航栏
     const handleDetection = async () => {
@@ -189,12 +225,34 @@ const SmartElementFinder: React.FC<SmartElementFinderProps> = ({ deviceId, onSte
             return;
         }
 
+        // 从预设名称中提取应用名称（如 "小红书_底部导航" -> "小红书"）
+        const appName = selectedPreset === '自定义配置' 
+            ? '专业模式' 
+            : selectedPreset.split('_')[0] || '未知应用';
+
+        // 从position_type转换为中文描述
+        const positionTypeMap = {
+            'bottom': '下方导航栏',
+            'top': '顶部导航栏', 
+            'side': '侧边导航栏',
+            'floating': '浮动导航栏'
+        };
+        const navigationTypeDesc = positionTypeMap[config.position_type] || '导航栏';
+
         const stepData = {
             type: 'smart_element_finder',
             name: `智能查找-${config.target_button}`,
-            description: `在${config.position_type}导航栏中查找并点击"${config.target_button}"`,
-            config: config,
-            target_element: detectionResult.target_element,
+            description: `在${navigationTypeDesc}中查找并点击"${config.target_button}"`,
+            // 为表单自动填充提供必要信息
+            parameters: {
+                app_name: appName,
+                navigation_type: navigationTypeDesc,
+                target_button: config.target_button,
+                click_action: config.click_action,
+                detected_element: detectionResult.target_element,
+                config: config,
+                target_element: detectionResult.target_element
+            }
         };
 
         onStepCreated?.(stepData);

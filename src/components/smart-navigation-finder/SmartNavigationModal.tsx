@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Modal, Tabs, Typography, Card, Alert, Button, Space, message } from 'antd';
 import {
   PartitionOutlined,
@@ -17,23 +17,37 @@ const { TabPane } = Tabs;
 
 interface SmartNavigationModalProps {
   visible: boolean;
-  onClose: () => void;
+  onClose: (finalConfig?: {app_name?: string, navigation_type?: string}) => void; // 修改：允许传递最终配置
   deviceId?: string;
   onStepGenerated: (step: SmartScriptStep) => void;
+  onConfigurationChange?: (config: {app_name?: string, navigation_type?: string}) => void;
 }
 
 export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
   visible,
   onClose,
   deviceId = '',
-  onStepGenerated
+  onStepGenerated,
+  onConfigurationChange
 }) => {
   const [activeTab, setActiveTab] = useState<string>('wizard');
   const [hasValidStep, setHasValidStep] = useState<boolean>(false);
   const [pendingStep, setPendingStep] = useState<SmartScriptStep | null>(null);
+  
+  // 用于收集当前配置状态的ref
+  const wizardConfigRef = useRef<{
+    app: string;
+    navType: string;
+  } | null>(null);
+  const professionalConfigRef = useRef<{
+    app: string;
+    navType: string;
+  } | null>(null);
 
   // 处理向导模式生成的步骤
   const handleWizardStepGenerated = useCallback((stepConfig: any) => {
+    console.log('🔍 向导模式步骤配置:', stepConfig); // 调试信息
+    
     const smartStep: SmartScriptStep = {
       id: Date.now().toString(),
       name: `智能导航 - ${stepConfig.description}`,
@@ -56,8 +70,17 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
 
     setPendingStep(smartStep);
     setHasValidStep(true);
+    
+    // 通知配置变化 - 修复数据访问路径
+    const configChange = {
+      app_name: stepConfig.parameters?.app_name,
+      navigation_type: stepConfig.parameters?.navigation_type
+    };
+    console.log('📤 发送配置变化:', configChange); // 调试信息
+    onConfigurationChange?.(configChange);
+    
     message.success('步骤配置完成，点击确定添加到脚本');
-  }, []);
+  }, [onConfigurationChange]);
 
   // 处理专业模式生成的步骤
   const handleProfessionalStepGenerated = useCallback((stepConfig: any) => {
@@ -82,34 +105,66 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
 
     setPendingStep(smartStep);
     setHasValidStep(true);
+    
+    // 通知配置变化  
+    onConfigurationChange?.({
+      app_name: stepConfig.parameters?.app_name,
+      navigation_type: stepConfig.parameters?.navigation_type
+    });
+    
     message.success('步骤配置完成，点击确定添加到脚本');
-  }, []);
+  }, [onConfigurationChange]);
+
+  // 统一的关闭处理函数，直接从当前UI状态提取配置
+  const applyLastConfigAndClose = useCallback(() => {
+    console.log('🚀 统一关闭处理，活跃Tab:', activeTab); // 调试信息
+    
+    let finalConfig = null;
+    
+    // 根据当前活跃的Tab提取配置
+    if (activeTab === 'wizard' && wizardConfigRef.current) {
+      finalConfig = {
+        app_name: wizardConfigRef.current.app,
+        navigation_type: wizardConfigRef.current.navType
+      };
+    } else if (activeTab === 'professional' && professionalConfigRef.current) {
+      finalConfig = {
+        app_name: professionalConfigRef.current.app,
+        navigation_type: professionalConfigRef.current.navType
+      };
+    }
+    
+    console.log('📤 提取到的最终配置:', finalConfig); // 调试信息
+    
+    // 重置状态
+    setPendingStep(null);
+    setHasValidStep(false);
+    setActiveTab('wizard');
+    
+    // 调用关闭回调，传递最终配置
+    onClose(finalConfig);
+  }, [activeTab, onClose]);
 
   // 确定按钮处理
   const handleConfirm = useCallback(() => {
     if (pendingStep) {
       onStepGenerated(pendingStep);
-      onClose();
+      applyLastConfigAndClose();
       message.success(`已添加导航步骤: ${pendingStep.name}`);
     } else {
       message.warning('请先完成步骤配置');
     }
-  }, [pendingStep, onStepGenerated, onClose]);
+  }, [pendingStep, onStepGenerated, applyLastConfigAndClose]);
 
-  // 取消按钮处理
+  // 取消按钮处理 - 也应用最后配置
   const handleCancel = useCallback(() => {
-    setPendingStep(null);
-    setHasValidStep(false);
-    onClose();
-  }, [onClose]);
+    applyLastConfigAndClose();
+  }, [applyLastConfigAndClose]);
 
-  // 重置状态当模态框关闭时
+  // 重置状态当模态框关闭时 - 也应用最后配置
   const handleModalClose = useCallback(() => {
-    setPendingStep(null);
-    setHasValidStep(false);
-    setActiveTab('wizard');
-    onClose();
-  }, [onClose]);
+    applyLastConfigAndClose();
+  }, [applyLastConfigAndClose]);
 
   return (
     <Modal
@@ -176,6 +231,10 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
           <SmartNavigationStepBuilder 
             onStepGenerated={handleWizardStepGenerated}
             deviceId={deviceId}
+            onConfigChange={(config) => {
+              console.log('📥 接收向导模式配置变化:', config); // 调试信息
+              wizardConfigRef.current = config;
+            }}
           />
         </TabPane>
 
@@ -202,6 +261,10 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
           <SmartElementFinder
             deviceId={deviceId}
             onStepCreated={handleProfessionalStepGenerated}
+            onConfigChange={(config) => {
+              console.log('📥 接收专业模式配置变化:', config); // 调试信息
+              professionalConfigRef.current = config;
+            }}
           />
         </TabPane>
       </Tabs>

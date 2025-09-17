@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAdb } from '../application/hooks/useAdb';
 import { DeviceStatus } from '../domain/adb/entities/Device';
 import {
@@ -279,6 +279,7 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [currentDeviceId, setCurrentDeviceId] = useState<string>(''); // 当前选择的设备ID
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
+  const [lastNavigationConfig, setLastNavigationConfig] = useState<{app_name?: string, navigation_type?: string} | null>(null); // 记录最后的导航配置
   const [executorConfig, setExecutorConfig] = useState<ExecutorConfig>({
     default_timeout_ms: 10000,
     default_retry_count: 3,
@@ -305,6 +306,35 @@ const SmartScriptBuilderPage: React.FC = () => {
       }
     }
   }, [devices, currentDeviceId]);
+
+  // 处理智能导航配置变化，强制覆盖表单字段
+  const handleNavigationConfigChange = useCallback((config: {app_name?: string, navigation_type?: string}) => {
+    console.log('📥 接收到配置变化:', config); // 调试信息
+    setLastNavigationConfig(config);
+  }, []);
+
+  // 处理智能导航模态框关闭，强制应用配置
+  const handleNavigationModalClose = useCallback((finalConfig?: {app_name?: string, navigation_type?: string}) => {
+    console.log('🔄 模态框关闭，最后配置:', lastNavigationConfig, '最终配置:', finalConfig); // 调试信息
+    setShowNavigationModal(false);
+    
+    // 优先使用传入的最终配置，否则使用保存的配置
+    const configToApply = finalConfig || lastNavigationConfig;
+    
+    // 如果有配置信息，强制覆盖表单字段
+    if (configToApply) {
+      const appName = configToApply.app_name || '智能导航';
+      const navType = configToApply.navigation_type || '导航操作';
+      
+      console.log('💾 强制覆盖表单字段:', { appName, navType }); // 调试信息
+      
+      // 强制覆盖，不管用户是否已经输入
+      form.setFieldValue('name', appName);
+      form.setFieldValue('description', `导航栏选择 ${navType}`);
+      
+      message.success(`已自动填充步骤信息：${appName} - 导航栏选择 ${navType}`);
+    }
+  }, [lastNavigationConfig, form]);
 
   // 添加新步骤
   const handleAddStep = () => {
@@ -1092,12 +1122,19 @@ const SmartScriptBuilderPage: React.FC = () => {
       {/* 智能导航配置模态框 */}
       <SmartNavigationModal
         visible={showNavigationModal}
-        onClose={() => setShowNavigationModal(false)}
+        onClose={handleNavigationModalClose}
+        onConfigurationChange={handleNavigationConfigChange}
         onStepGenerated={(step) => {
+          // 强制覆盖表单字段（确定添加时）
+          const appName = step.parameters?.app_name || '智能导航';
+          const navType = step.parameters?.navigation_type || '导航操作';
+          form.setFieldValue('name', appName);
+          form.setFieldValue('description', `导航栏选择 ${navType}`);
+          
           // 添加生成的步骤到脚本中
           setSteps(prev => [...prev, step]);
           setShowNavigationModal(false);
-          message.success(`已添加导航步骤: ${step.name}`);
+          message.success(`已添加导航步骤: ${step.name}，已强制覆盖表单字段`);
         }}
         deviceId={currentDeviceId}
       />

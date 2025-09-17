@@ -6,6 +6,10 @@ mod services;
 mod utils;
 mod xml_judgment_service;
 
+// 导入必要的模块和 trait
+use services::xiaohongshu_automator::screen_utils::ScreenUtilsExt;
+use services::xiaohongshu_automator::navigation::NavigationExt;
+
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 

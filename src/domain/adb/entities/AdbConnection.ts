@@ -31,7 +31,9 @@ export class AdbConnection {
    */
   needsReconnection(): boolean {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    return this.lastCheck < fiveMinutesAgo || this.status === ConnectionStatus.ERROR;
+    return (
+      this.lastCheck < fiveMinutesAgo || this.status === ConnectionStatus.ERROR
+    );
   }
 
   /**
@@ -67,10 +69,10 @@ export class AdbConnection {
  * 连接状态枚举
  */
 export enum ConnectionStatus {
-  DISCONNECTED = 'disconnected',
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  ERROR = 'error'
+  DISCONNECTED = "disconnected",
+  CONNECTING = "connecting",
+  CONNECTED = "connected",
+  ERROR = "error",
 }
 
 /**
@@ -83,14 +85,32 @@ export class AdbConfig {
     public readonly ldPlayerPath?: string,
     public readonly autoDetectLdPlayer: boolean = true,
     public readonly serverPort: number = 5037,
-    public readonly commandTimeout: number = 30000
+    public readonly commandTimeout: number = 300000,
+    public readonly enableDeviceWatching: boolean = true,
+    public readonly deviceWatchInterval: number = 300000 // 30秒轮询间隔
   ) {}
 
   /**
    * 创建默认配置
    */
   static default(): AdbConfig {
-    return new AdbConfig('auto');
+    return new AdbConfig("auto");
+  }
+
+  /**
+   * 创建无设备监听的静默配置
+   */
+  static silent(): AdbConfig {
+    return new AdbConfig(
+      "auto",
+      true,
+      undefined,
+      true,
+      5037,
+      30000,
+      false, // 禁用设备监听
+      30000
+    );
   }
 
   /**
@@ -103,8 +123,25 @@ export class AdbConfig {
       this.ldPlayerPath,
       this.autoDetectLdPlayer,
       this.serverPort,
-      this.commandTimeout
+      this.commandTimeout,
+      this.enableDeviceWatching,
+      this.deviceWatchInterval
+    );
+  }
+
+  /**
+   * 创建配置副本并禁用设备监听
+   */
+  withDeviceWatchingDisabled(): AdbConfig {
+    return new AdbConfig(
+      this.adbPath,
+      this.autoDetectPath,
+      this.ldPlayerPath,
+      this.autoDetectLdPlayer,
+      this.serverPort,
+      this.commandTimeout,
+      false, // 禁用设备监听
+      this.deviceWatchInterval
     );
   }
 }
-

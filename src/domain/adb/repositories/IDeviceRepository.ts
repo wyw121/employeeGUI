@@ -48,6 +48,6 @@ export interface IDeviceRepository {
   /**
    * 监听设备变化
    */
-  watchDeviceChanges(callback: (devices: Device[]) => void): () => void;
+  watchDeviceChanges(callback: (devices: Device[]) => void, intervalMs?: number): () => void;
 }
 

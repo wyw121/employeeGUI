@@ -122,12 +122,12 @@ export class DeviceManagerService {
   /**
    * 监听设备变化
    */
-  watchDeviceChanges(callback: (devices: Device[]) => void): () => void {
+  watchDeviceChanges(callback: (devices: Device[]) => void, intervalMs?: number): () => void {
     return this.deviceRepository.watchDeviceChanges((devices) => {
       // 检测设备状态变化并发送相应事件
       this.handleDeviceChanges(devices);
       callback(devices);
-    });
+    }, intervalMs);
   }
 
   /**

@@ -8,6 +8,8 @@ use crate::services::xiaohongshu_automator::{
     XiaohongshuAutomator, AppStatusResult, NavigationResult, 
     XiaohongshuFollowOptions, XiaohongshuFollowResult
 };
+use crate::services::xiaohongshu_automator::app_status::AppStatusExt;
+use crate::services::xiaohongshu_automator::navigation::NavigationExt;
 use serde::{Deserialize, Serialize};
 
 // 定义本地的ImportAndFollowResult结构，使用正确的类型
@@ -128,7 +130,7 @@ pub async fn import_vcf_contacts_async_safe(
 
     // 使用VcfImporter直接导入VCF文件
     info!("📋 创建VcfImporter实例...");
-    let importer = VcfImporter::new(deviceId.clone());
+    let _importer = VcfImporter::new(deviceId.clone());
 
     let result = tokio::task::spawn_blocking(move || {
         tokio::runtime::Handle::current().block_on(async move {

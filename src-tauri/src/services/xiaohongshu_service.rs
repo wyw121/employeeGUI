@@ -8,6 +8,10 @@ use super::xiaohongshu_automator::{
     AppStatusResult, NavigationResult, XiaohongshuAutomator, XiaohongshuFollowOptions,
     XiaohongshuFollowResult,
 };
+use super::xiaohongshu_automator::app_status::AppStatusExt;
+use super::xiaohongshu_automator::navigation::NavigationExt;
+use super::xiaohongshu_automator::follow_automation::FollowAutomationExt;
+
 
 /// 小红书服务状态管理
 pub struct XiaohongshuService {
@@ -84,6 +88,15 @@ pub async fn navigate_to_contacts_page(
     let service = service.lock().await;
     
     if let Some(automator) = &service.automator {
+        // 🔍 操作前预检查
+        match perform_pre_operation_check(automator).await {
+            Ok(_) => info!("✅ 操作前检查通过"),
+            Err(e) => {
+                error!("❌ 操作前检查失败: {}", e);
+                return Err(format!("操作前检查失败: {}", e));
+            }
+        }
+
         automator
             .navigate_to_contacts()
             .await
@@ -114,6 +127,56 @@ pub async fn auto_follow_contacts(
                 error!("自动关注执行失败: {}", e);
                 e.to_string()
             })
+    } else {
+        Err("小红书服务未初始化，请先调用初始化方法".to_string())
+    }
+}
+
+/// 批量关注通讯录页面中的所有联系人（优化版本）
+#[command]
+pub async fn batch_follow_all_contacts(
+    service: State<'_, Mutex<XiaohongshuService>>,
+    max_follows: Option<usize>,
+) -> Result<BatchFollowResult, String> {
+    info!("🚀 开始批量关注通讯录中的所有联系人");
+    
+    let service = service.lock().await;
+    
+    if let Some(automator) = &service.automator {
+        let max_count = max_follows.unwrap_or(10);
+        
+        match automator.batch_follow_all_contacts_in_page(max_count).await {
+            Ok(results) => {
+                let successful_count = results.iter()
+                    .filter(|r| matches!(r.status, super::xiaohongshu_automator::types::FollowStatus::Success))
+                    .count();
+                
+                Ok(BatchFollowResult {
+                    success: true,
+                    total_processed: results.len(),
+                    successful_follows: successful_count,
+                    failed_follows: results.len() - successful_count,
+                    results: results.into_iter().map(|r| FollowResultSummary {
+                        user_name: r.user_name,
+                        status: format!("{:?}", r.status),
+                        message: r.message,
+                        timestamp: r.timestamp.to_rfc3339(),
+                    }).collect(),
+                    message: format!("批量关注完成，成功关注 {} 个联系人", successful_count),
+                })
+            }
+            Err(e) => {
+                error!("批量关注执行失败: {}", e);
+                Ok(BatchFollowResult {
+                    success: false,
+                    total_processed: 0,
+                    successful_follows: 0,
+                    failed_follows: 0,
+                    results: vec![],
+                    message: format!("批量关注失败: {}", e),
+                })
+            }
+        }
     } else {
         Err("小红书服务未初始化，请先调用初始化方法".to_string())
     }
@@ -226,4 +289,65 @@ pub struct CompleteWorkflowResult {
     pub app_status: AppStatusResult,
     pub navigation: NavigationResult,
     pub follow_result: XiaohongshuFollowResult,
+}
+
+/// 批量关注结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BatchFollowResult {
+    pub success: bool,
+    pub total_processed: usize,
+    pub successful_follows: usize,
+    pub failed_follows: usize,
+    pub results: Vec<FollowResultSummary>,
+    pub message: String,
+}
+
+/// 关注结果摘要
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FollowResultSummary {
+    pub user_name: String,
+    pub status: String,
+    pub message: String,
+    pub timestamp: String,
+}
+
+/// 🔍 操作前预检查：确保设备和应用状态正常
+async fn perform_pre_operation_check(automator: &XiaohongshuAutomator) -> Result<()> {
+    info!("🔍 执行操作前预检查...");
+    
+    // 检查1: 设备连接状态
+    if let Err(e) = automator.execute_adb_command(&["devices"]) {
+        return Err(anyhow::anyhow!("设备连接检查失败: {}", e));
+    }
+    
+    // 检查2: 应用状态
+    let app_status = automator.check_app_status().await.map_err(|e| {
+        anyhow::anyhow!("应用状态检查失败: {}", e)
+    })?;
+    
+    if !app_status.app_running {
+        return Err(anyhow::anyhow!("小红书应用未在运行"));
+    }
+    
+    // 简化前台检查逻辑，因为app_status不包含is_foreground字段
+    info!("⚠️ 确保小红书应用在前台");
+    if let Err(e) = automator.execute_adb_command(&[
+        "shell", "am", "start", "-n", "com.xingin.xhs/.index.IndexActivity"
+    ]) {
+        return Err(anyhow::anyhow!("切换应用到前台失败: {}", e));
+    }
+    tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+    
+    // 检查3: 页面状态基本验证
+    use super::xiaohongshu_automator::page_recognition::PageRecognitionExt;
+    let page_state = automator.recognize_current_page().await.map_err(|e| {
+        anyhow::anyhow!("页面状态识别失败: {}", e)
+    })?;
+    
+    if page_state.confidence < 0.5 {
+        return Err(anyhow::anyhow!("页面识别置信度过低: {:.2}", page_state.confidence));
+    }
+    
+    info!("✅ 操作前预检查全部通过");
+    Ok(())
 }

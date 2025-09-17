@@ -134,7 +134,7 @@ export class TauriDeviceRepository implements IDeviceRepository {
     return connectedDevices;
   }
 
-  watchDeviceChanges(callback: (devices: Device[]) => void): () => void {
+  watchDeviceChanges(callback: (devices: Device[]) => void, intervalMs: number = 30000): () => void {
     // 使用轮询方式监听设备变化
     // 在实际项目中，可以考虑使用WebSocket或其他实时通信方式
     let isWatching = true;
@@ -157,7 +157,7 @@ export class TauriDeviceRepository implements IDeviceRepository {
       }
 
       if (isWatching) {
-        setTimeout(pollDevices, 3000); // 每3秒检查一次
+        setTimeout(pollDevices, intervalMs); // 使用可配置的轮询间隔
       }
     };
 

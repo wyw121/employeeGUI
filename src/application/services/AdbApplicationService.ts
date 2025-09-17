@@ -67,8 +67,11 @@ export class AdbApplicationService {
       const devices = await this.deviceManager.getDevices();
       store.setDevices(devices);
 
-      // 4. 启动设备监听
-      this.startDeviceWatching();
+      // 4. 启动设备监听（如果配置启用）
+      const currentConfig = store.config;
+      if (currentConfig?.enableDeviceWatching) {
+        this.startDeviceWatching();
+      }
 
       // 5. 启动健康检查
       this.startHealthChecking();
@@ -493,10 +496,12 @@ export class AdbApplicationService {
       this.deviceWatcher();
     }
 
+    const store = useAdbStore.getState();
+    const intervalMs = store.config?.deviceWatchInterval || 30000;
+
     this.deviceWatcher = this.deviceManager.watchDeviceChanges((devices) => {
-      const store = useAdbStore.getState();
       store.setDevices(devices);
-    });
+    }, intervalMs);
   }
 
   /**

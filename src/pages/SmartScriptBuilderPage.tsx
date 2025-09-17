@@ -45,6 +45,7 @@ import {
   SyncOutlined,
 } from '@ant-design/icons';
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
+import { SmartNavigationModal } from '../components';
 import { SmartActionType } from '../types/smartComponents';
 import type { LaunchAppComponentParams } from '../types/smartComponents';
 import type { SmartScriptStep } from '../types/smartScript';
@@ -181,20 +182,24 @@ const SMART_ACTION_CONFIGS = {
 
   [SmartActionType.SMART_NAVIGATION]: {
     name: '智能导航',
-    description: '执行复杂的页面导航流程',
+    description: '智能识别并点击导航栏按钮（底部、顶部、侧边、悬浮导航栏）',
     icon: '🧭',
     color: 'geekblue',
-    category: 'workflow',
+    category: 'smart',
     parameters: [
-      { key: 'target_page', label: '目标页面', type: 'select', required: true,
-        options: ['Home', 'AppMainPage', 'Settings', 'ListPage', 'DetailPage'] },
-      { key: 'navigation_strategy', label: '导航策略', type: 'select', 
-        options: ['automatic', 'manual', 'hybrid'], default: 'automatic' },
+      { key: 'navigation_type', label: '导航栏类型', type: 'select', required: true,
+        options: ['bottom', 'top', 'side', 'floating'], default: 'bottom' },
+      { key: 'app_name', label: '应用名称', type: 'text', required: true },
+      { key: 'button_name', label: '按钮名称', type: 'text', required: true },
+      { key: 'click_action', label: '点击方式', type: 'select',
+        options: ['single_tap', 'double_tap', 'long_press'], default: 'single_tap' },
     ],
     advanced: [
-      { key: 'max_navigation_steps', label: '最大导航步数', type: 'number', default: 10 },
-      { key: 'step_timeout_ms', label: '步骤超时(ms)', type: 'number', default: 5000 },
-      { key: 'enable_recovery', label: '启用智能恢复', type: 'boolean', default: true },
+      { key: 'position_ratio', label: '位置范围', type: 'bounds' },
+      { key: 'button_patterns', label: '按钮模式', type: 'multiselect',
+        options: ['首页', '市集', '发布', '消息', '我', '微信', '通讯录', '发现'] },
+      { key: 'retry_count', label: '重试次数', type: 'number', default: 3 },
+      { key: 'timeout_ms', label: '超时时间(ms)', type: 'number', default: 10000 },
     ]
   },
 
@@ -273,6 +278,7 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [editingStep, setEditingStep] = useState<SmartScriptStep | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>(''); // 当前选择的设备ID
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
+  const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
   const [executorConfig, setExecutorConfig] = useState<ExecutorConfig>({
     default_timeout_ms: 10000,
     default_retry_count: 3,
@@ -965,6 +971,35 @@ const SmartScriptBuilderPage: React.FC = () => {
                 );
               }
 
+              // 特殊处理：如果是SMART_NAVIGATION类型，显示配置按钮
+              if (stepType === SmartActionType.SMART_NAVIGATION) {
+                return (
+                  <div>
+                    <Divider orientation="left">智能导航配置</Divider>
+                    <Alert 
+                      message="智能导航支持自动识别导航栏并点击指定按钮，适用于底部导航栏、顶部导航栏等场景"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                    <Card className="text-center" style={{ marginBottom: 16 }}>
+                      <Button 
+                        type="primary" 
+                        size="large"
+                        icon={<SettingOutlined />}
+                        onClick={() => setShowNavigationModal(true)}
+                      >
+                        打开智能导航配置器
+                      </Button>
+                      <br />
+                      <Text type="secondary" style={{ marginTop: 8, display: 'block' }}>
+                        包含向导模式（推荐新手）和专业模式（支持自定义配置）
+                      </Text>
+                    </Card>
+                  </div>
+                );
+              }
+
               return (
                 <div>
                   <Divider orientation="left">参数配置</Divider>
@@ -1053,6 +1088,19 @@ const SmartScriptBuilderPage: React.FC = () => {
           }}
         />
       </Modal>
+
+      {/* 智能导航配置模态框 */}
+      <SmartNavigationModal
+        visible={showNavigationModal}
+        onClose={() => setShowNavigationModal(false)}
+        onStepGenerated={(step) => {
+          // 添加生成的步骤到脚本中
+          setSteps(prev => [...prev, step]);
+          setShowNavigationModal(false);
+          message.success(`已添加导航步骤: ${step.name}`);
+        }}
+        deviceId={currentDeviceId}
+      />
     </div>
   );
 };

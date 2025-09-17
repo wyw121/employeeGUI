@@ -34,6 +34,7 @@ import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import AppLaunchTestPage from '../pages/AppLaunchTestPage'; // 应用启动测试页面
+import SmartNavigationTestPage from '../pages/SmartNavigationTestPage'; // 智能导航测试页面
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
@@ -109,6 +110,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'app-launch-test',
       icon: <ExperimentOutlined />,
       label: '应用启动测试',
+    },
+    {
+      key: 'smart-navigation-test',
+      icon: <RobotOutlined />,
+      label: '智能导航测试',
     }
   ];
 
@@ -356,6 +362,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'app-launch-test' && (
               <AppLaunchTestPage />
+            )}
+
+            {selectedKey === 'smart-navigation-test' && (
+              <SmartNavigationTestPage />
             )}
           </Content>
         </Layout>

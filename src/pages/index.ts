@@ -28,3 +28,6 @@ export * from "./contact-management";
 export * from "./device-management";
 export * from "./precise-acquisition";
 export * from "./statistics";
+
+// 智能导航测试页面
+export { default as SmartNavigationTestPage } from "./SmartNavigationTestPage";

@@ -24,6 +24,7 @@ export * from './task';
 
 // Smart components
 export * from './smart';
+export { SmartNavigationModal } from './smart-navigation-finder/SmartNavigationModal';
 
 // Test components
 export { default as StepTestButton } from './StepTestButton';

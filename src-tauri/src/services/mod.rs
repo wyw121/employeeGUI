@@ -20,6 +20,8 @@ pub mod smart_element_finder_service;  // 新增：智能元素查找服务
 pub mod smart_script_executor;
 pub mod smart_vcf_opener;
 pub mod ui_reader_service;
+pub mod universal_ui_finder;  // Universal UI Finder 核心模块
+pub mod universal_ui_service;  // Universal UI Finder 服务桥接
 pub mod vcf_importer;
 pub mod vcf_importer_async;
 pub mod vcf_importer_optimized;

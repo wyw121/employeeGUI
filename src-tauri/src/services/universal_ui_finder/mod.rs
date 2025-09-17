@@ -147,9 +147,10 @@ impl UniversalUIFinder {
         -> Result<Vec<ClickResult>, FindError> {
         
         let mut results = Vec::new();
+        let total_operations = operations.len();
         
         for operation in operations {
-            println!("🔄 执行批量操作 {}/{}", results.len() + 1, operations.len());
+            println!("🔄 执行批量操作 {}/{}", results.len() + 1, total_operations);
             
             let result = self.smart_click(
                 &operation.app_name,
@@ -185,7 +186,7 @@ impl UniversalUIFinder {
     }
     
     /// 仅查找元素，不执行点击
-    pub async fn find_element_only(&mut self, request: FindRequest) -> Result<UIElement, FindError> {
+    pub async fn find_element_only(&mut self, request: FindRequest) -> Result<UniversalUIElement, FindError> {
         // 如果指定了应用名，执行应用检测；否则跳过
         if let Some(_app_name) = &request.app_name {
             let _app_status = self.detector.detect_and_prepare_app(&request, &mut self.logger).await?;
@@ -228,7 +229,7 @@ pub struct ClickResult {
     pub element_found: bool,
     pub click_executed: bool,
     pub execution_time: std::time::Duration,
-    pub found_element: Option<UIElement>,
+    pub found_element: Option<UniversalUIElement>,
     pub user_intervention: bool, // 是否需要用户手动干预
     pub error_message: Option<String>,
 }
@@ -267,3 +268,10 @@ impl std::fmt::Display for FindError {
 }
 
 impl std::error::Error for FindError {}
+
+// 错误转换实现
+impl From<Box<dyn std::error::Error>> for FindError {
+    fn from(err: Box<dyn std::error::Error>) -> Self {
+        FindError::ExecutionFailed(err.to_string())
+    }
+}

@@ -6,6 +6,9 @@ mod services;
 mod utils;
 mod xml_judgment_service;
 
+// Universal UI Finder 模块桥接
+// 注意：universal-ui-finder模块位于src/modules/，我们通过services层桥接
+
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -26,6 +29,7 @@ use services::smart_element_finder_service::{smart_element_finder, click_detecte
 use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
+use services::universal_ui_service::*; // 新增：Universal UI Finder 服务
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use services::xiaohongshu_long_connection_service::{XiaohongshuLongConnectionService, *};
 use std::sync::Mutex;
@@ -795,7 +799,12 @@ fn main() {
             get_navigation_configs,  // 获取预设配置
             // 智能元素查找功能
             smart_element_finder,    // 智能元素查找
-            click_detected_element   // 点击检测到的元素
+            click_detected_element,  // 点击检测到的元素
+            // Universal UI Finder 功能 - 智能导航桥接
+            execute_universal_ui_click,      // 执行智能导航点击（统一入口）
+            execute_universal_quick_click,   // 快速点击（简化接口）
+            execute_universal_direct_click,  // 直接ADB点击（跳过应用检测）
+            get_universal_navigation_presets // 获取预设配置信息
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

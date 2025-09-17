@@ -2,8 +2,8 @@
 
 use std::process::Command;
 use regex::Regex;
-use crate::{FindRequest, FindError};
-use crate::logger::{InteractiveLogger, AppDetectionStep};
+use crate::services::universal_ui_finder::{FindRequest, FindError};
+use crate::services::universal_ui_finder::logger::{InteractiveLogger, AppDetectionStep};
 
 pub struct AppDetector {
     adb_path: String,

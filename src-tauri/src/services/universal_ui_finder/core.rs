@@ -2,8 +2,8 @@
 
 use regex::Regex;
 use std::collections::HashMap;
-use crate::{FindRequest, FindError, UIElement, ElementBounds};
-use crate::logger::{InteractiveLogger, ElementSearchStep, PreActionStep};
+use crate::services::universal_ui_finder::{FindRequest, FindError};
+use crate::services::universal_ui_finder::logger::{InteractiveLogger, ElementSearchStep, PreActionStep};
 
 pub struct UIFinderCore {
     adb_path: String,
@@ -32,7 +32,7 @@ impl UIFinderCore {
     
     /// 主要的UI元素查找方法 - 支持用户交互
     pub async fn find_element_with_guidance(&self, request: &FindRequest, logger: &mut InteractiveLogger) 
-        -> Result<UIElement, FindError> {
+        -> Result<UniversalUIElement, FindError> {
         
         logger.log_element_search(&request.target_text, ElementSearchStep::Starting);
         
@@ -138,7 +138,7 @@ impl UIFinderCore {
     }
     
     /// 解析所有UI元素
-    fn parse_all_ui_elements(&self, xml_content: &str) -> Result<Vec<UIElement>, FindError> {
+    fn parse_all_ui_elements(&self, xml_content: &str) -> Result<Vec<UniversalUIElement>, FindError> {
         let mut elements = Vec::new();
         
         // 使用正则表达式解析XML节点
@@ -153,7 +153,7 @@ impl UIFinderCore {
             let package = captures.get(6).map_or(String::new(), |m| m.as_str().to_string());
             
             if let Ok(bounds) = self.parse_bounds(&bounds_str) {
-                elements.push(UIElement {
+                elements.push(UniversalUIElement {
                     text,
                     content_desc,
                     bounds,
@@ -169,7 +169,7 @@ impl UIFinderCore {
     }
     
     /// 解析坐标边界
-    fn parse_bounds(&self, bounds_str: &str) -> Result<ElementBounds, Box<dyn std::error::Error>> {
+    fn parse_bounds(&self, bounds_str: &str) -> Result<UniversalElementBounds, Box<dyn std::error::Error>> {
         // 解析 "[left,top][right,bottom]" 格式
         let bounds_regex = Regex::new(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]").unwrap();
         
@@ -179,14 +179,14 @@ impl UIFinderCore {
             let right: i32 = captures.get(3).unwrap().as_str().parse()?;
             let bottom: i32 = captures.get(4).unwrap().as_str().parse()?;
             
-            Ok(ElementBounds::new(left, top, right, bottom))
+            Ok(UniversalElementBounds::new(left, top, right, bottom))
         } else {
             Err("无法解析bounds格式".into())
         }
     }
     
     /// 智能筛选候选元素
-    fn filter_candidates(&self, all_elements: &[UIElement], request: &FindRequest) -> Vec<UIElement> {
+    fn filter_candidates(&self, all_elements: &[UniversalUIElement], request: &FindRequest) -> Vec<UniversalUIElement> {
         let mut candidates = Vec::new();
         
         for element in all_elements {
@@ -199,7 +199,7 @@ impl UIFinderCore {
     }
     
     /// 判断是否为潜在匹配
-    fn is_potential_match(&self, element: &UIElement, request: &FindRequest) -> bool {
+    fn is_potential_match(&self, element: &UniversalUIElement, request: &FindRequest) -> bool {
         // 1. 基本筛选：必须可点击
         if !element.clickable {
             return false;
@@ -250,7 +250,7 @@ impl UIFinderCore {
     }
     
     /// 位置匹配检查
-    fn position_matches(&self, bounds: &ElementBounds, position_hint: &str) -> bool {
+    fn position_matches(&self, bounds: &UniversalElementBounds, position_hint: &str) -> bool {
         match position_hint {
             "下方导航栏" | "底部导航栏" => {
                 bounds.bottom > self.screen_height * 4 / 5
@@ -272,7 +272,7 @@ impl UIFinderCore {
     }
     
     /// 尺寸合理性检查
-    fn size_reasonable(&self, bounds: &ElementBounds) -> bool {
+    fn size_reasonable(&self, bounds: &UniversalElementBounds) -> bool {
         let width = bounds.width();
         let height = bounds.height();
         
@@ -282,8 +282,8 @@ impl UIFinderCore {
     }
     
     /// 选择最佳匹配元素
-    fn select_best_match(&self, candidates: &[UIElement], request: &FindRequest) -> UIElement {
-        let mut scored_candidates: Vec<(UIElement, f32)> = candidates.iter()
+    fn select_best_match(&self, candidates: &[UniversalUIElement], request: &FindRequest) -> UniversalUIElement {
+        let mut scored_candidates: Vec<(UniversalUIElement, f32)> = candidates.iter()
             .map(|element| {
                 let score = self.calculate_confidence(element, request);
                 (element.clone(), score)
@@ -298,7 +298,7 @@ impl UIFinderCore {
     }
     
     /// 计算匹配置信度
-    fn calculate_confidence(&self, element: &UIElement, request: &FindRequest) -> f32 {
+    fn calculate_confidence(&self, element: &UniversalUIElement, request: &FindRequest) -> f32 {
         let mut confidence = 0.0;
         
         // 1. 文本匹配得分 (最重要，权重50%)
@@ -410,12 +410,12 @@ impl UIFinderCore {
     }
 }
 
-/// UI元素结构
+/// UI元素结构  
 #[derive(Debug, Clone)]
-pub struct UIElement {
+pub struct UniversalUIElement {
     pub text: String,
     pub content_desc: String,
-    pub bounds: ElementBounds,
+    pub bounds: UniversalElementBounds,
     pub clickable: bool,
     pub class_name: String,
     pub package: String,
@@ -424,14 +424,14 @@ pub struct UIElement {
 
 /// 元素边界坐标
 #[derive(Debug, Clone)]
-pub struct ElementBounds {
+pub struct UniversalElementBounds {
     pub left: i32,
     pub top: i32,
     pub right: i32,
     pub bottom: i32,
 }
 
-impl ElementBounds {
+impl UniversalElementBounds {
     pub fn new(left: i32, top: i32, right: i32, bottom: i32) -> Self {
         Self { left, top, right, bottom }
     }

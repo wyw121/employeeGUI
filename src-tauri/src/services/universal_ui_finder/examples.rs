@@ -1,7 +1,7 @@
 // 通用UI查找器使用示例 - 展示如何适配各种应用和场景
 // 这个模块完全适配任何Android应用的UI自动化需求
 
-use crate::modules::universal_ui_finder::*;
+use crate::services::universal_ui_finder::*;
 
 /// 使用示例：展示完整的功能演示
 #[tokio::main]

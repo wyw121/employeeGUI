@@ -32,7 +32,7 @@
 ## 📁 模块结构
 
 ```
-src/modules/universal-ui-finder/
+src-tauri/src/services/universal_ui_finder/
 ├── mod.rs           # 主入口和API定义
 ├── core.rs          # 核心UI查找算法
 ├── detector.rs      # 应用检测和验证
@@ -67,7 +67,7 @@ src/modules/universal-ui-finder/
 #### 📱 指定应用模式
 
 ```rust
-use crate::modules::universal_ui_finder::*;
+use crate::services::universal_ui_finder::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

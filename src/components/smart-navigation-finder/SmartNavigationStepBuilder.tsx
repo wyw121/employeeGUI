@@ -21,6 +21,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
+import UniversalUIService, { type SmartNavigationParams, type UniversalClickResult } from '../../api/universalUIAPI';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -243,21 +244,49 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
 
     try {
       setLoading(true);
-      const config = buildConfig();
+      const formValues = form.getFieldsValue();
       
-      console.log('智能导航检测配置:', config);
+      // 构建Universal UI参数
+      const navigationParams: SmartNavigationParams = {
+        navigation_type: selectedNavType,
+        target_button: formValues.target_button || '我',
+        click_action: formValues.click_action || 'single_tap',
+        app_name: selectedApp, // 指定应用模式
+      };
       
-      const result = await invoke<ElementFinderResult>('smart_element_finder', {
-        deviceId,
-        config
-      });
+      console.log('🔧 Universal UI 智能检测参数:', navigationParams);
+      
+      // 使用新的Universal UI API进行检测（仅查找，不执行点击）
+      const result = await UniversalUIService.executeUIClick(deviceId, navigationParams);
 
-      setDetectionResult(result);
+      // 将结果转换为前端格式
+      const elementFinderResult: ElementFinderResult = {
+        success: result.element_found,
+        message: result.element_found 
+          ? `成功找到目标按钮 "${navigationParams.target_button}"` 
+          : (result.error_message || '未找到目标按钮'),
+        found_elements: result.found_element ? [{
+          text: result.found_element.text,
+          bounds: result.found_element.bounds,
+          position: result.found_element.position,
+          content_desc: '', // 添加缺失的属性
+          clickable: true,  // 添加缺失的属性
+        }] : [],
+        target_element: result.found_element ? {
+          text: result.found_element.text,
+          bounds: result.found_element.bounds,
+          position: result.found_element.position,
+          content_desc: '', // 添加缺失的属性
+          clickable: true,  // 添加缺失的属性
+        } : undefined,
+      };
 
-      if (result.success) {
-        message.success('成功检测到导航元素！');
+      setDetectionResult(elementFinderResult);
+
+      if (result.element_found) {
+        message.success(`✅ 成功检测到导航元素！(${result.mode}, ${result.execution_time_ms}ms)`);
       } else {
-        message.warning(result.message);
+        message.warning(result.error_message || '未找到目标按钮');
       }
     } catch (error) {
       console.error('智能检测失败:', error);

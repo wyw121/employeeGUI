@@ -20,7 +20,7 @@ impl InteractiveLogger {
     }
     
     /// 开始新的查找会话
-    pub fn start_session(&mut self, request: &crate::FindRequest) {
+    pub fn start_session(&mut self, request: &crate::services::universal_ui_finder::FindRequest) {
         self.session_start = Some(Local::now());
         
         if !self.enabled { return; }
@@ -168,7 +168,7 @@ impl InteractiveLogger {
     }
     
     /// 完成会话并显示总结
-    pub fn complete_session(&self, result: &crate::ClickResult) {
+    pub fn complete_session(&self, result: &crate::services::universal_ui_finder::ClickResult) {
         if !self.enabled { return; }
         
         println!("\n{}", "📊 任务执行结果".bright_blue().bold());
@@ -272,7 +272,7 @@ pub enum ElementSearchStep {
     DumpingUI,
     Parsing,
     Filtering(usize), // count
-    Found(crate::UIElement, f32), // element, confidence
+    Found(crate::services::universal_ui_finder::UniversalUIElement, f32), // element, confidence
     NotFound,
     MultipleFound(usize), // count
 }

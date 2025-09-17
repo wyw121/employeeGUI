@@ -2,8 +2,8 @@
 
 use std::process::Command;
 use std::time::{Duration, Instant};
-use crate::{FindRequest, ClickResult, UIElement, FindError};
-use crate::logger::{InteractiveLogger, ClickExecutionStep};
+use crate::services::universal_ui_finder::{FindRequest, ClickResult, UniversalUIElement, FindError};
+use crate::services::universal_ui_finder::logger::{InteractiveLogger, ClickExecutionStep};
 
 pub struct ActionExecutor {
     adb_path: String,
@@ -19,7 +19,7 @@ impl ActionExecutor {
     }
     
     /// 执行点击操作
-    pub async fn execute_click(&self, element: &UIElement, request: &FindRequest, logger: &mut InteractiveLogger) 
+    pub async fn execute_click(&self, element: &UniversalUIElement, request: &FindRequest, logger: &mut InteractiveLogger) 
         -> Result<ClickResult, FindError> {
         
         let start_time = Instant::now();
@@ -192,7 +192,7 @@ impl ActionExecutor {
     }
     
     /// 执行长按操作 (扩展功能)
-    pub async fn execute_long_press(&self, element: &UIElement, duration_ms: u64) -> Result<bool, FindError> {
+    pub async fn execute_long_press(&self, element: &UniversalUIElement, duration_ms: u64) -> Result<bool, FindError> {
         let (x, y) = element.bounds.center();
         
         // 使用ADB的长按命令
@@ -211,7 +211,7 @@ impl ActionExecutor {
     }
     
     /// 执行双击操作 (扩展功能)
-    pub async fn execute_double_click(&self, element: &UIElement) -> Result<bool, FindError> {
+    pub async fn execute_double_click(&self, element: &UniversalUIElement) -> Result<bool, FindError> {
         let (x, y) = element.bounds.center();
         
         // 执行两次快速点击
@@ -224,7 +224,7 @@ impl ActionExecutor {
     }
     
     /// 在指定区域内执行滑动 (扩展功能)
-    pub async fn execute_swipe_in_element(&self, element: &UIElement, direction: SwipeDirection) 
+    pub async fn execute_swipe_in_element(&self, element: &UniversalUIElement, direction: SwipeDirection) 
         -> Result<bool, FindError> {
         
         let bounds = &element.bounds;

@@ -35,7 +35,7 @@ impl AppConfigManager {
     
     /// 创建查找请求配置
     pub fn create_find_request(&self, app_name: &str, button_text: &str, position_hint: Option<&str>) 
-        -> Result<crate::FindRequest, String> {
+        -> Result<crate::services::universal_ui_finder::FindRequest, String> {
         
         let app_config = self.get_app_config(app_name)
             .ok_or_else(|| format!("未找到应用配置: {}", app_name))?;
@@ -43,7 +43,7 @@ impl AppConfigManager {
         // 根据按钮类型推断预操作
         let pre_actions = self.infer_pre_actions(button_text, position_hint, app_config);
         
-        Ok(crate::FindRequest {
+        Ok(crate::services::universal_ui_finder::FindRequest {
             app_name: Some(app_name.to_string()), // 指定应用模式
             target_text: button_text.to_string(),
             position_hint: position_hint.map(|s| s.to_string()),

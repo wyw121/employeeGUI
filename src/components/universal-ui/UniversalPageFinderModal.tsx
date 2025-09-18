@@ -175,6 +175,117 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
     return 'low';
   };
 
+  // 智能分析APP和页面信息
+  const analyzeAppAndPageInfo = (xmlString: string): { appName: string; pageName: string } => {
+    if (!xmlString) return { appName: '未知应用', pageName: '未知页面' };
+    
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+      
+      // 1. 分析APP名称
+      let appName = '未知应用';
+      
+      // 从package属性分析APP
+      const rootNode = xmlDoc.querySelector('hierarchy node');
+      if (rootNode) {
+        const packageName = rootNode.getAttribute('package') || '';
+        
+        // 常见APP包名映射
+        const appMappings: { [key: string]: string } = {
+          'com.xingin.xhs': '小红书',
+          'com.tencent.mm': '微信',
+          'com.taobao.taobao': '淘宝',
+          'com.jingdong.app.mall': '京东',
+          'com.tmall.wireless': '天猫',
+          'com.sina.weibo': '微博',
+          'com.ss.android.ugc.aweme': '抖音',
+          'com.tencent.mobileqq': 'QQ',
+          'com.alibaba.android.rimet': '钉钉',
+          'com.autonavi.minimap': '高德地图',
+          'com.baidu.BaiduMap': '百度地图',
+          'com.netease.cloudmusic': '网易云音乐',
+          'com.tencent.qqmusic': 'QQ音乐'
+        };
+        
+        appName = appMappings[packageName] || packageName.split('.').pop() || '未知应用';
+      }
+      
+      // 2. 分析页面名称
+      let pageName = '未知页面';
+      
+      // 分析底部导航栏确定当前页面
+      const allNodes = xmlDoc.querySelectorAll('node');
+      const navigationTexts: string[] = [];
+      const selectedTabs: string[] = [];
+      
+      allNodes.forEach(node => {
+        const text = node.getAttribute('text') || '';
+        const contentDesc = node.getAttribute('content-desc') || '';
+        const selected = node.getAttribute('selected') === 'true';
+        
+        // 检查底部导航
+        if (contentDesc.includes('首页') || contentDesc.includes('市集') || 
+            contentDesc.includes('发布') || contentDesc.includes('消息') || 
+            contentDesc.includes('我') || text === '首页' || text === '市集' || 
+            text === '消息' || text === '我') {
+          navigationTexts.push(text || contentDesc);
+          if (selected) {
+            selectedTabs.push(text || contentDesc);
+          }
+        }
+        
+        // 检查顶部标签页
+        if ((text === '关注' || text === '发现' || text === '视频') && selected) {
+          selectedTabs.push(text);
+        }
+      });
+      
+      // 根据选中的标签确定页面名称
+      if (selectedTabs.length > 0) {
+        // 组合底部导航和顶部标签
+        const bottomNav = selectedTabs.find(tab => 
+          ['首页', '市集', '发布', '消息', '我'].includes(tab)
+        ) || '';
+        const topTab = selectedTabs.find(tab => 
+          ['关注', '发现', '视频'].includes(tab)
+        ) || '';
+        
+        if (bottomNav && topTab) {
+          pageName = `${bottomNav}-${topTab}页面`;
+        } else if (bottomNav) {
+          pageName = `${bottomNav}页面`;
+        } else if (topTab) {
+          pageName = `${topTab}页面`;
+        }
+      }
+      
+      // 特殊页面检测
+      if (pageName === '未知页面') {
+        // 检查是否有特殊关键词
+        const allText = Array.from(allNodes)
+          .map(node => `${node.getAttribute('text') || ''} ${node.getAttribute('content-desc') || ''}`)
+          .join(' ')
+          .toLowerCase();
+          
+        if (allText.includes('登录') || allText.includes('注册')) {
+          pageName = '登录注册页面';
+        } else if (allText.includes('设置')) {
+          pageName = '设置页面';
+        } else if (allText.includes('搜索')) {
+          pageName = '搜索页面';
+        } else {
+          pageName = '主页面';
+        }
+      }
+      
+      return { appName, pageName };
+    } catch (error) {
+      console.error('分析APP和页面信息失败:', error);
+      return { appName: '未知应用', pageName: '未知页面' };
+    }
+  };
+
   // 解析XML并提取元素
   const parseXML = (xmlString: string) => {
     if (!xmlString) return;
@@ -260,7 +371,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
     if (elements.length === 0) {
       return (
         <div style={{ 
-          width: 400, 
+          width: '100%', 
           height: 600, 
           display: 'flex', 
           alignItems: 'center', 
@@ -274,75 +385,224 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
       );
     }
 
+    // 分析设备实际分辨率
     const maxX = Math.max(...elements.map(e => e.position.x + e.position.width));
     const maxY = Math.max(...elements.map(e => e.position.y + e.position.height));
-    const scale = Math.min(400 / maxX, 600 / maxY, 1);
+    
+    // 智能缩放计算
+    // 预览容器的可用空间（减去标题和边距）
+    const containerWidth = 380;  // 容器宽度
+    const containerHeight = 550; // 容器高度（减去标题空间）
+    
+    // 计算合适的缩放比例，确保内容可见但不过小
+    const scaleX = containerWidth / maxX;
+    const scaleY = containerHeight / maxY;
+    let scale = Math.min(scaleX, scaleY);
+    
+    // 设置最小和最大缩放比例，确保可用性
+    const minScale = 0.2;  // 最小20%，确保大分辨率设备内容不会太小
+    const maxScale = 2.0;  // 最大200%，确保小分辨率设备不会过大
+    scale = Math.max(minScale, Math.min(maxScale, scale));
+    
+    // 计算缩放后的实际尺寸
+    const scaledWidth = maxX * scale;
+    const scaledHeight = maxY * scale;
+    
+    // 智能分析APP和页面信息
+    const { appName, pageName } = analyzeAppAndPageInfo(xmlContent);
     
     return (
       <div style={{ 
-        width: 400, 
-        height: 600, 
-        position: 'relative', 
-        border: '1px solid #4b5563', 
-        borderRadius: 8, 
-        overflow: 'hidden', 
-        backgroundColor: '#1f2937' 
+        width: '100%', 
+        height: 600,
+        border: '1px solid #4b5563',
+        borderRadius: 8,
+        backgroundColor: '#1f2937',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        <Title level={5} style={{ 
-          textAlign: 'center', 
-          margin: '8px 0', 
-          color: '#e5e7eb', 
-          fontWeight: 'bold' 
+        {/* 标题栏 */}
+        <div style={{
+          padding: '12px',
+          borderBottom: '1px solid #374151',
+          backgroundColor: '#111827'
         }}>
-          小红书页面布局预览
-        </Title>
-        {filteredElements.map(element => {
-          const category = categories.find(cat => cat.name === element.category);
-          return (
-            <div
-              key={element.id}
-              title={`${element.userFriendlyName}: ${element.description}`}
-              style={{
-                position: 'absolute',
-                left: element.position.x * scale,
-                top: element.position.y * scale + 30,
-                width: Math.max(element.position.width * scale, 2),
-                height: Math.max(element.position.height * scale, 2),
-                backgroundColor: category?.color || '#ccc',
-                opacity: element.clickable ? 0.8 : 0.5,
-                border: element.clickable ? '2px solid #fff' : '1px solid rgba(255,255,255,0.5)',
-                borderRadius: 2,
-                cursor: element.clickable ? 'pointer' : 'default'
-              }}
-              onClick={() => {
-                if (element.clickable && onElementSelected) {
-                  // 转换为 UIElement 格式
-                  const uiElement: UIElement = {
-                    id: element.id,
-                    text: element.text,
-                    element_type: element.type,
-                    xpath: '',
-                    bounds: {
-                      left: element.position.x,
-                      top: element.position.y,
-                      right: element.position.x + element.position.width,
-                      bottom: element.position.y + element.position.height
-                    },
-                    is_clickable: element.clickable,
-                    is_scrollable: false,
-                    is_enabled: true,
-                    checkable: false,
-                    checked: false,
-                    selected: false,
-                    password: false,
-                    content_desc: element.description
-                  };
-                  onElementSelected(uiElement);
-                }
-              }}
-            />
-          );
-        })}
+          <Title level={5} style={{ 
+            textAlign: 'center', 
+            margin: 0,
+            color: '#e5e7eb', 
+            fontWeight: 'bold'
+          }}>
+            📱 {appName}的{pageName}
+          </Title>
+          <div style={{
+            textAlign: 'center',
+            fontSize: '12px',
+            color: '#9ca3af',
+            marginTop: '4px'
+          }}>
+            设备分辨率: {maxX} × {maxY} | 缩放比例: {(scale * 100).toFixed(0)}%
+          </div>
+        </div>
+        
+        {/* 可滚动的预览区域 */}
+        <div style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '16px',
+          position: 'relative',
+          backgroundColor: '#1f2937'
+        }}>
+          {/* 设备边框模拟 */}
+          <div style={{
+            width: scaledWidth + 20,
+            height: scaledHeight + 20,
+            margin: '0 auto',
+            position: 'relative',
+            backgroundColor: '#000',
+            borderRadius: '20px',
+            padding: '10px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}>
+            {/* 实际页面内容区域 */}
+            <div style={{
+              width: scaledWidth,
+              height: scaledHeight,
+              position: 'relative',
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              overflow: 'hidden'
+            }}>
+              {filteredElements.map(element => {
+                const category = categories.find(cat => cat.name === element.category);
+                
+                // 计算元素在缩放后的位置和大小
+                const elementLeft = element.position.x * scale;
+                const elementTop = element.position.y * scale;
+                const elementWidth = Math.max(element.position.width * scale, 1);
+                const elementHeight = Math.max(element.position.height * scale, 1);
+                
+                return (
+                  <div
+                    key={element.id}
+                    title={`${element.userFriendlyName}: ${element.description}\n位置: (${element.position.x}, ${element.position.y})\n大小: ${element.position.width} × ${element.position.height}`}
+                    style={{
+                      position: 'absolute',
+                      left: elementLeft,
+                      top: elementTop,
+                      width: elementWidth,
+                      height: elementHeight,
+                      backgroundColor: category?.color || '#8b5cf6',
+                      opacity: element.clickable ? 0.7 : 0.4,
+                      border: element.clickable ? '1px solid #fff' : '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: Math.min(elementWidth, elementHeight) > 10 ? '2px' : '1px',
+                      cursor: element.clickable ? 'pointer' : 'default',
+                      transition: 'all 0.2s ease',
+                      zIndex: element.clickable ? 10 : 5
+                    }}
+                    onClick={() => {
+                      if (element.clickable && onElementSelected) {
+                        // 转换为 UIElement 格式
+                        const uiElement: UIElement = {
+                          id: element.id,
+                          text: element.text,
+                          element_type: element.type,
+                          xpath: '',
+                          bounds: {
+                            left: element.position.x,
+                            top: element.position.y,
+                            right: element.position.x + element.position.width,
+                            bottom: element.position.y + element.position.height
+                          },
+                          is_clickable: element.clickable,
+                          is_scrollable: false,
+                          is_enabled: true,
+                          checkable: false,
+                          checked: false,
+                          selected: false,
+                          password: false,
+                          content_desc: element.description
+                        };
+                        onElementSelected(uiElement);
+                      }
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.zIndex = '20';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.zIndex = element.clickable ? '10' : '5';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    {/* 元素标签（仅在足够大时显示）*/}
+                    {elementWidth > 40 && elementHeight > 20 && element.text && (
+                      <div style={{
+                        fontSize: Math.max(8, Math.min(12, elementHeight / 3)),
+                        color: '#fff',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                        padding: '1px 2px',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        lineHeight: 1.2
+                      }}>
+                        {element.text.substring(0, 10)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              
+              {/* 网格辅助线（可选） */}
+              {scaledWidth > 200 && (
+                <>
+                  {/* 垂直辅助线 */}
+                  {[0.25, 0.5, 0.75].map((ratio, index) => (
+                    <div key={`v-${index}`} style={{
+                      position: 'absolute',
+                      left: scaledWidth * ratio,
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                      pointerEvents: 'none'
+                    }} />
+                  ))}
+                  
+                  {/* 水平辅助线 */}
+                  {[0.25, 0.5, 0.75].map((ratio, index) => (
+                    <div key={`h-${index}`} style={{
+                      position: 'absolute',
+                      top: scaledHeight * ratio,
+                      left: 0,
+                      right: 0,
+                      height: '1px',
+                      backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                      pointerEvents: 'none'
+                    }} />
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* 缩放控制提示 */}
+          <div style={{
+            position: 'absolute',
+            bottom: '8px',
+            right: '8px',
+            background: 'rgba(0, 0, 0, 0.7)',
+            color: '#fff',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '10px'
+          }}>
+            💡 滚动查看完整页面
+          </div>
+        </div>
       </div>
     );
   };
@@ -487,7 +747,7 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   const [searchText, setSearchText] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
   const [analysisResult, setAnalysisResult] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'list' | 'tree' | 'visual'>('list'); // 显示模式（新增visual）
+  const [viewMode, setViewMode] = useState<'list' | 'tree' | 'visual'>('visual'); // 默认显示可视化视图
   const [selectedElementId, setSelectedElementId] = useState<string>(''); // 选中的元素
 
   // 重置状态
@@ -1119,11 +1379,11 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                   <Space>
                     <Button.Group size="small">
                       <Button 
-                        type={viewMode === 'list' ? 'primary' : 'default'}
-                        icon={<UnorderedListOutlined />}
-                        onClick={() => setViewMode('list')}
+                        type={viewMode === 'visual' ? 'primary' : 'default'}
+                        icon={<EyeOutlined />}
+                        onClick={() => setViewMode('visual')}
                       >
-                        列表视图
+                        可视化视图
                       </Button>
                       <Button 
                         type={viewMode === 'tree' ? 'primary' : 'default'}
@@ -1133,11 +1393,11 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                         层级树
                       </Button>
                       <Button 
-                        type={viewMode === 'visual' ? 'primary' : 'default'}
-                        icon={<EyeOutlined />}
-                        onClick={() => setViewMode('visual')}
+                        type={viewMode === 'list' ? 'primary' : 'default'}
+                        icon={<UnorderedListOutlined />}
+                        onClick={() => setViewMode('list')}
                       >
-                        可视化视图
+                        列表视图
                       </Button>
                     </Button.Group>
                   </Space>

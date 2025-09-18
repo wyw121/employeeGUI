@@ -33,7 +33,6 @@ import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
-import VisualizationViewPage from '../pages/VisualizationViewPage'; // 可视化视图主页
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
@@ -236,7 +235,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             overflow: 'hidden'
           }}>
             {selectedKey === 'visualization-view' && (
-              <VisualizationViewPage />
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <h3>可视化视图功能已集成到智能脚本构建器中</h3>
+                <p>请在智能脚本构建器的可视化页面分析中使用此功能</p>
+              </div>
             )}
 
             <div style={{ 

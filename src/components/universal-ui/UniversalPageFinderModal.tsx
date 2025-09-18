@@ -37,6 +37,7 @@ import { useAdb } from '../../application/hooks/useAdb';
 import UniversalUIAPI, { UIElement, ElementBounds } from '../../api/universalUIAPI';
 import UIElementTree from './UIElementTree';
 import VisualPageAnalyzer from '../VisualPageAnalyzer';
+import { UniversalElementAnalyzer, SmartStepDescriptionGenerator, ElementAnalysisResult } from './UniversalElementAnalyzer';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -77,6 +78,90 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
 }) => {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // 创建完整的ElementContext的辅助函数
+  const createElementContext = (element: VisualUIElement): any => {
+    return {
+      text: element.text,
+      contentDesc: element.description,
+      resourceId: '',
+      className: element.type,
+      bounds: `[${element.position.x},${element.position.y}][${element.position.x + element.position.width},${element.position.y + element.position.height}]`,
+      clickable: element.clickable,
+      selected: false,
+      enabled: true,
+      focusable: false,
+      scrollable: false,
+      checkable: false,
+      checked: false,
+      position: element.position,
+      screenWidth: 1080, // 默认屏幕宽度
+      screenHeight: 1920, // 默认屏幕高度
+      parentElements: [],
+      siblingElements: [],
+      childElements: []
+    };
+  };
+
+  // 智能分析元素的函数（在VisualPageAnalyzerContent内部）
+  const analyzeVisualElement = (element: VisualUIElement): ElementAnalysisResult | null => {
+    try {
+      const elementContext = createElementContext(element);
+      return UniversalElementAnalyzer.analyzeElement(elementContext, 'com.xingin.xhs');
+    } catch (error) {
+      console.error('可视化元素分析失败:', error);
+      return null;
+    }
+  };
+
+  // 智能元素选择处理函数
+  const handleSmartElementSelect = (element: VisualUIElement) => {
+    if (!element.clickable || !onElementSelected) return;
+    
+    // 转换为 UIElement 格式
+    const uiElement: UIElement = {
+      id: element.id,
+      text: element.text,
+      element_type: element.type,
+      xpath: '',
+      bounds: {
+        left: element.position.x,
+        top: element.position.y,
+        right: element.position.x + element.position.width,
+        bottom: element.position.y + element.position.height
+      },
+      is_clickable: element.clickable,
+      is_scrollable: false,
+      is_enabled: true,
+      checkable: false,
+      checked: false,
+      selected: false,
+      password: false,
+      content_desc: element.description
+    };
+    
+    // 执行智能分析
+    const analysis = analyzeVisualElement(element);
+    
+    // 创建增强的元素对象
+    const enhancedElement = {
+      ...uiElement,
+      smartAnalysis: analysis,
+      smartDescription: analysis ? SmartStepDescriptionGenerator.generateStepDescription(analysis, createElementContext(element)) : `点击 ${element.text || element.type} 元素`
+    };
+    
+    onElementSelected(enhancedElement as any);
+    
+    // 显示智能分析结果
+    if (analysis) {
+      console.log('🎯 可视化元素智能分析结果:', {
+        userDescription: analysis.userDescription,
+        confidence: analysis.confidence,
+        actionSuggestion: analysis.actionSuggestion,
+        elementType: analysis.elementType
+      });
+    }
+  };
   const [showOnlyClickable, setShowOnlyClickable] = useState(false);
   const [elements, setElements] = useState<VisualUIElement[]>([]);
   const [categories, setCategories] = useState<VisualElementCategory[]>([]);
@@ -500,32 +585,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                       transition: 'all 0.2s ease',
                       zIndex: element.clickable ? 10 : 5
                     }}
-                    onClick={() => {
-                      if (element.clickable && onElementSelected) {
-                        // 转换为 UIElement 格式
-                        const uiElement: UIElement = {
-                          id: element.id,
-                          text: element.text,
-                          element_type: element.type,
-                          xpath: '',
-                          bounds: {
-                            left: element.position.x,
-                            top: element.position.y,
-                            right: element.position.x + element.position.width,
-                            bottom: element.position.y + element.position.height
-                          },
-                          is_clickable: element.clickable,
-                          is_scrollable: false,
-                          is_enabled: true,
-                          checkable: false,
-                          checked: false,
-                          selected: false,
-                          password: false,
-                          content_desc: element.description
-                        };
-                        onElementSelected(uiElement);
-                      }
-                    }}
+                    onClick={() => handleSmartElementSelect(element)}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'scale(1.05)';
                       e.currentTarget.style.zIndex = '20';
@@ -851,12 +911,103 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     setFilteredElements(filtered);
   };
 
+  // 从UIElement创建ElementContext的辅助函数
+  const createElementContextFromUIElement = (element: UIElement): any => {
+    return {
+      text: element.text || '',
+      contentDesc: element.content_desc || '',
+      resourceId: '',
+      className: element.element_type,
+      bounds: `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`,
+      clickable: element.is_clickable,
+      selected: element.selected,
+      enabled: element.is_enabled,
+      focusable: false,
+      scrollable: element.is_scrollable,
+      checkable: element.checkable,
+      checked: element.checked,
+      position: {
+        x: element.bounds.left,
+        y: element.bounds.top,
+        width: element.bounds.right - element.bounds.left,
+        height: element.bounds.bottom - element.bounds.top
+      },
+      screenWidth: 1080, // 默认屏幕宽度
+      screenHeight: 1920, // 默认屏幕高度
+      parentElements: [],
+      siblingElements: [],
+      childElements: []
+    };
+  };
+
+  // 智能分析并选择元素
+  const analyzeAndSelectElement = (element: UIElement): ElementAnalysisResult | null => {
+    if (!analysisResult) return null;
+    
+    try {
+      // 将UIElement转换为ElementContext格式
+      const elementContext = createElementContextFromUIElement(element);
+      
+      // 执行智能分析
+      const analysis = UniversalElementAnalyzer.analyzeElement(elementContext, 'com.xingin.xhs');
+      return analysis;
+    } catch (error) {
+      console.error('元素智能分析失败:', error);
+      return null;
+    }
+  };
+
+  // 生成智能步骤描述
+  const generateSmartStepDescription = (element: UIElement, analysis: ElementAnalysisResult | null): string => {
+    if (!analysis) {
+      return `点击 ${element.text || element.element_type} 元素`;
+    }
+    
+    const elementContext = createElementContextFromUIElement(element);
+    
+    return SmartStepDescriptionGenerator.generateStepDescription(analysis, elementContext);
+  };
+
   // 元素选择
   const handleElementSelect = (element: UIElement) => {
     setSelectedElementId(element.id);
+    
+    // 执行智能分析
+    const analysis = analyzeAndSelectElement(element);
+    
+    // 生成智能描述
+    const smartDescription = generateSmartStepDescription(element, analysis);
+    
+    // 创建增强的元素对象
+    const enhancedElement = {
+      ...element,
+      smartAnalysis: analysis,
+      smartDescription: smartDescription
+    };
+    
     if (onElementSelected) {
-      onElementSelected(element);
-      message.success(`已选择元素: ${element.text || element.element_type}`);
+      onElementSelected(enhancedElement as any);
+      
+      // 显示智能分析结果
+      if (analysis) {
+        message.success({
+          content: (
+            <div>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                🎯 已选择: {analysis.userDescription}
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                置信度: {(analysis.confidence * 100).toFixed(0)}% | 
+                操作建议: {analysis.actionSuggestion}
+              </div>
+            </div>
+          ),
+          duration: 5
+        });
+      } else {
+        message.success(`已选择元素: ${element.text || element.element_type}`);
+      }
+      
       onClose();
     }
   };
@@ -864,10 +1015,43 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   // 处理层级树中的元素选择
   const handleTreeElementSelect = (element: UIElement) => {
     setSelectedElementId(element.id);
+    
+    // 执行智能分析
+    const analysis = analyzeAndSelectElement(element);
+    
+    // 生成智能描述
+    const smartDescription = generateSmartStepDescription(element, analysis);
+    
+    // 创建增强的元素对象
+    const enhancedElement = {
+      ...element,
+      smartAnalysis: analysis,
+      smartDescription: smartDescription
+    };
+    
     // 也可以调用 onElementSelected 来通知外部组件
     if (onElementSelected) {
-      onElementSelected(element);
-      message.info(`选中层级树元素: ${element.text || element.element_type}`);
+      onElementSelected(enhancedElement as any);
+      
+      // 显示智能分析结果
+      if (analysis) {
+        message.info({
+          content: (
+            <div>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                🌳 层级树选择: {analysis.userDescription}
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                置信度: {(analysis.confidence * 100).toFixed(0)}% | 
+                类型: {analysis.elementType}
+              </div>
+            </div>
+          ),
+          duration: 4
+        });
+      } else {
+        message.info(`选中层级树元素: ${element.text || element.element_type}`);
+      }
     }
   };
 

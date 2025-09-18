@@ -10,3 +10,6 @@ export { default as DeviceAPI } from './deviceAPI';
 export * from './taskAPI';
 export { BalanceAPI, StatisticsAPI, default as TaskAPI } from './taskAPI';
 
+// 页面分析API
+// 删除已不存在的 pageAnalysisAPI 模块导出
+

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Select, Button, Space, Typography, Alert, Divider } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { SmartElementFinder } from '../components/smart-element-finder';
+import { useAdb } from '../application/hooks/useAdb';
 import { MobileOutlined, RobotOutlined, BugOutlined } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
@@ -14,7 +15,7 @@ interface Device {
 }
 
 const SmartElementFinderTestPage: React.FC = () => {
-    const [devices, setDevices] = useState<Device[]>([]);
+    const { devices, refreshDevices } = useAdb(); // 使用统一的设备状态
     const [selectedDevice, setSelectedDevice] = useState<string>('');
     const [loading, setLoading] = useState(false);
 
@@ -22,10 +23,9 @@ const SmartElementFinderTestPage: React.FC = () => {
     useEffect(() => {
         const loadDevices = async () => {
             try {
-                const result = await invoke<Device[]>('get_xiaohongshu_devices');
-                setDevices(result);
-                if (result.length > 0) {
-                    setSelectedDevice(result[0].id);
+                await refreshDevices(); // 使用统一的刷新方法
+                if (devices.length > 0) {
+                    setSelectedDevice(devices[0].id);
                 }
             } catch (error) {
                 console.error('获取设备列表失败:', error);
@@ -39,8 +39,7 @@ const SmartElementFinderTestPage: React.FC = () => {
     const handleRefreshDevices = async () => {
         setLoading(true);
         try {
-            const result = await invoke<Device[]>('get_xiaohongshu_devices');
-            setDevices(result);
+            await refreshDevices(); // 使用统一的刷新方法
         } catch (error) {
             console.error('刷新设备列表失败:', error);
         } finally {

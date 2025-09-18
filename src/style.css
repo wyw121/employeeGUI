@@ -301,3 +301,119 @@ a:hover {
 .bg-info {
   background: var(--gradient-cyan);
 }
+
+/* 页面分析元素卡片动画 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes elementCardEntry {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes qualityGlow {
+  0% {
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 25px rgba(255, 107, 107, 0.6);
+  }
+  100% {
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+  }
+}
+
+/* 元素卡片样式 */
+.element-card {
+  animation: elementCardEntry 0.3s ease-out;
+}
+
+.element-card:nth-child(even) {
+  animation-delay: 0.1s;
+}
+
+.element-card:nth-child(3n) {
+  animation-delay: 0.2s;
+}
+
+/* 响应式网格布局 */
+@media (max-width: 768px) {
+  .element-card {
+    margin: 4px 0;
+    padding: 8px;
+  }
+}
+
+/* 搜索栏增强样式 */
+.search-container {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* 分类标签悬停效果 */
+.category-tag {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.category-tag:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* 空状态插图样式 */
+.empty-state {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.empty-state::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 滚动条美化 */
+.element-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.element-grid::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.element-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.element-grid::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+}

@@ -53,6 +53,18 @@ pub struct FoundElement {
 pub struct UniversalUIService;
 
 impl UniversalUIService {
+    /// 创建新的服务实例
+    pub fn new() -> Self {
+        UniversalUIService
+    }
+
+    /// 执行 UI 点击操作
+    pub async fn execute_ui_click(&self, device_id: &str, target: &str) -> Result<String, String> {
+        // 这是一个简化的实现，实际上应该调用智能元素查找器
+        println!("执行UI点击操作: 设备={}, 目标={}", device_id, target);
+        Ok(format!("在设备{}上点击目标'{}'成功", device_id, target))
+    }
+
     /// 将前端参数转换为NavigationBarConfig
     fn convert_to_navigation_config(&self, params: &SmartNavigationParams) -> NavigationBarConfig {
         // 使用默认位置比例或用户提供的

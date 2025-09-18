@@ -1,49 +1,102 @@
 import React, { useEffect, useState } from "react";
 import { isTauri } from '@tauri-apps/api/core';
-import { AntDesignIntegrationDemo } from "./components/AntDesignDemo";
 import "./style.css";
 
 function App() {
   const [tauriReady, setTauriReady] = useState(false);
+  const [FullApp, setFullApp] = useState<React.ComponentType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 检查并等待Tauri环境准备就绪
-    const initializeTauri = async () => {
+    const initializeApp = async () => {
       try {
-        if (isTauri()) {
-          console.log('✅ Tauri environment detected');
-          // 给Tauri一点时间完成初始化
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } else {
-          console.warn('⚠️ Not running in Tauri environment - some features may not work');
+        // 检查 Tauri 环境
+        try {
+          const isInTauri = await isTauri();
+          console.log('✅ Tauri environment detected:', isInTauri);
+        } catch (error) {
+          console.log('🌐 Running in browser environment');
         }
-      } catch (error) {
-        console.error('❌ Tauri initialization error:', error);
-      } finally {
         setTauriReady(true);
+
+        // 直接加载完整应用
+        console.log('🔄 加载完整应用程序...');
+        const module = await import("./components/AntDesignDemo");
+        console.log('✅ 应用程序加载成功');
+        
+        setFullApp(() => module.AntDesignIntegrationDemo);
+        setLoading(false);
+      } catch (error) {
+        console.error('❌ 应用程序加载失败:', error);
+        setError(`加载失败: ${error.message || '未知错误'}`);
+        setLoading(false);
       }
     };
 
-    initializeTauri();
+    initializeApp();
   }, []);
 
-  if (!tauriReady) {
+  if (loading) {
     return (
       <div style={{ 
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        fontSize: '16px'
+        fontSize: '18px',
+        fontFamily: 'Arial, sans-serif'
       }}>
-        正在初始化应用...
+        🚀 正在启动 Employee GUI 应用程序...
       </div>
     );
   }
 
-  // 只显示Ant Design集成方案
-  return <AntDesignIntegrationDemo />;
+  if (error) {
+    return (
+      <div style={{ 
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        padding: '20px',
+        fontFamily: 'Arial, sans-serif'
+      }}>
+        <h2 style={{ color: 'red', marginBottom: '16px' }}>❌ 应用启动失败</h2>
+        <p style={{ marginBottom: '16px', textAlign: 'center' }}>{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#1890ff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          重新加载
+        </button>
+      </div>
+    );
+  }
+
+  if (FullApp) {
+    return <FullApp />;
+  }
+
+  return (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      fontSize: '18px' 
+    }}>
+      初始化中...
+    </div>
+  );
 }
 
 export default App;
-

@@ -27,6 +27,7 @@ dist-ssr
 src-tauri/target
 *.db
 data/
+debug_xml/
 
 # 项目特定文件
 # ===============

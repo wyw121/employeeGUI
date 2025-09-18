@@ -26,6 +26,9 @@ export * from './task';
 export * from './smart';
 export { SmartNavigationModal } from './smart-navigation-finder/SmartNavigationModal';
 
+// Smart Page Finder components (DDD架构)
+export * from './smart-page-finder';
+
 // Test components
 export { default as StepTestButton } from './StepTestButton';
 export { default as TestResultsDisplay } from './TestResultsDisplay';

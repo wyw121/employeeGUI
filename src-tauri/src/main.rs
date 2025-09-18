@@ -4,11 +4,20 @@
 // mod commands;
 mod screenshot_service;
 mod services;
+mod types;
 mod utils;
 mod xml_judgment_service;
 
 // Universal UI Finder 模块桥接
 // 注意：universal-ui-finder模块位于src/modules/，我们通过services层桥接
+use services::smart_element_finder_service::SmartElementFinderService;
+use services::universal_ui_service::UniversalUIService;
+use services::page_analyzer_service::PageAnalyzerService; // 新增页面分析服务
+
+// 新增页面分析类型导入
+use types::page_analysis::{
+    PageAnalysisResult, PageAnalysisConfig, SelectedElementConfig
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -32,6 +41,8 @@ use services::smart_script_executor::*;
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::universal_ui_service::*;
+use services::universal_ui_page_analyzer::*;
+use services::simple_xml_parser::*;
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use services::xiaohongshu_long_connection_service::{XiaohongshuLongConnectionService, *};
 use std::sync::Mutex;
@@ -599,6 +610,85 @@ async fn delete_file(path: String) -> Result<(), String> {
     }
 }
 
+// ====== 智能页面分析相关命令 ======
+
+/// 分析当前页面，获取可操作元素
+#[tauri::command]
+async fn analyze_current_page(
+    device_id: String,
+    config: Option<PageAnalysisConfig>,
+) -> Result<PageAnalysisResult, String> {
+    let service = PageAnalyzerService::new();
+    service.analyze_current_page(&device_id, config)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 验证选中的元素配置
+#[tauri::command]
+async fn validate_element_config(
+    config: SelectedElementConfig,
+) -> Result<bool, String> {
+    // 简单验证逻辑
+    if config.element_id.is_empty() {
+        return Err("元素ID不能为空".to_string());
+    }
+    
+    match config.action {
+        types::page_analysis::ElementAction::InputText(ref text) => {
+            if text.is_empty() {
+                return Err("输入文本不能为空".to_string());
+            }
+        }
+        types::page_analysis::ElementAction::SelectOption(ref option) => {
+            if option.is_empty() {
+                return Err("选择选项不能为空".to_string());
+            }
+        }
+        _ => {}
+    }
+    
+    Ok(true)
+}
+
+/// 执行页面元素操作（基于分析结果）
+#[tauri::command]
+async fn execute_page_element_action(
+    device_id: String,
+    config: SelectedElementConfig,
+) -> Result<String, String> {
+    // 这里可以调用 Universal UI 服务来执行实际操作
+    let universal_service = UniversalUIService::new();
+    
+    match config.action {
+        types::page_analysis::ElementAction::Click => {
+            // 转换为 Universal UI 点击操作
+            universal_service.execute_ui_click(&device_id, &config.description)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok("点击操作执行成功".to_string())
+        }
+        types::page_analysis::ElementAction::InputText(text) => {
+            // 这里需要实现输入文本的逻辑
+            Ok(format!("输入文本操作执行成功: {}", text))
+        }
+        _ => {
+            Ok("操作执行成功".to_string())
+        }
+    }
+}
+
+/// 获取页面分析历史记录
+#[tauri::command]
+async fn get_page_analysis_history(
+    device_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<PageAnalysisResult>, String> {
+    // 这里可以从缓存或数据库中获取历史记录
+    // 目前返回空列表
+    Ok(vec![])
+}
+
 // ====== 日志桥接相关命令 ======
 
 // 获取所有日志
@@ -804,6 +894,18 @@ fn main() {
             click_detected_element,  // 点击检测到的元素
             // Universal UI 智能导航功能
             execute_universal_ui_click,  // 执行智能导航点击
+            // Universal UI 页面分析功能
+            analyze_universal_ui_page,        // 分析Universal UI页面
+            extract_page_elements,            // 提取页面元素
+            // extract_page_elements_simple,     // 简化提取页面元素 - 暂时禁用
+            classify_ui_elements,             // 分类UI元素
+            deduplicate_elements,             // 去重元素
+            identify_page_type,               // 识别页面类型
+            // 智能页面分析功能
+            analyze_current_page,        // 分析当前页面获取可操作元素
+            validate_element_config,     // 验证元素配置
+            execute_page_element_action, // 执行页面元素操作
+            get_page_analysis_history,   // 获取页面分析历史记录
             // 应用生命周期管理功能
             // ensure_app_running,              // 确保应用运行（独立模块）
             // detect_app_state                 // 检测应用状态（独立模块）

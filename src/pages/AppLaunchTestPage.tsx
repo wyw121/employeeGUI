@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Card, Button, Select, Alert, Progress, Timeline, Tag, Spin } from 'antd';
 import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useAdb } from '../application/hooks/useAdb';
 
 const { Option } = Select;
 
@@ -42,7 +43,7 @@ interface Device {
  * 用于测试和演示新的智能应用启动状态检测功能
  */
 const AppLaunchTestPage: React.FC = () => {
-  const [devices, setDevices] = useState<Device[]>([]);
+  const { devices, refreshDevices } = useAdb(); // 使用统一的设备状态
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [selectedApp, setSelectedApp] = useState<string>('');
@@ -64,10 +65,9 @@ const AppLaunchTestPage: React.FC = () => {
 
   const loadDevices = async () => {
     try {
-      const result = await invoke<Device[]>('get_adb_devices_safe');
-      setDevices(result);
-      if (result.length > 0) {
-        setSelectedDevice(result[0].id);
+      await refreshDevices(); // 使用统一的刷新方法
+      if (devices.length > 0) {
+        setSelectedDevice(devices[0].id);
       }
     } catch (error) {
       console.error('获取设备列表失败:', error);

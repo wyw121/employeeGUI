@@ -29,15 +29,13 @@ import {
 import React, { useState } from 'react';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
-import SmartElementFinderTestPage from '../pages/SmartElementFinderTestPage'; // 智能元素查找测试页面
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
-import AppLaunchTestPage from '../pages/AppLaunchTestPage'; // 应用启动测试页面
-import SmartNavigationTestPage from '../pages/SmartNavigationTestPage'; // 智能导航测试页面
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
+import { UniversalUITestComponent } from './test/UniversalUITestComponent'; // Universal UI 测试组件
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -97,24 +95,14 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       label: '智能脚本构建器',
     },
     {
-      key: 'smart-element-finder',
-      icon: <AimOutlined />,
-      label: '智能元素查找',
-    },
-    {
       key: 'template-library',
       icon: <FolderOutlined />,
       label: '模板库',
     },
     {
-      key: 'app-launch-test',
+      key: 'universal-ui-test',
       icon: <ExperimentOutlined />,
-      label: '应用启动测试',
-    },
-    {
-      key: 'smart-navigation-test',
-      icon: <RobotOutlined />,
-      label: '智能导航测试',
+      label: 'Universal UI 测试',
     }
   ];
 
@@ -352,20 +340,12 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               <SmartScriptBuilderPage />
             )}
 
-            {selectedKey === 'smart-element-finder' && (
-              <SmartElementFinderTestPage />
-            )}
-
             {selectedKey === 'template-library' && (
               <TemplateLibrary />
             )}
 
-            {selectedKey === 'app-launch-test' && (
-              <AppLaunchTestPage />
-            )}
-
-            {selectedKey === 'smart-navigation-test' && (
-              <SmartNavigationTestPage />
+            {selectedKey === 'universal-ui-test' && (
+              <UniversalUITestComponent />
             )}
           </Content>
         </Layout>

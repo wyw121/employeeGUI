@@ -46,6 +46,10 @@ import {
 } from '@ant-design/icons';
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
 import { SmartNavigationModal } from '../components';
+import { SmartPageFinderModal } from '../components/smart-page-finder';
+import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
+import { PageAnalysisProvider } from '../application/page-analysis/PageAnalysisProvider';
+import { PageAnalysisApplicationService } from '../application/page-analysis/PageAnalysisApplicationService';
 import { SmartActionType } from '../types/smartComponents';
 import type { LaunchAppComponentParams } from '../types/smartComponents';
 import type { SmartScriptStep } from '../types/smartScript';
@@ -272,6 +276,22 @@ const SmartScriptBuilderPage: React.FC = () => {
   // ADB Hook 获取设备信息
   const { devices, refreshDevices } = useAdb();
   
+  // 创建页面分析服务实例
+  const pageAnalysisService = React.useMemo(() => {
+    try {
+      const { PageAnalysisApplicationService } = require('../application/page-analysis/PageAnalysisApplicationService');
+      const { PageAnalysisRepositoryFactory } = require('../infrastructure/repositories/PageAnalysisRepositoryFactory');
+      
+      const pageAnalysisRepository = PageAnalysisRepositoryFactory.getPageAnalysisRepository();
+      const deviceUIStateRepository = PageAnalysisRepositoryFactory.getDeviceUIStateRepository();
+      
+      return new PageAnalysisApplicationService(pageAnalysisRepository, deviceUIStateRepository);
+    } catch (error) {
+      console.error('创建页面分析服务失败:', error);
+      return null;
+    }
+  }, []);
+  
   const [steps, setSteps] = useState<SmartScriptStep[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -279,6 +299,7 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [currentDeviceId, setCurrentDeviceId] = useState<string>(''); // 当前选择的设备ID
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
+  const [showPageAnalyzer, setShowPageAnalyzer] = useState(false); // 显示智能页面分析器
   const [lastNavigationConfig, setLastNavigationConfig] = useState<{app_name?: string, navigation_type?: string} | null>(null); // 记录最后的导航配置
   const [executorConfig, setExecutorConfig] = useState<ExecutorConfig>({
     default_timeout_ms: 10000,
@@ -1030,6 +1051,35 @@ const SmartScriptBuilderPage: React.FC = () => {
                 );
               }
 
+              // 特殊处理：如果是SMART_FIND_ELEMENT类型，显示智能页面分析器
+              if (stepType === SmartActionType.SMART_FIND_ELEMENT) {
+                return (
+                  <div>
+                    <Divider orientation="left">智能元素查找配置</Divider>
+                    <Alert 
+                      message="智能元素查找通过分析当前页面UI结构，自动识别可操作元素并支持智能去重和分类，提供精确的元素定位能力"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                    <Card className="text-center" style={{ marginBottom: 16 }}>
+                      <Button 
+                        type="primary" 
+                        size="large"
+                        icon={<EyeOutlined />}
+                        onClick={() => setShowPageAnalyzer(true)}
+                      >
+                        打开智能页面分析器
+                      </Button>
+                      <br />
+                      <Text type="secondary" style={{ marginTop: 8, display: 'block' }}>
+                        配置设备连接并分析页面，智能识别可操作元素
+                      </Text>
+                    </Card>
+                  </div>
+                );
+              }
+
               return (
                 <div>
                   <Divider orientation="left">参数配置</Divider>
@@ -1137,6 +1187,25 @@ const SmartScriptBuilderPage: React.FC = () => {
           message.success(`已添加导航步骤: ${step.name}，已强制覆盖表单字段`);
         }}
         deviceId={currentDeviceId}
+      />
+
+      {/* Universal UI智能页面查找模态框 */}
+      <UniversalPageFinderModal
+        visible={showPageAnalyzer}
+        onClose={() => setShowPageAnalyzer(false)}
+        onElementSelected={(element) => {
+          // 当用户选择元素时，将元素信息填入表单
+          const elementDesc = element.text || element.element_type || '未知元素';
+          const searchCriteria = `文本: "${element.text}" | 类型: ${element.element_type} | ID: ${element.resource_id || 'N/A'}`;
+          
+          form.setFieldValue('search_criteria', searchCriteria);
+          form.setFieldValue('name', `智能查找: ${elementDesc}`);
+          form.setFieldValue('description', `自动查找并点击元素: ${elementDesc}`);
+          form.setFieldValue('click_if_found', true);
+          
+          setShowPageAnalyzer(false);
+          message.success(`已选择元素: ${elementDesc}`);
+        }}
       />
     </div>
   );

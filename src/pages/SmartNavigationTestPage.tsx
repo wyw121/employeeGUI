@@ -9,6 +9,7 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import { SmartNavigationStepBuilder } from '../components/smart-navigation-finder';
+import { useAdb } from '../application/hooks/useAdb';
 import type { ElementFinderResult, DetectedElement } from '../components/smart-element-finder/SmartElementFinder';
 
 const { Title, Text } = Typography;
@@ -45,7 +46,7 @@ interface InvokeResult {
 }
 
 const SmartNavigationTestPage: React.FC = () => {
-  const [devices, setDevices] = useState<Device[]>([]);
+  const { devices, refreshDevices } = useAdb(); // 使用统一的设备状态
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [smartSteps, setSmartSteps] = useState<SmartStep[]>([]);
@@ -58,10 +59,9 @@ const SmartNavigationTestPage: React.FC = () => {
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const result = await invoke<Device[]>('get_adb_devices');
-      setDevices(result || []);
-      if (result && result.length > 0) {
-        setSelectedDevice(result[0].id);
+      await refreshDevices(); // 使用统一的刷新方法
+      if (devices.length > 0) {
+        setSelectedDevice(devices[0].id);
       }
     } catch (error) {
       console.error('获取设备失败:', error);
@@ -204,7 +204,7 @@ const SmartNavigationTestPage: React.FC = () => {
                 <Space>
                   <MobileOutlined />
                   <span>{device.id}</span>
-                  <Tag color={device.status === 'device' ? 'green' : 'orange'}>
+                  <Tag color={device.status === 'online' ? 'green' : 'orange'}>
                     {device.status}
                   </Tag>
                 </Space>

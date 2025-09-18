@@ -49,18 +49,39 @@ impl XmlJudgmentService {
     /// 获取设备当前UI的XML结构
     pub async fn get_ui_xml(device_id: &str) -> Result<String, String> {
         // 先dump UI hierarchy
-        let _dump_result = execute_adb_with_result(&["-s", device_id, "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]).await?;
+        match execute_adb_with_result(&["-s", device_id, "shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"]).await {
+            Ok(dump_result) => {
+                tracing::info!("✅ uiautomator dump 执行成功: {}", String::from_utf8_lossy(&dump_result.stdout));
+            }
+            Err(e) => {
+                tracing::error!("❌ uiautomator dump 执行失败: {}", e);
+                return Err(format!("UI dump 失败: {}", e));
+            }
+        }
 
-        // 等待文件生成
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // 等待文件生成，增加更长的等待时间
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // 先检查文件是否存在
+        match execute_adb_with_result(&["-s", device_id, "shell", "ls", "-la", "/sdcard/ui_dump.xml"]).await {
+            Ok(ls_result) => {
+                tracing::info!("📂 文件状态: {}", String::from_utf8_lossy(&ls_result.stdout));
+            }
+            Err(e) => {
+                tracing::warn!("⚠️  文件检查失败: {}", e);
+            }
+        }
 
         // 读取XML文件内容
         let cat_result = execute_adb_with_result(&["-s", device_id, "shell", "cat", "/sdcard/ui_dump.xml"]).await?;
 
+        // 检查读取到的内容长度
+        let xml_content = String::from_utf8_lossy(&cat_result.stdout);
+        tracing::info!("📄 XML内容长度: {} bytes", xml_content.len());
+
         // 清理临时文件
         let _ = execute_adb_command(&["-s", device_id, "shell", "rm", "/sdcard/ui_dump.xml"]);
 
-        let xml_content = String::from_utf8_lossy(&cat_result.stdout);
         Ok(xml_content.to_string())
     }
 

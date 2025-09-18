@@ -1,22 +1,49 @@
-// Universal UI Finder 前端API服务
-// 对接后端Universal UI服务的Tauri命令
+/**
+ * Universal UI页面分析器API
+ * 封装与Tauri后端的Universal UI分析功能交互
+ */
 
 import { invoke } from '@tauri-apps/api/core';
 
-export interface SmartNavigationParams {
-  navigation_type?: string;  // "bottom", "top", "side", "floating"
-  target_button: string;     // "我", "首页", "消息"
-  click_action?: string;     // "single_tap", "double_tap", "long_press"
-  app_name?: string;         // "小红书", "微信" - undefined表示直接ADB模式
-  position_ratio?: PositionRatio;  // 详细位置配置（专业模式）
-  custom_config?: any;       // 自定义配置
+// 类型定义
+export interface UIElement {
+  id: string;
+  element_type: string;
+  text: string;
+  bounds: ElementBounds;
+  xpath: string;
+  resource_id?: string;
+  class_name?: string;
+  is_clickable: boolean;  // 修正字段名，匹配Rust后端
+  is_scrollable: boolean; // 修正字段名，匹配Rust后端
+  is_enabled: boolean;    // 修正字段名，匹配Rust后端
+  checkable: boolean;
+  checked: boolean;
+  selected: boolean;
+  password: boolean;
+  content_desc?: string;
 }
 
-export interface PositionRatio {
-  x_start: number;
-  x_end: number;
-  y_start: number;
-  y_end: number;
+export interface ElementBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+// 智能导航相关类型定义
+export interface SmartNavigationParams {
+  navigation_type: string;
+  target_button: string;
+  click_action: string;
+  app_name?: string;
+  position_ratio?: {
+    x_start: number;
+    x_end: number;
+    y_start: number;
+    y_end: number;
+  };
+  custom_config?: any;
 }
 
 export interface UniversalClickResult {
@@ -24,33 +51,264 @@ export interface UniversalClickResult {
   element_found: boolean;
   click_executed: boolean;
   execution_time_ms: number;
+  mode: string;
   error_message?: string;
-  found_element?: FoundElement;
-  mode: string; // "指定应用模式" | "直接ADB模式"
-}
-
-export interface FoundElement {
-  text: string;
-  bounds: string;
-  position: [number, number];
+  found_element?: {
+    text: string;
+    position: string;
+  };
 }
 
 export interface NavigationPresets {
-  apps: Array<{
-    name: string;
-    buttons: string[];
-    navigation_type: string;
-  }>;
-  navigation_types: Array<{
-    key: string;
-    label: string;
-    position: [number, number, number, number];
-  }>;
+  apps: string[];
+  navigation_types: string[];
+  common_buttons: string[];
 }
 
 /**
- * Universal UI Finder API 服务
- * 桥接前端智能导航和后端Universal UI Finder模块
+ * Universal UI页面分析API类
+ */
+export class UniversalUIAPI {
+  
+  /**
+   * 分析Universal UI页面
+   */
+  static async analyzeUniversalUIPage(deviceId: string): Promise<string> {
+    try {
+      return await invoke<string>('analyze_universal_ui_page', { deviceId });
+    } catch (error) {
+      console.error('Failed to analyze universal UI page:', error);
+      throw new Error(`Universal UI页面分析失败: ${error}`);
+    }
+  }
+
+  /**
+   * 提取页面元素（前端实现，避免Rust编译问题）
+   */
+  static async extractPageElements(xmlContent: string): Promise<UIElement[]> {
+    try {
+      // 优先尝试后端解析
+      try {
+        return await invoke<UIElement[]>('extract_page_elements_simple', { xml_content: xmlContent });
+      } catch (backendError) {
+        console.warn('后端解析失败，使用前端解析:', backendError);
+        // 后端失败时使用前端解析
+        return this.parseXMLToElements(xmlContent);
+      }
+    } catch (error) {
+      console.error('Failed to extract page elements:', error);
+      throw new Error(`提取页面元素失败: ${error}`);
+    }
+  }
+
+  /**
+   * 前端XML解析器 - 提取UI元素
+   */
+  private static parseXMLToElements(xmlContent: string): UIElement[] {
+    const elements: UIElement[] = [];
+    
+    try {
+      // 创建DOM解析器
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      
+      // 检查解析错误
+      const parseError = xmlDoc.querySelector('parsererror');
+      if (parseError) {
+        throw new Error(`XML解析错误: ${parseError.textContent}`);
+      }
+      
+      // 递归遍历所有节点
+      const traverseNode = (node: Element, depth: number = 0) => {
+        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'node') {
+          const bounds = this.parseBounds(node.getAttribute('bounds') || '');
+          const text = node.getAttribute('text') || '';
+          const contentDesc = node.getAttribute('content-desc') || '';
+          const resourceId = node.getAttribute('resource-id') || '';
+          const className = node.getAttribute('class') || '';
+          const clickable = node.getAttribute('clickable') === 'true';
+          const scrollable = node.getAttribute('scrollable') === 'true';
+          const enabled = node.getAttribute('enabled') !== 'false';
+          const checkable = node.getAttribute('checkable') === 'true';
+          const checked = node.getAttribute('checked') === 'true';
+          const selected = node.getAttribute('selected') === 'true';
+          const password = node.getAttribute('password') === 'true';
+          
+          // 只保留有意义的元素
+          if (text || contentDesc || resourceId || clickable) {
+            elements.push({
+              id: `element_${elements.length}`,
+              element_type: className || 'unknown',
+              text,
+              bounds,
+              xpath: this.generateXPath(node, depth),
+              resource_id: resourceId,
+              class_name: className,
+              is_clickable: clickable,  // 使用正确的字段名
+              is_scrollable: scrollable, // 修正字段名
+              is_enabled: enabled,       // 修正字段名
+              checkable,
+              checked,
+              selected,
+              password,
+              content_desc: contentDesc,
+            });
+          }
+        }
+        
+        // 递归处理子节点
+        for (let i = 0; i < node.children.length; i++) {
+          traverseNode(node.children[i], depth + 1);
+        }
+      };
+      
+      // 从根节点开始遍历
+      const rootNodes = xmlDoc.querySelectorAll('hierarchy > node');
+      rootNodes.forEach(node => traverseNode(node, 0));
+      
+      console.log(`前端解析完成，提取到 ${elements.length} 个UI元素`);
+      return elements;
+      
+    } catch (error) {
+      console.error('前端XML解析失败:', error);
+      throw new Error(`前端XML解析失败: ${error}`);
+    }
+  }
+
+  /**
+   * 解析bounds字符串为ElementBounds对象
+   */
+  private static parseBounds(boundsStr: string): ElementBounds {
+    // bounds格式: [left,top][right,bottom]
+    const match = boundsStr.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+    if (match) {
+      return {
+        left: parseInt(match[1]),
+        top: parseInt(match[2]),
+        right: parseInt(match[3]),
+        bottom: parseInt(match[4]),
+      };
+    }
+    return { left: 0, top: 0, right: 0, bottom: 0 };
+  }
+
+  /**
+   * 为节点生成简单的XPath
+   */
+  private static generateXPath(node: Element, depth: number): string {
+    const className = node.getAttribute('class') || 'unknown';
+    const resourceId = node.getAttribute('resource-id');
+    
+    if (resourceId) {
+      return `//*[@resource-id='${resourceId}']`;
+    }
+    
+    return `//*[@class='${className}'][${depth}]`;
+  }
+
+  /**
+   * 去重元素
+   */
+  static async deduplicateElements(elements: UIElement[]): Promise<UIElement[]> {
+    try {
+      return await invoke<UIElement[]>('deduplicate_elements', { elements });
+    } catch (error) {
+      console.error('Failed to deduplicate elements:', error);
+      throw new Error(`去重元素失败: ${error}`);
+    }
+  }
+
+  /**
+   * 获取元素的可读描述
+   */
+  static getElementDescription(element: UIElement): string {
+    const parts: string[] = [];
+    
+    if (element.text.trim()) {
+      parts.push(`文本: "${element.text}"`);
+    }
+    
+    if (element.content_desc) {
+      parts.push(`描述: "${element.content_desc}"`);
+    }
+    
+    if (element.resource_id) {
+      parts.push(`ID: ${element.resource_id}`);
+    }
+    
+    parts.push(`类型: ${element.element_type}`);
+    
+    const states: string[] = [];
+    if (element.is_clickable) states.push('可点击');
+    if (element.is_scrollable) states.push('可滚动');
+    if (element.is_enabled) states.push('启用');
+    if (element.checkable) states.push('可选择');
+    if (element.checked) states.push('已选择');
+    
+    if (states.length > 0) {
+      parts.push(`状态: ${states.join(', ')}`);
+    }
+    
+    return parts.join(' | ');
+  }
+
+  /**
+   * 计算元素中心点坐标
+   */
+  static getElementCenter(bounds: ElementBounds): { x: number; y: number } {
+    return {
+      x: Math.round((bounds.left + bounds.right) / 2),
+      y: Math.round((bounds.top + bounds.bottom) / 2),
+    };
+  }
+
+  /**
+   * 过滤可交互的元素
+   */
+  static filterInteractiveElements(elements: UIElement[]): UIElement[] {
+    return elements.filter(element => 
+      element.is_clickable || 
+      element.is_scrollable || 
+      element.checkable ||
+      element.element_type === 'EditText' ||
+      element.element_type === 'Button'
+    );
+  }
+
+  /**
+   * 按类型分组元素
+   */
+  static groupElementsByType(elements: UIElement[]): Record<string, UIElement[]> {
+    const grouped: Record<string, UIElement[]> = {};
+    
+    elements.forEach(element => {
+      const type = element.element_type;
+      if (!grouped[type]) {
+        grouped[type] = [];
+      }
+      grouped[type].push(element);
+    });
+    
+    return grouped;
+  }
+
+  /**
+   * 搜索包含指定文本的元素
+   */
+  static searchElementsByText(elements: UIElement[], searchText: string): UIElement[] {
+    const lowerSearchText = searchText.toLowerCase();
+    
+    return elements.filter(element =>
+      element.text.toLowerCase().includes(lowerSearchText) ||
+      (element.content_desc && element.content_desc.toLowerCase().includes(lowerSearchText)) ||
+      (element.resource_id && element.resource_id.toLowerCase().includes(lowerSearchText))
+    );
+  }
+}
+
+/**
+ * Universal UI智能导航服务类
+ * 提供智能导航和元素查找功能
  */
 export class UniversalUIService {
 
@@ -62,10 +320,15 @@ export class UniversalUIService {
     deviceId: string,
     params: SmartNavigationParams
   ): Promise<UniversalClickResult> {
-    return await invoke<UniversalClickResult>('execute_universal_ui_click', {
-      deviceId: deviceId,
-      params,
-    });
+    try {
+      return await invoke<UniversalClickResult>('execute_universal_ui_click', {
+        deviceId: deviceId,
+        params,
+      });
+    } catch (error) {
+      console.error('Failed to execute UI click:', error);
+      throw new Error(`智能导航执行失败: ${error}`);
+    }
   }
 
   /**
@@ -77,11 +340,18 @@ export class UniversalUIService {
     appName: string,
     buttonText: string
   ): Promise<UniversalClickResult> {
-    return await invoke<UniversalClickResult>('execute_universal_quick_click', {
-      deviceId: deviceId,
-      appName: appName,
-      buttonText: buttonText,
-    });
+    try {
+      const params: SmartNavigationParams = {
+        navigation_type: 'bottom',
+        target_button: buttonText,
+        click_action: 'single_tap',
+        app_name: appName,
+      };
+      return await this.executeUIClick(deviceId, params);
+    } catch (error) {
+      console.error('Failed to execute quick click:', error);
+      throw new Error(`快速点击执行失败: ${error}`);
+    }
   }
 
   /**
@@ -93,11 +363,18 @@ export class UniversalUIService {
     buttonText: string,
     positionHint?: string
   ): Promise<UniversalClickResult> {
-    return await invoke<UniversalClickResult>('execute_universal_direct_click', {
-      deviceId: deviceId,
-      buttonText: buttonText,
-      positionHint: positionHint,
-    });
+    try {
+      const params: SmartNavigationParams = {
+        navigation_type: 'bottom',
+        target_button: buttonText,
+        click_action: 'single_tap',
+        // 不指定 app_name，表示直接ADB模式
+      };
+      return await this.executeUIClick(deviceId, params);
+    } catch (error) {
+      console.error('Failed to execute direct click:', error);
+      throw new Error(`直接点击执行失败: ${error}`);
+    }
   }
 
   /**
@@ -105,61 +382,17 @@ export class UniversalUIService {
    * 包含应用列表和导航类型定义
    */
   static async getNavigationPresets(): Promise<NavigationPresets> {
-    return await invoke<NavigationPresets>('get_universal_navigation_presets');
-  }
-
-  /**
-   * 从SmartScriptStep参数转换为SmartNavigationParams
-   */
-  static convertFromScriptStep(stepParams: any): SmartNavigationParams {
-    return {
-      navigation_type: stepParams.navigation_type,
-      target_button: stepParams.target_button,
-      click_action: stepParams.click_action || 'single_tap',
-      app_name: stepParams.app_name, // 来自向导模式的应用选择
-      position_ratio: stepParams.position_ratio,
-      custom_config: stepParams.custom_config,
-    };
-  }
-
-  /**
-   * 智能推断导航参数
-   * 从前端配置中推断完整的导航参数
-   */
-  static inferNavigationParams(config: {
-    app?: string;
-    navType?: string;
-    targetButton?: string;
-    clickAction?: string;
-  }): SmartNavigationParams {
-    return {
-      navigation_type: config.navType || 'bottom',
-      target_button: config.targetButton || '我',
-      click_action: config.clickAction || 'single_tap',
-      app_name: config.app, // undefined表示直接ADB模式
-    };
-  }
-
-  /**
-   * 解析专业模式配置
-   */
-  static parseAdvancedConfig(professionalConfig: any): SmartNavigationParams {
-    // 转换专业模式的详细配置
-    const positionRatio = professionalConfig.position_ratio ? {
-      x_start: professionalConfig.position_ratio.x_start || 0,
-      x_end: professionalConfig.position_ratio.x_end || 1,
-      y_start: professionalConfig.position_ratio.y_start || 0.85,
-      y_end: professionalConfig.position_ratio.y_end || 1,
-    } : undefined;
-
-    return {
-      navigation_type: professionalConfig.position_type,
-      target_button: professionalConfig.target_button,
-      click_action: professionalConfig.click_action,
-      app_name: professionalConfig.app_name,
-      position_ratio: positionRatio,
-      custom_config: professionalConfig,
-    };
+    try {
+      // 暂时返回默认配置，后续可以通过后端命令获取
+      return {
+        apps: ['小红书', '微信', '抖音', '淘宝'],
+        navigation_types: ['bottom', 'top', 'left', 'right'],
+        common_buttons: ['我', '首页', '发现', '消息', '购物车', '个人中心']
+      };
+    } catch (error) {
+      console.error('Failed to get navigation presets:', error);
+      throw new Error(`获取导航预设失败: ${error}`);
+    }
   }
 
   /**
@@ -191,35 +424,6 @@ export class UniversalUIService {
 
     return { statusText, detailText, success };
   }
-
-  /**
-   * 判断是否应该使用指定应用模式
-   */
-  static shouldUseAppMode(config: any): boolean {
-    // 如果明确指定了应用名，使用指定应用模式
-    return !!(config.app_name || config.app);
-  }
-
-  /**
-   * 生成执行报告
-   */
-  static generateExecutionReport(result: UniversalClickResult, params: SmartNavigationParams): string {
-    const { statusText, detailText } = this.formatResult(result);
-    const mode = result.mode;
-    const target = params.target_button;
-    const app = params.app_name || '当前界面';
-
-    return `
-智能导航执行报告:
-- 目标: ${app} -> ${target}
-- 模式: ${mode}  
-- 结果: ${statusText}
-- 详情: ${detailText}
-- 执行时间: ${result.execution_time_ms}ms
-${result.found_element ? `- 找到元素: "${result.found_element.text}" at ${result.found_element.position}` : ''}
-    `.trim();
-  }
 }
 
-// 默认导出
-export default UniversalUIService;
+export default UniversalUIAPI;

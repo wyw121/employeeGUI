@@ -38,6 +38,7 @@ import UniversalUIAPI, { UIElement, ElementBounds } from '../../api/universalUIA
 import UIElementTree from './UIElementTree';
 import VisualPageAnalyzer from '../VisualPageAnalyzer';
 import { UniversalElementAnalyzer, SmartStepDescriptionGenerator, ElementAnalysisResult } from './UniversalElementAnalyzer';
+import { RealXMLAnalysisService, RealElementAnalysis } from '../../services/RealXMLAnalysisService';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -143,11 +144,35 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
     // 执行智能分析
     const analysis = analyzeVisualElement(element);
     
+    // 生成增强的步骤描述
+    let smartDescription: string;
+    try {
+      // 使用真实XML分析服务进行增强分析
+      const realAnalysis = RealXMLAnalysisService.analyzeElement(
+        element.text || '',
+        element.description || '',
+        {
+          x: element.position?.x || 0,
+          y: element.position?.y || 0,
+          width: element.position?.width || 0,
+          height: element.position?.height || 0
+        },
+        element.type || '',
+        'com.xingin.xhs',
+        element.clickable || false
+      );
+      
+      smartDescription = RealXMLAnalysisService.generateEnhancedStepDescription(realAnalysis);
+    } catch (error) {
+      console.error('可视化元素真实XML分析失败，使用备用方案:', error);
+      smartDescription = analysis ? SmartStepDescriptionGenerator.generateStepDescription(analysis, createElementContext(element)) : `点击 ${element.text || element.type} 元素`;
+    }
+    
     // 创建增强的元素对象
     const enhancedElement = {
       ...uiElement,
       smartAnalysis: analysis,
-      smartDescription: analysis ? SmartStepDescriptionGenerator.generateStepDescription(analysis, createElementContext(element)) : `点击 ${element.text || element.type} 元素`
+      smartDescription: smartDescription
     };
     
     onElementSelected(enhancedElement as any);
@@ -957,15 +982,38 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     }
   };
 
-  // 生成智能步骤描述
+  // 生成智能步骤描述（使用真实XML分析）
   const generateSmartStepDescription = (element: UIElement, analysis: ElementAnalysisResult | null): string => {
-    if (!analysis) {
-      return `点击 ${element.text || element.element_type} 元素`;
+    try {
+      // 使用真实XML分析服务进行增强分析
+      const realAnalysis = RealXMLAnalysisService.analyzeElement(
+        element.text || '',
+        element.content_desc || '',
+        {
+          x: element.bounds?.left || 0,
+          y: element.bounds?.top || 0,
+          width: (element.bounds?.right || 0) - (element.bounds?.left || 0),
+          height: (element.bounds?.bottom || 0) - (element.bounds?.top || 0)
+        },
+        element.element_type || '',
+        'com.xingin.xhs', // 假设是小红书，可以从设备信息中获取
+        element.is_clickable || false
+      );
+      
+      // 生成增强的步骤描述
+      return RealXMLAnalysisService.generateEnhancedStepDescription(realAnalysis);
+      
+    } catch (error) {
+      console.error('真实XML分析失败，使用备用方案:', error);
+      
+      // 备用方案：使用原有的分析
+      if (!analysis) {
+        return `点击 ${element.text || element.element_type} 元素`;
+      }
+      
+      const elementContext = createElementContextFromUIElement(element);
+      return SmartStepDescriptionGenerator.generateStepDescription(analysis, elementContext);
     }
-    
-    const elementContext = createElementContextFromUIElement(element);
-    
-    return SmartStepDescriptionGenerator.generateStepDescription(analysis, elementContext);
   };
 
   // 元素选择

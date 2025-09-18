@@ -1,0 +1,314 @@
+/* 统一可视化视图 - 暗黑主题样式 */
+
+/* 主体Modal样式 */
+.unified-visualization-view .ant-modal-content {
+  background: #1f2937 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.unified-visualization-view .ant-modal-header {
+  background: #111827 !important;
+  border-bottom: 1px solid #374151 !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+.unified-visualization-view .ant-modal-title {
+  color: #f9fafb !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.unified-visualization-view .ant-modal-close {
+  color: #9ca3af !important;
+}
+
+.unified-visualization-view .ant-modal-close:hover {
+  color: #f3f4f6 !important;
+}
+
+.unified-visualization-view .ant-modal-footer {
+  background: #111827 !important;
+  border-top: 1px solid #374151 !important;
+  border-radius: 0 0 12px 12px !important;
+}
+
+/* 标签页样式 */
+.unified-visualization-view .ant-tabs {
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-tabs-nav {
+  background: #374151 !important;
+  border-radius: 8px 8px 0 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.unified-visualization-view .ant-tabs-tab {
+  color: #9ca3af !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 12px 16px !important;
+}
+
+.unified-visualization-view .ant-tabs-tab:hover {
+  color: #e5e7eb !important;
+  background: rgba(75, 85, 99, 0.5) !important;
+}
+
+.unified-visualization-view .ant-tabs-tab-active {
+  color: #60a5fa !important;
+  background: rgba(96, 165, 250, 0.1) !important;
+}
+
+.unified-visualization-view .ant-tabs-ink-bar {
+  background: #60a5fa !important;
+  height: 3px !important;
+}
+
+.unified-visualization-view .ant-tabs-content-holder {
+  background: #1f2937 !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+.unified-visualization-view .ant-tabs-tabpane {
+  background: transparent !important;
+}
+
+/* 卡片样式 */
+.unified-visualization-view .ant-card {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  border-radius: 8px !important;
+}
+
+.unified-visualization-view .ant-card-head {
+  background: #4b5563 !important;
+  border-bottom-color: #6b7280 !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.unified-visualization-view .ant-card-head-title {
+  color: #f9fafb !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+.unified-visualization-view .ant-card-body {
+  background: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-card-small .ant-card-head {
+  padding: 8px 12px !important;
+  min-height: auto !important;
+}
+
+.unified-visualization-view .ant-card-small .ant-card-body {
+  padding: 12px !important;
+}
+
+/* 输入框和搜索样式 */
+.unified-visualization-view .ant-input {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-input:focus,
+.unified-visualization-view .ant-input-focused {
+  background-color: #374151 !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+}
+
+.unified-visualization-view .ant-input::placeholder {
+  color: #9ca3af !important;
+}
+
+.unified-visualization-view .ant-input-group .ant-input-affix-wrapper {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+}
+
+.unified-visualization-view .ant-input-search-button {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  border-color: #3b82f6 !important;
+}
+
+/* 按钮样式 */
+.unified-visualization-view .ant-btn {
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+}
+
+.unified-visualization-view .ant-btn-default {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-btn-default:hover {
+  background: #4b5563 !important;
+  border-color: #6b7280 !important;
+  color: #f9fafb !important;
+}
+
+.unified-visualization-view .ant-btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+.unified-visualization-view .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* 标签样式 */
+.unified-visualization-view .ant-tag {
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  margin: 2px !important;
+  border: 1px solid transparent !important;
+}
+
+.unified-visualization-view .ant-tag-default {
+  background: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-tag-green {
+  background: #065f46 !important;
+  color: #6ee7b7 !important;
+  border-color: #10b981 !important;
+}
+
+.unified-visualization-view .ant-tag-blue {
+  background: #1e3a8a !important;
+  color: #93c5fd !important;
+  border-color: #3b82f6 !important;
+}
+
+.unified-visualization-view .ant-tag-purple {
+  background: #581c87 !important;
+  color: #c4b5fd !important;
+  border-color: #8b5cf6 !important;
+}
+
+.unified-visualization-view .ant-tag-orange {
+  background: #9a3412 !important;
+  color: #fdba74 !important;
+  border-color: #f97316 !important;
+}
+
+/* Typography样式 */
+.unified-visualization-view .ant-typography {
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-typography h1,
+.unified-visualization-view .ant-typography h2,
+.unified-visualization-view .ant-typography h3,
+.unified-visualization-view .ant-typography h4,
+.unified-visualization-view .ant-typography h5 {
+  color: #f9fafb !important;
+}
+
+.unified-visualization-view .ant-typography-caption {
+  color: #9ca3af !important;
+}
+
+/* Badge样式 */
+.unified-visualization-view .ant-badge-count {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border: 1px solid #059669 !important;
+}
+
+/* Row和Col样式 */
+.unified-visualization-view .ant-row {
+  color: #e5e7eb !important;
+}
+
+.unified-visualization-view .ant-col {
+  color: #e5e7eb !important;
+}
+
+/* 空状态样式 */
+.unified-visualization-view .ant-empty {
+  color: #9ca3af !important;
+}
+
+.unified-visualization-view .ant-empty-description {
+  color: #9ca3af !important;
+}
+
+/* Tooltip样式 */
+.unified-visualization-view .ant-tooltip-inner {
+  background-color: #374151 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #4b5563 !important;
+}
+
+.unified-visualization-view .ant-tooltip-arrow::before {
+  background-color: #374151 !important;
+  border: 1px solid #4b5563 !important;
+}
+
+/* 可视化预览区域自定义样式 */
+.unified-visualization-view .element-preview-area {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%) !important;
+  border: 2px solid #374151 !important;
+  border-radius: 8px !important;
+}
+
+.unified-visualization-view .element-overlay {
+  transition: all 0.2s ease !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+}
+
+.unified-visualization-view .element-overlay:hover {
+  box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.6) !important;
+  z-index: 10 !important;
+}
+
+.unified-visualization-view .clickable-element {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border: 1px solid #10b981 !important;
+}
+
+.unified-visualization-view .non-clickable-element {
+  background: rgba(156, 163, 175, 0.15) !important;
+  border: 1px solid #6b7280 !important;
+}
+
+/* 滚动条样式 */
+.unified-visualization-view ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.unified-visualization-view ::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.unified-visualization-view ::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #4b5563, #6b7280);
+  border-radius: 3px;
+}
+
+.unified-visualization-view ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #6b7280, #9ca3af);
+}
+
+/* 响应式设计 */
+@media (max-width: 1400px) {
+  .unified-visualization-view .ant-modal {
+    width: 95vw !important;
+    max-width: none !important;
+  }
+}

@@ -1,0 +1,335 @@
+/* 可视化页面分析器 - 暗黑主题样式 */
+.visual-page-analyzer .ant-modal-content {
+  max-height: 80vh;
+  overflow: hidden;
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #374151;
+}
+
+.visual-page-analyzer .ant-modal-body {
+  max-height: calc(80vh - 110px);
+  overflow: auto;
+  padding: 16px;
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+}
+
+.visual-page-analyzer .ant-modal-header {
+  background-color: #111827 !important;
+  border-bottom: 1px solid #374151 !important;
+}
+
+.visual-page-analyzer .ant-modal-title {
+  color: #f9fafb !important;
+}
+
+.visual-page-analyzer .ant-modal-close {
+  color: #9ca3af !important;
+}
+
+.visual-page-analyzer .ant-modal-close:hover {
+  color: #f9fafb !important;
+}
+
+/* 确保所有文字在暗色背景下都是浅色 */
+.visual-page-analyzer .ant-typography,
+.visual-page-analyzer .ant-typography h1,
+.visual-page-analyzer .ant-typography h2,
+.visual-page-analyzer .ant-typography h3,
+.visual-page-analyzer .ant-typography h4,
+.visual-page-analyzer .ant-typography h5,
+.visual-page-analyzer .ant-typography h6,
+.visual-page-analyzer .ant-typography p,
+.visual-page-analyzer .ant-typography span,
+.visual-page-analyzer .ant-typography div,
+.visual-page-analyzer .ant-space {
+  color: #e5e7eb !important;
+}
+
+/* 输入框暗黑主题 */
+.visual-page-analyzer .ant-input {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+.visual-page-analyzer .ant-input::placeholder {
+  color: #9ca3af !important;
+}
+
+.visual-page-analyzer .ant-input:focus,
+.visual-page-analyzer .ant-input:hover {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+}
+
+/* Switch 暗黑主题 */
+.visual-page-analyzer .ant-switch {
+  background-color: #4b5563 !important;
+}
+
+.visual-page-analyzer .ant-switch-checked {
+  background-color: #3b82f6 !important;
+}
+
+/* 页面预览容器 - 暗黑主题 */
+.page-preview {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  border: 1px solid #374151;
+}
+
+/* 预览元素样式 */
+.preview-element {
+  transition: all 0.2s ease;
+  border-radius: 4px !important;
+  position: relative;
+}
+
+.preview-element:hover {
+  transform: scale(1.1);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.preview-element.high {
+  border: 3px solid #ff4d4f !important;
+  box-shadow: 0 0 8px rgba(255, 77, 79, 0.5);
+}
+
+.preview-element.medium {
+  border: 2px solid #faad14 !important;
+  box-shadow: 0 0 6px rgba(250, 173, 20, 0.4);
+}
+
+.preview-element.low {
+  border: 1px solid #d9d9d9 !important;
+  opacity: 0.6;
+}
+
+/* 元素卡片样式 - 暗黑主题 */
+.element-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #374151 !important;
+  border: 1px solid #4b5563 !important;
+}
+
+.element-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  background-color: #4b5563 !important;
+}
+
+.element-card .ant-card-head {
+  background-color: #374151 !important;
+  border-bottom: 1px solid #4b5563 !important;
+}
+
+.element-card .ant-card-head-title {
+  color: #f9fafb !important;
+}
+
+.element-card .ant-card-body {
+  background-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+.element-card.high {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, #374151 20%) !important;
+}
+
+.element-card.medium {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.1) 0%, #374151 20%) !important;
+}
+
+.element-card.low {
+  border-left: 4px solid #6b7280;
+  background: linear-gradient(90deg, rgba(107, 114, 128, 0.1) 0%, #374151 20%) !important;
+}
+
+/* 分类按钮样式 - 暗黑主题 */
+.visual-page-analyzer .ant-btn {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+.visual-page-analyzer .ant-btn:hover {
+  background-color: #4b5563 !important;
+  border-color: #6b7280 !important;
+  color: #f9fafb !important;
+  transform: translateX(4px);
+}
+
+.visual-page-analyzer .ant-btn-primary {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.visual-page-analyzer .ant-btn-primary:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.ant-btn.category-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+/* 统计卡片动画 */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.stats-card {
+  animation: pulse 2s infinite;
+}
+
+/* 搜索框增强 - 暗黑主题 */
+.ant-input-affix-wrapper:focus-within {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+/* 滚动条美化 - 暗黑主题 */
+.visual-page-analyzer ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.visual-page-analyzer ::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.visual-page-analyzer ::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #4b5563, #6b7280);
+  border-radius: 3px;
+}
+
+.visual-page-analyzer ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #6b7280, #9ca3af);
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .visual-page-analyzer .ant-modal {
+    width: 95vw !important;
+    max-width: none !important;
+  }
+}
+
+/* 工具提示增强 - 暗黑主题 */
+.ant-tooltip-inner {
+  max-width: 300px;
+  font-size: 12px;
+  background-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+.ant-tooltip-arrow::before {
+  background-color: #374151 !important;
+}
+
+/* 徽章样式 - 暗黑主题 */
+.ant-badge-status-text {
+  font-size: 11px;
+  margin-left: 4px;
+  color: #e5e7eb !important;
+}
+
+/* 卡片标题样式 - 暗黑主题 */
+.ant-card-head-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f9fafb !important;
+}
+
+/* 元素详情弹窗 - 暗黑主题 */
+.ant-modal .element-detail {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e5e7eb;
+}
+
+.element-detail p {
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: #374151;
+  border-radius: 4px;
+  border-left: 3px solid #60a5fa;
+  color: #e5e7eb;
+}
+
+/* Alert组件暗黑主题 */
+.visual-page-analyzer .ant-alert {
+  background-color: #374151 !important;
+  border: 1px solid #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+.visual-page-analyzer .ant-alert-message {
+  color: #f9fafb !important;
+}
+
+.visual-page-analyzer .ant-alert-description {
+  color: #e5e7eb !important;
+}
+
+/* Badge暗黑主题 */
+.visual-page-analyzer .ant-badge-status-text {
+  color: #e5e7eb !important;
+}
+
+/* 加载状态 - 暗黑主题 */
+.loading-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  background: #374151;
+  border-radius: 8px;
+  color: #e5e7eb;
+  font-size: 14px;
+  border: 1px solid #4b5563;
+}
+
+/* 空状态样式 - 暗黑主题 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #e5e7eb;
+}
+
+.empty-state .ant-empty-image {
+  margin-bottom: 16px;
+}
+
+/* 高亮搜索结果 - 暗黑主题优化 */
+.highlight-text {
+  background: linear-gradient(120deg, #fbbf24 0%, #f59e0b 100%);
+  color: #1f2937;
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-weight: 600;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+}

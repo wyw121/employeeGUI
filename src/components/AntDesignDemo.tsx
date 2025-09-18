@@ -1,6 +1,7 @@
 import {
     AimOutlined,
     BarChartOutlined,
+    EyeOutlined,
     FolderOutlined,
     MobileOutlined,
     SecurityScanOutlined,
@@ -32,6 +33,7 @@ import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
+import VisualizationViewPage from '../pages/VisualizationViewPage'; // 可视化视图主页
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
@@ -41,7 +43,7 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 export const AntDesignIntegrationDemo: React.FC = () => {
-  const [selectedKey, setSelectedKey] = useState('adb-test'); // 默认选中ADB测试
+  const [selectedKey, setSelectedKey] = useState('visualization-view'); // 默认选中可视化视图
   const [selectedDevice, setSelectedDevice] = useState<string>('');
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -49,6 +51,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
   };
 
   const menuItems = [
+    {
+      key: 'visualization-view',
+      icon: <EyeOutlined />,
+      label: '可视化视图',
+    },
     {
       key: 'dashboard',
       icon: <BarChartOutlined />,
@@ -223,10 +230,20 @@ export const AntDesignIntegrationDemo: React.FC = () => {
           {/* 主内容区域 */}
           <Content style={{ 
             margin: '0', 
+            padding: '0',
             background: '#0d1117',
             height: 'calc(100vh - 64px)',
-            overflow: 'auto'
+            overflow: 'hidden'
           }}>
+            {selectedKey === 'visualization-view' && (
+              <VisualizationViewPage />
+            )}
+
+            <div style={{ 
+              padding: selectedKey === 'visualization-view' ? '0' : '24px',
+              height: '100%',
+              overflow: selectedKey === 'visualization-view' ? 'hidden' : 'auto'
+            }}>
             {selectedKey === 'dashboard' && (
               <div className="space-y-6">
                 {/* 统计卡片 */}
@@ -347,6 +364,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             {selectedKey === 'universal-ui-test' && (
               <UniversalUITestComponent />
             )}
+            </div>
           </Content>
         </Layout>
       </Layout>

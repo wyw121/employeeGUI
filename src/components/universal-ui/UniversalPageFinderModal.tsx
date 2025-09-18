@@ -43,6 +43,425 @@ const { Option } = Select;
 const { TabPane } = Tabs;
 const { Search } = Input;
 
+// 从 VisualPageAnalyzer 提取的核心内容组件
+interface VisualPageAnalyzerContentProps {
+  xmlContent: string;
+  onElementSelected?: (element: UIElement) => void;
+}
+
+// VisualPageAnalyzer 中使用的元素接口
+interface VisualUIElement {
+  id: string;
+  text: string;
+  description: string;
+  type: string;
+  category: string;
+  position: { x: number; y: number; width: number; height: number };
+  clickable: boolean;
+  importance: 'high' | 'medium' | 'low';
+  userFriendlyName: string;
+}
+
+// 元素分类定义
+interface VisualElementCategory {
+  name: string;
+  icon: React.ReactNode;
+  color: string;
+  description: string;
+  elements: VisualUIElement[];
+}
+
+const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({ 
+  xmlContent, 
+  onElementSelected 
+}) => {
+  const [searchText, setSearchText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [showOnlyClickable, setShowOnlyClickable] = useState(false);
+  const [elements, setElements] = useState<VisualUIElement[]>([]);
+  const [categories, setCategories] = useState<VisualElementCategory[]>([]);
+
+  // 从 VisualPageAnalyzer 复制的解析函数
+  const parseBounds = (bounds: string): { x: number; y: number; width: number; height: number } => {
+    const match = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+    if (!match) return { x: 0, y: 0, width: 0, height: 0 };
+    
+    const [, x1, y1, x2, y2] = match.map(Number);
+    return {
+      x: x1,
+      y: y1,
+      width: x2 - x1,
+      height: y2 - y1
+    };
+  };
+
+  // 获取元素的用户友好名称
+  const getUserFriendlyName = (node: any): string => {
+    if (node['content-desc'] && node['content-desc'].trim()) {
+      return node['content-desc'];
+    }
+    if (node.text && node.text.trim()) {
+      return node.text;
+    }
+    
+    const className = node.class || '';
+    if (className.includes('Button')) return '按钮';
+    if (className.includes('TextView')) return '文本';
+    if (className.includes('ImageView')) return '图片';
+    if (className.includes('EditText')) return '输入框';
+    if (className.includes('RecyclerView')) return '列表';
+    if (className.includes('ViewPager')) return '滑动页面';
+    if (className.includes('Tab')) return '标签页';
+    
+    return '未知元素';
+  };
+
+  // 判断元素类别
+  const categorizeElement = (node: any): string => {
+    const contentDesc = node['content-desc'] || '';
+    const text = node.text || '';
+    const className = node.class || '';
+    
+    if (contentDesc.includes('首页') || contentDesc.includes('消息') || contentDesc.includes('我') || 
+        contentDesc.includes('市集') || contentDesc.includes('发布') || 
+        text.includes('首页') || text.includes('消息') || text.includes('我')) {
+      return 'navigation';
+    }
+    
+    if (contentDesc.includes('关注') || contentDesc.includes('发现') || contentDesc.includes('视频') || 
+        text.includes('关注') || text.includes('发现') || text.includes('视频')) {
+      return 'tabs';
+    }
+    
+    if (contentDesc.includes('搜索') || className.includes('search')) {
+      return 'search';
+    }
+    
+    if (contentDesc.includes('笔记') || contentDesc.includes('视频') || 
+        (node.clickable === 'true' && contentDesc.includes('来自'))) {
+      return 'content';
+    }
+    
+    if (className.includes('Button') || node.clickable === 'true') {
+      return 'buttons';
+    }
+    
+    if (className.includes('TextView') && text.trim()) {
+      return 'text';
+    }
+    
+    if (className.includes('ImageView')) {
+      return 'images';
+    }
+    
+    return 'others';
+  };
+
+  // 获取元素重要性
+  const getElementImportance = (node: any): 'high' | 'medium' | 'low' => {
+    const contentDesc = node['content-desc'] || '';
+    
+    if (contentDesc.includes('首页') || contentDesc.includes('搜索') || 
+        contentDesc.includes('笔记') || contentDesc.includes('视频') ||
+        contentDesc.includes('发布')) {
+      return 'high';
+    }
+    
+    if (contentDesc.includes('关注') || contentDesc.includes('发现') || 
+        contentDesc.includes('消息') || node.clickable === 'true') {
+      return 'medium';
+    }
+    
+    return 'low';
+  };
+
+  // 解析XML并提取元素
+  const parseXML = (xmlString: string) => {
+    if (!xmlString) return;
+    
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+      const allNodes = xmlDoc.querySelectorAll('node');
+      
+      const extractedElements: VisualUIElement[] = [];
+      const elementCategories: { [key: string]: VisualElementCategory } = {
+        navigation: { name: '底部导航', icon: <AppstoreOutlined />, color: '#1890ff', description: '应用主要导航按钮', elements: [] },
+        tabs: { name: '顶部标签', icon: <AppstoreOutlined />, color: '#722ed1', description: '页面切换标签', elements: [] },
+        search: { name: '搜索功能', icon: <SearchOutlined />, color: '#13c2c2', description: '搜索相关功能', elements: [] },
+        content: { name: '内容卡片', icon: <AppstoreOutlined />, color: '#52c41a', description: '主要内容区域', elements: [] },
+        buttons: { name: '按钮控件', icon: <AppstoreOutlined />, color: '#fa8c16', description: '可点击的按钮', elements: [] },
+        text: { name: '文本内容', icon: <AppstoreOutlined />, color: '#eb2f96', description: '文本信息显示', elements: [] },
+        images: { name: '图片内容', icon: <AppstoreOutlined />, color: '#f5222d', description: '图片和图标', elements: [] },
+        others: { name: '其他元素', icon: <AppstoreOutlined />, color: '#8c8c8c', description: '其他UI元素', elements: [] }
+      };
+      
+      allNodes.forEach((node, index) => {
+        const bounds = node.getAttribute('bounds') || '';
+        const text = node.getAttribute('text') || '';
+        const contentDesc = node.getAttribute('content-desc') || '';
+        const className = node.getAttribute('class') || '';
+        const clickable = node.getAttribute('clickable') === 'true';
+        
+        if (!bounds || bounds === '[0,0][0,0]') return;
+        if (!text && !contentDesc && !clickable) return;
+        
+        const position = parseBounds(bounds);
+        if (position.width <= 0 || position.height <= 0) return;
+        
+        const category = categorizeElement(node);
+        const userFriendlyName = getUserFriendlyName(node);
+        const importance = getElementImportance(node);
+        
+        const element: VisualUIElement = {
+          id: `element-${index}`,
+          text: text,
+          description: contentDesc || `${userFriendlyName}${clickable ? '（可点击）' : ''}`,
+          type: className.split('.').pop() || 'Unknown',
+          category,
+          position,
+          clickable,
+          importance,
+          userFriendlyName
+        };
+        
+        extractedElements.push(element);
+        elementCategories[category].elements.push(element);
+      });
+      
+      setElements(extractedElements);
+      setCategories(Object.values(elementCategories).filter(cat => cat.elements.length > 0));
+    } catch (error) {
+      console.error('XML解析失败:', error);
+    }
+  };
+
+  // 解析XML内容
+  React.useEffect(() => {
+    if (xmlContent) {
+      parseXML(xmlContent);
+    }
+  }, [xmlContent]);
+
+  // 过滤元素
+  const filteredElements = elements.filter(element => {
+    const matchesSearch = searchText === '' || 
+      element.userFriendlyName.toLowerCase().includes(searchText.toLowerCase()) ||
+      element.description.toLowerCase().includes(searchText.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'all' || element.category === selectedCategory;
+    const matchesClickable = !showOnlyClickable || element.clickable;
+    
+    return matchesSearch && matchesCategory && matchesClickable;
+  });
+
+  // 渲染可视化页面预览
+  const renderPagePreview = () => {
+    if (elements.length === 0) {
+      return (
+        <div style={{ 
+          width: 400, 
+          height: 600, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          border: '1px solid #d1d5db',
+          borderRadius: 8,
+          backgroundColor: '#f9fafb'
+        }}>
+          <Text type="secondary">等待页面分析数据...</Text>
+        </div>
+      );
+    }
+
+    const maxX = Math.max(...elements.map(e => e.position.x + e.position.width));
+    const maxY = Math.max(...elements.map(e => e.position.y + e.position.height));
+    const scale = Math.min(400 / maxX, 600 / maxY, 1);
+    
+    return (
+      <div style={{ 
+        width: 400, 
+        height: 600, 
+        position: 'relative', 
+        border: '1px solid #4b5563', 
+        borderRadius: 8, 
+        overflow: 'hidden', 
+        backgroundColor: '#1f2937' 
+      }}>
+        <Title level={5} style={{ 
+          textAlign: 'center', 
+          margin: '8px 0', 
+          color: '#e5e7eb', 
+          fontWeight: 'bold' 
+        }}>
+          小红书页面布局预览
+        </Title>
+        {filteredElements.map(element => {
+          const category = categories.find(cat => cat.name === element.category);
+          return (
+            <div
+              key={element.id}
+              title={`${element.userFriendlyName}: ${element.description}`}
+              style={{
+                position: 'absolute',
+                left: element.position.x * scale,
+                top: element.position.y * scale + 30,
+                width: Math.max(element.position.width * scale, 2),
+                height: Math.max(element.position.height * scale, 2),
+                backgroundColor: category?.color || '#ccc',
+                opacity: element.clickable ? 0.8 : 0.5,
+                border: element.clickable ? '2px solid #fff' : '1px solid rgba(255,255,255,0.5)',
+                borderRadius: 2,
+                cursor: element.clickable ? 'pointer' : 'default'
+              }}
+              onClick={() => {
+                if (element.clickable && onElementSelected) {
+                  // 转换为 UIElement 格式
+                  const uiElement: UIElement = {
+                    id: element.id,
+                    text: element.text,
+                    element_type: element.type,
+                    xpath: '',
+                    bounds: {
+                      left: element.position.x,
+                      top: element.position.y,
+                      right: element.position.x + element.position.width,
+                      bottom: element.position.y + element.position.height
+                    },
+                    is_clickable: element.clickable,
+                    is_scrollable: false,
+                    is_enabled: true,
+                    checkable: false,
+                    checked: false,
+                    selected: false,
+                    password: false,
+                    content_desc: element.description
+                  };
+                  onElementSelected(uiElement);
+                }
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 16, height: 600 }}>
+      {/* 左侧控制面板 */}
+      <div style={{ width: 300, borderRight: '1px solid #f0f0f0', paddingRight: 16 }}>
+        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          {/* 搜索框 */}
+          <Input
+            placeholder="搜索元素..."
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          
+          {/* 过滤选项 */}
+          <div>
+            <Space>
+              <input 
+                type="checkbox"
+                checked={showOnlyClickable} 
+                onChange={(e) => setShowOnlyClickable(e.target.checked)}
+              />
+              <Text>只显示可点击元素</Text>
+            </Space>
+          </div>
+          
+          {/* 分类选择 */}
+          <div>
+            <Title level={5}>按功能分类</Title>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button 
+                type={selectedCategory === 'all' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => setSelectedCategory('all')}
+                style={{ textAlign: 'left' }}
+              >
+                <AppstoreOutlined /> 全部 ({elements.length})
+              </Button>
+              {categories.map(category => (
+                <Button
+                  key={category.name}
+                  type={selectedCategory === category.name ? 'primary' : 'default'}
+                  size="small"
+                  onClick={() => setSelectedCategory(category.name)}
+                  style={{ 
+                    textAlign: 'left', 
+                    borderColor: category.color,
+                    backgroundColor: selectedCategory === category.name ? category.color : undefined
+                  }}
+                >
+                  {category.icon} {category.name} ({category.elements.length})
+                </Button>
+              ))}
+            </div>
+          </div>
+          
+          {/* 统计信息 */}
+          <Alert
+            message="页面统计"
+            description={
+              <div>
+                <p>总元素: {elements.length} 个</p>
+                <p>可点击: {elements.filter(e => e.clickable).length} 个</p>
+                <p>高重要性: {elements.filter(e => e.importance === 'high').length} 个</p>
+              </div>
+            }
+            type="info"
+          />
+        </Space>
+      </div>
+      
+      {/* 中间页面预览 */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+        {renderPagePreview()}
+      </div>
+      
+      {/* 右侧元素列表 */}
+      <div style={{ width: 400, maxHeight: 600, overflowY: 'auto' }}>
+        <Title level={5}>元素列表 ({filteredElements.length})</Title>
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {filteredElements.map(element => {
+            const category = categories.find(cat => cat.name === element.category);
+            return (
+              <Card
+                key={element.id}
+                size="small"
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {category?.icon}
+                    <span style={{ color: category?.color }}>{element.userFriendlyName}</span>
+                    {element.clickable && <Tag color="green">可点击</Tag>}
+                  </div>
+                }
+                extra={
+                  <Tag 
+                    color={element.importance === 'high' ? 'red' : element.importance === 'medium' ? 'orange' : 'default'}
+                  >
+                    {element.importance === 'high' ? '重要' : element.importance === 'medium' ? '中等' : '一般'}
+                  </Tag>
+                }
+              >
+                <div style={{ fontSize: 12 }}>
+                  <p style={{ margin: 0 }}><strong>功能:</strong> {element.description}</p>
+                  <p style={{ margin: 0 }}><strong>位置:</strong> ({element.position.x}, {element.position.y})</p>
+                  <p style={{ margin: 0 }}><strong>大小:</strong> {element.position.width} × {element.position.height}</p>
+                  {element.text && <p style={{ margin: 0 }}><strong>文本:</strong> {element.text}</p>}
+                </div>
+              </Card>
+            );
+          })}
+        </Space>
+      </div>
+    </div>
+  );
+};
+
 interface UniversalPageFinderModalProps {
   visible: boolean;
   onClose: () => void;
@@ -68,9 +487,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   const [searchText, setSearchText] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
   const [analysisResult, setAnalysisResult] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list'); // 显示模式
+  const [viewMode, setViewMode] = useState<'list' | 'tree' | 'visual'>('list'); // 显示模式（新增visual）
   const [selectedElementId, setSelectedElementId] = useState<string>(''); // 选中的元素
-  const [showVisualAnalyzer, setShowVisualAnalyzer] = useState(false); // 可视化分析器开关
 
   // 重置状态
   const resetState = () => {
@@ -591,37 +1009,6 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                 )}
               </Button>
 
-              {/* 可视化分析器按钮 */}
-              <Button
-                type="default"
-                icon={<AppstoreOutlined />}
-                onClick={() => setShowVisualAnalyzer(true)}
-                disabled={!analysisResult}
-                size="large"
-                block
-                style={{
-                  height: '50px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  background: analysisResult 
-                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
-                    : 'linear-gradient(135deg, #f1f3f4, #e8eaed)',
-                  color: analysisResult ? 'white' : '#666',
-                  border: 'none',
-                  borderRadius: '12px',
-                  boxShadow: analysisResult 
-                    ? '0 4px 15px rgba(102, 126, 234, 0.4)'
-                    : '0 2px 8px rgba(0,0,0,0.1)',
-                  transition: 'all 0.3s ease',
-                  marginTop: '12px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>🎨</span>
-                  <span>可视化页面分析</span>
-                </div>
-              </Button>
-
               {/* 统计信息卡片 */}
               {stats.total > 0 && (
                 <div style={{
@@ -745,6 +1132,13 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                       >
                         层级树
                       </Button>
+                      <Button 
+                        type={viewMode === 'visual' ? 'primary' : 'default'}
+                        icon={<EyeOutlined />}
+                        onClick={() => setViewMode('visual')}
+                      >
+                        可视化视图
+                      </Button>
                     </Button.Group>
                   </Space>
                 )}
@@ -765,6 +1159,12 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                     elements={elements}
                     onElementSelect={handleTreeElementSelect}
                     selectedElementId={selectedElementId}
+                  />
+                ) : viewMode === 'visual' ? (
+                  // 可视化视图（嵌入原有的VisualPageAnalyzer功能逻辑）
+                  <VisualPageAnalyzerContent 
+                    xmlContent={analysisResult} 
+                    onElementSelected={onElementSelected}
                   />
                 ) : (
                   // 列表视图
@@ -955,13 +1355,6 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
           </Card>
         </Col>
       </Row>
-      
-      {/* 可视化页面分析器 */}
-      <VisualPageAnalyzer
-        visible={showVisualAnalyzer}
-        onClose={() => setShowVisualAnalyzer(false)}
-        xmlContent={analysisResult}
-      />
     </Modal>
   );
 };

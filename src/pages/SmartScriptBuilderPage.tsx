@@ -49,7 +49,10 @@ import { SmartNavigationModal } from '../components';
 import { SmartPageFinderModal } from '../components/smart-page-finder';
 import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
 import SmartStepGenerator from '../modules/SmartStepGenerator';
+import ElementNameEditor from '../components/element-name-editor/ElementNameEditor';
+import { UIElement, ElementNameMapper } from '../modules/ElementNameMapper';
 import { testSmartStepGenerator, testVariousCases } from '../test/SmartStepGeneratorTest';
+import { runAllElementNameMapperTests } from '../test/ElementNameMapperTest';
 import { PageAnalysisProvider } from '../application/page-analysis/PageAnalysisProvider';
 import { PageAnalysisApplicationService } from '../application/page-analysis/PageAnalysisApplicationService';
 import { SmartActionType } from '../types/smartComponents';
@@ -302,6 +305,9 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
   const [showPageAnalyzer, setShowPageAnalyzer] = useState(false); // 显示智能页面分析器
+  const [showElementNameEditor, setShowElementNameEditor] = useState(false); // 显示元素名称编辑器
+  const [editingElement, setEditingElement] = useState<UIElement | null>(null); // 正在编辑的元素
+  const [editingStepForName, setEditingStepForName] = useState<SmartScriptStep | null>(null); // 正在编辑名称的步骤
   const [lastNavigationConfig, setLastNavigationConfig] = useState<{app_name?: string, navigation_type?: string} | null>(null); // 记录最后的导航配置
   const [executorConfig, setExecutorConfig] = useState<ExecutorConfig>({
     default_timeout_ms: 10000,
@@ -387,7 +393,9 @@ const SmartScriptBuilderPage: React.FC = () => {
   const handleSaveStep = async () => {
     try {
       const values = await form.validateFields();
+      console.log('🔍 表单验证后的所有值:', values);
       const { step_type, name, description, ...parameters } = values;
+      console.log('🔍 解构后的 parameters:', parameters);
 
       const newStep: SmartScriptStep = {
         id: editingStep?.id || `step_${Date.now()}`,
@@ -437,6 +445,139 @@ const SmartScriptBuilderPage: React.FC = () => {
     setSteps(prev => prev.map(s => 
       s.id === stepId ? { ...s, enabled: !s.enabled } : s
     ));
+  };
+
+  // 🆕 打开元素名称编辑器
+  const handleEditElementName = (step: SmartScriptStep) => {
+    console.log('🏷️ 打开元素名称编辑器，步骤:', step);
+    console.log('🏷️ 步骤参数详细信息:', step.parameters);
+    console.log('🔍 步骤参数所有键:', Object.keys(step.parameters || {}));
+    
+    // 从步骤参数中重构元素信息 - 使用更全面的属性提取
+    const params = step.parameters || {};
+    const element: UIElement = {
+      id: step.id,
+      text: (params.text as string) || (params.element_text as string) || '',
+      element_type: (params.element_type as string) || '',
+      resource_id: (params.resource_id as string) || undefined,
+      content_desc: (params.content_desc as string) || undefined,
+      bounds: params.bounds as any,
+      smartDescription: (params.smartDescription as string) || undefined,
+      smartAnalysis: params.smartAnalysis || undefined,
+      // 🆕 添加更多属性以确保完整的指纹匹配
+      xpath: (params.xpath as string) || undefined,
+      ...(params.class_name && { class_name: params.class_name as string }),
+      ...(params.parent && { parent: params.parent }),
+      ...(params.siblings && { siblings: params.siblings }),
+      ...(params.clickable !== undefined && { clickable: Boolean(params.clickable) })
+    };
+
+    console.log('🏷️ 重构后的元素信息:', element);
+    console.log('🔍 重构后的关键属性 - text:', element.text, 'element_type:', element.element_type, 'resource_id:', element.resource_id, 'clickable:', element.clickable);
+    
+    setEditingElement(element);
+    setEditingStepForName(step); // 🆕 保存正在编辑名称的步骤
+    setShowElementNameEditor(true);
+  };
+
+  // 🆕 处理元素名称保存
+  const handleElementNameSaved = (newDisplayName: string) => {
+    console.log('💾 元素名称已保存:', newDisplayName);
+    console.log('🔍 当前编辑元素:', editingElement);
+    console.log('🔍 当前编辑步骤:', editingStepForName);
+    
+    // 🆕 立即测试映射是否生效
+    if (editingElement) {
+      console.log('🧪 测试刚保存的映射是否立即生效...');
+      const testMapping = ElementNameMapper.getDisplayName(editingElement);
+      console.log('🧪 ElementNameMapper.getDisplayName 测试结果:', testMapping);
+    }
+    
+    // 🆕 添加延迟确保保存操作完全完成
+    setTimeout(() => {
+      // 🆕 强制刷新缓存以确保新映射立即生效
+      console.log('🔄 开始强制刷新缓存...');
+      ElementNameMapper.refreshCache();
+      
+      // 🆕 再次测试映射以确认更新生效
+      if (editingElement) {
+        console.log('🧪 重新测试映射更新后的效果...');
+        const updatedMapping = ElementNameMapper.getDisplayName(editingElement);
+        console.log('🧪 更新后的映射结果:', updatedMapping);
+      }
+      
+      // 刷新页面以应用新的名称映射
+      if (editingElement && editingStepForName) {
+        try {
+          console.log('🔄 开始重新生成步骤信息...');
+          // 🆕 重新生成智能步骤信息，使用新的显示名称
+          const stepInfo = SmartStepGenerator.generateStepInfo(editingElement);
+          console.log('✨ 使用刷新后的缓存重新生成步骤:', stepInfo);
+          
+          // 🆕 更新 steps 数组中对应的步骤
+          setSteps(prevSteps => {
+            const updatedSteps = prevSteps.map(step => 
+              step.id === editingStepForName.id 
+                ? { 
+                    ...step, 
+                    name: stepInfo.name,
+                    description: stepInfo.description
+                  }
+                : step
+            );
+            console.log('🔄 步骤数组已更新:', updatedSteps);
+            return updatedSteps;
+          });
+          
+          // 更新表单中的步骤名称和描述（如果当前正在编辑这个步骤）
+          if (editingStep?.id === editingStepForName.id) {
+            form.setFieldValue('name', stepInfo.name);
+            form.setFieldValue('description', stepInfo.description);
+          }
+          
+          console.log('✨ 步骤信息已使用新名称更新:', stepInfo);
+          
+          message.success({
+            content: (
+              <div>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                  🎯 元素名称已更新并应用！
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  新步骤名称: {stepInfo.name}
+                </div>
+              </div>
+            ),
+            duration: 3
+          });
+        } catch (error) {
+          console.error('❌ 更新步骤信息失败:', error);
+          
+          // 降级处理：手动更新显示名称
+          const updatedName = `点击"${newDisplayName}"`;
+          
+          // 更新 steps 数组
+          setSteps(prevSteps => 
+            prevSteps.map(step => 
+              step.id === editingStepForName.id 
+                ? { ...step, name: updatedName }
+                : step
+            )
+          );
+          
+          // 更新表单（如果正在编辑这个步骤）
+          if (editingStep?.id === editingStepForName.id) {
+            form.setFieldValue('name', updatedName);
+          }
+          
+          message.success(`元素名称映射已保存: "${newDisplayName}"`);
+        }
+      }
+    }, 100); // 100ms延迟确保保存操作完成
+    
+    setShowElementNameEditor(false);
+    setEditingElement(null);
+    setEditingStepForName(null); // 🆕 清空正在编辑名称的步骤
   };
 
   // 执行智能脚本
@@ -780,6 +921,18 @@ const SmartScriptBuilderPage: React.FC = () => {
                             <Text strong>{step.name}</Text>
                             <Tag color={config?.color}>{config?.name}</Tag>
                             {!step.enabled && <Tag>已禁用</Tag>}
+                            {/* 🆕 修改元素名称按钮 - 仅对智能元素查找步骤显示 */}
+                            {step.step_type === 'smart_find_element' && (
+                              <Button
+                                size="small"
+                                type="link"
+                                icon={<SettingOutlined />}
+                                onClick={() => handleEditElementName(step)}
+                                style={{ padding: '0 4px', fontSize: '12px' }}
+                              >
+                                修改元素名称
+                              </Button>
+                            )}
                           </div>
                           <Space>
                             <StepTestButton 
@@ -934,6 +1087,37 @@ const SmartScriptBuilderPage: React.FC = () => {
                   </div>
                 </Panel>
               </Collapse>
+            </Card>
+
+            {/* 🆕 调试和测试区域 */}
+            <Card title="🧪 调试测试">
+              <Space direction="vertical" className="w-full">
+                <Button
+                  size="small"
+                  type="default"
+                  block
+                  icon={<BulbOutlined />}
+                  onClick={() => {
+                    console.log('🧪 运行元素名称映射测试...');
+                    runAllElementNameMapperTests();
+                  }}
+                >
+                  测试元素名称映射
+                </Button>
+                <Button
+                  size="small"
+                  type="default"
+                  block
+                  icon={<RobotOutlined />}
+                  onClick={() => {
+                    console.log('🧪 运行智能步骤生成器测试...');
+                    testSmartStepGenerator();
+                    testVariousCases();
+                  }}
+                >
+                  测试智能步骤生成
+                </Button>
+              </Space>
             </Card>
           </Space>
         </Col>
@@ -1129,6 +1313,47 @@ const SmartScriptBuilderPage: React.FC = () => {
               );
             }}
           </Form.Item>
+          
+          {/* 🆕 隐藏字段：保存元素属性用于指纹匹配 */}
+          <Form.Item name="text" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="element_text" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="element_type" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="resource_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="content_desc" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="bounds" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="smartDescription" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="smartAnalysis" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="class_name" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="clickable" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="parent" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="siblings" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="xpath" hidden>
+            <Input />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -1214,6 +1439,31 @@ const SmartScriptBuilderPage: React.FC = () => {
             form.setFieldValue('description', stepInfo.description);
             form.setFieldValue('click_if_found', true);
             
+            // 🆕 保存完整的元素属性到表单中，以便后续的元素名称编辑使用
+            form.setFieldValue('text', element.text);
+            form.setFieldValue('element_text', element.text); // 备用字段
+            form.setFieldValue('element_type', element.element_type);
+            form.setFieldValue('resource_id', element.resource_id);
+            form.setFieldValue('content_desc', element.content_desc);
+            form.setFieldValue('bounds', element.bounds);
+            form.setFieldValue('smartDescription', (element as any).smartDescription);
+            form.setFieldValue('smartAnalysis', (element as any).smartAnalysis);
+            // 保存指纹匹配需要的额外属性
+            if ((element as any).class_name) {
+              form.setFieldValue('class_name', (element as any).class_name);
+            }
+            if ((element as any).clickable !== undefined) {
+              form.setFieldValue('clickable', (element as any).clickable);
+            }
+            if ((element as any).parent) {
+              form.setFieldValue('parent', (element as any).parent);
+            }
+            if ((element as any).siblings) {
+              form.setFieldValue('siblings', (element as any).siblings);
+            }
+            
+            console.log('🎯 已保存完整的元素属性到表单');
+            
             setShowPageAnalyzer(false);
             
             // 显示成功消息
@@ -1237,19 +1487,53 @@ const SmartScriptBuilderPage: React.FC = () => {
           } catch (error) {
             console.error('❌ 智能步骤生成失败:', error);
             
-            // 降级处理：使用原始逻辑
-            const elementDesc = element.text || element.element_type || '未知元素';
+            // 降级处理：使用 ElementNameMapper 获取智能显示名称
+            const elementDesc = ElementNameMapper.getDisplayName(element);
             const searchCriteria = element.text ? `文本: "${element.text}"` : '自动识别元素特征';
             
             form.setFieldValue('search_criteria', searchCriteria);
-            form.setFieldValue('name', `点击: ${elementDesc}`);
+            form.setFieldValue('name', `点击"${elementDesc}"`);
             form.setFieldValue('description', `自动查找并点击"${elementDesc}"元素`);
             form.setFieldValue('click_if_found', true);
+            
+            // 🆕 在降级处理中也保存完整的元素属性
+            form.setFieldValue('text', element.text);
+            form.setFieldValue('element_text', element.text);
+            form.setFieldValue('element_type', element.element_type);
+            form.setFieldValue('resource_id', element.resource_id);
+            form.setFieldValue('content_desc', element.content_desc);
+            form.setFieldValue('bounds', element.bounds);
+            form.setFieldValue('smartDescription', (element as any).smartDescription);
+            form.setFieldValue('smartAnalysis', (element as any).smartAnalysis);
+            if ((element as any).class_name) {
+              form.setFieldValue('class_name', (element as any).class_name);
+            }
+            if ((element as any).clickable !== undefined) {
+              form.setFieldValue('clickable', (element as any).clickable);
+            }
+            if ((element as any).parent) {
+              form.setFieldValue('parent', (element as any).parent);
+            }
+            if ((element as any).siblings) {
+              form.setFieldValue('siblings', (element as any).siblings);
+            }
             
             setShowPageAnalyzer(false);
             message.warning('使用基础模式填充步骤信息');
           }
         }}
+      />
+
+      {/* 🆕 元素名称编辑器模态框 */}
+      <ElementNameEditor
+        visible={showElementNameEditor}
+        onClose={() => {
+          setShowElementNameEditor(false);
+          setEditingElement(null);
+          setEditingStepForName(null); // 🆕 清空正在编辑名称的步骤
+        }}
+        element={editingElement}
+        onSaved={handleElementNameSaved}
       />
     </div>
   );

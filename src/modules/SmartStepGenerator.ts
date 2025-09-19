@@ -3,6 +3,8 @@
  * 根据元素分析结果生成合理的步骤名称和描述
  */
 
+import ElementNameMapper from './ElementNameMapper';
+
 interface UIElement {
   id?: string;
   text?: string;
@@ -79,8 +81,23 @@ export class SmartStepGenerator {
    * 生成简洁的步骤名称
    */
   private static generateStepName(element: UIElement, keyInfo: any): string {
-    // 优先级: 智能分析结果 > 元素文本 > 元素类型
+    // 🆕 优先使用ElementNameMapper获取智能名称
+    console.log('🔍 SmartStepGenerator.generateStepName 开始，元素:', element);
+    console.log('🔍 元素关键属性 - text:', element.text, 'resource_id:', element.resource_id, 'element_type:', element.element_type, 'clickable:', (element as any).clickable);
     
+    const mappedName = ElementNameMapper.getDisplayName(element);
+    console.log('🏷️ ElementNameMapper 返回的名称:', mappedName);
+    
+    if (mappedName && mappedName !== '未知元素' && !mappedName.includes('未知')) {
+      const action = keyInfo.action || '点击';
+      const generatedName = `${action}"${mappedName}"`;
+      console.log('✅ 使用自定义映射名称:', generatedName);
+      return generatedName;
+    } else {
+      console.log('❌ 未找到有效的自定义映射，使用降级逻辑。映射名称:', mappedName);
+    }
+
+    // 降级处理：使用原有逻辑
     // 1. 如果有智能分析结果，提取关键信息
     if (keyInfo.elementName && keyInfo.appName) {
       return `${keyInfo.action}${keyInfo.appName}${keyInfo.elementName}`;
@@ -101,6 +118,8 @@ export class SmartStepGenerator {
     // 4. 根据元素类型生成通用名称
     const elementType = element.element_type || '元素';
     const action = keyInfo.action || '操作';
+    
+    console.log('🔄 使用降级逻辑生成名称，elementType:', elementType, 'action:', action);
     
     if (elementType.includes('Button')) {
       return `${action}按钮`;

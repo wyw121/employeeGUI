@@ -142,7 +142,7 @@ async fn get_ui_dump(device_id: &str) -> Result<String, String> {
 }
 
 /// 解析XML内容获取UI元素
-fn parse_ui_elements(xml_content: &str) -> Result<Vec<UIElement>, String> {
+pub fn parse_ui_elements(xml_content: &str) -> Result<Vec<UIElement>, String> {
     let mut elements = Vec::new();
     
     // 使用字符串匹配解析元素

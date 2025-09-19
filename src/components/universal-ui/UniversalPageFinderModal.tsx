@@ -20,7 +20,8 @@ import {
   Tabs,
   Alert,
   Spin,
-  message
+  message,
+  Divider
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -39,6 +40,8 @@ import UIElementTree from './UIElementTree';
 import VisualPageAnalyzer from '../VisualPageAnalyzer';
 import { UniversalElementAnalyzer, SmartStepDescriptionGenerator, ElementAnalysisResult } from './UniversalElementAnalyzer';
 import { RealXMLAnalysisService, RealElementAnalysis } from '../../services/RealXMLAnalysisService';
+import { XmlCachePageSelector } from '../xml-cache/XmlCachePageSelector';
+import { XmlPageCacheService, CachedXmlPage, XmlPageContent } from '../../services/XmlPageCacheService';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -834,6 +837,11 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'tree' | 'visual'>('visual'); // 默认显示可视化视图
   const [selectedElementId, setSelectedElementId] = useState<string>(''); // 选中的元素
+  
+  // 缓存相关状态
+  const [showCache, setShowCache] = useState(false);
+  const [loadingCachePage, setLoadingCachePage] = useState(false);
+  const [currentCachePage, setCurrentCachePage] = useState<CachedXmlPage | null>(null);
 
   // 重置状态
   const resetState = () => {
@@ -1334,6 +1342,53 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     };
   };
 
+  // 处理缓存页面选择
+  const handleCachePageSelected = async (cachedPage: CachedXmlPage) => {
+    setLoadingCachePage(true);
+    try {
+      console.log('🔄 加载缓存页面:', cachedPage.pageTitle);
+      
+      // 加载缓存页面内容
+      const pageContent: XmlPageContent = await XmlPageCacheService.loadPageContent(cachedPage);
+      
+      // 设置当前缓存页面
+      setCurrentCachePage(cachedPage);
+      
+      // 更新元素列表
+      setElements(pageContent.elements);
+      setFilteredElements(pageContent.elements);
+      
+      // 设置分析结果为XML内容（用于可视化视图）
+      setAnalysisResult(pageContent.xmlContent);
+      
+      // 切换到可视化视图
+      setViewMode('visual');
+      
+      // 隐藏缓存选择器
+      setShowCache(false);
+      
+      message.success({
+        content: (
+          <div>
+            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+              📄 缓存页面加载成功
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {cachedPage.pageTitle} • {pageContent.elements.length}个元素
+            </div>
+          </div>
+        ),
+        duration: 3
+      });
+      
+    } catch (error) {
+      console.error('❌ 加载缓存页面失败:', error);
+      message.error('加载缓存页面失败，请重试');
+    } finally {
+      setLoadingCachePage(false);
+    }
+  };
+
   const stats = getElementTypeStats();
 
   return (
@@ -1500,6 +1555,95 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                   </div>
                 )}
               </Button>
+
+              {/* 缓存页面选择器 */}
+              <div style={{ marginTop: '16px' }}>
+                <Divider style={{ margin: '16px 0', borderColor: '#ddd' }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>历史页面缓存</Text>
+                </Divider>
+                
+                {!showCache ? (
+                  <Button
+                    type="dashed"
+                    block
+                    style={{
+                      borderColor: '#1890ff',
+                      color: '#1890ff',
+                      borderRadius: '8px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onClick={() => setShowCache(true)}
+                  >
+                    <span>📚</span>
+                    <span>使用历史缓存页面</span>
+                  </Button>
+                ) : (
+                  <div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      marginBottom: '12px'
+                    }}>
+                      <Text strong style={{ color: '#1890ff' }}>
+                        📚 选择历史页面
+                      </Text>
+                      <Button 
+                        size="small" 
+                        type="text"
+                        onClick={() => setShowCache(false)}
+                        style={{ color: '#999' }}
+                      >
+                        收起
+                      </Button>
+                    </div>
+                    
+                    <Spin spinning={loadingCachePage}>
+                      <div style={{ 
+                        maxHeight: '300px', 
+                        overflowY: 'auto',
+                        border: '1px solid #f0f0f0',
+                        borderRadius: '8px',
+                        padding: '8px'
+                      }}>
+                        <XmlCachePageSelector
+                          onPageSelected={handleCachePageSelected}
+                          showStats={false}
+                          maxPages={10}
+                        />
+                      </div>
+                    </Spin>
+                  </div>
+                )}
+              </div>
+              
+              {/* 当前页面信息 */}
+              {currentCachePage && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #52c41a, #73d13d)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  color: 'white',
+                  marginTop: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>📄</span>
+                    <Text strong style={{ color: 'white', fontSize: '14px' }}>
+                      当前页面（缓存）
+                    </Text>
+                  </div>
+                  <Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '12px' }}>
+                    {currentCachePage.pageTitle}
+                  </Text>
+                  <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.8)', marginTop: '4px' }}>
+                    {currentCachePage.deviceId} • {currentCachePage.clickableCount}个可点击元素
+                  </div>
+                </div>
+              )}
 
               {/* 统计信息卡片 */}
               {stats.total > 0 && (

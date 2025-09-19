@@ -909,7 +909,176 @@ fn main() {
             // 应用生命周期管理功能
             // ensure_app_running,              // 确保应用运行（独立模块）
             // detect_app_state                 // 检测应用状态（独立模块）
+            // XML缓存管理功能
+            list_xml_cache_files,        // 列出所有XML缓存文件
+            read_xml_cache_file,         // 读取XML缓存文件内容
+            get_xml_file_size,           // 获取XML文件大小
+            delete_xml_cache_file,       // 删除XML缓存文件
+            parse_cached_xml_to_elements // 解析缓存XML为UI元素
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ==================== XML缓存管理命令 ====================
+
+/// 列出所有XML缓存文件
+#[tauri::command]
+async fn list_xml_cache_files() -> Result<Vec<String>, String> {
+    use std::fs;
+    
+    let debug_dir = get_debug_xml_dir();
+    
+    if !debug_dir.exists() {
+        info!("📂 debug_xml目录不存在，返回空列表");
+        return Ok(vec![]);
+    }
+    
+    match fs::read_dir(&debug_dir) {
+        Ok(entries) => {
+            let mut xml_files = Vec::new();
+            
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(file_name) = path.file_name() {
+                            if let Some(name_str) = file_name.to_str() {
+                                if name_str.ends_with(".xml") && name_str.starts_with("ui_dump_") {
+                                    xml_files.push(name_str.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 按文件名排序（时间戳排序）
+            xml_files.sort();
+            xml_files.reverse(); // 最新的在前面
+            
+            info!("📋 找到 {} 个XML缓存文件", xml_files.len());
+            Ok(xml_files)
+        },
+        Err(e) => {
+            let error_msg = format!("❌ 读取debug_xml目录失败: {}", e);
+            info!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 读取XML缓存文件内容
+#[tauri::command]
+async fn read_xml_cache_file(file_name: String) -> Result<String, String> {
+    use std::fs;
+    
+    let debug_dir = get_debug_xml_dir();
+    let file_path = debug_dir.join(&file_name);
+    
+    if !file_path.exists() {
+        let error_msg = format!("❌ XML缓存文件不存在: {}", file_name);
+        return Err(error_msg);
+    }
+    
+    match fs::read_to_string(&file_path) {
+        Ok(content) => {
+            info!("📖 成功读取XML缓存文件: {} (大小: {})", file_name, content.len());
+            Ok(content)
+        },
+        Err(e) => {
+            let error_msg = format!("❌ 读取XML缓存文件失败: {} - {}", file_name, e);
+            info!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 获取XML文件大小
+#[tauri::command]
+async fn get_xml_file_size(file_name: String) -> Result<u64, String> {
+    use std::fs;
+    
+    let debug_dir = get_debug_xml_dir();
+    let file_path = debug_dir.join(&file_name);
+    
+    if !file_path.exists() {
+        let error_msg = format!("❌ XML缓存文件不存在: {}", file_name);
+        return Err(error_msg);
+    }
+    
+    match fs::metadata(&file_path) {
+        Ok(metadata) => {
+            let size = metadata.len();
+            Ok(size)
+        },
+        Err(e) => {
+            let error_msg = format!("❌ 获取文件大小失败: {} - {}", file_name, e);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 删除XML缓存文件
+#[tauri::command]
+async fn delete_xml_cache_file(file_name: String) -> Result<(), String> {
+    use std::fs;
+    
+    let debug_dir = get_debug_xml_dir();
+    let file_path = debug_dir.join(&file_name);
+    
+    if !file_path.exists() {
+        let error_msg = format!("❌ XML缓存文件不存在: {}", file_name);
+        return Err(error_msg);
+    }
+    
+    match fs::remove_file(&file_path) {
+        Ok(_) => {
+            info!("🗑️ 成功删除XML缓存文件: {}", file_name);
+            Ok(())
+        },
+        Err(e) => {
+            let error_msg = format!("❌ 删除XML缓存文件失败: {} - {}", file_name, e);
+            info!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 解析缓存XML为UI元素
+#[tauri::command]
+async fn parse_cached_xml_to_elements(xml_content: String) -> Result<serde_json::Value, String> {
+    use crate::services::ui_reader_service::parse_ui_elements;
+    
+    info!("🔍 开始解析缓存XML内容，长度: {}", xml_content.len());
+    
+    match parse_ui_elements(&xml_content) {
+        Ok(elements) => {
+            info!("✅ 成功解析 {} 个UI元素", elements.len());
+            
+            // 转换为JSON格式
+            match serde_json::to_value(&elements) {
+                Ok(json) => Ok(json),
+                Err(e) => {
+                    let error_msg = format!("❌ 序列化UI元素失败: {}", e);
+                    Err(error_msg)
+                }
+            }
+        },
+        Err(e) => {
+            let error_msg = format!("❌ 解析XML内容失败: {}", e);
+            info!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+/// 获取debug_xml目录路径
+fn get_debug_xml_dir() -> std::path::PathBuf {
+    // 获取项目根目录的debug_xml文件夹
+    std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new(".."))
+        .join("debug_xml")
 }

@@ -1195,16 +1195,60 @@ const SmartScriptBuilderPage: React.FC = () => {
         onClose={() => setShowPageAnalyzer(false)}
         onElementSelected={(element) => {
           // 当用户选择元素时，将元素信息填入表单
-          const elementDesc = element.text || element.element_type || '未知元素';
-          const searchCriteria = `文本: "${element.text}" | 类型: ${element.element_type} | ID: ${element.resource_id || 'N/A'}`;
+          console.log('🎯 接收到智能分析元素:', element);
           
+          // 优先使用智能描述，备用简单描述
+          const elementDesc = element.text || element.element_type || '未知元素';
+          const smartDescription = (element as any).smartDescription;
+          const intelligentDesc = smartDescription || `点击 ${elementDesc} 元素`;
+          
+          // 使用智能分析结果生成搜索条件
+          let searchCriteria = '';
+          if (element.text) {
+            searchCriteria += `文本: "${element.text}"`;
+          }
+          if (element.element_type) {
+            searchCriteria += ` | 类型: ${element.element_type}`;
+          }
+          if (element.resource_id) {
+            searchCriteria += ` | ID: ${element.resource_id}`;
+          }
+          if (!searchCriteria) {
+            searchCriteria = '自动识别元素特征';
+          }
+          
+          // 使用智能描述填充表单
           form.setFieldValue('search_criteria', searchCriteria);
-          form.setFieldValue('name', `智能查找: ${elementDesc}`);
-          form.setFieldValue('description', `自动查找并点击元素: ${elementDesc}`);
+          form.setFieldValue('name', `智能识别: ${elementDesc}`);
+          
+          // 关键改进：使用智能描述作为步骤描述
+          const enhancedDescription = smartDescription ? 
+            `🤖 智能分析结果:\n${smartDescription}` : 
+            `自动查找并点击元素: ${elementDesc}`;
+          
+          form.setFieldValue('description', enhancedDescription);
           form.setFieldValue('click_if_found', true);
           
           setShowPageAnalyzer(false);
-          message.success(`已选择元素: ${elementDesc}`);
+          
+          // 显示智能分析成功消息
+          if (smartDescription) {
+            message.success({
+              content: (
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                    🎯 智能识别成功！
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    已将详细分析结果填入步骤描述
+                  </div>
+                </div>
+              ),
+              duration: 3
+            });
+          } else {
+            message.success(`已选择元素: ${elementDesc}`);
+          }
         }}
       />
     </div>

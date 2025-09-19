@@ -1,6 +1,7 @@
 import {
     AimOutlined,
     BarChartOutlined,
+    BugOutlined,
     EyeOutlined,
     FolderOutlined,
     MobileOutlined,
@@ -37,6 +38,7 @@ import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 import { UniversalUITestComponent } from './test/UniversalUITestComponent'; // Universal UI 测试组件
+import ScriptSystemTester from './ScriptSystemTester'; // 脚本系统测试器
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -109,6 +111,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'universal-ui-test',
       icon: <ExperimentOutlined />,
       label: 'Universal UI 测试',
+    },
+    {
+      key: 'script-system-test',
+      icon: <BugOutlined />,
+      label: '脚本系统测试',
     }
   ];
 
@@ -365,6 +372,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'universal-ui-test' && (
               <UniversalUITestComponent />
+            )}
+
+            {selectedKey === 'script-system-test' && (
+              <ScriptSystemTester />
             )}
             </div>
           </Content>

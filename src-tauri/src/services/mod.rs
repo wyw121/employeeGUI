@@ -19,6 +19,7 @@ pub mod ldplayer_vcf_opener;
 pub mod log_bridge;
 pub mod safe_adb_manager;
 pub mod script_executor;
+pub mod script_manager;  // 新增：智能脚本管理服务
 pub mod smart_app_manager;
 pub mod smart_app_service;
 pub mod smart_element_finder_service;  // 新增：智能元素查找服务

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能脚本系统测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .test-button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        .test-button:hover {
+            background: #40a9ff;
+        }
+        
+        .test-button:disabled {
+            background: #d9d9d9;
+            cursor: not-allowed;
+        }
+        
+        .log-container {
+            background: #001529;
+            color: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 15px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+        }
+        
+        .test-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #262626;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .status.success {
+            background: #f6ffed;
+            color: #52c41a;
+            border: 1px solid #b7eb8f;
+        }
+        
+        .status.error {
+            background: #fff2f0;
+            color: #ff4d4f;
+            border: 1px solid #ffccc7;
+        }
+        
+        .status.running {
+            background: #e6f7ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 智能脚本系统测试工具</h1>
+    
+    <div class="test-container">
+        <div class="test-section">
+            <div class="test-title">📋 脚本管理功能测试</div>
+            <button class="test-button" onclick="testScriptManagement()">测试脚本管理</button>
+            <button class="test-button" onclick="testScriptTemplates()">测试脚本模板</button>
+            <button class="test-button" onclick="testScriptCRUD()">测试CRUD操作</button>
+            <span id="script-management-status" class="status"></span>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">⚡ 脚本执行功能测试</div>
+            <button class="test-button" onclick="testScriptExecution()">测试脚本执行</button>
+            <button class="test-button" onclick="testDeviceConnection()">测试设备连接</button>
+            <button class="test-button" onclick="testBatchExecution()">测试批量执行</button>
+            <span id="script-execution-status" class="status"></span>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">🎯 综合测试</div>
+            <button class="test-button" onclick="runAllTests()">运行所有测试</button>
+            <button class="test-button" onclick="clearLogs()">清空日志</button>
+        </div>
+    </div>
+    
+    <div class="test-container">
+        <div class="test-title">📊 测试日志</div>
+        <div id="log-container" class="log-container"></div>
+    </div>
+
+    <script>
+        // 日志记录函数
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warn' ? '⚠️' : 'ℹ️';
+            const logMessage = `[${timestamp}] ${prefix} ${message}`;
+            
+            const logContainer = document.getElementById('log-container');
+            logContainer.textContent += logMessage + '\n';
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            console.log(logMessage);
+        }
+
+        function clearLogs() {
+            document.getElementById('log-container').textContent = '';
+        }
+
+        function setStatus(elementId, status, text) {
+            const element = document.getElementById(elementId);
+            element.className = `status ${status}`;
+            element.textContent = text;
+        }
+
+        // 检查 Tauri API 是否可用
+        function checkTauriAPI() {
+            if (typeof window.__TAURI__ === 'undefined') {
+                log('Tauri API 不可用，请确保在 Tauri 应用中运行', 'error');
+                return false;
+            }
+            return true;
+        }
+
+        // 测试脚本管理功能
+        async function testScriptManagement() {
+            if (!checkTauriAPI()) return;
+            
+            log('🧪 开始测试脚本管理功能...');
+            setStatus('script-management-status', 'running', '测试中...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                // 1. 测试创建脚本
+                log('📝 测试创建智能脚本...');
+                const testScript = {
+                    name: '测试脚本_' + Date.now(),
+                    description: '这是一个自动化测试脚本',
+                    steps: [
+                        {
+                            type: 'click',
+                            target: '登录按钮',
+                            description: '点击登录按钮',
+                            config: {
+                                element_selector: 'text("登录")',
+                                wait_after: 1000
+                            }
+                        }
+                    ],
+                    config: {
+                        continue_on_error: false,
+                        auto_verification_enabled: true,
+                        smart_recovery_enabled: true,
+                        detailed_logging: true
+                    },
+                    tags: ['测试', '登录'],
+                    created_by: 'Test User'
+                };
+
+                const scriptId = await invoke('save_smart_script', {
+                    script: testScript
+                });
+                log(`脚本创建成功，ID: ${scriptId}`, 'success');
+
+                // 2. 测试读取脚本
+                log('📖 测试读取脚本...');
+                const savedScript = await invoke('load_smart_script', {
+                    scriptId: scriptId
+                });
+                log(`脚本读取成功: ${savedScript.name}`, 'success');
+
+                // 3. 测试列出所有脚本
+                log('📜 测试列出所有脚本...');
+                const allScripts = await invoke('list_smart_scripts');
+                log(`找到 ${allScripts.length} 个脚本`, 'success');
+
+                // 4. 测试删除脚本
+                log('🗑️ 测试删除脚本...');
+                await invoke('delete_smart_script', {
+                    scriptId: scriptId
+                });
+                log('脚本删除成功', 'success');
+
+                setStatus('script-management-status', 'success', '测试通过');
+                log('🎉 脚本管理功能测试全部通过！', 'success');
+
+            } catch (error) {
+                log(`脚本管理测试失败: ${error}`, 'error');
+                setStatus('script-management-status', 'error', '测试失败');
+            }
+        }
+
+        // 测试脚本模板
+        async function testScriptTemplates() {
+            if (!checkTauriAPI()) return;
+            
+            log('📋 开始测试脚本模板...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                const templates = await invoke('list_script_templates');
+                log(`获取到 ${templates.length} 个脚本模板`, 'success');
+
+                for (const template of templates) {
+                    log(`模板: ${template.name} - ${template.description}`);
+                }
+
+                if (templates.length > 0) {
+                    // 测试从模板创建脚本
+                    const templateName = templates[0].name;
+                    log(`尝试从模板 "${templateName}" 创建脚本...`);
+                    
+                    const scriptFromTemplate = await invoke('create_script_from_template', {
+                        templateName: templateName,
+                        scriptName: '从模板创建的脚本_' + Date.now()
+                    });
+                    log(`从模板创建脚本成功: ${scriptFromTemplate.name}`, 'success');
+                }
+
+            } catch (error) {
+                log(`脚本模板测试失败: ${error}`, 'error');
+            }
+        }
+
+        // 测试 CRUD 操作
+        async function testScriptCRUD() {
+            if (!checkTauriAPI()) return;
+            
+            log('🔄 开始测试脚本 CRUD 操作...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                // Create
+                const script = {
+                    name: 'CRUD测试脚本_' + Date.now(),
+                    description: '测试CRUD操作的脚本',
+                    steps: [],
+                    config: {
+                        continue_on_error: true,
+                        auto_verification_enabled: false,
+                        smart_recovery_enabled: false,
+                        detailed_logging: true
+                    },
+                    tags: ['CRUD', '测试'],
+                    created_by: 'CRUD Tester'
+                };
+
+                const id = await invoke('save_smart_script', { script });
+                log(`创建成功: ID=${id}`, 'success');
+
+                // Read
+                const readScript = await invoke('load_smart_script', { scriptId: id });
+                log(`读取成功: ${readScript.name}`, 'success');
+
+                // Update (通过再次保存相同ID)
+                readScript.description = '更新后的描述_' + Date.now();
+                await invoke('save_smart_script', { script: readScript });
+                log('更新成功', 'success');
+
+                // Delete
+                await invoke('delete_smart_script', { scriptId: id });
+                log('删除成功', 'success');
+
+                log('🎉 CRUD 操作测试全部通过！', 'success');
+
+            } catch (error) {
+                log(`CRUD 测试失败: ${error}`, 'error');
+            }
+        }
+
+        // 测试脚本执行
+        async function testScriptExecution() {
+            if (!checkTauriAPI()) return;
+            
+            log('⚡ 开始测试脚本执行...');
+            setStatus('script-execution-status', 'running', '测试中...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                // 获取设备列表
+                log('📱 获取设备列表...');
+                let devices;
+                try {
+                    devices = await invoke('get_connected_devices');
+                    log(`找到 ${devices.length} 个连接的设备`, 'success');
+                } catch (deviceError) {
+                    log(`获取设备列表失败: ${deviceError}`, 'warn');
+                    devices = ['emulator-5554']; // 使用默认设备
+                    log('使用默认设备进行测试', 'warn');
+                }
+
+                const deviceId = devices[0] || 'emulator-5554';
+                log(`使用设备: ${deviceId}`);
+
+                // 测试脚本执行
+                log('🚀 测试脚本执行...');
+                
+                const testSteps = [
+                    {
+                        type: 'click',
+                        target: '测试按钮',
+                        description: '点击测试按钮',
+                        config: {
+                            element_selector: 'text("测试按钮")',
+                            wait_after: 1000
+                        }
+                    }
+                ];
+
+                const result = await invoke('execute_smart_automation_script', {
+                    deviceId: deviceId,
+                    steps: testSteps,
+                    config: {
+                        continue_on_error: true,
+                        auto_verification_enabled: false,
+                        smart_recovery_enabled: false,
+                        detailed_logging: true
+                    }
+                });
+
+                log(`脚本执行完成: ${result.success ? '成功' : '失败'}`, result.success ? 'success' : 'error');
+                if (result.message) {
+                    log(`执行消息: ${result.message}`);
+                }
+
+                setStatus('script-execution-status', result.success ? 'success' : 'error', result.success ? '测试通过' : '测试失败');
+
+            } catch (error) {
+                log(`脚本执行测试失败: ${error}`, 'error');
+                setStatus('script-execution-status', 'error', '测试失败');
+            }
+        }
+
+        // 测试设备连接
+        async function testDeviceConnection() {
+            if (!checkTauriAPI()) return;
+            
+            log('📱 开始测试设备连接...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                const devices = await invoke('get_connected_devices');
+                log(`连接的设备数量: ${devices.length}`, 'success');
+
+                for (const device of devices) {
+                    log(`设备: ${device}`);
+                }
+
+                if (devices.length === 0) {
+                    log('没有找到连接的设备', 'warn');
+                } else {
+                    log('设备连接测试通过', 'success');
+                }
+
+            } catch (error) {
+                log(`设备连接测试失败: ${error}`, 'error');
+            }
+        }
+
+        // 测试批量执行
+        async function testBatchExecution() {
+            if (!checkTauriAPI()) return;
+            
+            log('🔄 开始测试批量执行...');
+
+            try {
+                const { invoke } = window.__TAURI__.tauri;
+
+                // 创建多个测试步骤
+                const batchSteps = [
+                    {
+                        type: 'click',
+                        target: '按钮1',
+                        description: '点击第一个按钮',
+                        config: { element_selector: 'text("按钮1")', wait_after: 500 }
+                    },
+                    {
+                        type: 'click',
+                        target: '按钮2',
+                        description: '点击第二个按钮',
+                        config: { element_selector: 'text("按钮2")', wait_after: 500 }
+                    },
+                    {
+                        type: 'click',
+                        target: '按钮3',
+                        description: '点击第三个按钮',
+                        config: { element_selector: 'text("按钮3")', wait_after: 500 }
+                    }
+                ];
+
+                const deviceId = 'emulator-5554';
+                log(`批量执行 ${batchSteps.length} 个步骤...`);
+
+                const result = await invoke('execute_smart_automation_script', {
+                    deviceId: deviceId,
+                    steps: batchSteps,
+                    config: {
+                        continue_on_error: true,
+                        auto_verification_enabled: false,
+                        smart_recovery_enabled: false,
+                        detailed_logging: true
+                    }
+                });
+
+                log(`批量执行完成: ${result.success ? '成功' : '失败'}`, result.success ? 'success' : 'error');
+                log(`执行消息: ${result.message}`);
+
+            } catch (error) {
+                log(`批量执行测试失败: ${error}`, 'error');
+            }
+        }
+
+        // 运行所有测试
+        async function runAllTests() {
+            log('🎯 开始运行所有测试...');
+            log('='.repeat(50));
+
+            await testScriptManagement();
+            log('');
+            await testScriptTemplates();
+            log('');
+            await testScriptCRUD();
+            log('');
+            await testScriptExecution();
+            log('');
+            await testDeviceConnection();
+            log('');
+            await testBatchExecution();
+
+            log('='.repeat(50));
+            log('🏁 所有测试完成！', 'success');
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🔧 智能脚本系统测试工具已加载');
+            log('💡 点击上方按钮开始测试各项功能');
+        });
+    </script>
+</body>
+</html>

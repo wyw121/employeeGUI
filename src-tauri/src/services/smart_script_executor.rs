@@ -47,6 +47,28 @@ pub struct SingleStepTestResult {
     pub extracted_data: std::collections::HashMap<String, serde_json::Value>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartExecutionResult {
+    pub success: bool,
+    pub total_steps: u32,
+    pub executed_steps: u32,
+    pub failed_steps: u32,
+    pub skipped_steps: u32,
+    pub duration_ms: u64,
+    pub logs: Vec<String>,
+    pub final_page_state: Option<String>,
+    pub extracted_data: HashMap<String, serde_json::Value>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartExecutorConfig {
+    pub continue_on_error: bool,
+    pub auto_verification_enabled: bool,
+    pub smart_recovery_enabled: bool,
+    pub detailed_logging: bool,
+}
+
 pub struct SmartScriptExecutor {
     pub device_id: String,
     pub adb_path: String,
@@ -444,6 +466,114 @@ impl SmartScriptExecutor {
         }
     }
 
+    /// 执行智能脚本（批量执行多个步骤）
+    pub async fn execute_smart_script(&self, steps: Vec<SmartScriptStep>, config: Option<SmartExecutorConfig>) -> Result<SmartExecutionResult> {
+        let start_time = std::time::Instant::now();
+        let mut logs = Vec::new();
+        let mut executed_steps = 0u32;
+        let mut failed_steps = 0u32;
+        let skipped_steps = 0u32;
+        let mut extracted_data = HashMap::new();
+        
+        // 默认配置
+        let config = config.unwrap_or(SmartExecutorConfig {
+            continue_on_error: true,
+            auto_verification_enabled: true,
+            smart_recovery_enabled: true,
+            detailed_logging: true,
+        });
+
+        info!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len());
+        logs.push(format!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len()));
+
+        // 过滤并排序启用的步骤
+        let mut enabled_steps: Vec<_> = steps.into_iter()
+            .filter(|step| step.enabled)
+            .collect();
+        enabled_steps.sort_by_key(|step| step.order);
+
+        logs.push(format!("📋 已启用的步骤: {} 个", enabled_steps.len()));
+        
+        // 执行每个步骤
+        for (index, step) in enabled_steps.iter().enumerate() {
+            let step_start = std::time::Instant::now();
+            logs.push(format!("📋 执行步骤 {}/{}: {} (类型: {:?})", 
+                index + 1, enabled_steps.len(), step.name, step.step_type));
+
+            // 执行单个步骤
+            match self.execute_single_step(step.clone()).await {
+                Ok(result) => {
+                    if result.success {
+                        executed_steps += 1;
+                        logs.push(format!("✅ 步骤成功: {} (耗时: {}ms)", 
+                            step.name, step_start.elapsed().as_millis()));
+                        
+                        // 合并提取的数据
+                        for (key, value) in result.extracted_data {
+                            extracted_data.insert(format!("{}_{}", step.id, key), value);
+                        }
+                    } else {
+                        failed_steps += 1;
+                        logs.push(format!("❌ 步骤失败: {} - {}", step.name, result.message));
+                        
+                        // 如果不继续执行错误，则中断
+                        if !config.continue_on_error {
+                            logs.push("⏸️ 遇到错误，停止执行后续步骤".to_string());
+                            break;
+                        }
+                    }
+                    
+                    // 合并日志
+                    logs.extend(result.logs);
+                }
+                Err(e) => {
+                    failed_steps += 1;
+                    let error_msg = format!("❌ 步骤执行异常: {} - {}", step.name, e);
+                    logs.push(error_msg);
+                    error!("步骤执行异常: {}", e);
+                    
+                    // 如果不继续执行错误，则中断
+                    if !config.continue_on_error {
+                        logs.push("⏸️ 遇到异常，停止执行后续步骤".to_string());
+                        break;
+                    }
+                }
+            }
+            
+            // 步骤间添加短暂延迟
+            if index < enabled_steps.len() - 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            }
+        }
+
+        let total_duration = start_time.elapsed().as_millis() as u64;
+        let success = failed_steps == 0 && executed_steps > 0;
+
+        let message = if success {
+            format!("智能脚本执行成功！共执行 {} 个步骤，耗时 {}ms", executed_steps, total_duration)
+        } else {
+            format!("智能脚本执行完成，{} 个成功，{} 个失败", executed_steps, failed_steps)
+        };
+
+        logs.push(message.clone());
+        info!("✅ 智能脚本批量执行完成: {}", message);
+
+        let result = SmartExecutionResult {
+            success,
+            total_steps: enabled_steps.len() as u32,
+            executed_steps,
+            failed_steps,
+            skipped_steps,
+            duration_ms: total_duration,
+            logs,
+            final_page_state: None,
+            extracted_data,
+            message,
+        };
+
+        Ok(result)
+    }
+
     async fn execute_adb_command(&self, args: &[&str]) -> Result<std::process::Output> {
         let mut cmd = std::process::Command::new(&self.adb_path);
         cmd.args(args);
@@ -474,6 +604,29 @@ pub async fn execute_single_step_test(
         Err(e) => {
             error!("❌ 单步测试失败: {} - 错误: {}", device_id, e);
             Err(format!("单步测试失败: {}", e))
+        },
+    }
+}
+
+#[command]
+pub async fn execute_smart_automation_script(
+    device_id: String,
+    steps: Vec<SmartScriptStep>,
+    config: Option<SmartExecutorConfig>,
+) -> Result<SmartExecutionResult, String> {
+    info!("🚀 收到智能脚本批量执行请求: 设备 {}, {} 个步骤", device_id, steps.len());
+    
+    let executor = SmartScriptExecutor::new(device_id.clone());
+    
+    match executor.execute_smart_script(steps, config).await {
+        Ok(result) => {
+            info!("✅ 智能脚本批量执行完成: {} (总耗时: {}ms)", 
+                result.message, result.duration_ms);
+            Ok(result)
+        },
+        Err(e) => {
+            error!("❌ 智能脚本批量执行失败: {} - 错误: {}", device_id, e);
+            Err(format!("智能脚本批量执行失败: {}", e))
         },
     }
 }

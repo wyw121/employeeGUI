@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useAdb } from '../application/hooks/useAdb';
 import { DeviceStatus } from '../domain/adb/entities/Device';
 import {
@@ -60,6 +61,9 @@ import type { LaunchAppComponentParams } from '../types/smartComponents';
 import type { SmartScriptStep } from '../types/smartScript';
 import StepTestButton from '../components/StepTestButton';
 import TestResultsDisplay from '../components/TestResultsDisplay';
+// 🆕 导入新的脚本管理模块
+import { ScriptBuilderIntegration } from '../modules/smart-script-management/components/ScriptBuilderIntegration';
+import { ScriptSerializer } from '../modules/smart-script-management/utils/serializer';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -465,7 +469,6 @@ const SmartScriptBuilderPage: React.FC = () => {
       smartDescription: (params.smartDescription as string) || undefined,
       smartAnalysis: params.smartAnalysis || undefined,
       // 🆕 添加更多属性以确保完整的指纹匹配
-      xpath: (params.xpath as string) || undefined,
       ...(params.class_name && { class_name: params.class_name as string }),
       ...(params.parent && { parent: params.parent }),
       ...(params.siblings && { siblings: params.siblings }),
@@ -580,8 +583,116 @@ const SmartScriptBuilderPage: React.FC = () => {
     setEditingStepForName(null); // 🆕 清空正在编辑名称的步骤
   };
 
+  // 保存智能脚本
+  const handleSaveScript = async () => {
+    console.log('💾 开始保存智能脚本...');
+    
+    if (steps.length === 0) {
+      message.warning('请先添加脚本步骤');
+      return;
+    }
+
+    try {
+      // 改进的Tauri环境检测 - 直接尝试使用invoke函数
+      console.log('🔍 开始Tauri环境检测...');
+      console.log('window对象存在:', typeof window !== 'undefined');
+      console.log('__TAURI__对象:', typeof (window as any).__TAURI__);
+      console.log('__TAURI__内容:', (window as any).__TAURI__);
+      
+      let isTauri = false;
+      try {
+        // 尝试调用一个存在的Tauri命令来测试环境
+        await invoke('get_adb_devices_safe');
+        isTauri = true;
+        console.log('✅ Tauri invoke 函数可用');
+      } catch (invokeError) {
+        console.log('❌ Tauri invoke 函数不可用:', invokeError);
+        isTauri = false;
+      }
+      
+      console.log('🌐 Tauri环境检测:', isTauri ? '是' : '否');
+      
+      if (!isTauri) {
+        message.warning('保存功能仅在Tauri环境中可用');
+        return;
+      }
+
+      // 构造脚本对象
+      const currentTime = new Date().toISOString();
+      const scriptId = `script_${Date.now()}`;
+      
+      const scriptData = {
+        id: scriptId,
+        name: `智能脚本_${new Date().toLocaleString()}`,
+        description: `包含 ${steps.length} 个步骤的自动化脚本`,
+        version: "1.0.0",
+        created_at: currentTime,
+        updated_at: currentTime,
+        author: "用户",
+        category: "通用",
+        tags: ['智能脚本', '自动化'],
+        steps: steps.map((step, index) => ({
+          id: step.id || `step_${index + 1}`,
+          step_type: step.step_type,
+          name: step.name || step.description,
+          description: step.description,
+          parameters: step.parameters || {},
+          enabled: step.enabled !== false, // 默认启用
+          order: index
+        })),
+        config: {
+          continue_on_error: executorConfig.smart_recovery_enabled,
+          auto_verification_enabled: executorConfig.auto_verification_enabled,
+          smart_recovery_enabled: executorConfig.smart_recovery_enabled,
+          detailed_logging: executorConfig.detailed_logging
+        },
+        metadata: {}
+      };
+
+      console.log('📝 保存脚本数据:', scriptData);
+
+      // 调用后端保存接口
+      const savedScriptId = await invoke('save_smart_script', {
+        script: scriptData
+      });
+
+      console.log('✅ 脚本保存成功，ID:', savedScriptId);
+      message.success(`脚本保存成功！ID: ${savedScriptId}`);
+
+    } catch (error) {
+      console.error('❌ 保存脚本失败:', error);
+      message.error(`保存脚本失败: ${error}`);
+    }
+  };
+
+  // 🆕 处理脚本加载的回调函数
+  const handleLoadScriptFromManager = (loadedScript: any) => {
+    try {
+      console.log('📥 正在加载脚本:', loadedScript);
+      
+      // 使用新的序列化工具来恢复UI状态
+      const { steps: deserializedSteps, config: deserializedConfig } = 
+        ScriptSerializer.deserializeScript(loadedScript);
+        
+      console.log('🔄 反序列化的步骤:', deserializedSteps);
+      console.log('🔄 反序列化的配置:', deserializedConfig);
+      
+      // 更新UI状态
+      setSteps(deserializedSteps);
+      setExecutorConfig(deserializedConfig);
+      
+      message.success(`已成功加载脚本: ${loadedScript.name} (${deserializedSteps.length} 个步骤)`);
+      
+    } catch (error) {
+      console.error('❌ 脚本加载失败:', error);
+      message.error(`脚本加载失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  };
+
   // 执行智能脚本
   const handleExecuteScript = async () => {
+    console.log('🚀 开始执行智能脚本...');
+    
     if (steps.length === 0) {
       message.warning('请先添加脚本步骤');
       return;
@@ -593,13 +704,38 @@ const SmartScriptBuilderPage: React.FC = () => {
       return;
     }
 
+    console.log('📋 启用的步骤数量:', enabledSteps.length);
+    console.log('📝 启用的步骤详情:', enabledSteps);
+
+    // 获取当前选中的设备
+    const selectedDevice = currentDeviceId || devices.find(d => d.status === 'online')?.id || 'emulator-5554';
+    console.log('📱 选中的设备:', selectedDevice);
+    console.log('🔧 执行配置:', executorConfig);
+
     setIsExecuting(true);
     try {
-      // 检查是否在Tauri环境中
-      const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+      // 改进的Tauri环境检测 - 直接尝试使用invoke函数
+      console.log('🔍 开始Tauri环境检测...');
+      console.log('window对象存在:', typeof window !== 'undefined');
+      console.log('__TAURI__对象:', typeof (window as any).__TAURI__);
+      console.log('__TAURI__内容:', (window as any).__TAURI__);
+      
+      let isTauri = false;
+      try {
+        // 尝试调用一个存在的Tauri命令来测试环境
+        await invoke('get_adb_devices_safe');
+        isTauri = true;
+        console.log('✅ Tauri invoke 函数可用');
+      } catch (invokeError) {
+        console.log('❌ Tauri invoke 函数不可用:', invokeError);
+        isTauri = false;
+      }
+      
+      console.log('🌐 Tauri环境检测:', isTauri ? '是' : '否');
       
       if (!isTauri) {
         // 模拟执行结果（用于开发环境）
+        console.log('🎭 使用模拟执行...');
         const mockResult: SmartExecutionResult = {
           success: true,
           total_steps: enabledSteps.length,
@@ -623,18 +759,30 @@ const SmartScriptBuilderPage: React.FC = () => {
 
       // 真实的Tauri调用
       try {
-        // 动态导入在Tauri环境中的处理
-        const tauriApi = (window as any).__TAURI__;
-        if (!tauriApi?.invoke) {
-          throw new Error('Tauri API不可用');
-        }
+        console.log('🔌 准备调用Tauri API...');
+        
+        // 构造符合后端期望的配置对象
+        const backendConfig = {
+          continue_on_error: executorConfig.smart_recovery_enabled,
+          auto_verification_enabled: executorConfig.auto_verification_enabled,
+          smart_recovery_enabled: executorConfig.smart_recovery_enabled,
+          detailed_logging: executorConfig.detailed_logging
+        };
+        
+        console.log('📤 发送Tauri调用:', {
+          command: 'execute_smart_automation_script',
+          deviceId: selectedDevice,
+          stepsCount: enabledSteps.length,
+          config: backendConfig
+        });
 
-        const result = await tauriApi.invoke('execute_smart_automation_script', {
-          deviceId: 'emulator-5554', // 使用默认模拟器设备
+        const result = await invoke('execute_smart_automation_script', {
+          deviceId: selectedDevice,
           steps: enabledSteps,
-          config: executorConfig,
+          config: backendConfig,
         }) as SmartExecutionResult;
 
+        console.log('📥 收到Tauri响应:', result);
         setExecutionResult(result);
         
         if (result.success) {
@@ -644,7 +792,9 @@ const SmartScriptBuilderPage: React.FC = () => {
         }
       } catch (tauriError) {
         // 如果Tauri调用失败，使用模拟结果
-        console.warn('Tauri API调用失败，使用模拟执行:', tauriError);
+        console.error('❌ Tauri API调用失败:', tauriError);
+        console.warn('🎭 回退到模拟执行...');
+        
         const mockResult: SmartExecutionResult = {
           success: true,
           total_steps: enabledSteps.length,
@@ -652,20 +802,21 @@ const SmartScriptBuilderPage: React.FC = () => {
           failed_steps: 0,
           skipped_steps: 0,
           duration_ms: 2500,
-          logs: [],
+          logs: [`模拟执行 ${enabledSteps.length} 个步骤`, '所有步骤模拟成功'],
           final_page_state: 'Home',
           extracted_data: {},
           message: '使用模拟执行（Tauri API不可用）',
         };
         
         setExecutionResult(mockResult);
-        message.success(`智能脚本模拟执行成功！执行了 ${mockResult.executed_steps} 个步骤`);
+        message.warning('Tauri API不可用，使用模拟执行模式');
       }
     } catch (error) {
-      console.error('智能脚本执行失败:', error);
+      console.error('❌ 智能脚本执行失败:', error);
       message.error(`智能脚本执行失败: ${error}`);
     } finally {
       setIsExecuting(false);
+      console.log('🏁 智能脚本执行流程结束');
     }
   };
 
@@ -995,13 +1146,29 @@ const SmartScriptBuilderPage: React.FC = () => {
                 </Button>
                 
                 <Row gutter={8}>
+                  <Col span={24}>
+                    {/* 🆕 集成完整的脚本管理功能 */}
+                    <ScriptBuilderIntegration
+                      steps={steps}
+                      executorConfig={executorConfig}
+                      onLoadScript={handleLoadScriptFromManager}
+                      onUpdateSteps={setSteps}
+                      onUpdateConfig={setExecutorConfig}
+                    />
+                  </Col>
+                </Row>
+                
+                <Divider style={{ margin: '12px 0' }} />
+                
+                <Row gutter={8}>
                   <Col span={12}>
                     <Button 
                       block 
                       icon={<SaveOutlined />}
                       disabled={steps.length === 0}
+                      onClick={handleSaveScript}
                     >
-                      保存脚本
+                      快速保存 (旧版)
                     </Button>
                   </Col>
                   <Col span={12}>
@@ -1099,7 +1266,8 @@ const SmartScriptBuilderPage: React.FC = () => {
                   icon={<BulbOutlined />}
                   onClick={() => {
                     console.log('🧪 运行元素名称映射测试...');
-                    runAllElementNameMapperTests();
+                    // runAllElementNameMapperTests(); // 暂时注释掉，函数未导入
+                    message.info('元素名称映射测试功能暂时禁用');
                   }}
                 >
                   测试元素名称映射

@@ -35,6 +35,7 @@ use services::log_bridge::{AdbCommandLog, LogEntry, LOG_COLLECTOR};
 use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_button, get_navigation_configs};
 use services::safe_adb_manager::*;
 use services::script_executor::*;
+use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
 use services::smart_element_finder_service::{smart_element_finder, click_detected_element};
 use services::smart_script_executor::*;
@@ -871,6 +872,16 @@ fn main() {
             validate_device_connection, // 验证设备连接
             // 智能脚本执行器功能
             execute_single_step_test,        // 执行单步测试
+            execute_smart_automation_script, // 执行智能脚本批量操作
+            // 脚本管理功能
+            save_smart_script,            // 保存智能脚本
+            load_smart_script,            // 加载智能脚本
+            delete_smart_script,          // 删除智能脚本
+            list_smart_scripts,           // 列出所有脚本
+            import_smart_script,          // 导入脚本
+            export_smart_script,          // 导出脚本
+            list_script_templates,        // 列出脚本模板
+            create_script_from_template,  // 从模板创建脚本
             // 截图服务功能
             capture_device_screenshot,    // 捕获设备截图
             get_device_screen_resolution, // 获取设备分辨率

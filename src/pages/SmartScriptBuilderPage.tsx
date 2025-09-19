@@ -52,7 +52,7 @@ import SmartStepGenerator from '../modules/SmartStepGenerator';
 import ElementNameEditor from '../components/element-name-editor/ElementNameEditor';
 import { UIElement, ElementNameMapper } from '../modules/ElementNameMapper';
 import { testSmartStepGenerator, testVariousCases } from '../test/SmartStepGeneratorTest';
-import { runAllElementNameMapperTests } from '../test/ElementNameMapperTest';
+// import { runAllElementNameMapperTests } from '../test/ElementNameMapperTest';
 import { PageAnalysisProvider } from '../application/page-analysis/PageAnalysisProvider';
 import { PageAnalysisApplicationService } from '../application/page-analysis/PageAnalysisApplicationService';
 import { SmartActionType } from '../types/smartComponents';

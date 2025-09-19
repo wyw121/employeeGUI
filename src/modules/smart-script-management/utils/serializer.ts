@@ -54,6 +54,8 @@ export class StepSerializer {
    * 反序列化步骤为UI状态
    */
   static deserializeStep(step: SmartScriptStep): any {
+    const params = step.parameters as any; // 使用 any 类型以访问额外属性
+    
     return {
       id: step.id,
       step_type: step.step_type,
@@ -67,7 +69,19 @@ export class StepSerializer {
       status: step.status || 'active',
       conditions: step.conditions,
       error_handling: step.error_handling,
-      ui_state: step.ui_state || { collapsed: false }
+      ui_state: step.ui_state || { collapsed: false },
+      
+      // ✅ 确保所有参数都被正确传递，特别是智能分析数据
+      ...params,
+      
+      // 显式传递关键字段，防止嵌套丢失
+      smartAnalysis: params?.smartAnalysis,
+      smartDescription: params?.smartDescription,
+      bounds: params?.bounds,
+      content_desc: params?.content_desc,
+      element_text: params?.element_text,
+      element_type: params?.element_type,
+      text: params?.text
     };
   }
 
@@ -170,7 +184,19 @@ export class StepSerializer {
           ...baseParams,
           element_description: params.element_description || params.description || '',
           fallback_coordinates: params.fallback_coordinates || { x: 0, y: 0 },
-          search_area: params.search_area
+          search_area: params.search_area,
+          
+          // ✅ 保存完整的智能分析数据
+          smartAnalysis: params.smartAnalysis,
+          smartDescription: params.smartDescription,
+          bounds: params.bounds,
+          content_desc: params.content_desc,
+          element_text: params.element_text,
+          element_type: params.element_type,
+          text: params.text,
+          
+          // 保存所有原始参数，确保不丢失任何信息
+          ...params
         };
 
       case StepActionType.SMART_FIND_ELEMENT:
@@ -178,7 +204,19 @@ export class StepSerializer {
           ...baseParams,
           element_description: params.element_description || params.description || '',
           find_multiple: params.find_multiple || false,
-          return_coordinates: params.return_coordinates || true
+          return_coordinates: params.return_coordinates || true,
+          
+          // ✅ 保存完整的智能分析数据
+          smartAnalysis: params.smartAnalysis,
+          smartDescription: params.smartDescription,
+          bounds: params.bounds,
+          content_desc: params.content_desc,
+          element_text: params.element_text,
+          element_type: params.element_type,
+          text: params.text,
+          
+          // 保存所有原始参数，确保不丢失任何信息
+          ...params
         };
 
       case StepActionType.RECOGNIZE_PAGE:

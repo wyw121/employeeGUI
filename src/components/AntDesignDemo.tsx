@@ -39,6 +39,7 @@ import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 import { UniversalUITestComponent } from './test/UniversalUITestComponent'; // Universal UI 测试组件
 import ScriptSystemTester from './ScriptSystemTester'; // 脚本系统测试器
+import LoopDragTester from './LoopDragTester'; // 循环拖拽测试器
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -116,6 +117,11 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'script-system-test',
       icon: <BugOutlined />,
       label: '脚本系统测试',
+    },
+    {
+      key: 'loop-drag-test',
+      icon: <SyncOutlined />,
+      label: '循环拖拽测试',
     }
   ];
 
@@ -376,6 +382,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'script-system-test' && (
               <ScriptSystemTester />
+            )}
+
+            {selectedKey === 'loop-drag-test' && (
+              <LoopDragTester />
             )}
             </div>
           </Content>

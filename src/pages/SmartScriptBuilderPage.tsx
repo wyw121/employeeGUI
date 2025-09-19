@@ -64,6 +64,8 @@ import TestResultsDisplay from '../components/TestResultsDisplay';
 // 🆕 导入新的脚本管理模块
 import { ScriptBuilderIntegration } from '../modules/smart-script-management/components/ScriptBuilderIntegration';
 import { ScriptSerializer } from '../modules/smart-script-management/utils/serializer';
+// 🆕 导入拖拽步骤组件
+import { DraggableStepsContainer } from '../components/DraggableStepsContainer';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -1029,102 +1031,35 @@ const SmartScriptBuilderPage: React.FC = () => {
       </Card>
 
       <Row gutter={16} className="h-full">
-        {/* 左侧：步骤列表 */}
+        {/* 左侧：可拖拽的步骤列表 */}
         <Col span={16}>
-          <Card 
-            title={
-              <div className="flex items-center justify-between">
-                <span>📋 智能脚本步骤 ({steps.length})</span>
-                <Space>
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />}
-                    onClick={handleAddStep}
-                  >
-                    添加智能步骤
-                  </Button>
-                </Space>
-              </div>
-            }
-            className="h-full"
-            bodyStyle={{ padding: '16px', height: 'calc(100% - 57px)', overflow: 'auto' }}
-          >
-            {steps.length === 0 ? (
-              <div className="text-center py-12">
-                <RobotOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-                <div className="mt-4 text-gray-500">
-                  还没有添加智能步骤，点击上方按钮开始构建智能脚本
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {steps.map((step, index) => {
-                  const config = SMART_ACTION_CONFIGS[step.step_type];
-                  return (
-                    <Card
-                      key={step.id}
-                      size="small"
-                      className={`${step.enabled ? 'border-blue-200' : 'border-gray-200'} transition-all`}
-                      title={
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Text className="text-lg">{config?.icon}</Text>
-                            <Text strong>{step.name}</Text>
-                            <Tag color={config?.color}>{config?.name}</Tag>
-                            {!step.enabled && <Tag>已禁用</Tag>}
-                            {/* 🆕 修改元素名称按钮 - 仅对智能元素查找步骤显示 */}
-                            {step.step_type === 'smart_find_element' && (
-                              <Button
-                                size="small"
-                                type="link"
-                                icon={<SettingOutlined />}
-                                onClick={() => handleEditElementName(step)}
-                                style={{ padding: '0 4px', fontSize: '12px' }}
-                              >
-                                修改元素名称
-                              </Button>
-                            )}
-                          </div>
-                          <Space>
-                            <StepTestButton 
-                              step={step} 
-                              deviceId={currentDeviceId}
-                              disabled={!currentDeviceId || devices.filter(d => d.status === DeviceStatus.ONLINE).length === 0}
-                            />
-                            <Switch
-                              size="small"
-                              checked={step.enabled}
-                              onChange={() => handleToggleStep(step.id)}
-                            />
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<EditOutlined />}
-                              onClick={() => handleEditStep(step)}
-                            />
-                            <Button
-                              type="text"
-                              size="small"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => handleDeleteStep(step.id)}
-                            />
-                          </Space>
-                        </div>
-                      }
+          <div style={{ height: '100%' }}>
+            <DraggableStepsContainer
+              steps={steps}
+              onStepsChange={setSteps}
+              currentDeviceId={currentDeviceId}
+              devices={devices}
+              onEditStep={handleEditStep}
+              onDeleteStep={handleDeleteStep}
+              onToggleStep={handleToggleStep}
+              onEditElementName={handleEditElementName}
+              StepTestButton={StepTestButton}
+              title={
+                <div className="flex items-center justify-between">
+                  <span>📋 智能脚本步骤 ({steps.length})</span>
+                  <Space>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />}
+                      onClick={handleAddStep}
                     >
-                      <div className="text-sm text-gray-600 mb-2">
-                        {step.description}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        步骤 #{index + 1} | 类型: {config?.category} | 参数: {Object.keys(step.parameters).length} 个
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
+                      添加智能步骤
+                    </Button>
+                  </Space>
+                </div>
+              }
+            />
+          </div>
         </Col>
 
         {/* 右侧：控制面板 */}

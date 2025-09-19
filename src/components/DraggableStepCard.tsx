@@ -1,14 +1,15 @@
 // 可拖拽的步骤卡片组件
 
-import React from 'react';
-import { Card, Button, Space, Tag, Switch, Typography } from 'antd';
+import React, { useState } from 'react';
+import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
   EditOutlined,
   DeleteOutlined,
   SettingOutlined,
-  DragOutlined
+  DragOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -56,6 +57,8 @@ export interface DraggableStepCardProps {
   onEditElementName?: (step: SmartScriptStep) => void;
   /** 测试步骤组件 */
   StepTestButton?: React.ComponentType<any>;
+  /** 更新步骤参数回调 */
+  onUpdateStepParameters?: (stepId: string, parameters: any) => void;
 }
 
 export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
@@ -68,8 +71,26 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
   onDelete,
   onToggle,
   onEditElementName,
-  StepTestButton
+  StepTestButton,
+  onUpdateStepParameters
 }) => {
+  // 循环次数设置状态
+  const [isLoopConfigVisible, setIsLoopConfigVisible] = useState(false);
+  const [loopCount, setLoopCount] = useState(step.parameters?.loop_count || 3);
+  const [isInfiniteLoop, setIsInfiniteLoop] = useState(step.parameters?.is_infinite_loop || false);
+
+  // 保存循环次数
+  const handleSaveLoopConfig = () => {
+    if (onUpdateStepParameters) {
+      onUpdateStepParameters(step.id, {
+        ...step.parameters,
+        loop_count: isInfiniteLoop ? -1 : loopCount, // -1 表示无限循环
+        is_infinite_loop: isInfiniteLoop
+      });
+    }
+    setIsLoopConfigVisible(false);
+  };
+
   const {
     attributes,
     listeners,
@@ -190,6 +211,34 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
             </div>
             
             <Space>
+              {/* 循环次数设置按钮 - 对循环开始和循环结束步骤显示 */}
+              {(step.step_type === 'loop_start' || step.step_type === 'loop_end') && (
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ReloadOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsLoopConfigVisible(true);
+                  }}
+                  style={{ 
+                    padding: '0 4px', 
+                    fontSize: '12px',
+                    color: step.parameters?.is_infinite_loop ? '#f59e0b' : '#3b82f6' 
+                  }}
+                  title={
+                    step.parameters?.is_infinite_loop 
+                      ? '循环次数: 无限循环 ∞' 
+                      : `循环次数: ${step.parameters?.loop_count || 3}`
+                  }
+                >
+                  {step.parameters?.is_infinite_loop 
+                    ? '∞' 
+                    : `${step.parameters?.loop_count || 3}次`
+                  }
+                </Button>
+              )}
+
               {/* 测试按钮 */}
               {StepTestButton && (
                 <div onClick={(e) => e.stopPropagation()}>
@@ -254,6 +303,101 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
           步骤 #{index + 1} | 类型: {config.category} | 参数: {Object.keys(step.parameters).length} 个
         </div>
       </Card>
+
+      {/* 循环配置弹窗 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ReloadOutlined style={{ color: '#3b82f6' }} />
+            <span>
+              {step.step_type === 'loop_start' 
+                ? '🔄 循环开始配置' 
+                : step.step_type === 'loop_end' 
+                ? '🏁 循环结束配置'
+                : '设置循环次数'
+              }
+            </span>
+          </div>
+        }
+        open={isLoopConfigVisible}
+        onOk={handleSaveLoopConfig}
+        onCancel={() => {
+          setIsLoopConfigVisible(false);
+          setLoopCount(step.parameters?.loop_count || 3);
+          setIsInfiniteLoop(step.parameters?.is_infinite_loop || false);
+        }}
+        okText="保存"
+        cancelText="取消"
+        width={400}
+      >
+        <div style={{ padding: '20px 0' }}>
+          {/* 无限循环开关 */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Text strong>无限循环模式：</Text>
+                <span style={{ fontSize: '16px' }}>∞</span>
+              </div>
+              <Switch
+                checked={isInfiniteLoop}
+                onChange={(checked) => {
+                  setIsInfiniteLoop(checked);
+                  if (checked) {
+                    // 切换到无限循环时，设置默认值
+                    setLoopCount(3);
+                  }
+                }}
+                checkedChildren="开启"
+                unCheckedChildren="关闭"
+              />
+            </div>
+            {isInfiniteLoop && (
+              <div style={{ padding: '12px', backgroundColor: '#fff7ed', borderRadius: '6px', border: '1px solid #fed7aa' }}>
+                <Text type="warning" style={{ fontSize: '12px' }}>
+                  ⚠️ 警告：无限循环将持续执行直到手动停止，请谨慎使用！
+                </Text>
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* 循环次数设置 */}
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>循环执行次数：</Text>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <InputNumber
+              min={1}
+              max={100}
+              value={loopCount}
+              onChange={(value) => setLoopCount(value || 1)}
+              style={{ width: '120px' }}
+              addonAfter="次"
+              disabled={isInfiniteLoop}
+            />
+            <Text type="secondary">
+              {isInfiniteLoop 
+                ? '已启用无限循环模式 ∞' 
+                : `当前设置为执行 ${loopCount} 次`
+              }
+            </Text>
+          </div>
+          
+          <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              💡 提示：{isInfiniteLoop 
+                ? '无限循环模式下，循环体内的步骤将不断重复执行，直到手动停止或出现错误。' 
+                : step.step_type === 'loop_start' 
+                  ? '循环体内的所有步骤将重复执行指定次数，类似多次点击"执行智能脚本"按钮。'
+                  : step.step_type === 'loop_end'
+                  ? '当执行到循环结束卡片时，如果还未达到设定次数，将返回循环开始处继续执行。'
+                  : '循环体内的所有步骤将重复执行指定次数。'
+              }
+            </Text>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -1,11 +1,12 @@
 // 循环结束卡片组件
 
-import React from 'react';
-import { Card, Button, Space, Typography, Tag } from 'antd';
+import React, { useState } from 'react';
+import { Card, Button, Space, Typography, Tag, Modal, InputNumber, Switch, Divider } from 'antd';
 import { 
   CheckCircleOutlined, 
   DeleteOutlined,
-  DragOutlined
+  DragOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,6 +27,8 @@ export interface LoopEndCardProps {
   onDeleteLoop: (loopId: string) => void;
   /** 切换启用状态回调 */
   onToggle: (stepId: string) => void;
+  /** 更新步骤参数回调 */
+  onUpdateStepParameters?: (stepId: string, parameters: Record<string, any>) => void;
 }
 
 export const LoopEndCard: React.FC<LoopEndCardProps> = ({
@@ -34,8 +37,18 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
   loopConfig,
   isDragging,
   onDeleteLoop,
-  onToggle
+  onToggle,
+  onUpdateStepParameters
 }) => {
+  // 循环配置状态
+  const [isLoopConfigVisible, setIsLoopConfigVisible] = useState(false);
+  const [loopCount, setLoopCount] = useState<number>(
+    (step.parameters?.loop_count as number) || 3
+  );
+  const [isInfiniteLoop, setIsInfiniteLoop] = useState<boolean>(
+    (step.parameters?.is_infinite_loop as boolean) || false
+  );
+
   const {
     attributes,
     listeners,
@@ -58,6 +71,32 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
     if (loopConfig) {
       onDeleteLoop(loopConfig.loopId);
     }
+  };
+
+  // 处理循环配置保存
+  const handleSaveLoopConfig = () => {
+    if (onUpdateStepParameters) {
+      const parameters = {
+        ...step.parameters,
+        loop_count: isInfiniteLoop ? -1 : loopCount,
+        is_infinite_loop: isInfiniteLoop
+      };
+      onUpdateStepParameters(step.id, parameters);
+    }
+    setIsLoopConfigVisible(false);
+  };
+
+  // 显示循环配置模态框
+  const showLoopConfigModal = () => {
+    setIsLoopConfigVisible(true);
+  };
+
+  // 取消循环配置
+  const handleCancelLoopConfig = () => {
+    // 重置为原始值
+    setLoopCount((step.parameters?.loop_count as number) || 3);
+    setIsInfiniteLoop((step.parameters?.is_infinite_loop as boolean) || false);
+    setIsLoopConfigVisible(false);
   };
 
   return (
@@ -118,7 +157,27 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
             </div>
             
             <Space size="small">
-              {/* 🗑️ 删除循环按钮 */}
+              {/* � 循环次数设置按钮 */}
+              <Button
+                type="text"
+                size="small"
+                className="hover:bg-blue-100 border-blue-200"
+                icon={<ReloadOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showLoopConfigModal();
+                }}
+                style={{
+                  backgroundColor: isInfiniteLoop ? '#fed7aa' : '#dbeafe',
+                  borderColor: isInfiniteLoop ? '#f59e0b' : '#3b82f6',
+                  color: isInfiniteLoop ? '#92400e' : '#1e40af'
+                }}
+                title={`设置循环次数 (当前: ${isInfiniteLoop ? '无限' : `${loopCount}次`})`}
+              >
+                {isInfiniteLoop ? '∞' : `${loopCount}次`}
+              </Button>
+
+              {/* �🗑️ 删除循环按钮 */}
               <Button
                 type="text"
                 size="small"
@@ -156,6 +215,82 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
           </div>
         </div>
       </Card>
+
+      {/* 循环配置模态框 */}
+      <Modal
+        title="🔄 循环结束配置"
+        open={isLoopConfigVisible}
+        onOk={handleSaveLoopConfig}
+        onCancel={handleCancelLoopConfig}
+        okText="确定"
+        cancelText="取消"
+        width={480}
+        className="loop-config-modal"
+      >
+        <div style={{ padding: '20px 0' }}>
+          {/* 无限循环开关 */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Text strong>无限循环模式：</Text>
+                <span style={{ fontSize: '16px' }}>∞</span>
+              </div>
+              <Switch
+                checked={isInfiniteLoop}
+                onChange={(checked) => {
+                  setIsInfiniteLoop(checked);
+                  if (checked) {
+                    // 切换到无限循环时，设置默认值
+                    setLoopCount(3);
+                  }
+                }}
+                checkedChildren="开启"
+                unCheckedChildren="关闭"
+              />
+            </div>
+            {isInfiniteLoop && (
+              <div style={{ padding: '12px', backgroundColor: '#fff7ed', borderRadius: '6px', border: '1px solid #fed7aa' }}>
+                <Text type="warning" style={{ fontSize: '12px' }}>
+                  ⚠️ 警告：无限循环将持续执行直到手动停止，请谨慎使用！
+                </Text>
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* 循环次数设置 */}
+          <div style={{ marginBottom: '16px' }}>
+            <Text strong>循环执行次数：</Text>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <InputNumber
+              min={1}
+              max={100}
+              value={loopCount}
+              onChange={(value) => setLoopCount(value || 1)}
+              style={{ width: '120px' }}
+              addonAfter="次"
+              disabled={isInfiniteLoop}
+            />
+            <Text type="secondary">
+              {isInfiniteLoop 
+                ? '已启用无限循环模式 ∞' 
+                : `当前设置为执行 ${loopCount} 次`
+              }
+            </Text>
+          </div>
+          
+          <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              💡 提示：{isInfiniteLoop 
+                ? '无限循环模式下，循环体内的步骤将不断重复执行，直到手动停止或出现错误。' 
+                : '当执行到循环结束卡片时，如果还未达到设定次数，将返回循环开始处继续执行。'
+              }
+            </Text>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

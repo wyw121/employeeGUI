@@ -63,6 +63,16 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
     onStepsChange(extendedSteps);
   };
 
+  // 处理步骤参数更新
+  const handleUpdateStepParameters = (stepId: string, parameters: any) => {
+    const updatedSteps = steps.map(step => 
+      step.id === stepId 
+        ? { ...step, parameters: { ...step.parameters, ...parameters } }
+        : step
+    );
+    onStepsChange(updatedSteps);
+  };
+
   return (
     <Card title={
       <div className="flex items-center space-x-2">
@@ -117,6 +127,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         onEditElementName={onEditElementName}
         StepTestButton={StepTestButton}
         title="步骤列表"
+        onUpdateStepParameters={handleUpdateStepParameters}
       />
     </Card>
   );

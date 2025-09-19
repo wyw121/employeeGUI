@@ -29,6 +29,8 @@ export interface DraggableStepsContainerProps {
   StepTestButton?: React.ComponentType<any>;
   /** 容器标题 */
   title?: React.ReactNode;
+  /** 更新步骤参数回调 */
+  onUpdateStepParameters?: (stepId: string, parameters: any) => void;
 }
 
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
@@ -41,7 +43,8 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onToggleStep,
   onEditElementName,
   StepTestButton,
-  title = <span>步骤列表</span>
+  title = <span>步骤列表</span>,
+  onUpdateStepParameters
 }) => {
   // 配置传感器
   const sensors = useSensors(
@@ -112,6 +115,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 onToggle={onToggleStep}
                 onEditElementName={onEditElementName}
                 StepTestButton={StepTestButton}
+                onUpdateStepParameters={onUpdateStepParameters}
               />
             ))}
           </div>

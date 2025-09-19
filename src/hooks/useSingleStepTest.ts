@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { message } from 'antd';
+import { isTauri, invoke } from '@tauri-apps/api/core';
 import type { SmartScriptStep, SingleStepTestResult } from '../types/smartScript';
 
 export const useSingleStepTest = () => {
@@ -13,27 +14,35 @@ export const useSingleStepTest = () => {
   ): Promise<SingleStepTestResult> => {
     const stepId = step.id;
     
+    console.log(`🧪 开始单步测试: ${step.name} (设备: ${deviceId})`);
+    console.log(`🔧 步骤类型: ${step.step_type}`);
+    console.log('📋 步骤参数:', step.parameters);
+    
     // 标记为测试中
     setTestingSteps(prev => new Set(prev).add(stepId));
 
     try {
       // 检查是否在Tauri环境中
-      const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+      const isInTauri = await isTauri();
+      console.log('🔧 Tauri环境检测', { isInTauri, windowExists: typeof window !== 'undefined' });
       
-      if (!isTauri) {
+      if (!isInTauri) {
+        console.log('🔄 非Tauri环境，使用模拟结果');
         // 开发环境模拟结果
         const mockResult = createMockResult(step);
         await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟延迟
         
         setTestResults(prev => ({ ...prev, [stepId]: mockResult }));
+        console.log(`✅ 模拟测试完成: ${step.name}`, mockResult);
         message.success(`步骤测试完成: ${step.name}`);
         return mockResult;
       }
 
+      console.log(`🚀 调用后端单步测试API...`);
+      console.log(`📋 传递参数:`, { deviceId, stepType: step.step_type, stepName: step.name });
       // 调用Tauri后端单步测试API  
-      const tauriApi = (window as any).__TAURI__;
-      const result = await tauriApi.invoke('execute_single_step_test', {
-        device_id: deviceId,
+      const result = await invoke('execute_single_step_test', {
+        deviceId: deviceId,  // 尝试使用 camelCase
         step: {
           ...step,
           // 确保步骤是启用状态
@@ -41,18 +50,24 @@ export const useSingleStepTest = () => {
         }
       }) as SingleStepTestResult;
 
+      console.log(`📊 后端测试结果:`, result);
+
       // 保存测试结果
       setTestResults(prev => ({ ...prev, [stepId]: result }));
 
       if (result.success) {
+        console.log(`✅ 单步测试成功: ${step.name} (${result.duration_ms}ms)`);
         message.success(`✅ ${step.name} - 测试成功 (${result.duration_ms}ms)`);
       } else {
+        console.log(`❌ 单步测试失败: ${step.name}`, result.error_details);
         message.error(`❌ ${step.name} - 测试失败: ${result.message}`);
       }
 
       return result;
     } catch (error) {
       const errorMessage = `测试执行失败: ${error}`;
+      console.error(`❌ 单步测试异常: ${step.name}`, error);
+      
       const failureResult: SingleStepTestResult = {
         success: false,
         step_id: step.id,

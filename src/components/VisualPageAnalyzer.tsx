@@ -10,9 +10,12 @@ import {
   ToolOutlined,
   FileTextOutlined,
   CameraOutlined,
-  MenuOutlined
+  MenuOutlined,
+  EditOutlined
 } from '@ant-design/icons';
 import './VisualPageAnalyzer.css';
+import { ElementNameMapper, UIElement as MappedUIElement } from '../modules/ElementNameMapper';
+import ElementNameEditor from './element-name-editor/ElementNameEditor';
 
 const { Title, Text } = Typography;
 
@@ -58,16 +61,20 @@ interface VisualPageAnalyzerProps {
   visible: boolean;
   onClose: () => void;
   xmlContent: string;
+  onElementSelected?: (element: UIElement) => void; // 🆕 元素选择回调
 }
 
 const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
   visible,
   onClose,
-  xmlContent
+  xmlContent,
+  onElementSelected
 }) => {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showOnlyClickable, setShowOnlyClickable] = useState(false);
+  const [showElementNameEditor, setShowElementNameEditor] = useState(false); // 🆕 显示元素名称编辑器
+  const [editingElement, setEditingElement] = useState<MappedUIElement | null>(null); // 🆕 正在编辑的元素
   const [elements, setElements] = useState<UIElement[]>([]);
   const [categories, setCategories] = useState<ElementCategory[]>([]);
 
@@ -85,8 +92,36 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
     };
   };
 
-  // 获取元素的用户友好名称
+  // 🆕 获取元素的用户友好名称（集成特征库）
   const getUserFriendlyName = (node: any): string => {
+    // 🔍 首先检查特征库是否有匹配
+    try {
+      const position = parseBounds(node.bounds || '');
+      const mappedElement: MappedUIElement = {
+        id: node.uniqueId || '',
+        text: node.text || '',
+        element_type: node.class || '',
+        resource_id: node['resource-id'] || '',
+        content_desc: node['content-desc'] || '',
+        bounds: {
+          left: position.x,
+          top: position.y,
+          right: position.x + position.width,
+          bottom: position.y + position.height
+        },
+        clickable: node.clickable === 'true'
+      };
+      
+      const customName = ElementNameMapper.getDisplayName(mappedElement);
+      if (customName && customName !== '未知元素' && !customName.includes('未知')) {
+        console.log(`🎯 特征库匹配成功: "${customName}"`);
+        return `${customName}`;
+      }
+    } catch (error) {
+      console.warn('特征库查询失败:', error);
+    }
+    
+    // 降级处理：使用原有逻辑
     // 优先使用content-desc
     if (node['content-desc'] && node['content-desc'].trim()) {
       return node['content-desc'];
@@ -177,6 +212,49 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
     }
     
     return 'low';
+  };
+
+  // 🆕 处理元素选择
+  const handleElementSelect = (element: UIElement) => {
+    if (onElementSelected) {
+      onElementSelected(element);
+    }
+  };
+
+  // 🆕 处理元素自定义命名
+  const handleElementCustomName = (element: UIElement) => {
+    // 转换为MappedUIElement格式
+    const mappedElement: MappedUIElement = {
+      id: element.id,
+      text: element.text,
+      element_type: element.type,
+      resource_id: '', // 这里需要从原始XML节点获取
+      content_desc: element.description,
+      bounds: {
+        left: element.position.x,
+        top: element.position.y,
+        right: element.position.x + element.position.width,
+        bottom: element.position.y + element.position.height
+      },
+      clickable: element.clickable
+    };
+
+    setEditingElement(mappedElement);
+    setShowElementNameEditor(true);
+  };
+
+  // 🆕 处理元素名称保存完成
+  const handleElementNameSaved = (newDisplayName: string) => {
+    console.log('🎯 元素名称已保存:', newDisplayName);
+    
+    // 强制刷新缓存
+    ElementNameMapper.refreshCache();
+    
+    // 重新解析XML以更新显示
+    parseXML(xmlContent);
+    
+    setShowElementNameEditor(false);
+    setEditingElement(null);
   };
 
   // 解析XML并提取元素
@@ -311,6 +389,7 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
   };
 
   return (
+    <>
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -420,12 +499,34 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
                     </div>
                   }
                   extra={
-                    <Badge 
-                      color={element.importance === 'high' ? 'red' : element.importance === 'medium' ? 'orange' : 'default'}
-                      text={element.importance === 'high' ? '重要' : element.importance === 'medium' ? '中等' : '一般'}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Badge 
+                        color={element.importance === 'high' ? 'red' : element.importance === 'medium' ? 'orange' : 'default'}
+                        text={element.importance === 'high' ? '重要' : element.importance === 'medium' ? '中等' : '一般'}
+                      />
+                    </div>
                   }
                   className={`element-card ${element.importance}`}
+                  actions={[
+                    <Button
+                      key="select"
+                      type="primary"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => handleElementSelect(element)}
+                      disabled={!element.clickable}
+                    >
+                      选择此元素
+                    </Button>,
+                    <Button
+                      key="custom"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => handleElementCustomName(element)}
+                    >
+                      自定义名称
+                    </Button>
+                  ]}
                 >
                   <div style={{ fontSize: 12, color: '#e5e7eb' }}>
                     <p style={{ margin: 0, color: '#e5e7eb' }}><strong>功能:</strong> {element.description}</p>
@@ -440,6 +541,18 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
         </div>
       </div>
     </Modal>
+
+    {/* 🆕 元素名称编辑器 */}
+    <ElementNameEditor
+      visible={showElementNameEditor}
+      element={editingElement}
+      onClose={() => {
+        setShowElementNameEditor(false);
+        setEditingElement(null);
+      }}
+      onSaved={handleElementNameSaved}
+    />
+  </>
   );
 };
 

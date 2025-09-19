@@ -48,6 +48,8 @@ import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartCompo
 import { SmartNavigationModal } from '../components';
 import { SmartPageFinderModal } from '../components/smart-page-finder';
 import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
+import SmartStepGenerator from '../modules/SmartStepGenerator';
+import { testSmartStepGenerator, testVariousCases } from '../test/SmartStepGeneratorTest';
 import { PageAnalysisProvider } from '../application/page-analysis/PageAnalysisProvider';
 import { PageAnalysisApplicationService } from '../application/page-analysis/PageAnalysisApplicationService';
 import { SmartActionType } from '../types/smartComponents';
@@ -316,6 +318,11 @@ const SmartScriptBuilderPage: React.FC = () => {
   useEffect(() => {
     // 刷新设备列表
     refreshDevices();
+    
+    // 临时测试：在控制台中运行智能步骤生成器测试
+    console.log('🧪 运行智能步骤生成器测试...');
+    testSmartStepGenerator();
+    testVariousCases();
   }, [refreshDevices]);
 
   // 当设备列表变化时，自动选择第一个设备
@@ -1197,57 +1204,50 @@ const SmartScriptBuilderPage: React.FC = () => {
           // 当用户选择元素时，将元素信息填入表单
           console.log('🎯 接收到智能分析元素:', element);
           
-          // 优先使用智能描述，备用简单描述
-          const elementDesc = element.text || element.element_type || '未知元素';
-          const smartDescription = (element as any).smartDescription;
-          const intelligentDesc = smartDescription || `点击 ${elementDesc} 元素`;
-          
-          // 使用智能分析结果生成搜索条件
-          let searchCriteria = '';
-          if (element.text) {
-            searchCriteria += `文本: "${element.text}"`;
-          }
-          if (element.element_type) {
-            searchCriteria += ` | 类型: ${element.element_type}`;
-          }
-          if (element.resource_id) {
-            searchCriteria += ` | ID: ${element.resource_id}`;
-          }
-          if (!searchCriteria) {
-            searchCriteria = '自动识别元素特征';
-          }
-          
-          // 使用智能描述填充表单
-          form.setFieldValue('search_criteria', searchCriteria);
-          form.setFieldValue('name', `智能识别: ${elementDesc}`);
-          
-          // 关键改进：使用智能描述作为步骤描述
-          const enhancedDescription = smartDescription ? 
-            `🤖 智能分析结果:\n${smartDescription}` : 
-            `自动查找并点击元素: ${elementDesc}`;
-          
-          form.setFieldValue('description', enhancedDescription);
-          form.setFieldValue('click_if_found', true);
-          
-          setShowPageAnalyzer(false);
-          
-          // 显示智能分析成功消息
-          if (smartDescription) {
+          try {
+            // 使用智能步骤生成器处理元素
+            const stepInfo = SmartStepGenerator.generateStepInfo(element);
+            
+            // 填充表单字段
+            form.setFieldValue('search_criteria', stepInfo.searchCriteria);
+            form.setFieldValue('name', stepInfo.name);
+            form.setFieldValue('description', stepInfo.description);
+            form.setFieldValue('click_if_found', true);
+            
+            setShowPageAnalyzer(false);
+            
+            // 显示成功消息
             message.success({
               content: (
                 <div>
                   <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                    🎯 智能识别成功！
+                    🎯 智能步骤生成成功！
                   </div>
                   <div style={{ fontSize: '12px', color: '#666' }}>
-                    已将详细分析结果填入步骤描述
+                    {stepInfo.name}
                   </div>
                 </div>
               ),
               duration: 3
             });
-          } else {
-            message.success(`已选择元素: ${elementDesc}`);
+            
+            // 调试信息：预览生成的步骤
+            SmartStepGenerator.previewStepInfo(element);
+            
+          } catch (error) {
+            console.error('❌ 智能步骤生成失败:', error);
+            
+            // 降级处理：使用原始逻辑
+            const elementDesc = element.text || element.element_type || '未知元素';
+            const searchCriteria = element.text ? `文本: "${element.text}"` : '自动识别元素特征';
+            
+            form.setFieldValue('search_criteria', searchCriteria);
+            form.setFieldValue('name', `点击: ${elementDesc}`);
+            form.setFieldValue('description', `自动查找并点击"${elementDesc}"元素`);
+            form.setFieldValue('click_if_found', true);
+            
+            setShowPageAnalyzer(false);
+            message.warning('使用基础模式填充步骤信息');
           }
         }}
       />

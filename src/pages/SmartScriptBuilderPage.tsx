@@ -44,6 +44,7 @@ import {
   RocketOutlined,
   AndroidOutlined,
   SyncOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
 import { SmartNavigationModal } from '../components';
@@ -66,6 +67,9 @@ import { ScriptBuilderIntegration } from '../modules/smart-script-management/com
 import { ScriptSerializer } from '../modules/smart-script-management/utils/serializer';
 // 🆕 导入拖拽步骤组件
 import { DraggableStepsContainer } from '../components/DraggableStepsContainer';
+import { EnhancedDraggableStepsContainer } from '../components/EnhancedDraggableStepsContainer';
+// 🆕 导入循环逻辑类型
+import type { ExtendedSmartScriptStep, LoopConfig } from '../types/loopScript';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -255,6 +259,41 @@ const SMART_ACTION_CONFIGS = {
       { key: 'screenshot_on_error', label: '出错时截图', type: 'boolean', default: true },
     ]
   },
+
+  // 循环控制操作
+  [SmartActionType.LOOP_START]: {
+    name: '循环开始',
+    description: '标记循环体的开始',
+    icon: '🔄',
+    color: 'blue',
+    category: 'loop',
+    parameters: [
+      { key: 'loop_name', label: '循环名称', type: 'text', required: true, default: '新循环' },
+      { key: 'loop_count', label: '循环次数', type: 'number', required: true, default: 3 },
+      { key: 'break_condition', label: '跳出条件', type: 'select', 
+        options: ['none', 'page_change', 'element_found', 'element_not_found'], default: 'none' },
+      { key: 'break_condition_value', label: '跳出条件值', type: 'text', required: false },
+    ],
+    advanced: [
+      { key: 'max_iterations', label: '最大迭代次数', type: 'number', default: 100 },
+      { key: 'delay_between_loops', label: '循环间延迟(ms)', type: 'number', default: 500 },
+      { key: 'enable_debug_logging', label: '启用调试日志', type: 'boolean', default: false },
+    ]
+  },
+
+  [SmartActionType.LOOP_END]: {
+    name: '循环结束',
+    description: '标记循环体的结束',
+    icon: '🏁',
+    color: 'blue',
+    category: 'loop',
+    parameters: [
+      { key: 'loop_id', label: '对应循环ID', type: 'text', required: true },
+    ],
+    advanced: [
+      { key: 'log_iteration_results', label: '记录迭代结果', type: 'boolean', default: true },
+    ]
+  },
 };
 
 // ==================== 接口定义 ====================
@@ -303,10 +342,11 @@ const SmartScriptBuilderPage: React.FC = () => {
     }
   }, []);
   
-  const [steps, setSteps] = useState<SmartScriptStep[]>([]);
+  const [steps, setSteps] = useState<ExtendedSmartScriptStep[]>([]);
+  const [loopConfigs, setLoopConfigs] = useState<LoopConfig[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [editingStep, setEditingStep] = useState<SmartScriptStep | null>(null);
+  const [editingStep, setEditingStep] = useState<ExtendedSmartScriptStep | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>(''); // 当前选择的设备ID
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
@@ -403,7 +443,7 @@ const SmartScriptBuilderPage: React.FC = () => {
       const { step_type, name, description, ...parameters } = values;
       console.log('🔍 解构后的 parameters:', parameters);
 
-      const newStep: SmartScriptStep = {
+      const newStep: ExtendedSmartScriptStep = {
         id: editingStep?.id || `step_${Date.now()}`,
         step_type,
         name,
@@ -453,8 +493,133 @@ const SmartScriptBuilderPage: React.FC = () => {
     ));
   };
 
+  // ==================== 循环管理函数 ====================
+  
+  // 创建新循环
+  const handleCreateLoop = () => {
+    const loopId = `loop_${Date.now()}`;
+    const startStepId = `step_${Date.now()}_start`;
+    const endStepId = `step_${Date.now()}_end`;
+
+    // 创建循环配置
+    const newLoopConfig: LoopConfig = {
+      loopId,
+      name: '新循环',
+      iterations: 3,
+      enabled: true,
+      description: '智能循环'
+    };
+
+    // 创建循环开始步骤
+    const loopStartStep: ExtendedSmartScriptStep = {
+      id: startStepId,
+      step_type: SmartActionType.LOOP_START,
+      name: '循环开始',
+      description: `开始执行 ${newLoopConfig.name}`,
+      parameters: {
+        loop_id: loopId,
+        loop_name: newLoopConfig.name,
+        loop_count: newLoopConfig.iterations
+      },
+      enabled: true,
+      order: steps.length + 1,
+      find_condition: null,
+      verification: null,
+      retry_config: null,
+      fallback_actions: [],
+      pre_conditions: [],
+      post_conditions: [],
+    };
+
+    // 创建循环结束步骤
+    const loopEndStep: ExtendedSmartScriptStep = {
+      id: endStepId,
+      step_type: SmartActionType.LOOP_END,
+      name: '循环结束',
+      description: `结束执行 ${newLoopConfig.name}`,
+      parameters: {
+        loop_id: loopId
+      },
+      enabled: true,
+      order: steps.length + 2,
+      find_condition: null,
+      verification: null,
+      retry_config: null,
+      fallback_actions: [],
+      pre_conditions: [],
+      post_conditions: [],
+    };
+
+    // 更新状态
+    setLoopConfigs(prev => [...prev, newLoopConfig]);
+    setSteps(prev => [...prev, loopStartStep, loopEndStep]);
+    
+    message.success('创建循环成功！可以拖拽其他步骤到循环体内');
+  };
+
+  // 删除循环
+  const handleDeleteLoop = (loopId: string) => {
+    Modal.confirm({
+      title: '确认删除循环',
+      content: '确定要删除整个循环吗？这将删除循环开始和结束标记，循环内的步骤会保留。',
+      onOk: () => {
+        // 删除循环配置
+        setLoopConfigs(prev => prev.filter(config => config.loopId !== loopId));
+        
+        // 删除循环相关步骤，重置循环体内步骤的父级关系
+        setSteps(prev => {
+          const updatedSteps = prev.filter(step => {
+            // 删除循环开始和结束步骤
+            if ((step.step_type === SmartActionType.LOOP_START || step.step_type === SmartActionType.LOOP_END) 
+                && step.parameters?.loop_id === loopId) {
+              return false;
+            }
+            return true;
+          }).map(step => {
+            // 重置循环体内步骤的父级关系
+            if (step.parent_loop_id === loopId) {
+              return { ...step, parent_loop_id: undefined };
+            }
+            return step;
+          });
+          
+          // 重新计算步骤顺序
+          return updatedSteps.map((step, index) => ({ ...step, order: index + 1 }));
+        });
+        
+        message.success('循环删除成功');
+      },
+    });
+  };
+
+  // 更新循环配置
+  const handleUpdateLoopConfig = (loopId: string, updates: Partial<LoopConfig>) => {
+    setLoopConfigs(prev => prev.map(config => 
+      config.loopId === loopId ? { ...config, ...updates } : config
+    ));
+    
+    // 同步更新相关步骤的参数
+    setSteps(prev => prev.map(step => {
+      if ((step.step_type === SmartActionType.LOOP_START || step.step_type === SmartActionType.LOOP_END) 
+          && step.parameters?.loop_id === loopId) {
+        return {
+          ...step,
+          name: step.step_type === SmartActionType.LOOP_START ? `循环开始 - ${updates.name || step.name}` : step.name,
+          description: step.step_type === SmartActionType.LOOP_START ? 
+            `开始执行 ${updates.name || '循环'}` : step.description,
+          parameters: {
+            ...step.parameters,
+            loop_name: updates.name || step.parameters?.loop_name,
+            loop_count: updates.iterations || step.parameters?.loop_count
+          }
+        };
+      }
+      return step;
+    }));
+  };
+
   // 🆕 打开元素名称编辑器
-  const handleEditElementName = (step: SmartScriptStep) => {
+  const handleEditElementName = (step: ExtendedSmartScriptStep) => {
     console.log('🏷️ 打开元素名称编辑器，步骤:', step);
     console.log('🏷️ 步骤参数详细信息:', step.parameters);
     console.log('🔍 步骤参数所有键:', Object.keys(step.parameters || {}));
@@ -1034,13 +1199,16 @@ const SmartScriptBuilderPage: React.FC = () => {
         {/* 左侧：可拖拽的步骤列表 */}
         <Col span={16}>
           <div style={{ height: '100%' }}>
-            <DraggableStepsContainer
+            <EnhancedDraggableStepsContainer
               steps={steps}
+              loopConfigs={loopConfigs}
               onStepsChange={setSteps}
+              onLoopConfigsChange={setLoopConfigs}
               currentDeviceId={currentDeviceId}
               devices={devices}
               onEditStep={handleEditStep}
               onDeleteStep={handleDeleteStep}
+              onDeleteLoop={handleDeleteLoop}
               onToggleStep={handleToggleStep}
               onEditElementName={handleEditElementName}
               StepTestButton={StepTestButton}
@@ -1048,6 +1216,15 @@ const SmartScriptBuilderPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span>📋 智能脚本步骤 ({steps.length})</span>
                   <Space>
+                    <Button 
+                      type="default"
+                      size="large"
+                      icon={<ReloadOutlined className="text-blue-600" />}
+                      onClick={handleCreateLoop}
+                      className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 text-blue-700 font-semibold hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 hover:text-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                    >
+                      🔄 创建循环
+                    </Button>
                     <Button 
                       type="primary" 
                       icon={<PlusOutlined />}

@@ -125,6 +125,10 @@ export enum SmartActionType {
   EXTRACT_ELEMENT = 'extract_element',
   SMART_NAVIGATION = 'smart_navigation',
   
+  // 循环控制操作
+  LOOP_START = 'loop_start',
+  LOOP_END = 'loop_end',
+  
   // 应用操作 - 新增
   LAUNCH_APP = 'launch_app',
   CLOSE_APP = 'close_app',

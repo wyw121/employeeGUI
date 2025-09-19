@@ -63,6 +63,55 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
     onStepsChange(extendedSteps);
   };
 
+  // 查找循环配对步骤
+  const findLoopPairStep = (currentStep: ExtendedSmartScriptStep, allSteps: ExtendedSmartScriptStep[]) => {
+    // 如果当前步骤不是循环步骤，返回null
+    if (currentStep.step_type !== 'loop_start' && currentStep.step_type !== 'loop_end') {
+      return null;
+    }
+
+    // 根据循环ID查找配对步骤
+    let targetStepType = currentStep.step_type === 'loop_start' ? 'loop_end' : 'loop_start';
+    
+    // 优先通过parameters中的loop_id匹配
+    if (currentStep.parameters?.loop_id) {
+      return allSteps.find(step => 
+        step.step_type === targetStepType && 
+        step.parameters?.loop_id === currentStep.parameters?.loop_id
+      );
+    }
+
+    // 备用方案：通过loop_config中的loopId匹配
+    if (currentStep.loop_config?.loopId) {
+      return allSteps.find(step => 
+        step.step_type === targetStepType && 
+        step.loop_config?.loopId === currentStep.loop_config?.loopId
+      );
+    }
+
+    // 最后备用方案：查找最近的配对步骤（基于位置的简单配对逻辑）
+    const currentIndex = allSteps.findIndex(step => step.id === currentStep.id);
+    if (currentIndex === -1) return null;
+
+    if (currentStep.step_type === 'loop_start') {
+      // 查找后续的loop_end
+      for (let i = currentIndex + 1; i < allSteps.length; i++) {
+        if (allSteps[i].step_type === 'loop_end') {
+          return allSteps[i];
+        }
+      }
+    } else {
+      // 查找前面的loop_start
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        if (allSteps[i].step_type === 'loop_start') {
+          return allSteps[i];
+        }
+      }
+    }
+
+    return null;
+  };
+
   // 处理步骤参数更新
   const handleUpdateStepParameters = (stepId: string, parameters: any) => {
     const updatedSteps = steps.map(step => 
@@ -70,6 +119,33 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         ? { ...step, parameters: { ...step.parameters, ...parameters } }
         : step
     );
+
+    // 如果更新的是循环步骤的参数，需要同步更新配对步骤
+    const currentStep = steps.find(step => step.id === stepId);
+    if (currentStep && (currentStep.step_type === 'loop_start' || currentStep.step_type === 'loop_end')) {
+      // 查找循环配对步骤
+      const pairStep = findLoopPairStep(currentStep, updatedSteps);
+      
+      if (pairStep) {
+        // 同步循环相关参数到配对步骤
+        const loopRelatedParams = {
+          loop_count: parameters.loop_count,
+          is_infinite_loop: parameters.is_infinite_loop
+        };
+
+        // 再次更新配对步骤的参数
+        const finalUpdatedSteps = updatedSteps.map(step => 
+          step.id === pairStep.id
+            ? { ...step, parameters: { ...step.parameters, ...loopRelatedParams } }
+            : step
+        );
+
+        onStepsChange(finalUpdatedSteps);
+        return;
+      }
+    }
+
+    // 如果不是循环步骤或找不到配对步骤，正常更新
     onStepsChange(updatedSteps);
   };
 

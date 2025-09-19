@@ -519,7 +519,8 @@ const SmartScriptBuilderPage: React.FC = () => {
       parameters: {
         loop_id: loopId,
         loop_name: newLoopConfig.name,
-        loop_count: newLoopConfig.iterations
+        loop_count: newLoopConfig.iterations,
+        is_infinite_loop: false // 初始化为非无限循环
       },
       enabled: true,
       order: steps.length + 1,
@@ -538,7 +539,10 @@ const SmartScriptBuilderPage: React.FC = () => {
       name: '循环结束',
       description: `结束执行 ${newLoopConfig.name}`,
       parameters: {
-        loop_id: loopId
+        loop_id: loopId,
+        loop_name: newLoopConfig.name,
+        loop_count: newLoopConfig.iterations, // 确保循环结束步骤也有相同的循环次数
+        is_infinite_loop: false // 初始化为非无限循环
       },
       enabled: true,
       order: steps.length + 2,

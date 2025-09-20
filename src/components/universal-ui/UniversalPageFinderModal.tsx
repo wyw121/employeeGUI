@@ -1355,32 +1355,98 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
       // 设置当前缓存页面
       setCurrentCachePage(cachedPage);
       
-      // 更新元素列表
-      setElements(pageContent.elements);
-      setFilteredElements(pageContent.elements);
-      
       // 设置分析结果为XML内容（用于可视化视图）
       setAnalysisResult(pageContent.xmlContent);
       
-      // 切换到可视化视图
+      console.log('🔍 缓存页面原始元素数量:', pageContent.elements.length);
+      
+      // 🚀 使用与"分析当前页面"相同的元素处理逻辑
+      if (pageContent.xmlContent.includes('<?xml') || pageContent.xmlContent.includes('<hierarchy')) {
+        console.log('📋 重新提取缓存页面元素...');
+        try {
+          // 使用相同的API提取元素
+          const extractedElements = await UniversalUIAPI.extractPageElements(pageContent.xmlContent);
+          console.log('📋 提取到的元素数量:', extractedElements.length);
+          
+          if (extractedElements.length > 0) {
+            try {
+              // 使用相同的去重逻辑
+              const deduplicatedElements = await UniversalUIAPI.deduplicateElements(extractedElements);
+              console.log('📋 去重后的元素数量:', deduplicatedElements.length);
+              
+              // 更新元素列表
+              setElements(deduplicatedElements);
+              setFilteredElements(deduplicatedElements);
+              
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      📄 缓存页面加载成功
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {cachedPage.pageTitle} • {deduplicatedElements.length}个元素
+                    </div>
+                  </div>
+                ),
+                duration: 3
+              });
+            } catch (dedupeError) {
+              console.warn('缓存页面元素去重失败，使用原始元素列表:', dedupeError);
+              setElements(extractedElements);
+              setFilteredElements(extractedElements);
+              
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      📄 缓存页面加载成功
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {cachedPage.pageTitle} • {extractedElements.length}个元素（跳过去重）
+                    </div>
+                  </div>
+                ),
+                duration: 3
+              });
+            }
+          } else {
+            // 如果提取失败，回退到原始数据
+            console.warn('提取元素失败，使用缓存的原始元素');
+            setElements(pageContent.elements);
+            setFilteredElements(pageContent.elements);
+            
+            message.warning({
+              content: `缓存页面加载成功，但元素提取有问题 • ${pageContent.elements.length}个原始元素`,
+              duration: 3
+            });
+          }
+        } catch (extractError) {
+          console.error('提取缓存页面元素失败，使用原始数据:', extractError);
+          setElements(pageContent.elements);
+          setFilteredElements(pageContent.elements);
+          
+          message.warning({
+            content: `缓存页面加载成功 • ${pageContent.elements.length}个元素（使用原始数据）`,
+            duration: 3
+          });
+        }
+      } else {
+        // 非XML内容，直接使用原始元素
+        setElements(pageContent.elements);
+        setFilteredElements(pageContent.elements);
+        
+        message.success({
+          content: `缓存页面加载成功 • ${pageContent.elements.length}个元素`,
+          duration: 3
+        });
+      }
+      
+      // 默认切换到可视化视图（保持与原有行为一致）
       setViewMode('visual');
       
       // 隐藏缓存选择器
       setShowCache(false);
-      
-      message.success({
-        content: (
-          <div>
-            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-              📄 缓存页面加载成功
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {cachedPage.pageTitle} • {pageContent.elements.length}个元素
-            </div>
-          </div>
-        ),
-        duration: 3
-      });
       
     } catch (error) {
       console.error('❌ 加载缓存页面失败:', error);

@@ -26,6 +26,13 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
   onElementSelect,
   selectedElementId
 }) => {
+  // 🔍 调试日志：检查elements数组状态
+  console.log('🌲 UIElementTree 渲染:', {
+    elementsCount: elements?.length || 0,
+    elements: elements?.slice(0, 3), // 只显示前3个避免日志过长
+    selectedElementId
+  });
+
   // 移除循环引用的函数
   const removeCircularReferences = (elements: any[]): any[] => {
     const result = [...elements];

@@ -30,38 +30,76 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
   const buildTreeData = (): UITreeNode[] => {
     if (!elements.length) return [];
 
-    // 为每个元素计算层级深度和父子关系
-    const elementsWithHierarchy = elements.map((element, index) => {
-      // 通过bounds位置关系推断层级
-      const depth = calculateDepth(element, elements);
-      const parentElement = findParentElement(element, elements);
+    try {
+      // 为每个元素计算层级深度和父子关系
+      const elementsWithHierarchy = elements.map((element, index) => {
+        // 通过bounds位置关系推断层级
+        const depth = calculateDepth(element, elements);
+        const parentElement = findParentElement(element, elements);
+        
+        return {
+          ...element,
+          depth,
+          parentId: parentElement?.id,
+          originalIndex: index
+        };
+      });
+
+      // 检测并移除循环引用
+      const validElements = removeCircularReferences(elementsWithHierarchy);
       
-      return {
-        ...element,
-        depth,
-        parentId: parentElement?.id,
-        originalIndex: index
+      // 按深度分组
+      const rootElements = validElements.filter(el => !el.parentId);
+      
+      // 递归保护的buildNode函数
+      const buildNode = (element: any, visitedIds = new Set<string>(), depth = 0): UITreeNode => {
+        // 递归深度保护
+        if (depth > 20) {
+          console.warn('🚨 递归深度超限，停止构建:', element.id);
+          return {
+            key: element.id,
+            title: renderNodeTitle(element),
+            element: element,
+            children: undefined,
+            icon: getElementIcon(element),
+          };
+        }
+
+        // 循环引用检测
+        if (visitedIds.has(element.id)) {
+          console.warn('🚨 检测到循环引用，跳过:', element.id);
+          return {
+            key: element.id,
+            title: renderNodeTitle(element),
+            element: element,
+            children: undefined,
+            icon: getElementIcon(element),
+          };
+        }
+
+        // 标记当前节点为已访问
+        const newVisitedIds = new Set(visitedIds);
+        newVisitedIds.add(element.id);
+
+        // 安全地构建子节点
+        const children = validElements
+          .filter(el => el.parentId === element.id)
+          .map(child => buildNode(child, newVisitedIds, depth + 1));
+
+        return {
+          key: element.id,
+          title: renderNodeTitle(element),
+          element: element,
+          children: children.length > 0 ? children : undefined,
+          icon: getElementIcon(element),
+        };
       };
-    });
 
-    // 按深度分组
-    const rootElements = elementsWithHierarchy.filter(el => !el.parentId);
-    
-    const buildNode = (element: any): UITreeNode => {
-      const children = elementsWithHierarchy
-        .filter(el => el.parentId === element.id)
-        .map(buildNode);
-
-      return {
-        key: element.id,
-        title: renderNodeTitle(element),
-        element: element,
-        children: children.length > 0 ? children : undefined,
-        icon: getElementIcon(element),
-      };
-    };
-
-    return rootElements.map(buildNode);
+      return rootElements.map(el => buildNode(el));
+    } catch (error) {
+      console.error('🚨 构建UI树时发生错误:', error);
+      return [];
+    }
   };
 
   // 计算元素深度（基于bounds包含关系）

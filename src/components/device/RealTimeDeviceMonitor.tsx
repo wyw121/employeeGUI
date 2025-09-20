@@ -78,16 +78,16 @@ export const RealTimeDeviceMonitor: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
+    <div style={{ padding: '24px', minHeight: '100vh' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* 标题和控制面板 */}
         <Card style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <Title level={2} style={{ margin: 0, color: '#1890ff' }}>
+              <Title level={2} style={{ margin: 0 }}>
                 <MobileOutlined /> 实时ADB设备监控
               </Title>
-              <Paragraph style={{ margin: '8px 0 0 0', color: '#666' }}>
+              <Paragraph style={{ margin: '8px 0 0 0' }} type="secondary">
                 基于 <Text code>host:track-devices</Text> 协议的事件驱动设备管理，告别轮询！
               </Paragraph>
             </div>

@@ -478,10 +478,10 @@ const TemplateLibrary: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <div style={{ padding: '24px', minHeight: '100vh' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
-          <Title level={2} style={{ margin: 0, color: '#1890ff' }}>
+          <Title level={2} style={{ margin: 0 }}>
             📚 脚本模板库
           </Title>
           <Paragraph type="secondary">

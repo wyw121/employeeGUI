@@ -46,8 +46,8 @@ import { RealXMLAnalysisService, RealElementAnalysis } from '../../services/Real
 import { XmlCachePageSelector } from '../xml-cache/XmlCachePageSelector';
 import { XmlPageCacheService, CachedXmlPage, XmlPageContent } from '../../services/XmlPageCacheService';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { useVisualElementInteractionManager } from './VisualElementInteractionManager';
-import ElementSelectionConfirm from './ElementSelectionConfirm';
+// 使用新的元素选择模块
+import { useElementSelectionManager, ElementSelectionPopover } from './element-selection';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -224,9 +224,9 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
     };
   };
 
-  // 使用可视化元素交互管理器
+  // 使用新的元素选择管理器
   const uiElements = elements.map(convertVisualToUIElement);
-  const interactionManager = useVisualElementInteractionManager(
+  const selectionManager = useElementSelectionManager(
     uiElements,
     (selectedElement) => {
       // 元素被确认选择后的处理逻辑
@@ -642,7 +642,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                 const elementHeight = Math.max(element.position.height * scale, 1);
                 
                 // 获取元素的显示状态
-                const displayState = interactionManager.getElementDisplayState(element.id);
+                const displayState = selectionManager.getElementDisplayState(element.id);
                 
                 return (
                   <div
@@ -698,19 +698,19 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                       
                       console.log('🎯 点击坐标 - 页面绝对:', e.clientX, e.clientY, '相对容器:', relativeX, relativeY);
                       
-                      // 使用交互管理器处理点击
+                      // 使用选择管理器处理点击
                       const uiElement = convertVisualToUIElement(element);
-                      interactionManager.handleElementClick(uiElement, clickPosition);
+                      selectionManager.handleElementClick(uiElement, clickPosition);
                     }}
                     onMouseEnter={(e) => {
                       if (displayState.isHidden) return;
                       
-                      // 通知交互管理器悬停状态
-                      interactionManager.handleElementHover(element.id);
+                      // 通知选择管理器悬停状态
+                      selectionManager.handleElementHover(element.id);
                     }}
                     onMouseLeave={(e) => {
                       // 清除悬停状态
-                      interactionManager.handleElementHover(null);
+                      selectionManager.handleElementHover(null);
                     }}
                   >
                     {/* 元素标签（仅在足够大时显示）*/}
@@ -809,7 +809,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
               </Space>
               
               {/* 隐藏元素管理 */}
-              {interactionManager.hiddenElements.length > 0 && (
+              {selectionManager.hiddenElements.length > 0 && (
                 <div style={{ 
                   padding: '8px', 
                   backgroundColor: '#f6ffed', 
@@ -819,12 +819,12 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                 }}>
                   <Space direction="vertical" size={4} style={{ width: '100%' }}>
                     <Text style={{ fontSize: '12px', color: '#52c41a' }}>
-                      已隐藏 {interactionManager.hiddenElements.length} 个元素
+                      已隐藏 {selectionManager.hiddenElements.length} 个元素
                     </Text>
                     <Button
                       size="small"
                       type="link"
-                      onClick={interactionManager.restoreAllElements}
+                      onClick={selectionManager.restoreAllElements}
                       style={{ padding: 0, height: 'auto', fontSize: '11px' }}
                     >
                       恢复所有隐藏元素
@@ -922,83 +922,13 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
         </Space>
       </div>
       
-      {/* 隐藏的Popconfirm助手 - 用于元素选择确认 */}
-      {interactionManager.pendingSelection && (
-        <div
-          style={{
-            position: 'fixed', // 使用 fixed 定位确保相对于视口
-            left: interactionManager.pendingSelection.position.x + 10, // 鼠标右侧稍微偏移
-            top: interactionManager.pendingSelection.position.y - 60,   // 鼠标上方显示
-            zIndex: 10000, // 增加 z-index 确保显示在最上层
-            pointerEvents: 'none' // 防止干扰其他交互
-          }}
-        >
-          <Popconfirm
-            open={!!interactionManager.pendingSelection}
-            title={
-              <div style={{ maxWidth: '200px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                  选择此元素？
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                  {interactionManager.pendingSelection.element.text || 
-                   interactionManager.pendingSelection.element.resource_id || 
-                   interactionManager.pendingSelection.element.class_name || '未知元素'}
-                </div>
-              </div>
-            }
-            description=""
-            okText={
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckOutlined />
-                确定
-              </span>
-            }
-            cancelText={
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <EyeInvisibleOutlined />
-                隐藏
-              </span>
-            }
-            onConfirm={(e) => {
-              if (e) e.stopPropagation();
-              interactionManager.confirmSelection();
-            }}
-            onCancel={(e) => {
-              if (e) e.stopPropagation();
-              interactionManager.hideElement();
-            }}
-            placement="topRight" // 让箭头指向鼠标位置
-            arrow={{ pointAtCenter: false }}
-            getPopupContainer={() => document.body} // 确保在 body 中渲染
-          >
-            {/* 不可见的触发器 */}
-            <div style={{ 
-              width: 1, 
-              height: 1, 
-              opacity: 0,
-              pointerEvents: 'auto' // 允许这个触发器接收事件
-            }} />
-          </Popconfirm>
-        </div>
-      )}
-      
-      {/* 原有的ElementSelectionConfirm组件作为备用 */}
-      {false && (
-        <ElementSelectionConfirm
-          visible={!!interactionManager.pendingSelection}
-          position={interactionManager.pendingSelection?.position || { x: 0, y: 0 }}
-          element={interactionManager.pendingSelection?.element ? {
-            id: interactionManager.pendingSelection.element.id,
-            text: interactionManager.pendingSelection.element.text,
-            className: interactionManager.pendingSelection.element.element_type,
-            resourceId: interactionManager.pendingSelection.element.content_desc
-          } : null}
-          onConfirm={interactionManager.confirmSelection}
-          onHide={interactionManager.hideElement}
-          onCancel={interactionManager.cancelSelection}
-        />
-      )}
+      {/* 使用新的元素选择弹出框组件 */}
+      <ElementSelectionPopover
+        visible={!!selectionManager.pendingSelection}
+        selection={selectionManager.pendingSelection}
+        onConfirm={selectionManager.confirmSelection}
+        onCancel={selectionManager.hideElement}
+      />
     </div>
   );
 };

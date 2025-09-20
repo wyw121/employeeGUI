@@ -8,8 +8,7 @@ import {
     SyncOutlined,
     ThunderboltOutlined,
     UserOutlined,
-    RobotOutlined,
-    ExperimentOutlined
+    RobotOutlined
 } from '@ant-design/icons';
 import {
     App,
@@ -36,7 +35,6 @@ import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能�
 import RealDeviceManager from './device/RealDeviceManager';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
-import { UniversalUITestComponent } from './test/UniversalUITestComponent'; // Universal UI 测试组件
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -99,11 +97,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       key: 'template-library',
       icon: <FolderOutlined />,
       label: '模板库',
-    },
-    {
-      key: 'universal-ui-test',
-      icon: <ExperimentOutlined />,
-      label: 'Universal UI 测试',
     }
   ];
 
@@ -349,10 +342,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
 
             {selectedKey === 'template-library' && (
               <TemplateLibrary />
-            )}
-
-            {selectedKey === 'universal-ui-test' && (
-              <UniversalUITestComponent />
             )}
             </div>
           </Content>

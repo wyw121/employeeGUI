@@ -43,6 +43,8 @@ import { RealXMLAnalysisService, RealElementAnalysis } from '../../services/Real
 import { XmlCachePageSelector } from '../xml-cache/XmlCachePageSelector';
 import { XmlPageCacheService, CachedXmlPage, XmlPageContent } from '../../services/XmlPageCacheService';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { useVisualElementInteractionManager } from './VisualElementInteractionManager';
+import ElementSelectionConfirm from './ElementSelectionConfirm';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -194,6 +196,46 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
   const [showOnlyClickable, setShowOnlyClickable] = useState(false);
   const [elements, setElements] = useState<VisualUIElement[]>([]);
   const [categories, setCategories] = useState<VisualElementCategory[]>([]);
+
+  // 将VisualUIElement转换为UIElement的函数（用于交互管理器）
+  const convertVisualToUIElement = (visualElement: VisualUIElement): UIElement => {
+    return {
+      id: visualElement.id,
+      text: visualElement.text,
+      element_type: visualElement.type,
+      xpath: '',
+      bounds: {
+        left: visualElement.position.x,
+        top: visualElement.position.y,
+        right: visualElement.position.x + visualElement.position.width,
+        bottom: visualElement.position.y + visualElement.position.height
+      },
+      is_clickable: visualElement.clickable,
+      is_scrollable: false,
+      is_enabled: true,
+      checkable: false,
+      checked: false,
+      selected: false,
+      password: false,
+      content_desc: visualElement.description
+    };
+  };
+
+  // 使用可视化元素交互管理器
+  const uiElements = elements.map(convertVisualToUIElement);
+  const interactionManager = useVisualElementInteractionManager(
+    uiElements,
+    (selectedElement) => {
+      // 元素被确认选择后的处理逻辑
+      console.log('✅ 用户确认选择元素:', selectedElement);
+      
+      // 找到对应的VisualUIElement
+      const visualElement = elements.find(el => el.id === selectedElement.id);
+      if (visualElement) {
+        handleSmartElementSelect(visualElement);
+      }
+    }
+  );
 
   // 从 VisualPageAnalyzer 复制的解析函数
   const parseBounds = (bounds: string): { x: number; y: number; width: number; height: number } => {
@@ -596,6 +638,9 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                 const elementWidth = Math.max(element.position.width * scale, 1);
                 const elementHeight = Math.max(element.position.height * scale, 1);
                 
+                // 获取元素的显示状态
+                const displayState = interactionManager.getElementDisplayState(element.id);
+                
                 return (
                   <div
                     key={element.id}
@@ -607,23 +652,47 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                       width: elementWidth,
                       height: elementHeight,
                       backgroundColor: category?.color || '#8b5cf6',
-                      opacity: element.clickable ? 0.7 : 0.4,
-                      border: element.clickable ? '1px solid #fff' : '1px solid rgba(255,255,255,0.3)',
+                      opacity: displayState.isHidden ? 0.1 : 
+                               displayState.isPending ? 1 : 
+                               element.clickable ? 0.7 : 0.4,
+                      border: displayState.isPending ? '2px solid #52c41a' :
+                              displayState.isHovered ? '2px solid #faad14' :
+                              element.clickable ? '1px solid #fff' : '1px solid rgba(255,255,255,0.3)',
                       borderRadius: Math.min(elementWidth, elementHeight) > 10 ? '2px' : '1px',
-                      cursor: element.clickable ? 'pointer' : 'default',
+                      cursor: displayState.isHidden ? 'default' :
+                              element.clickable ? 'pointer' : 'default',
                       transition: 'all 0.2s ease',
-                      zIndex: element.clickable ? 10 : 5
+                      zIndex: displayState.isPending ? 50 :
+                              displayState.isHovered ? 30 :
+                              element.clickable ? 10 : 5,
+                      transform: displayState.isPending ? 'scale(1.1)' :
+                                displayState.isHovered ? 'scale(1.05)' : 'scale(1)',
+                      boxShadow: displayState.isPending ? '0 4px 16px rgba(82, 196, 26, 0.4)' :
+                                displayState.isHovered ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                      filter: displayState.isHidden ? 'grayscale(100%) blur(1px)' : 'none'
                     }}
-                    onClick={() => handleSmartElementSelect(element)}
+                    onClick={(e) => {
+                      if (!element.clickable || displayState.isHidden) return;
+                      
+                      // 获取点击位置
+                      const clickPosition = {
+                        x: e.clientX,
+                        y: e.clientY
+                      };
+                      
+                      // 使用交互管理器处理点击
+                      const uiElement = convertVisualToUIElement(element);
+                      interactionManager.handleElementClick(uiElement, clickPosition);
+                    }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                      e.currentTarget.style.zIndex = '20';
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                      if (displayState.isHidden) return;
+                      
+                      // 通知交互管理器悬停状态
+                      interactionManager.handleElementHover(element.id);
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.zIndex = element.clickable ? '10' : '5';
-                      e.currentTarget.style.boxShadow = 'none';
+                      // 清除悬停状态
+                      interactionManager.handleElementHover(null);
                     }}
                   >
                     {/* 元素标签（仅在足够大时显示）*/}
@@ -711,13 +780,40 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
           
           {/* 过滤选项 */}
           <div>
-            <Space>
-              <input 
-                type="checkbox"
-                checked={showOnlyClickable} 
-                onChange={(e) => setShowOnlyClickable(e.target.checked)}
-              />
-              <Text>只显示可点击元素</Text>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Space>
+                <input 
+                  type="checkbox"
+                  checked={showOnlyClickable} 
+                  onChange={(e) => setShowOnlyClickable(e.target.checked)}
+                />
+                <Text>只显示可点击元素</Text>
+              </Space>
+              
+              {/* 隐藏元素管理 */}
+              {interactionManager.hiddenElements.length > 0 && (
+                <div style={{ 
+                  padding: '8px', 
+                  backgroundColor: '#f6ffed', 
+                  border: '1px solid #b7eb8f',
+                  borderRadius: '4px',
+                  fontSize: '12px'
+                }}>
+                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    <Text style={{ fontSize: '12px', color: '#52c41a' }}>
+                      已隐藏 {interactionManager.hiddenElements.length} 个元素
+                    </Text>
+                    <Button
+                      size="small"
+                      type="link"
+                      onClick={interactionManager.restoreAllElements}
+                      style={{ padding: 0, height: 'auto', fontSize: '11px' }}
+                    >
+                      恢复所有隐藏元素
+                    </Button>
+                  </Space>
+                </div>
+              )}
             </Space>
           </div>
           
@@ -807,6 +903,21 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
           })}
         </Space>
       </div>
+      
+      {/* 元素选择确认面板 */}
+      <ElementSelectionConfirm
+        visible={!!interactionManager.pendingSelection}
+        position={interactionManager.pendingSelection?.position || { x: 0, y: 0 }}
+        element={interactionManager.pendingSelection?.element ? {
+          id: interactionManager.pendingSelection.element.id,
+          text: interactionManager.pendingSelection.element.text,
+          className: interactionManager.pendingSelection.element.element_type,
+          resourceId: interactionManager.pendingSelection.element.content_desc
+        } : null}
+        onConfirm={interactionManager.confirmSelection}
+        onHide={interactionManager.hideElement}
+        onCancel={interactionManager.cancelSelection}
+      />
     </div>
   );
 };

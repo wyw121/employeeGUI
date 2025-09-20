@@ -1,7 +1,7 @@
 // 可拖拽的步骤卡片组件
 
 import React, { useState } from 'react';
-import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider } from 'antd';
+import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider, Popconfirm, message } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -271,17 +271,34 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 }}
               />
               
-              {/* 删除按钮 */}
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
+              {/* 删除按钮 - 添加确认对话框 */}
+              <Popconfirm
+                title="确认删除步骤"
+                description="删除后无法恢复，确定要删除这个步骤吗？"
+                onConfirm={(e) => {
+                  e?.stopPropagation();
                   onDelete(step.id);
+                  message.success(`已删除步骤: ${step.name}`);
                 }}
-              />
+                onCancel={(e) => {
+                  e?.stopPropagation();
+                }}
+                okText="删除"
+                cancelText="取消"
+                okType="danger"
+                placement="topRight"
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Popconfirm 会处理确认逻辑
+                  }}
+                />
+              </Popconfirm>
             </Space>
           </div>
         }

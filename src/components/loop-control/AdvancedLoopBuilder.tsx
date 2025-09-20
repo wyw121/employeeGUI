@@ -13,6 +13,8 @@ import {
   Switch,
   Tooltip,
   Modal,
+  Popconfirm,
+  message,
 } from 'antd';
 import {
   PlusOutlined,
@@ -387,6 +389,7 @@ const AdvancedLoopBuilder: React.FC = () => {
 
   const handleRemoveLoop = useCallback((id: string) => {
     setLoops(loops.filter(loop => loop.id !== id));
+    message.success('高级循环删除成功');
   }, [loops]);
 
   const handleUpdateLoop = useCallback((id: string, updates: Partial<LoopConfig>) => {
@@ -456,13 +459,22 @@ const AdvancedLoopBuilder: React.FC = () => {
                 onClick={() => handleCloneLoop(loop)}
                 title="复制循环"
               />
-              <Button
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => handleRemoveLoop(loop.id)}
-                title="删除循环"
-              />
+              <Popconfirm
+                title="确认删除高级循环"
+                description="确定要删除这个高级循环配置吗？此操作不可撤销。"
+                onConfirm={() => handleRemoveLoop(loop.id)}
+                okText="删除"
+                cancelText="取消"
+                okType="danger"
+                placement="topLeft"
+              >
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  title="删除循环"
+                />
+              </Popconfirm>
             </Space>
           </div>
         }

@@ -1,7 +1,7 @@
 // 循环开始卡片组件 - 独特的蓝色主题
 
 import React, { useState } from 'react';
-import { Card, Button, Input, Typography, Tag, Tooltip, Space, InputNumber } from 'antd';
+import { Card, Button, Input, Typography, Tag, Tooltip, Space, InputNumber, Popconfirm, message } from 'antd';
 import { 
   ReloadOutlined, 
   EditOutlined, 
@@ -84,6 +84,7 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
   const handleDeleteLoop = () => {
     if (tempConfig.loopId) {
       onDeleteLoop(tempConfig.loopId);
+      message.success(`已删除循环: ${tempConfig.name || '未命名循环'}`);
     }
   };
 
@@ -190,22 +191,38 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
                 title="编辑循环配置"
               />
               
-              {/* 🗑️ 删除按钮 */}
-              <Button
-                type="text"
-                size="small"
-                danger
-                style={{
-                  backgroundColor: 'rgba(254, 242, 242, 1)',
-                  borderColor: '#fecaca'
-                }}
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
+              {/* 🗑️ 删除按钮 - 添加确认对话框 */}
+              <Popconfirm
+                title="确认删除循环"
+                description="删除循环将同时删除循环内的所有步骤，此操作不可撤销"
+                onConfirm={(e) => {
+                  e?.stopPropagation();
                   handleDeleteLoop();
                 }}
-                title="删除整个循环"
-              />
+                onCancel={(e) => {
+                  e?.stopPropagation();
+                }}
+                okText="删除"
+                cancelText="取消"
+                okType="danger"
+                placement="topRight"
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  style={{
+                    backgroundColor: 'rgba(254, 242, 242, 1)',
+                    borderColor: '#fecaca'
+                  }}
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Popconfirm 会处理确认逻辑
+                  }}
+                  title="删除整个循环"
+                />
+              </Popconfirm>
             </Space>
           </div>
         }

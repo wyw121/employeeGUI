@@ -1,7 +1,7 @@
 // 循环步骤卡片组件
 
 import React, { useState } from 'react';
-import { Card, Space, Tag, Button, Tooltip, Collapse, Typography, InputNumber, Select } from 'antd';
+import { Card, Space, Tag, Button, Tooltip, Collapse, Typography, InputNumber, Select, Popconfirm } from 'antd';
 import { 
   RedoOutlined, 
   PlayCircleOutlined, 
@@ -214,13 +214,22 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
           </Tooltip>
           {editable && (
             <Tooltip title="删除循环">
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={onDelete}
-              />
+              <Popconfirm
+                title="确认删除循环"
+                description="删除循环将同时删除循环内的所有步骤，此操作不可撤销"
+                onConfirm={onDelete}
+                okText="删除"
+                cancelText="取消"
+                okType="danger"
+                placement="topLeft"
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
             </Tooltip>
           )}
         </Space>

@@ -927,8 +927,8 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
         <div
           style={{
             position: 'fixed', // 使用 fixed 定位确保相对于视口
-            left: interactionManager.pendingSelection.position.x - 100, // 偏移一些让气泡居中
-            top: interactionManager.pendingSelection.position.y - 80,   // 气泡显示在点击位置上方
+            left: interactionManager.pendingSelection.position.x + 10, // 鼠标右侧稍微偏移
+            top: interactionManager.pendingSelection.position.y - 60,   // 鼠标上方显示
             zIndex: 10000, // 增加 z-index 确保显示在最上层
             pointerEvents: 'none' // 防止干扰其他交互
           }}
@@ -938,7 +938,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
             title={
               <div style={{ maxWidth: '200px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                  选择元素
+                  选择此元素？
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
                   {interactionManager.pendingSelection.element.text || 
@@ -968,7 +968,7 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
               if (e) e.stopPropagation();
               interactionManager.hideElement();
             }}
-            placement="topLeft"
+            placement="topRight" // 让箭头指向鼠标位置
             arrow={{ pointAtCenter: false }}
             getPopupContainer={() => document.body} // 确保在 body 中渲染
           >

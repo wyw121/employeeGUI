@@ -193,7 +193,7 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 </Tag>
               )}
               
-              {/* 修改元素名称按钮 - 仅对智能元素查找步骤显示 */}
+              {/* 修改元素参数按钮 - 仅对智能元素查找步骤显示 */}
               {step.step_type === 'smart_find_element' && onEditElementName && (
                 <Button
                   size="small"
@@ -205,7 +205,7 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                   }}
                   style={{ padding: '0 4px', fontSize: '12px' }}
                 >
-                  修改元素名称
+                  修改元素参数
                 </Button>
               )}
             </div>

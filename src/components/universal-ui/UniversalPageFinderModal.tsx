@@ -962,9 +962,10 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   const [selectedElementId, setSelectedElementId] = useState<string>(''); // 选中的元素
   
   // 缓存相关状态
-  const [showCache, setShowCache] = useState(false);
+  const [showCache, setShowCache] = useState(true); // 默认展开历史缓存页面
   const [loadingCachePage, setLoadingCachePage] = useState(false);
   const [currentCachePage, setCurrentCachePage] = useState<CachedXmlPage | null>(null);
+  const [reloadingCache, setReloadingCache] = useState(false);
 
   // 重置状态
   const resetState = () => {
@@ -1065,6 +1066,27 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     }
     
     setFilteredElements(filtered);
+  };
+
+  // 重新加载缓存页面
+  const handleReloadCache = async () => {
+    setReloadingCache(true);
+    try {
+      message.loading({ content: '正在重新加载页面...', key: 'reload', duration: 0 });
+      
+      // 如果当前有选中的缓存页面，重新加载它
+      if (currentCachePage) {
+        await handleCachePageSelected(currentCachePage);
+        message.success({ content: '页面重新加载成功', key: 'reload', duration: 2 });
+      } else {
+        message.info({ content: '请先选择一个缓存页面', key: 'reload', duration: 2 });
+      }
+    } catch (error) {
+      console.error('重新加载页面失败:', error);
+      message.error({ content: '重新加载页面失败', key: 'reload', duration: 2 });
+    } finally {
+      setReloadingCache(false);
+    }
   };
 
   // 从UIElement创建ElementContext的辅助函数
@@ -1567,8 +1589,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
       // 默认切换到可视化视图（保持与原有行为一致）
       setViewMode('visual');
       
-      // 隐藏缓存选择器
-      setShowCache(false);
+      // 保持缓存选择器打开状态（根据用户要求，选择缓存页面后不自动关闭）
+      // setShowCache(false); // 已移除：用户希望选择缓存页面后保持历史缓存区域打开
       
     } catch (error) {
       console.error('❌ 加载缓存页面失败:', error);
@@ -1594,12 +1616,9 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
       width={1200}
       style={{ top: 20 }}
       bodyStyle={{ padding: '24px', background: 'linear-gradient(135deg, #111827, #1f2937)' }}
-      footer={[
-        <Button key="close" onClick={onClose}>
-          关闭
-        </Button>
-      ]}
+      footer={null}
       afterClose={resetState}
+      zIndex={1050} // 设置更高的z-index，确保在添加智能步骤模态框之上
     >
       <Row gutter={16}>
         {/* 左侧：设备选择和分析 */}
@@ -1745,6 +1764,42 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                 )}
               </Button>
 
+              {/* 重新加载页面按钮 */}
+              <Button
+                type="default"
+                size="large"
+                icon={<ReloadOutlined />}
+                onClick={handleReloadCache}
+                loading={reloadingCache}
+                disabled={!currentCachePage}
+                style={{
+                  width: '100%',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: currentCachePage 
+                    ? 'linear-gradient(135deg, #52c41a, #73d13d)' 
+                    : 'linear-gradient(135deg, #d9d9d9, #f0f0f0)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {reloadingCache ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>🔄</span>
+                    <span>重新加载中...</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📄</span>
+                    <span>重新加载页面</span>
+                  </div>
+                )}
+              </Button>
+
               {/* 缓存页面选择器 */}
               <div style={{ marginTop: '16px' }}>
                 <Divider style={{ margin: '16px 0', borderColor: '#ddd' }}>
@@ -1795,9 +1850,10 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                       <div style={{ 
                         maxHeight: '300px', 
                         overflowY: 'auto',
-                        border: '1px solid #f0f0f0',
+                        border: '1px solid #374151',
                         borderRadius: '8px',
-                        padding: '8px'
+                        padding: '8px',
+                        backgroundColor: '#1f2937'
                       }}>
                         <XmlCachePageSelector
                           onPageSelected={handleCachePageSelected}

@@ -219,12 +219,20 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
   };
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div style={{ 
+      padding: '16px',
+      backgroundColor: 'transparent'
+    }}>
       {/* 标题和操作栏 */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center' }}>
-            <FileTextOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+          <Title level={4} style={{ 
+            margin: 0, 
+            display: 'flex', 
+            alignItems: 'center',
+            color: '#f9fafb'
+          }}>
+            <FileTextOutlined style={{ marginRight: '8px', color: '#6366f1' }} />
             XML页面缓存
           </Title>
           
@@ -313,20 +321,20 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
               <List.Item
                 style={{ 
                   padding: '8px 12px',
-                  border: '1px solid #f0f0f0',
+                  border: '1px solid #374151',
                   borderRadius: '6px',
                   marginBottom: '4px',
-                  backgroundColor: '#fafafa',
+                  backgroundColor: '#374151',
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#e6f7ff';
-                  e.currentTarget.style.borderColor = '#1890ff';
+                  e.currentTarget.style.backgroundColor = '#4b5563';
+                  e.currentTarget.style.borderColor = '#6366f1';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#fafafa';
-                  e.currentTarget.style.borderColor = '#f0f0f0';
+                  e.currentTarget.style.backgroundColor = '#374151';
+                  e.currentTarget.style.borderColor = '#374151';
                 }}
                 onClick={() => handlePageSelect(page)}
                 actions={[
@@ -363,16 +371,16 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
                   }
                   title={
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text strong style={{ fontSize: '14px' }}>
+                      <Text strong style={{ fontSize: '14px', color: '#f9fafb' }}>
                         {page.pageTitle}
                       </Text>
-                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                      <Text type="secondary" style={{ fontSize: '11px', color: '#d1d5db' }}>
                         {formatTime(page.createdAt)}
                       </Text>
                     </div>
                   }
                   description={
-                    <div style={{ fontSize: '12px', color: '#999' }}>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
                       <Space size="small">
                         <span>{page.deviceId}</span>
                         <span>•</span>

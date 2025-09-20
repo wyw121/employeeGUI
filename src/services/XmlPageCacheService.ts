@@ -173,9 +173,10 @@ export class XmlPageCacheService {
 
   /**
    * 将时间戳转换为Date对象
+   * 注意：Rust后端生成的时间戳是UTC时间，需要正确解析
    */
   private static parseTimestampToDate(timestamp: string): Date {
-    // 格式: 20250918_164711
+    // 格式: 20250918_164711 (UTC时间)
     const year = parseInt(timestamp.substring(0, 4));
     const month = parseInt(timestamp.substring(4, 6)) - 1; // 月份从0开始
     const day = parseInt(timestamp.substring(6, 8));
@@ -183,7 +184,13 @@ export class XmlPageCacheService {
     const minute = parseInt(timestamp.substring(11, 13));
     const second = parseInt(timestamp.substring(13, 15));
     
-    return new Date(year, month, day, hour, minute, second);
+    // 创建UTC时间对象，避免时区转换问题
+    const utcDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+    
+    // 调试日志：验证时间解析是否正确
+    console.log(`🕐 时间戳解析: ${timestamp} -> UTC: ${utcDate.toUTCString()} -> 本地: ${utcDate.toLocaleString('zh-CN')}`);
+    
+    return utcDate;
   }
 
   /**

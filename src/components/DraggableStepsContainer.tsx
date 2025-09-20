@@ -1,7 +1,8 @@
 // 可拖拽的步骤列表容器
 
 import React, { useMemo } from 'react';
-import { Card, Typography } from 'antd';
+import { Card, Typography, Button } from 'antd';
+import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DraggableStepCard, SmartScriptStep } from './DraggableStepCard';
@@ -31,6 +32,10 @@ export interface DraggableStepsContainerProps {
   title?: React.ReactNode;
   /** 更新步骤参数回调 */
   onUpdateStepParameters?: (stepId: string, parameters: any) => void;
+  /** 打开智能页面分析器回调 */
+  onOpenPageAnalyzer?: () => void;
+  /** 创建循环回调 */
+  onCreateLoop?: () => void;
 }
 
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
@@ -44,7 +49,9 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onEditElementName,
   StepTestButton,
   title = <span>步骤列表</span>,
-  onUpdateStepParameters
+  onUpdateStepParameters,
+  onOpenPageAnalyzer,
+  onCreateLoop
 }) => {
   // 配置传感器
   const sensors = useSensors(
@@ -85,6 +92,31 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
             还没有添加智能步骤，点击上方按钮开始构建智能脚本
           </div>
         </div>
+        
+        {/* 智能页面分析器快捷按钮 - 无步骤时也显示 */}
+        {onOpenPageAnalyzer && (
+          <div className="mt-4 flex gap-2">
+            <Button 
+              type="primary" 
+              icon={<EyeOutlined />}
+              onClick={onOpenPageAnalyzer}
+              style={{ flex: '0 0 20%' }}
+            >
+              页面分析
+            </Button>
+            {onCreateLoop && (
+              <Button 
+                type="default"
+                icon={<ReloadOutlined />}
+                onClick={onCreateLoop}
+                style={{ flex: '0 0 20%' }}
+              >
+                🔄 创建循环
+              </Button>
+            )}
+            {/* 预留空间给后续的其他按钮 */}
+          </div>
+        )}
       </Card>
     );
   }
@@ -118,6 +150,31 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 onUpdateStepParameters={onUpdateStepParameters}
               />
             ))}
+            
+            {/* 智能页面分析器快捷按钮 */}
+            {onOpenPageAnalyzer && (
+              <div className="mt-4 flex gap-2">
+                <Button 
+                  type="primary" 
+                  icon={<EyeOutlined />}
+                  onClick={onOpenPageAnalyzer}
+                  style={{ flex: '0 0 20%' }}
+                >
+                  页面分析
+                </Button>
+                {onCreateLoop && (
+                  <Button 
+                    type="default"
+                    icon={<ReloadOutlined />}
+                    onClick={onCreateLoop}
+                    style={{ flex: '0 0 20%' }}
+                  >
+                    🔄 创建循环
+                  </Button>
+                )}
+                {/* 预留空间给后续的其他按钮 */}
+              </div>
+            )}
           </div>
         </SortableContext>
       </DndContext>

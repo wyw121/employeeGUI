@@ -351,6 +351,7 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
   const [showPageAnalyzer, setShowPageAnalyzer] = useState(false); // 显示智能页面分析器
+  const [isQuickAnalyzer, setIsQuickAnalyzer] = useState(false); // 标记是否是快捷页面分析器
   const [showElementNameEditor, setShowElementNameEditor] = useState(false); // 显示元素名称编辑器
   const [editingElement, setEditingElement] = useState<UIElement | null>(null); // 正在编辑的元素
   const [editingStepForName, setEditingStepForName] = useState<SmartScriptStep | null>(null); // 正在编辑名称的步骤
@@ -421,6 +422,12 @@ const SmartScriptBuilderPage: React.FC = () => {
     setEditingStep(null);
     form.resetFields();
     setIsModalVisible(true);
+  };
+
+  // 🆕 处理快捷页面分析器
+  const handleQuickPageAnalyzer = () => {
+    setIsQuickAnalyzer(true); // 标记为快捷模式
+    setShowPageAnalyzer(true);
   };
 
   // 编辑步骤
@@ -1216,29 +1223,9 @@ const SmartScriptBuilderPage: React.FC = () => {
               onToggleStep={handleToggleStep}
               onEditElementName={handleEditElementName}
               StepTestButton={StepTestButton}
-              title={
-                <div className="flex items-center justify-between">
-                  <span>📋 智能脚本步骤 ({steps.length})</span>
-                  <Space>
-                    <Button 
-                      type="default"
-                      size="large"
-                      icon={<ReloadOutlined className="text-blue-600" />}
-                      onClick={handleCreateLoop}
-                      className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 text-blue-700 font-semibold hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 hover:text-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
-                    >
-                      🔄 创建循环
-                    </Button>
-                    <Button 
-                      type="primary" 
-                      icon={<PlusOutlined />}
-                      onClick={handleAddStep}
-                    >
-                      添加智能步骤
-                    </Button>
-                  </Space>
-                </div>
-              }
+              onOpenPageAnalyzer={handleQuickPageAnalyzer}
+              onCreateLoop={handleCreateLoop}
+              onAddStep={handleAddStep}
             />
           </div>
         </Col>
@@ -1415,6 +1402,7 @@ const SmartScriptBuilderPage: React.FC = () => {
         onCancel={() => setIsModalVisible(false)}
         width={600}
         maskClosable={false}
+        zIndex={1000} // 设置基础z-index，确保子模态框可以显示在其上方
       >
         <Form
           form={form}
@@ -1708,16 +1696,21 @@ const SmartScriptBuilderPage: React.FC = () => {
       {/* Universal UI智能页面查找模态框 */}
       <UniversalPageFinderModal
         visible={showPageAnalyzer}
-        onClose={() => setShowPageAnalyzer(false)}
+        onClose={() => {
+          setShowPageAnalyzer(false);
+          setIsQuickAnalyzer(false); // 重置快捷模式标记
+        }}
         onElementSelected={(element) => {
           // 当用户选择元素时，将元素信息填入表单
           console.log('🎯 接收到智能分析元素:', element);
+          console.log('🎯 快捷模式:', isQuickAnalyzer);
           
           try {
             // 使用智能步骤生成器处理元素
             const stepInfo = SmartStepGenerator.generateStepInfo(element);
             
             // 填充表单字段
+            form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT); // 🆕 设置为智能元素查找
             form.setFieldValue('search_criteria', stepInfo.searchCriteria);
             form.setFieldValue('name', stepInfo.name);
             form.setFieldValue('description', stepInfo.description);
@@ -1749,21 +1742,43 @@ const SmartScriptBuilderPage: React.FC = () => {
             console.log('🎯 已保存完整的元素属性到表单');
             
             setShowPageAnalyzer(false);
+            setIsQuickAnalyzer(false); // 重置快捷模式标记
             
-            // 显示成功消息
-            message.success({
-              content: (
-                <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                    🎯 智能步骤生成成功！
+            // 🆕 如果是快捷模式，自动打开步骤编辑模态框
+            if (isQuickAnalyzer) {
+              setEditingStep(null); // 确保是创建新步骤
+              setIsModalVisible(true); // 打开步骤编辑模态框
+              
+              // 显示快捷成功消息
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      🚀 快捷步骤生成成功！
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {stepInfo.name} - 请点击确定完成创建
+                    </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {stepInfo.name}
+                ),
+                duration: 4
+              });
+            } else {
+              // 普通模式的成功消息
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      🎯 智能步骤生成成功！
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {stepInfo.name}
+                    </div>
                   </div>
-                </div>
-              ),
-              duration: 3
-            });
+                ),
+                duration: 3
+              });
+            }
             
             // 调试信息：预览生成的步骤
             SmartStepGenerator.previewStepInfo(element);
@@ -1775,6 +1790,7 @@ const SmartScriptBuilderPage: React.FC = () => {
             const elementDesc = ElementNameMapper.getDisplayName(element);
             const searchCriteria = element.text ? `文本: "${element.text}"` : '自动识别元素特征';
             
+            form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT); // 🆕 设置为智能元素查找
             form.setFieldValue('search_criteria', searchCriteria);
             form.setFieldValue('name', `点击"${elementDesc}"`);
             form.setFieldValue('description', `自动查找并点击"${elementDesc}"元素`);
@@ -1803,7 +1819,15 @@ const SmartScriptBuilderPage: React.FC = () => {
             }
             
             setShowPageAnalyzer(false);
-            message.warning('使用基础模式填充步骤信息');
+            setIsQuickAnalyzer(false); // 重置快捷模式标记
+            
+            // 🆕 如果是快捷模式，也自动打开步骤编辑模态框
+            if (isQuickAnalyzer) {
+              setEditingStep(null);
+              setIsModalVisible(true);
+            }
+            
+            message.warning('使用基础模式填充步骤信息' + (isQuickAnalyzer ? '，请点击确定完成创建' : ''));
           }
         }}
       />

@@ -18,6 +18,7 @@ pub mod employee_service;
 pub mod ldplayer_vcf_opener;
 pub mod log_bridge;
 pub mod safe_adb_manager;
+pub mod script_execution;  // 新增：脚本执行模块（控制流处理系统）
 pub mod script_executor;
 pub mod script_manager;  // 新增：智能脚本管理服务
 pub mod smart_app_manager;

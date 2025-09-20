@@ -1,11 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tauri::command;
 use tracing::{error, info, warn, debug};
 
 use crate::services::adb_session_manager::get_device_session;
 use crate::services::error_handling::{ErrorHandler, ErrorHandlingConfig};
+use crate::services::script_execution::ScriptPreprocessor;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -13,12 +15,22 @@ use std::os::windows::process::CommandExt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SmartActionType {
+    // 基础操作类型
     Tap,
     Input,
     Wait,
+    Swipe,
+    // 智能操作类型
     SmartTap,
     SmartFindElement,
     RecognizePage,
+    VerifyAction,
+    WaitForPageState,
+    ExtractElement,
+    SmartNavigation,
+    // 循环控制类型
+    LoopStart,
+    LoopEnd,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,7 +44,7 @@ pub struct SmartScriptStep {
     pub order: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SingleStepTestResult {
     pub success: bool,
     pub step_id: String,
@@ -73,6 +85,7 @@ pub struct SmartScriptExecutor {
     pub device_id: String,
     pub adb_path: String,
     error_handler: ErrorHandler,
+    preprocessor: Arc<Mutex<ScriptPreprocessor>>,
 }
 
 impl SmartScriptExecutor {
@@ -99,6 +112,7 @@ impl SmartScriptExecutor {
             device_id, 
             adb_path,
             error_handler,
+            preprocessor: Arc::new(Mutex::new(ScriptPreprocessor::new())),
         }
     }
 
@@ -113,12 +127,43 @@ impl SmartScriptExecutor {
         logs.push(format!("🔧 步骤类型: {:?}", step.step_type));
 
         let result = match step.step_type {
+            // 基础操作类型
             SmartActionType::Tap => self.test_tap(&step, &mut logs).await,
             SmartActionType::Wait => self.test_wait(&step, &mut logs).await,
             SmartActionType::Input => self.test_input(&step, &mut logs).await,
+            SmartActionType::Swipe => {
+                logs.push("🔄 滑动操作".to_string());
+                Ok("滑动操作模拟".to_string())
+            },
+            // 智能操作类型
             SmartActionType::SmartTap => self.test_smart_tap(&step, &mut logs).await,
             SmartActionType::SmartFindElement => self.test_find_element(&step, &mut logs).await,
             SmartActionType::RecognizePage => self.test_recognize_page(&step, &mut logs).await,
+            SmartActionType::VerifyAction => {
+                logs.push("✅ 验证操作".to_string());
+                Ok("验证操作模拟".to_string())
+            },
+            SmartActionType::WaitForPageState => {
+                logs.push("⏳ 等待页面状态".to_string());
+                Ok("等待页面状态模拟".to_string())
+            },
+            SmartActionType::ExtractElement => {
+                logs.push("� 提取元素".to_string());
+                Ok("提取元素模拟".to_string())
+            },
+            SmartActionType::SmartNavigation => {
+                logs.push("🧭 智能导航".to_string());
+                Ok("智能导航模拟".to_string())
+            },
+            // 循环控制类型
+            SmartActionType::LoopStart => {
+                logs.push("🔄 循环开始标记".to_string());
+                Ok("循环开始已标记".to_string())
+            },
+            SmartActionType::LoopEnd => {
+                logs.push("🏁 循环结束标记".to_string());
+                Ok("循环结束已标记".to_string())
+            },
         };
 
         let duration = start_time.elapsed().as_millis() as u64;
@@ -486,11 +531,32 @@ impl SmartScriptExecutor {
         info!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len());
         logs.push(format!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len()));
 
-        // 过滤并排序启用的步骤
-        let mut enabled_steps: Vec<_> = steps.into_iter()
-            .filter(|step| step.enabled)
-            .collect();
-        enabled_steps.sort_by_key(|step| step.order);
+        // 1. 使用新的模块化控制流预处理器
+        let processed_steps = match self.preprocessor.lock().unwrap().preprocess_for_legacy_executor(steps) {
+            Ok(result) => {
+                logs.push(format!("🔄 控制流预处理成功：处理完成，生成 {} 个执行步骤", result.len()));
+                result
+            },
+            Err(e) => {
+                error!("控制流预处理失败: {}", e);
+                logs.push(format!("❌ 控制流预处理失败: {}", e));
+                return Ok(SmartExecutionResult {
+                    success: false,
+                    total_steps: 0,
+                    executed_steps: 0,
+                    failed_steps: 1,
+                    skipped_steps: 0,
+                    duration_ms: start_time.elapsed().as_millis() as u64,
+                    logs,
+                    final_page_state: None,
+                    extracted_data: HashMap::new(),
+                    message: format!("控制流预处理失败: {}", e),
+                });
+            }
+        };
+
+        // 2. 使用预处理后的步骤进行执行
+        let enabled_steps = processed_steps;
 
         logs.push(format!("📋 已启用的步骤: {} 个", enabled_steps.len()));
         

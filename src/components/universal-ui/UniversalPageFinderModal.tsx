@@ -42,6 +42,7 @@ import { UniversalElementAnalyzer, SmartStepDescriptionGenerator, ElementAnalysi
 import { RealXMLAnalysisService, RealElementAnalysis } from '../../services/RealXMLAnalysisService';
 import { XmlCachePageSelector } from '../xml-cache/XmlCachePageSelector';
 import { XmlPageCacheService, CachedXmlPage, XmlPageContent } from '../../services/XmlPageCacheService';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -1790,12 +1791,29 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
             ) : elements.length > 0 ? (
               <div>
                 {viewMode === 'tree' ? (
-                  // 层级树视图
-                  <UIElementTree
-                    elements={elements}
-                    onElementSelect={handleTreeElementSelect}
-                    selectedElementId={selectedElementId}
-                  />
+                  // 层级树视图 - 添加错误边界保护
+                  <ErrorBoundary
+                    fallback={
+                      <Card className="h-full">
+                        <div className="flex flex-col items-center justify-center h-32 text-gray-500 space-y-2">
+                          <span>⚠️ 层级树渲染出错</span>
+                          <Button 
+                            type="primary" 
+                            size="small"
+                            onClick={() => window.location.reload()}
+                          >
+                            刷新页面
+                          </Button>
+                        </div>
+                      </Card>
+                    }
+                  >
+                    <UIElementTree
+                      elements={elements}
+                      onElementSelect={handleTreeElementSelect}
+                      selectedElementId={selectedElementId}
+                    />
+                  </ErrorBoundary>
                 ) : viewMode === 'visual' ? (
                   // 可视化视图（嵌入原有的VisualPageAnalyzer功能逻辑）
                   <VisualPageAnalyzerContent 

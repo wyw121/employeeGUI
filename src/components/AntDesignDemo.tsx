@@ -45,7 +45,7 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 export const AntDesignIntegrationDemo: React.FC = () => {
-  const [selectedKey, setSelectedKey] = useState('visualization-view'); // 默认选中可视化视图
+  const [selectedKey, setSelectedKey] = useState('dashboard'); // 默认选中仪表板
   const [selectedDevice, setSelectedDevice] = useState<string>('');
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -53,11 +53,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
   };
 
   const menuItems = [
-    {
-      key: 'visualization-view',
-      icon: <EyeOutlined />,
-      label: '可视化视图',
-    },
     {
       key: 'dashboard',
       icon: <BarChartOutlined />,
@@ -247,17 +242,10 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             height: 'calc(100vh - 64px)',
             overflow: 'hidden'
           }}>
-            {selectedKey === 'visualization-view' && (
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                <h3>可视化视图功能已集成到智能脚本构建器中</h3>
-                <p>请在智能脚本构建器的可视化页面分析中使用此功能</p>
-              </div>
-            )}
-
             <div style={{ 
-              padding: selectedKey === 'visualization-view' ? '0' : '24px',
+              padding: '24px',
               height: '100%',
-              overflow: selectedKey === 'visualization-view' ? 'hidden' : 'auto'
+              overflow: 'auto'
             }}>
             {selectedKey === 'dashboard' && (
               <div className="space-y-6">

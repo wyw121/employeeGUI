@@ -153,41 +153,104 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
     return depth;
   };
 
-  // 查找父元素
+  // 查找父元素 - 增强版，防止循环引用
   const findParentElement = (element: UIElement, allElements: UIElement[]): UIElement | null => {
-    let bestParent: UIElement | null = null;
-    let minArea = Infinity;
+    try {
+      let bestParent: UIElement | null = null;
+      let minArea = Infinity;
 
-    for (const potential of allElements) {
-      if (potential.id !== element.id && isElementContainedIn(element, potential)) {
-        const area = calculateBoundsArea(potential.bounds);
-        if (area < minArea) {
-          minArea = area;
-          bestParent = potential;
+      for (const potential of allElements) {
+        // 基本排除条件
+        if (potential.id === element.id) continue;
+        
+        // 验证bounds有效性
+        if (!potential.bounds || !element.bounds) continue;
+        
+        // 检查是否被包含
+        if (isElementContainedIn(element, potential)) {
+          const area = calculateBoundsArea(potential.bounds);
+          
+          // 确保面积计算有效
+          if (area > 0 && area < minArea) {
+            // 防止选择自己作为父元素
+            if (potential.id !== element.id) {
+              minArea = area;
+              bestParent = potential;
+            }
+          }
         }
       }
+
+      return bestParent;
+    } catch (error) {
+      console.warn('🚨 查找父元素时出错:', element.id, error);
+      return null;
     }
-
-    return bestParent;
   };
 
-  // 判断元素A是否被元素B包含
+  // 判断元素A是否被元素B包含 - 增强版边界检查
   const isElementContainedIn = (elementA: UIElement, elementB: UIElement): boolean => {
-    const a = elementA.bounds;
-    const b = elementB.bounds;
-    
-    return (
-      a.left >= b.left &&
-      a.top >= b.top &&
-      a.right <= b.right &&
-      a.bottom <= b.bottom &&
-      !(a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom)
-    );
+    try {
+      const a = elementA.bounds;
+      const b = elementB.bounds;
+      
+      // 验证bounds存在性
+      if (!a || !b) return false;
+      
+      // 验证bounds数值有效性
+      if (typeof a.left !== 'number' || typeof a.top !== 'number' || 
+          typeof a.right !== 'number' || typeof a.bottom !== 'number' ||
+          typeof b.left !== 'number' || typeof b.top !== 'number' || 
+          typeof b.right !== 'number' || typeof b.bottom !== 'number') {
+        return false;
+      }
+      
+      // 验证bounds逻辑一致性
+      if (a.left >= a.right || a.top >= a.bottom || 
+          b.left >= b.right || b.top >= b.bottom) {
+        return false;
+      }
+      
+      // 检查包含关系
+      const isContained = (
+        a.left >= b.left &&
+        a.top >= b.top &&
+        a.right <= b.right &&
+        a.bottom <= b.bottom
+      );
+      
+      // 排除完全重叠的情况
+      const isIdentical = (
+        a.left === b.left && 
+        a.top === b.top && 
+        a.right === b.right && 
+        a.bottom === b.bottom
+      );
+      
+      return isContained && !isIdentical;
+    } catch (error) {
+      console.warn('🚨 边界检查时出错:', elementA.id, elementB.id, error);
+      return false;
+    }
   };
 
-  // 计算bounds面积
+  // 计算bounds面积 - 增强版验证
   const calculateBoundsArea = (bounds: any): number => {
-    return (bounds.right - bounds.left) * (bounds.bottom - bounds.top);
+    try {
+      if (!bounds) return 0;
+      
+      const width = bounds.right - bounds.left;
+      const height = bounds.bottom - bounds.top;
+      
+      // 验证尺寸有效性
+      if (width <= 0 || height <= 0) return 0;
+      if (!isFinite(width) || !isFinite(height)) return 0;
+      
+      return width * height;
+    } catch (error) {
+      console.warn('🚨 计算面积时出错:', bounds, error);
+      return 0;
+    }
   };
 
   // 渲染节点标题

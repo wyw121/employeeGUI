@@ -41,19 +41,92 @@ export const ElementSelectionConfirm: React.FC<ElementSelectionConfirmProps> = (
     return null;
   }
 
-  // 计算面板位置，确保不会超出视口
-  const panelStyle: React.CSSProperties = {
+  // 计算气泡位置和箭头方向
+  const calculateBubblePosition = () => {
+    const bubble = { width: 200, height: 80 };
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    
+    let x = position.x - bubble.width / 2;
+    let y = position.y;
+    let arrowDirection: 'top' | 'bottom' = 'bottom';
+    let arrowLeft = bubble.width / 2;
+
+    // 优先在元素上方显示气泡
+    if (position.y > bubble.height + 20) {
+      y = position.y - bubble.height - 15;
+      arrowDirection = 'bottom';
+    } else {
+      y = position.y + 15;
+      arrowDirection = 'top';
+    }
+
+    // 水平方向调整，避免超出视口
+    if (x < 10) {
+      arrowLeft = position.x - 10;
+      x = 10;
+    } else if (x + bubble.width > viewport.width - 10) {
+      arrowLeft = position.x - (viewport.width - bubble.width - 10);
+      x = viewport.width - bubble.width - 10;
+    }
+
+    // 确保箭头在合理范围内
+    arrowLeft = Math.max(15, Math.min(arrowLeft, bubble.width - 15));
+
+    return { x, y, arrowDirection, arrowLeft };
+  };
+
+  const { x, y, arrowDirection, arrowLeft } = calculateBubblePosition();
+
+  // 气泡样式
+  const bubbleStyle: React.CSSProperties = {
     position: 'absolute',
-    left: Math.max(10, Math.min(position.x, window.innerWidth - 280)),
-    top: Math.max(10, Math.min(position.y + 10, window.innerHeight - 120)),
+    left: x,
+    top: y,
+    width: '200px',
     zIndex: 9999,
     background: 'white',
-    border: '1px solid #d9d9d9',
+    border: '1px solid #e8e8e8',
     borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.12)',
     padding: '12px',
-    minWidth: '260px',
-    maxWidth: '300px',
+  };
+
+  // 箭头样式
+  const arrowStyle: React.CSSProperties = {
+    position: 'absolute',
+    left: arrowLeft - 6,
+    width: 0,
+    height: 0,
+    border: '6px solid transparent',
+    ...(arrowDirection === 'bottom' 
+      ? {
+          top: -12,
+          borderBottomColor: 'white',
+        }
+      : {
+          bottom: -12,
+          borderTopColor: 'white',
+        }
+    ),
+  };
+
+  // 箭头边框样式
+  const arrowBorderStyle: React.CSSProperties = {
+    position: 'absolute',
+    left: arrowLeft - 7,
+    width: 0,
+    height: 0,
+    border: '7px solid transparent',
+    ...(arrowDirection === 'bottom' 
+      ? {
+          top: -14,
+          borderBottomColor: '#e8e8e8',
+        }
+      : {
+          bottom: -14,
+          borderTopColor: '#e8e8e8',
+        }
+    ),
   };
 
   // 获取元素显示名称
@@ -86,23 +159,30 @@ export const ElementSelectionConfirm: React.FC<ElementSelectionConfirmProps> = (
         onClick={onCancel}
       />
       
-      {/* 确认面板 */}
-      <div style={panelStyle}>
+      {/* 气泡确认框 */}
+      <div style={bubbleStyle}>
+        {/* 箭头边框 */}
+        <div style={arrowBorderStyle} />
+        {/* 箭头 */}
+        <div style={arrowStyle} />
+        
         {/* 元素信息 */}
-        <div style={{ marginBottom: '12px' }}>
+        <div style={{ marginBottom: '10px', textAlign: 'center' }}>
           <div style={{ 
-            fontSize: '14px', 
-            fontWeight: 'bold', 
-            color: '#262626',
-            marginBottom: '4px'
+            fontSize: '11px', 
+            color: '#8c8c8c',
+            marginBottom: '2px'
           }}>
-            选中元素
+            选择元素
           </div>
           <div style={{ 
             fontSize: '12px', 
-            color: '#595959',
+            color: '#262626',
+            fontWeight: '500',
             wordBreak: 'break-all',
-            lineHeight: '1.4'
+            lineHeight: '1.3',
+            maxHeight: '24px',
+            overflow: 'hidden'
           }}>
             {getElementDisplayName()}
           </div>
@@ -111,24 +191,31 @@ export const ElementSelectionConfirm: React.FC<ElementSelectionConfirmProps> = (
         {/* 操作按钮 */}
         <div style={{ 
           display: 'flex', 
-          gap: '8px',
-          justifyContent: 'flex-end'
+          gap: '6px',
+          justifyContent: 'center'
         }}>
           <Button
             size="small"
             icon={<EyeInvisibleOutlined />}
             onClick={onHide}
             style={{
+              fontSize: '11px',
+              height: '28px',
               borderColor: '#faad14',
-              color: '#faad14'
+              color: '#faad14',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#ffc53d';
               e.currentTarget.style.color = '#ffc53d';
+              e.currentTarget.style.backgroundColor = '#fffbe6';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = '#faad14';
               e.currentTarget.style.color = '#faad14';
+              e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
             隐藏
@@ -140,8 +227,13 @@ export const ElementSelectionConfirm: React.FC<ElementSelectionConfirmProps> = (
             icon={<CheckOutlined />}
             onClick={onConfirm}
             style={{
+              fontSize: '11px',
+              height: '28px',
               backgroundColor: '#52c41a',
-              borderColor: '#52c41a'
+              borderColor: '#52c41a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = '#73d13d';

@@ -26,6 +26,44 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
   onElementSelect,
   selectedElementId
 }) => {
+  // 移除循环引用的函数
+  const removeCircularReferences = (elements: any[]): any[] => {
+    const result = [...elements];
+    const visited = new Set<string>();
+    
+    // 检测并断开循环引用
+    const checkCircular = (elementId: string, path: Set<string>): boolean => {
+      if (path.has(elementId)) {
+        return true; // 发现循环
+      }
+      
+      if (visited.has(elementId)) {
+        return false; // 已经检查过，安全
+      }
+      
+      visited.add(elementId);
+      const newPath = new Set(path);
+      newPath.add(elementId);
+      
+      const element = result.find(el => el.id === elementId);
+      if (element && element.parentId) {
+        return checkCircular(element.parentId, newPath);
+      }
+      
+      return false;
+    };
+    
+    // 移除有循环引用的元素的父子关系
+    for (const element of result) {
+      if (element.parentId && checkCircular(element.id, new Set())) {
+        console.warn('🚨 断开循环引用:', element.id, '-> parent:', element.parentId);
+        element.parentId = null; // 断开循环引用
+      }
+    }
+    
+    return result;
+  };
+
   // 构建层级树结构
   const buildTreeData = (): UITreeNode[] => {
     if (!elements.length) return [];

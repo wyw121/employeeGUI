@@ -21,7 +21,8 @@ import {
   Alert,
   Spin,
   message,
-  Divider
+  Divider,
+  Popconfirm
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -32,7 +33,9 @@ import {
   BugOutlined,
   BranchesOutlined,
   UnorderedListOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  EyeInvisibleOutlined,
+  CheckOutlined
 } from '@ant-design/icons';
 import { useAdb } from '../../application/hooks/useAdb';
 import UniversalUIAPI, { UIElement, ElementBounds } from '../../api/universalUIAPI';
@@ -904,20 +907,71 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
         </Space>
       </div>
       
-      {/* 元素选择确认面板 */}
-      <ElementSelectionConfirm
-        visible={!!interactionManager.pendingSelection}
-        position={interactionManager.pendingSelection?.position || { x: 0, y: 0 }}
-        element={interactionManager.pendingSelection?.element ? {
-          id: interactionManager.pendingSelection.element.id,
-          text: interactionManager.pendingSelection.element.text,
-          className: interactionManager.pendingSelection.element.element_type,
-          resourceId: interactionManager.pendingSelection.element.content_desc
-        } : null}
-        onConfirm={interactionManager.confirmSelection}
-        onHide={interactionManager.hideElement}
-        onCancel={interactionManager.cancelSelection}
-      />
+      {/* 隐藏的Popconfirm助手 - 用于元素选择确认 */}
+      {interactionManager.pendingSelection && (
+        <div
+          style={{
+            position: 'absolute',
+            left: interactionManager.pendingSelection.position.x,
+            top: interactionManager.pendingSelection.position.y,
+            zIndex: 9999,
+            pointerEvents: 'none' // 防止干扰其他交互
+          }}
+        >
+          <Popconfirm
+            open={!!interactionManager.pendingSelection}
+            title={
+              <div style={{ maxWidth: '200px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                  选择元素
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                  {interactionManager.pendingSelection.element.text || 
+                   interactionManager.pendingSelection.element.resource_id || 
+                   interactionManager.pendingSelection.element.class_name || '未知元素'}
+                </div>
+              </div>
+            }
+            description=""
+            okText={
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <CheckOutlined />
+                确定
+              </span>
+            }
+            cancelText={
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <EyeInvisibleOutlined />
+                隐藏
+              </span>
+            }
+            onConfirm={interactionManager.confirmSelection}
+            onCancel={interactionManager.hideElement}
+            placement="top"
+            arrow={{ pointAtCenter: true }}
+          >
+            {/* 不可见的触发器 */}
+            <div style={{ width: 0, height: 0, opacity: 0 }} />
+          </Popconfirm>
+        </div>
+      )}
+      
+      {/* 原有的ElementSelectionConfirm组件作为备用 */}
+      {false && (
+        <ElementSelectionConfirm
+          visible={!!interactionManager.pendingSelection}
+          position={interactionManager.pendingSelection?.position || { x: 0, y: 0 }}
+          element={interactionManager.pendingSelection?.element ? {
+            id: interactionManager.pendingSelection.element.id,
+            text: interactionManager.pendingSelection.element.text,
+            className: interactionManager.pendingSelection.element.element_type,
+            resourceId: interactionManager.pendingSelection.element.content_desc
+          } : null}
+          onConfirm={interactionManager.confirmSelection}
+          onHide={interactionManager.hideElement}
+          onCancel={interactionManager.cancelSelection}
+        />
+      )}
     </div>
   );
 };

@@ -31,7 +31,9 @@ import {
   SaveOutlined,
   ReloadOutlined,
   BranchesOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  GroupOutlined,
+  BulbOutlined
 } from '@ant-design/icons';
 import ElementNameMapper, { 
   UIElement, 
@@ -42,6 +44,8 @@ import ElementNameMapper, {
 import { ConstraintFieldEditor } from './ConstraintFieldEditor';
 import { ExtendedUIElement, adaptToAndroidXMLFields } from './ElementDataAdapter';
 import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
+import BatchRuleConfigPanel from './BatchRuleConfigPanel';
+import ErrorBoundary from '../ErrorBoundary';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -1269,7 +1273,7 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
       title={
         <Space>
           <EditOutlined />
-          修改元素名称
+          修改元素参数
           {existingMapping && <Tag color="orange">编辑现有映射</Tag>}
         </Space>
       }
@@ -1601,6 +1605,66 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
             {renderHierarchyStructure()}
           </div>
         )}
+      </TabPane>
+
+      {/* 批量规则配置标签页 */}
+      <TabPane 
+        tab={
+          <Space>
+            <GroupOutlined />
+            批量规则
+            <Tag color="purple">Batch</Tag>
+          </Space>
+        } 
+        key="batch-rules"
+      >
+        <div className="p-4">
+          {/* 功能介绍 */}
+          <Alert
+            message={
+              <Space>
+                <BulbOutlined />
+                批量规则配置功能
+              </Space>
+            }
+            description={
+              <div>
+                <Text>
+                  配置自定义匹配规则，实现"一条命令针对多个目标"的批量操作功能。
+                  例如：一键关注页面中的所有用户、批量点赞多个内容等。
+                </Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  💡 提示：此功能基于您当前选择的元素作为模板，生成智能匹配规则
+                </Text>
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ marginBottom: '16px' }}
+          />
+          
+          {/* 批量规则配置面板 */}
+          <ErrorBoundary fallback={
+            <Alert 
+              message="批量匹配组件加载失败" 
+              description="该组件出现渲染错误，请尝试刷新页面或检查数据格式。"
+              type="error" 
+              showIcon 
+            />
+          }>
+            <BatchRuleConfigPanel
+              onChange={(rule) => {
+                console.log('批量规则配置更新:', rule);
+                // TODO: 保存规则配置到状态管理
+              }}
+              showTesting={true}
+              elementType={element?.element_type || 'follow_button'}
+              elementData={element}
+              stepName={element?.text || '当前元素'}
+            />
+          </ErrorBoundary>
+        </div>
       </TabPane>
       </Tabs>
     </Modal>

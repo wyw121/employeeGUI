@@ -677,11 +677,26 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                     onClick={(e) => {
                       if (!element.clickable || displayState.isHidden) return;
                       
-                      // 获取点击位置
+                      // 阻止事件冒泡
+                      e.stopPropagation();
+                      
+                      // 获取预览容器的位置信息
+                      const previewContainer = e.currentTarget.parentElement;
+                      if (!previewContainer) return;
+                      
+                      const containerRect = previewContainer.getBoundingClientRect();
+                      
+                      // 计算相对于预览容器的点击位置
+                      const relativeX = e.clientX - containerRect.left;
+                      const relativeY = e.clientY - containerRect.top;
+                      
+                      // 获取点击位置（相对于页面的绝对位置，用于定位气泡）
                       const clickPosition = {
-                        x: e.clientX,
+                        x: e.clientX,  // 使用页面绝对坐标来定位气泡
                         y: e.clientY
                       };
+                      
+                      console.log('🎯 点击坐标 - 页面绝对:', e.clientX, e.clientY, '相对容器:', relativeX, relativeY);
                       
                       // 使用交互管理器处理点击
                       const uiElement = convertVisualToUIElement(element);
@@ -911,10 +926,10 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
       {interactionManager.pendingSelection && (
         <div
           style={{
-            position: 'absolute',
-            left: interactionManager.pendingSelection.position.x,
-            top: interactionManager.pendingSelection.position.y,
-            zIndex: 9999,
+            position: 'fixed', // 使用 fixed 定位确保相对于视口
+            left: interactionManager.pendingSelection.position.x - 100, // 偏移一些让气泡居中
+            top: interactionManager.pendingSelection.position.y - 80,   // 气泡显示在点击位置上方
+            zIndex: 10000, // 增加 z-index 确保显示在最上层
             pointerEvents: 'none' // 防止干扰其他交互
           }}
         >
@@ -945,13 +960,25 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
                 隐藏
               </span>
             }
-            onConfirm={interactionManager.confirmSelection}
-            onCancel={interactionManager.hideElement}
-            placement="top"
-            arrow={{ pointAtCenter: true }}
+            onConfirm={(e) => {
+              if (e) e.stopPropagation();
+              interactionManager.confirmSelection();
+            }}
+            onCancel={(e) => {
+              if (e) e.stopPropagation();
+              interactionManager.hideElement();
+            }}
+            placement="topLeft"
+            arrow={{ pointAtCenter: false }}
+            getPopupContainer={() => document.body} // 确保在 body 中渲染
           >
             {/* 不可见的触发器 */}
-            <div style={{ width: 0, height: 0, opacity: 0 }} />
+            <div style={{ 
+              width: 1, 
+              height: 1, 
+              opacity: 0,
+              pointerEvents: 'auto' // 允许这个触发器接收事件
+            }} />
           </Popconfirm>
         </div>
       )}

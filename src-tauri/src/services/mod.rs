@@ -32,6 +32,8 @@ pub mod universal_ui_service;  // Universal UI Finder 服务桥接
 pub mod vcf_importer;
 pub mod vcf_importer_async;
 pub mod vcf_importer_optimized;
+pub mod multi_brand_vcf_importer;  // 新增：多品牌VCF导入器
+pub mod huawei_enhanced_importer;  // 基于Python成功经验的华为增强导入器
 pub mod xiaohongshu_automator;
 pub mod xiaohongshu_follow_service;
 pub mod xiaohongshu_long_connection_automator;

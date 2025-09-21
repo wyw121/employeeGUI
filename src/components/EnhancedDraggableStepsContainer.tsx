@@ -37,8 +37,12 @@ export interface EnhancedDraggableStepsContainerProps {
   onOpenPageAnalyzer?: () => void;
   /** 创建循环回调 */
   onCreateLoop?: () => void;
+  /** 创建通讯录导入工作流回调 */
+  onCreateContactImport?: () => void;
   /** 添加步骤回调 */
   onAddStep?: () => void;
+  /** 批量匹配操作回调 */
+  onBatchMatch?: (stepId: string) => void;
 }
 
 const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerProps> = ({
@@ -57,7 +61,9 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   title = <span>智能步骤列表</span>,
   onOpenPageAnalyzer,
   onCreateLoop,
-  onAddStep
+  onCreateContactImport,
+  onAddStep,
+  onBatchMatch
 }) => {
   
   // 暂时使用基础的DraggableStepsContainer，后续可以扩展
@@ -199,6 +205,8 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         onUpdateStepParameters={handleUpdateStepParameters}
         onOpenPageAnalyzer={onOpenPageAnalyzer}
         onCreateLoop={onCreateLoop}
+        onCreateContactImport={onCreateContactImport}
+        onBatchMatch={onBatchMatch}
       />
     </Card>
   );

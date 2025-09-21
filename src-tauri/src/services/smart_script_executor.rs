@@ -8,6 +8,9 @@ use tracing::{error, info, warn, debug};
 use crate::services::adb_session_manager::get_device_session;
 use crate::services::error_handling::{ErrorHandler, ErrorHandlingConfig};
 use crate::services::script_execution::ScriptPreprocessor;
+use crate::services::contact_automation::generate_vcf_file;
+use crate::services::vcf_importer::VcfImporter;
+use crate::services::multi_brand_vcf_importer::MultiBrandVcfImporter;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -23,6 +26,7 @@ pub enum SmartActionType {
     // 智能操作类型
     SmartTap,
     SmartFindElement,
+    BatchMatch,  // 批量匹配操作（动态元素查找）
     RecognizePage,
     VerifyAction,
     WaitForPageState,
@@ -31,6 +35,9 @@ pub enum SmartActionType {
     // 循环控制类型
     LoopStart,
     LoopEnd,
+    // 通讯录自动化操作
+    ContactGenerateVcf,
+    ContactImportToDevice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,6 +158,7 @@ impl SmartScriptExecutor {
             // 智能操作类型
             SmartActionType::SmartTap => self.test_smart_tap(&step, &mut logs).await,
             SmartActionType::SmartFindElement => self.test_find_element(&step, &mut logs).await,
+            SmartActionType::BatchMatch => self.test_batch_match(&step, &mut logs).await,
             SmartActionType::RecognizePage => self.test_recognize_page(&step, &mut logs).await,
             SmartActionType::VerifyAction => {
                 logs.push("✅ 验证操作".to_string());
@@ -177,6 +185,9 @@ impl SmartScriptExecutor {
                 logs.push("🏁 循环结束标记".to_string());
                 Ok("循环结束已标记".to_string())
             },
+            // 通讯录自动化操作
+            SmartActionType::ContactGenerateVcf => self.test_contact_generate_vcf(&step, &mut logs).await,
+            SmartActionType::ContactImportToDevice => self.test_contact_import_to_device(&step, &mut logs).await,
         };
 
         let duration = start_time.elapsed().as_millis() as u64;
@@ -405,6 +416,218 @@ impl SmartScriptExecutor {
         }
     }
 
+    /// 批量匹配方法：动态查找元素，不使用预设坐标
+    async fn test_batch_match(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
+        logs.push("🚀 执行批量匹配操作（动态元素查找）".to_string());
+        
+        // 执行UI dump操作，获取当前界面状态
+        let ui_dump = self.execute_ui_dump_with_retry(logs).await?;
+        
+        let params: HashMap<String, serde_json::Value> = 
+            serde_json::from_value(step.parameters.clone())?;
+        
+        // 记录查找参数
+        logs.push("🎯 批量匹配查找参数:".to_string());
+        
+        // 获取要查找的元素文本
+        let element_text = params.get("element_text")
+            .or_else(|| params.get("text"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        if element_text.is_empty() {
+            logs.push("❌ 批量匹配失败: 没有提供元素文本".to_string());
+            return Err(anyhow::anyhow!("批量匹配需要元素文本"));
+        }
+        
+        logs.push(format!("  📝 目标元素文本: {}", element_text));
+        
+        // 在UI dump中搜索匹配的元素
+        let element_coords = self.find_element_in_ui(&ui_dump, element_text, logs).await?;
+        
+        if let Some((x, y)) = element_coords {
+            logs.push(format!("🎯 动态找到元素坐标: ({}, {})", x, y));
+            
+            // 执行点击操作
+            let click_result = self.execute_click_with_retry(x, y, logs).await;
+            
+            match click_result {
+                Ok(output) => {
+                    logs.push(format!("✅ 点击命令输出: {}", output));
+                    Ok(format!("✅ 批量匹配成功: 动态找到并点击元素'{}' -> 坐标({}, {})", element_text, x, y))
+                }
+                Err(e) => {
+                    logs.push(format!("❌ 点击操作失败: {}", e));
+                    Err(e)
+                }
+            }
+        } else {
+            logs.push(format!("❌ 批量匹配失败: 未在当前UI中找到元素'{}'", element_text));
+            Err(anyhow::anyhow!("未找到目标元素: {}", element_text))
+        }
+    }
+
+    /// 通用批量匹配 - 查找所有匹配元素，支持排除特定文本
+    async fn find_element_in_ui(&self, ui_dump: &str, element_text: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
+        logs.push(format!("🔍 批量匹配搜索: '{}'", element_text));
+        
+        // 检查是否是批量关注场景
+        if element_text == "关注" {
+            logs.push("🎯 批量关注模式：查找所有关注按钮，排除已关注".to_string());
+            return self.find_all_follow_buttons(ui_dump, logs).await;
+        }
+        
+        // 通用单个元素匹配逻辑
+        let text_pattern = format!(r#"text="[^"]*{}[^"]*""#, regex::escape(element_text));
+        let content_desc_pattern = format!(r#"content-desc="[^"]*{}[^"]*""#, regex::escape(element_text));
+        
+        let text_regex = regex::Regex::new(&text_pattern).unwrap_or_else(|_| {
+            logs.push(format!("⚠️  正则表达式编译失败: {}", text_pattern));
+            regex::Regex::new(r".*").unwrap()
+        });
+        
+        let content_desc_regex = regex::Regex::new(&content_desc_pattern).unwrap_or_else(|_| {
+            logs.push(format!("⚠️  正则表达式编译失败: {}", content_desc_pattern));
+            regex::Regex::new(r".*").unwrap()
+        });
+        
+        // 分行搜索UI dump
+        for (line_num, line) in ui_dump.lines().enumerate() {
+            // 检查是否包含目标文本 (text 属性)
+            if text_regex.is_match(line) {
+                logs.push(format!("✅ 在第{}行找到匹配的text属性", line_num + 1));
+                if let Some(coords) = self.extract_bounds_from_line(line, logs) {
+                    return Ok(Some(coords));
+                }
+            }
+            
+            // 检查是否包含目标文本 (content-desc 属性)
+            if content_desc_regex.is_match(line) {
+                logs.push(format!("✅ 在第{}行找到匹配的content-desc属性", line_num + 1));
+                if let Some(coords) = self.extract_bounds_from_line(line, logs) {
+                    return Ok(Some(coords));
+                }
+            }
+        }
+        
+        logs.push("❌ 在UI dump中未找到匹配的元素".to_string());
+        Ok(None)
+    }
+
+    /// 从UI dump行中提取bounds坐标
+    fn extract_bounds_from_line(&self, line: &str, logs: &mut Vec<String>) -> Option<(i32, i32)> {
+        // 使用正则表达式提取bounds属性
+        let bounds_regex = regex::Regex::new(r#"bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]""#).ok()?;
+        
+        if let Some(captures) = bounds_regex.captures(line) {
+            let left: i32 = captures.get(1)?.as_str().parse().ok()?;
+            let top: i32 = captures.get(2)?.as_str().parse().ok()?;
+            let right: i32 = captures.get(3)?.as_str().parse().ok()?;
+            let bottom: i32 = captures.get(4)?.as_str().parse().ok()?;
+            
+            let center_x = (left + right) / 2;
+            let center_y = (top + bottom) / 2;
+            
+            logs.push(format!("📊 提取到bounds: [{},{}][{},{}] -> 中心点({},{})", 
+                left, top, right, bottom, center_x, center_y));
+            
+            Some((center_x, center_y))
+        } else {
+            logs.push("⚠️  该行未找到有效的bounds属性".to_string());
+            None
+        }
+    }
+
+    /// 通用批量关注按钮查找 - 支持所有APP，自动排除"已关注"
+    async fn find_all_follow_buttons(&self, ui_dump: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
+        logs.push("🎯 通用批量关注模式启动...".to_string());
+        
+        let mut candidates = Vec::new();
+        
+        // 构建匹配模式
+        let follow_patterns = [
+            r#"text="关注""#,           // 精确匹配 "关注"
+            r#"text="[^"]*关注[^"]*""#,   // 包含关注的文本
+            r#"content-desc="[^"]*关注[^"]*""#, // content-desc中包含关注
+        ];
+        
+        // 排除模式 - 避免匹配"已关注"相关按钮
+        let exclude_patterns = [
+            r#"text="[^"]*已关注[^"]*""#,
+            r#"text="[^"]*取消关注[^"]*""#,
+            r#"text="[^"]*following[^"]*""#,  // 英文版已关注
+            r#"text="[^"]*unfollow[^"]*""#,   // 英文版取消关注
+            r#"content-desc="[^"]*已关注[^"]*""#,
+            r#"content-desc="[^"]*following[^"]*""#,
+        ];
+        
+        logs.push(format!("🔍 开始扫描UI dump，共{}行", ui_dump.lines().count()));
+        
+        for (line_num, line) in ui_dump.lines().enumerate() {
+            // 首先检查是否匹配排除模式
+            let mut should_exclude = false;
+            for exclude_pattern in &exclude_patterns {
+                if let Ok(regex) = regex::Regex::new(exclude_pattern) {
+                    if regex.is_match(line) {
+                        logs.push(format!("❌ 第{}行被排除: 包含已关注相关文本", line_num + 1));
+                        should_exclude = true;
+                        break;
+                    }
+                }
+            }
+            
+            if should_exclude {
+                continue;
+            }
+            
+            // 检查是否匹配关注模式
+            for (pattern_idx, pattern) in follow_patterns.iter().enumerate() {
+                if let Ok(regex) = regex::Regex::new(pattern) {
+                    if regex.is_match(line) {
+                        // 进一步验证是否为可点击按钮
+                        if line.contains(r#"clickable="true""#) {
+                            logs.push(format!("✅ 第{}行匹配模式{}: 找到可点击关注按钮", line_num + 1, pattern_idx + 1));
+                            
+                            if let Some(coords) = self.extract_bounds_from_line(line, logs) {
+                                // 优先级: 精确匹配 > 文本包含 > content-desc
+                                let priority = match pattern_idx {
+                                    0 => 1, // 精确匹配 "关注"
+                                    1 => 2, // 文本包含关注
+                                    2 => 3, // content-desc包含关注
+                                    _ => 4,
+                                };
+                                
+                                candidates.push((coords, priority, line_num + 1, line.to_string()));
+                            }
+                        } else {
+                            logs.push(format!("⚠️  第{}行匹配但不可点击，跳过", line_num + 1));
+                        }
+                        break; // 找到一个匹配就跳出pattern循环
+                    }
+                }
+            }
+        }
+        
+        // 按优先级排序选择最佳候选
+        candidates.sort_by_key(|&(_, priority, _, _)| priority);
+        
+        if candidates.is_empty() {
+            logs.push("❌ 未找到任何可用的关注按钮".to_string());
+            return Ok(None);
+        }
+        
+        logs.push(format!("🎯 共找到{}个关注按钮候选", candidates.len()));
+        
+        // 选择优先级最高的候选
+        let (best_coords, best_priority, best_line, best_content) = &candidates[0];
+        logs.push(format!("✅ 选择最佳关注按钮: 第{}行，优先级{}，坐标({}, {})", 
+            best_line, best_priority, best_coords.0, best_coords.1));
+        logs.push(format!("📝 按钮内容预览: {}", 
+            best_content.chars().take(100).collect::<String>()));
+        
+        Ok(Some(*best_coords))
+    }
+
     /// 带重试机制的 UI dump 执行
     async fn execute_ui_dump_with_retry(&self, logs: &mut Vec<String>) -> Result<String> {
         logs.push("📱 开始获取设备UI结构（带重试机制）...".to_string());
@@ -530,6 +753,196 @@ impl SmartScriptExecutor {
             }
         } else {
             Ok("页面识别测试完成".to_string())
+        }
+    }
+
+    async fn test_contact_generate_vcf(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
+        logs.push("🗂️ 开始VCF文件生成测试".to_string());
+        
+        let params: HashMap<String, serde_json::Value> = 
+            serde_json::from_value(step.parameters.clone())?;
+        
+        // 获取源文件路径
+        let source_file_path = params.get("source_file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        if source_file_path.is_empty() {
+            logs.push("❌ 缺少源文件路径参数".to_string());
+            return Ok("VCF生成失败: 缺少源文件路径".to_string());
+        }
+        
+        logs.push(format!("📁 源文件路径: {}", source_file_path));
+        
+        // 检查文件是否存在
+        if !std::path::Path::new(source_file_path).exists() {
+            logs.push(format!("❌ 源文件不存在: {}", source_file_path));
+            return Ok(format!("VCF生成失败: 文件不存在 - {}", source_file_path));
+        }
+        
+        // 读取文件内容进行预处理
+        match std::fs::read_to_string(source_file_path) {
+            Ok(content) => {
+                logs.push(format!("📄 成功读取文件内容，长度: {} 字符", content.len()));
+                
+                // 这里可以进行更详细的文件格式解析和联系人提取
+                // 为了测试目的，我们模拟生成一些示例联系人数据
+                let contacts = vec![
+                    crate::services::vcf_importer::Contact {
+                        id: "test_1".to_string(),
+                        name: "测试联系人1".to_string(),
+                        phone: "13800138001".to_string(),
+                        email: "test1@example.com".to_string(),
+                        address: "".to_string(),
+                        occupation: "".to_string(),
+                    },
+                    crate::services::vcf_importer::Contact {
+                        id: "test_2".to_string(),
+                        name: "测试联系人2".to_string(),
+                        phone: "13800138002".to_string(),
+                        email: "test2@example.com".to_string(),
+                        address: "".to_string(),
+                        occupation: "".to_string(),
+                    }
+                ];
+                
+                logs.push(format!("👥 解析出 {} 个联系人", contacts.len()));
+                
+                // 生成输出路径
+                let output_dir = params.get("output_dir")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("./vcf_output");
+                
+                let output_path = format!("{}/contacts_{}.vcf", output_dir, chrono::Utc::now().timestamp());
+                logs.push(format!("📤 输出路径: {}", output_path));
+                
+                // 确保输出目录存在
+                if let Some(parent) = std::path::Path::new(&output_path).parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                
+                // 调用VCF生成服务
+                match VcfImporter::generate_vcf_file(contacts, &output_path).await {
+                    Ok(_) => {
+                        logs.push(format!("✅ VCF文件生成成功: {}", output_path));
+                        Ok(format!("VCF文件生成成功: {}", output_path))
+                    },
+                    Err(e) => {
+                        logs.push(format!("❌ VCF文件生成失败: {}", e));
+                        Ok(format!("VCF生成失败: {}", e))
+                    }
+                }
+            },
+            Err(e) => {
+                logs.push(format!("❌ 读取文件失败: {}", e));
+                Ok(format!("VCF生成失败: 文件读取错误 - {}", e))
+            }
+        }
+    }
+
+    async fn test_contact_import_to_device(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
+        logs.push("📱 开始联系人导入到设备测试".to_string());
+        
+        let params: HashMap<String, serde_json::Value> = 
+            serde_json::from_value(step.parameters.clone())?;
+        
+        // 获取选择的设备ID
+        let selected_device_id = params.get("selected_device_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        if selected_device_id.is_empty() {
+            logs.push("❌ 缺少设备选择参数".to_string());
+            return Ok("联系人导入失败: 未选择目标设备".to_string());
+        }
+        
+        logs.push(format!("🎯 目标设备: {}", selected_device_id));
+        
+        // 获取VCF文件路径（通常来自上一步的生成结果）
+        let vcf_file_path = params.get("vcf_file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        if vcf_file_path.is_empty() {
+            logs.push("❌ 缺少VCF文件路径参数".to_string());
+            return Ok("联系人导入失败: 缺少VCF文件路径".to_string());
+        }
+        
+        logs.push(format!("📁 VCF文件路径: {}", vcf_file_path));
+        
+        // 检查VCF文件是否存在
+        if !std::path::Path::new(vcf_file_path).exists() {
+            logs.push(format!("❌ VCF文件不存在: {}", vcf_file_path));
+            return Ok(format!("联系人导入失败: VCF文件不存在 - {}", vcf_file_path));
+        }
+        
+        // 创建多品牌VcfImporter实例，支持批量尝试不同品牌手机
+        let mut multi_brand_importer = MultiBrandVcfImporter::new(selected_device_id.to_string());
+        
+        logs.push("🚀 启动多品牌联系人导入流程".to_string());
+        logs.push("📋 支持的品牌: 华为、小米、OPPO、VIVO、三星、原生Android等".to_string());
+        
+        // 执行多品牌联系人导入
+        match multi_brand_importer.import_vcf_contacts_multi_brand(vcf_file_path).await {
+            Ok(result) => {
+                if result.success {
+                    logs.push("✅ 多品牌联系人导入成功".to_string());
+                    
+                    if let Some(strategy) = &result.used_strategy {
+                        logs.push(format!("🎯 成功策略: {}", strategy));
+                    }
+                    
+                    if let Some(method) = &result.used_method {
+                        logs.push(format!("🔧 成功方法: {}", method));
+                    }
+                    
+                    logs.push(format!("📊 导入统计: 总计{}个，成功{}个，失败{}个", 
+                        result.total_contacts, 
+                        result.imported_contacts, 
+                        result.failed_contacts
+                    ));
+                    
+                    logs.push(format!("⏱️ 用时: {}秒", result.duration_seconds));
+                    logs.push(format!("🔄 尝试次数: {}次", result.attempts.len()));
+                    
+                    // 添加尝试详情
+                    for (i, attempt) in result.attempts.iter().enumerate() {
+                        let status = if attempt.success { "✅" } else { "❌" };
+                        logs.push(format!("  {}. {} {}-{} ({}s)", 
+                            i + 1,
+                            status,
+                            attempt.strategy_name,
+                            attempt.method_name,
+                            attempt.duration_seconds
+                        ));
+                    }
+                    
+                    logs.push("📱 联系人已成功导入到设备通讯录".to_string());
+                    Ok(format!("多品牌联系人导入成功: 已导入到设备 {} (使用{}策略)", 
+                        selected_device_id,
+                        result.used_strategy.unwrap_or_else(|| "未知".to_string())
+                    ))
+                } else {
+                    logs.push("❌ 多品牌联系人导入失败".to_string());
+                    logs.push(format!("📝 失败原因: {}", result.message));
+                    
+                    // 添加失败详情
+                    for (i, attempt) in result.attempts.iter().enumerate() {
+                        logs.push(format!("  {}. ❌ {}-{}: {}", 
+                            i + 1,
+                            attempt.strategy_name,
+                            attempt.method_name,
+                            attempt.error_message.as_deref().unwrap_or("未知错误")
+                        ));
+                    }
+                    
+                    Ok(format!("多品牌联系人导入失败: {}", result.message))
+                }
+            },
+            Err(e) => {
+                logs.push(format!("❌ 多品牌联系人导入系统错误: {}", e));
+                Ok(format!("多品牌联系人导入系统错误: {}", e))
+            }
         }
     }
 

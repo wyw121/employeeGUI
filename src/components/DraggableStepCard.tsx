@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider, Popconfirm, message } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -17,6 +18,7 @@ const { Text } = Typography;
 // 智能操作配置（从主页面复制）
 const SMART_ACTION_CONFIGS = {
   'smart_find_element': { icon: '🎯', name: '智能元素查找', color: 'blue', category: '定位' },
+  'batch_match': { icon: '🔍', name: '批量匹配', color: 'purple', category: '定位' },
   'smart_click': { icon: '👆', name: '智能点击', color: 'green', category: '交互' },
   'smart_input': { icon: '✏️', name: '智能输入', color: 'orange', category: '输入' },
   'smart_scroll': { icon: '📜', name: '智能滚动', color: 'purple', category: '导航' },
@@ -24,7 +26,9 @@ const SMART_ACTION_CONFIGS = {
   'smart_extract': { icon: '📤', name: '智能提取', color: 'red', category: '数据' },
   'smart_verify': { icon: '✅', name: '智能验证', color: 'geekblue', category: '验证' },
   'loop_start': { icon: '🔄', name: '循环开始', color: 'blue', category: '循环' },
-  'loop_end': { icon: '🏁', name: '循环结束', color: 'blue', category: '循环' }
+  'loop_end': { icon: '🏁', name: '循环结束', color: 'blue', category: '循环' },
+  'generate_vcf': { icon: '📇', name: '生成VCF文件', color: 'gold', category: '通讯录' },
+  'contact_import_to_device': { icon: '⚙️', name: '导入联系人到设备', color: 'orange', category: '通讯录' }
 };
 
 export interface SmartScriptStep {
@@ -59,6 +63,8 @@ export interface DraggableStepCardProps {
   StepTestButton?: React.ComponentType<any>;
   /** 更新步骤参数回调 */
   onUpdateStepParameters?: (stepId: string, parameters: any) => void;
+  /** 批量匹配操作回调 */
+  onBatchMatch?: (stepId: string) => void;
 }
 
 export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
@@ -72,12 +78,100 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
   onToggle,
   onEditElementName,
   StepTestButton,
-  onUpdateStepParameters
+  onUpdateStepParameters,
+  onBatchMatch
 }) => {
   // 循环次数设置状态
   const [isLoopConfigVisible, setIsLoopConfigVisible] = useState(false);
   const [loopCount, setLoopCount] = useState(step.parameters?.loop_count || 3);
   const [isInfiniteLoop, setIsInfiniteLoop] = useState(step.parameters?.is_infinite_loop || false);
+
+  // 文件选择处理函数 - 针对VCF生成步骤
+  const handleSelectSourceFile = async () => {
+    try {
+      const selected = await open({
+        filters: [{
+          name: 'Text Files',
+          extensions: ['txt']
+        }],
+        multiple: false
+      });
+
+      if (selected && typeof selected === 'string') {
+        // 更新步骤参数中的源文件路径
+        if (onUpdateStepParameters) {
+          onUpdateStepParameters(step.id, {
+            ...step.parameters,
+            source_file_path: selected
+          });
+          message.success(`已选择源文件: ${selected.split(/[/\\]/).pop()}`);
+        }
+      }
+    } catch (error) {
+      console.error('文件选择失败:', error);
+      message.error('文件选择失败');
+    }
+  };
+
+  // 选择设备
+  const handleSelectDevice = () => {
+    const onlineDevices = devices.filter(d => d.status === 'online');
+    
+    if (onlineDevices.length === 0) {
+      message.warning('没有在线设备可选择');
+      return;
+    }
+
+    // 如果只有一个在线设备，直接选择
+    if (onlineDevices.length === 1) {
+      const selectedDevice = onlineDevices[0];
+      if (onUpdateStepParameters) {
+        onUpdateStepParameters(step.id, {
+          ...step.parameters,
+          selected_device_id: selectedDevice.id
+        });
+        message.success(`已选择设备: ${selectedDevice.name || selectedDevice.id}`);
+      }
+      return;
+    }
+
+    // 多个设备时显示选择器
+    Modal.confirm({
+      title: '选择目标设备',
+      content: (
+        <div>
+          <p>请选择要导入联系人的设备:</p>
+          {onlineDevices.map(device => (
+            <div 
+              key={device.id}
+              style={{
+                padding: '8px 12px',
+                margin: '4px 0',
+                border: '1px solid #d9d9d9',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                if (onUpdateStepParameters) {
+                  onUpdateStepParameters(step.id, {
+                    ...step.parameters,
+                    selected_device_id: device.id
+                  });
+                  message.success(`已选择设备: ${device.name || device.id}`);
+                }
+                Modal.destroyAll();
+              }}
+            >
+              📱 {device.name || device.id}
+              {device.id === currentDeviceId && <span style={{color: '#52c41a', marginLeft: '8px'}}>当前设备</span>}
+            </div>
+          ))}
+        </div>
+      ),
+      okButtonProps: { style: { display: 'none' } },
+      cancelText: '取消'
+    });
+  };
 
   // 保存循环次数
   const handleSaveLoopConfig = () => {
@@ -308,7 +402,91 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
             color: step.step_type === 'loop_start' || step.step_type === 'loop_end' ? '#374151' : '#4b5563'
           }}
         >
-          {step.description}
+          <div className="flex items-center justify-between">
+            <span>{step.description}</span>
+            
+            {/* 批量匹配切换按钮 - 支持双向切换 */}
+            {(step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && onBatchMatch && (
+              <Button 
+                size="small"
+                type={step.step_type === 'batch_match' ? 'default' : 'primary'}
+                ghost={step.step_type === 'smart_find_element'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBatchMatch(step.id);
+                }}
+                style={{ 
+                  fontSize: '12px',
+                  height: '24px',
+                  padding: '0 8px',
+                  marginLeft: '8px',
+                  ...(step.step_type === 'batch_match' ? {
+                    borderColor: '#722ed1',
+                    color: '#722ed1'
+                  } : {})
+                }}
+                title={
+                  step.step_type === 'smart_find_element' 
+                    ? '将此步骤转换为批量匹配模式，实时查找UI元素' 
+                    : '将此步骤切换回智能元素查找模式，使用预设坐标'
+                }
+              >
+                {step.step_type === 'smart_find_element' ? '批量匹配' : '切回元素查找'}
+              </Button>
+            )}
+          </div>
+          
+          {/* 针对生成VCF文件步骤，添加文件选择按钮 */}
+          {step.step_type === 'contact_generate_vcf' && (
+            <div className="mt-2">
+              <Button 
+                size="small"
+                type="dashed"
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectSourceFile();
+                }}
+                style={{ fontSize: '12px' }}
+              >
+                {step.parameters?.source_file_path ? '更换源文件' : '选择txt文件'}
+              </Button>
+              {step.parameters?.source_file_path && (
+                <div className="mt-1 text-xs text-blue-600">
+                  📄 {step.parameters.source_file_path.split('/').pop() || step.parameters.source_file_path.split('\\').pop()}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* 针对导入联系人到设备步骤，添加设备选择按钮 */}
+          {step.step_type === 'contact_import_to_device' && (
+            <div className="mt-2">
+              <Button 
+                size="small"
+                type="dashed"
+                icon={<SettingOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectDevice();
+                }}
+                style={{ fontSize: '12px' }}
+                disabled={devices.filter(d => d.status === 'online').length === 0}
+              >
+                {step.parameters?.selected_device_id ? '更换设备' : '选择设备'}
+              </Button>
+              {step.parameters?.selected_device_id && (
+                <div className="mt-1 text-xs text-green-600">
+                  📱 {devices.find(d => d.id === step.parameters.selected_device_id)?.name || step.parameters.selected_device_id}
+                </div>
+              )}
+              {devices.filter(d => d.status === 'online').length === 0 && (
+                <div className="mt-1 text-xs text-red-500">
+                  ⚠️ 没有在线设备可选择
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div 
           className="text-xs"

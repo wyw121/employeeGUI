@@ -22,6 +22,8 @@ use types::page_analysis::{
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+use tauri_plugin_dialog;
+
 use screenshot_service::*;
 // use commands::app_lifecycle_commands::*;
 use services::adb_device_tracker::*;
@@ -776,6 +778,7 @@ fn main() {
     info!("✅ 所有服务初始化完成 (仅实时跟踪，无轮询)");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
             // 设置日志收集器的app handle以便实时发送日志到前端
             // 注意：这里需要通过不安全的方式来设置，因为LOG_COLLECTOR是静态的
@@ -833,6 +836,8 @@ fn main() {
             import_vcf_contacts_optimized,      // 现有优化版本
             import_vcf_contacts_python_version, // Python移植版本
             import_vcf_contacts_with_intent_fallback, // 新增Intent方法
+            import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入
+            import_vcf_contacts_huawei_enhanced, // 华为增强导入（基于Python成功经验）
             verify_vcf_import,
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
             // 雷电模拟器专用VCF打开功能

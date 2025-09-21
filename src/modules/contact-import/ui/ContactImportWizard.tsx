@@ -365,6 +365,15 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
             {isImporting && (
               <div>
                 <Text strong>{getPhaseDescription(currentPhase)}</Text>
+                {currentPhase === ImportPhase.IMPORTING && (
+                  <Alert
+                    type="info"
+                    message="多品牌智能导入"
+                    description="正在自动尝试不同品牌的导入方式，确保最佳兼容性"
+                    showIcon
+                    style={{ marginTop: '8px', marginBottom: '8px' }}
+                  />
+                )}
                 {progress && (
                   <div style={{ marginTop: '8px' }}>
                     <Progress
@@ -378,6 +387,11 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
                       {progress.currentDevice && (
                         <Text style={{ marginLeft: '16px' }}>
                           当前设备: {progress.currentDevice}
+                        </Text>
+                      )}
+                      {currentPhase === ImportPhase.IMPORTING && (
+                        <Text style={{ marginLeft: '16px', color: '#1890ff' }}>
+                          🔄 智能品牌适配中...
                         </Text>
                       )}
                     </div>

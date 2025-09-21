@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
-import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DraggableStepCard, SmartScriptStep } from './DraggableStepCard';
@@ -36,6 +36,10 @@ export interface DraggableStepsContainerProps {
   onOpenPageAnalyzer?: () => void;
   /** 创建循环回调 */
   onCreateLoop?: () => void;
+  /** 创建通讯录导入工作流回调 */
+  onCreateContactImport?: () => void;
+  /** 批量匹配操作回调 */
+  onBatchMatch?: (stepId: string) => void;
 }
 
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
@@ -51,7 +55,9 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   title = <span>步骤列表</span>,
   onUpdateStepParameters,
   onOpenPageAnalyzer,
-  onCreateLoop
+  onCreateLoop,
+  onCreateContactImport,
+  onBatchMatch
 }) => {
   // 配置传感器
   const sensors = useSensors(
@@ -114,6 +120,16 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 🔄 创建循环
               </Button>
             )}
+            {onCreateContactImport && (
+              <Button 
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={onCreateContactImport}
+                style={{ flex: '0 0 22%' }}
+              >
+                📱 通讯录导入
+              </Button>
+            )}
             {/* 预留空间给后续的其他按钮 */}
           </div>
         )}
@@ -148,6 +164,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 onEditElementName={onEditElementName}
                 StepTestButton={StepTestButton}
                 onUpdateStepParameters={onUpdateStepParameters}
+                onBatchMatch={onBatchMatch}
               />
             ))}
             
@@ -170,6 +187,16 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                     style={{ flex: '0 0 20%' }}
                   >
                     🔄 创建循环
+                  </Button>
+                )}
+                {onCreateContactImport && (
+                  <Button 
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={onCreateContactImport}
+                    style={{ flex: '0 0 22%' }}
+                  >
+                    📱 通讯录导入
                   </Button>
                 )}
                 {/* 预留空间给后续的其他按钮 */}

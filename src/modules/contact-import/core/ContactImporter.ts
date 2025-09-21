@@ -407,13 +407,27 @@ export class ContactImporter {
     });
 
     try {
-      // 调用后端导入 - 使用 Python 移植版本（优化版）
-      const result = await invoke<ImportResult>("import_vcf_contacts_python_version", {
-        deviceId: group.deviceId,
-        contactsFilePath: tempFilePath,
-      });
+      // 🚀 优先使用多品牌导入（批量尝试不同品牌的导入方式）
+      try {
+        console.log(`🔄 尝试多品牌VCF导入 - 设备: ${group.deviceId}`);
+        const multiBrandResult = await invoke<ImportResult>("import_vcf_contacts_multi_brand", {
+          deviceId: group.deviceId,
+          contactsFilePath: tempFilePath,
+        });
 
-      return result;
+        console.log(`✅ 多品牌导入成功 - 设备: ${group.deviceId}`, multiBrandResult);
+        return multiBrandResult;
+      } catch (multiBrandError) {
+        console.warn(`⚠️ 多品牌导入失败，回退到传统方法 - 设备: ${group.deviceId}`, multiBrandError);
+        
+        // 回退到传统的Python移植版本
+        const result = await invoke<ImportResult>("import_vcf_contacts_python_version", {
+          deviceId: group.deviceId,
+          contactsFilePath: tempFilePath,
+        });
+
+        return result;
+      }
     } finally {
       // 清理临时文件
       try {

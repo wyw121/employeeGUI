@@ -117,6 +117,7 @@ export enum SmartActionType {
   // 智能操作
   SMART_TAP = 'smart_tap',
   SMART_FIND_ELEMENT = 'smart_find_element',
+  BATCH_MATCH = 'batch_match', // 批量匹配 - 动态元素查找
   RECOGNIZE_PAGE = 'recognize_page',
   VERIFY_ACTION = 'verify_action',
   SMART_LOOP = 'smart_loop',

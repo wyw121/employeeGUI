@@ -517,6 +517,53 @@ const SmartScriptBuilderPage: React.FC = () => {
     ));
   };
 
+  // 处理批量匹配操作 - 支持双向转换：smart_find_element ⇄ batch_match
+  const handleBatchMatch = (stepId: string) => {
+    setSteps(prev => prev.map(step => {
+      if (step.id === stepId) {
+        // 情况1: smart_find_element -> batch_match
+        if (step.step_type === 'smart_find_element') {
+          return {
+            ...step,
+            step_type: 'batch_match',
+            name: step.name.replace('智能元素查找', '批量匹配'),
+            description: `${step.description} (批量匹配模式 - 动态查找)`,
+            parameters: {
+              ...step.parameters,
+              is_batch_match: true,
+              original_step_type: 'smart_find_element' // 保留原始类型
+            }
+          };
+        }
+        
+        // 情况2: batch_match -> smart_find_element
+        if (step.step_type === 'batch_match') {
+          const cleanedParameters = { ...step.parameters };
+          // 清理批量匹配相关的参数
+          delete cleanedParameters.is_batch_match;
+          delete cleanedParameters.original_step_type;
+          
+          return {
+            ...step,
+            step_type: 'smart_find_element',
+            name: step.name.replace('批量匹配', '智能元素查找'),
+            description: step.description.replace(/\s*\(批量匹配模式 - 动态查找\)$/, ''),
+            parameters: cleanedParameters
+          };
+        }
+      }
+      return step;
+    }));
+    
+    // 根据当前步骤类型显示相应的成功消息
+    const currentStep = steps.find(s => s.id === stepId);
+    if (currentStep?.step_type === 'smart_find_element') {
+      message.success('已转换为批量匹配模式，将使用动态元素查找');
+    } else if (currentStep?.step_type === 'batch_match') {
+      message.success('已切换回智能元素查找模式，将使用预设坐标');
+    }
+  };
+
   // ==================== 循环管理函数 ====================
   
   // 创建新循环
@@ -583,6 +630,25 @@ const SmartScriptBuilderPage: React.FC = () => {
     setSteps(prev => [...prev, loopStartStep, loopEndStep]);
     
     message.success('创建循环成功！可以拖拽其他步骤到循环体内');
+  };
+
+  // 创建通讯录导入工作流
+  const handleCreateContactImport = () => {
+    const baseTimestamp = Date.now();
+    
+    // 生成3个步骤卡片
+    const contactSteps = generateContactImportWorkflowSteps('', currentDeviceId);
+    
+    // 更新步骤顺序
+    const updatedSteps = contactSteps.map((step, index) => ({
+      ...step,
+      order: steps.length + index + 1
+    }));
+    
+    // 添加到步骤列表
+    setSteps(prev => [...prev, ...updatedSteps]);
+    
+    message.success('通讯录导入步骤创建成功！已添加3个步骤到脚本中');
   };
 
   // 删除循环
@@ -1253,7 +1319,9 @@ const SmartScriptBuilderPage: React.FC = () => {
               StepTestButton={StepTestButton}
               onOpenPageAnalyzer={handleQuickPageAnalyzer}
               onCreateLoop={handleCreateLoop}
+              onCreateContactImport={handleCreateContactImport}
               onAddStep={handleAddStep}
+              onBatchMatch={handleBatchMatch}
             />
           </div>
         </Col>

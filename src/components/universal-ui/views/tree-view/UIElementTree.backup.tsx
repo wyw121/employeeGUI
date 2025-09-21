@@ -1,19 +1,21 @@
 /**
  * UI元素树形显示组件
  * 显示页面UI元素的层级结构
+ * 直接复制旧版代码并进行必要的接口适配
  */
 
 import React from 'react';
 import { Tree, Card, Space, Tag, Typography } from 'antd';
-import { UIElement } from '../../api/universalUIAPI';
+import { UIElement } from '../../../../api/universalUIAPI';
 import type { DataNode } from 'antd/es/tree';
 
 const { Text } = Typography;
 
 interface UIElementTreeProps {
   elements: UIElement[];
-  onElementSelect?: (element: UIElement) => void;
-  selectedElementId?: string;
+  selectedElements?: UIElement[];
+  onElementSelect: (elements: UIElement[]) => void;
+  showOnlyClickable?: boolean;
 }
 
 interface UITreeNode extends DataNode {
@@ -21,16 +23,17 @@ interface UITreeNode extends DataNode {
   children?: UITreeNode[];
 }
 
-export const UIElementTree: React.FC<UIElementTreeProps> = ({
+const UIElementTree: React.FC<UIElementTreeProps> = ({
   elements,
+  selectedElements = [],
   onElementSelect,
-  selectedElementId
+  showOnlyClickable = false
 }) => {
   // 🔍 调试日志：检查elements数组状态
   console.log('🌲 UIElementTree 渲染:', {
     elementsCount: elements?.length || 0,
     elements: elements?.slice(0, 3), // 只显示前3个避免日志过长
-    selectedElementId
+    selectedElementsCount: selectedElements.length
   });
 
   // 移除循环引用的函数
@@ -53,8 +56,8 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
       newPath.add(elementId);
       
       const element = result.find(el => el.id === elementId);
-      if (element && element.parentId) {
-        return checkCircular(element.parentId, newPath);
+      if (element && (element as any).parentId) {
+        return checkCircular((element as any).parentId, newPath);
       }
       
       return false;
@@ -62,9 +65,9 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
     
     // 移除有循环引用的元素的父子关系
     for (const element of result) {
-      if (element.parentId && checkCircular(element.id, new Set())) {
-        console.warn('🚨 断开循环引用:', element.id, '-> parent:', element.parentId);
-        element.parentId = null; // 断开循环引用
+      if ((element as any).parentId && checkCircular(element.id, new Set())) {
+        console.warn('🚨 断开循环引用:', element.id, '-> parent:', (element as any).parentId);
+        (element as any).parentId = null; // 断开循环引用
       }
     }
     
@@ -76,11 +79,18 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
     if (!elements.length) return [];
 
     try {
+      // 过滤元素
+      const filteredElements = showOnlyClickable 
+        ? elements.filter(el => el.is_clickable)
+        : elements;
+
+      if (filteredElements.length === 0) return [];
+
       // 为每个元素计算层级深度和父子关系
-      const elementsWithHierarchy = elements.map((element, index) => {
+      const elementsWithHierarchy = filteredElements.map((element, index) => {
         // 通过bounds位置关系推断层级
-        const depth = calculateDepth(element, elements);
-        const parentElement = findParentElement(element, elements);
+        const depth = calculateDepth(element, filteredElements);
+        const parentElement = findParentElement(element, filteredElements);
         
         return {
           ...element,
@@ -94,7 +104,7 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
       const validElements = removeCircularReferences(elementsWithHierarchy);
       
       // 按深度分组
-      const rootElements = validElements.filter(el => !el.parentId);
+      const rootElements = validElements.filter(el => !(el as any).parentId);
       
       // 递归保护的buildNode函数
       const buildNode = (element: any, visitedIds = new Set<string>(), depth = 0): UITreeNode => {
@@ -128,7 +138,7 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
 
         // 安全地构建子节点
         const children = validElements
-          .filter(el => el.parentId === element.id)
+          .filter(el => (el as any).parentId === element.id)
           .map(child => buildNode(child, newVisitedIds, depth + 1));
 
         return {
@@ -262,10 +272,10 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
 
   // 渲染节点标题
   const renderNodeTitle = (element: UIElement) => {
-    const center = {
+    const center = element.bounds ? {
       x: Math.round((element.bounds.left + element.bounds.right) / 2),
       y: Math.round((element.bounds.top + element.bounds.bottom) / 2),
-    };
+    } : { x: 0, y: 0 };
 
     return (
       <div className="flex items-center justify-between w-full pr-2">
@@ -316,21 +326,22 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
     return <span className="text-gray-400">📦</span>;
   };
 
-  // 处理节点选择
+  // 处理节点选择 - 适配新接口
   const handleSelect = (selectedKeys: React.Key[], info: any) => {
-    if (selectedKeys.length > 0 && onElementSelect) {
+    if (selectedKeys.length > 0) {
       const selectedNode = info.node as UITreeNode;
-      onElementSelect(selectedNode.element);
+      onElementSelect([selectedNode.element]); // 传递数组格式
     }
   };
 
   const treeData = buildTreeData();
+  const selectedKeys = selectedElements.map(el => el.id);
 
   if (treeData.length === 0) {
     return (
       <Card className="h-full">
         <div className="flex items-center justify-center h-32 text-gray-500">
-          暂无UI元素数据
+          {showOnlyClickable ? '暂无可点击UI元素' : '暂无UI元素数据'}
         </div>
       </Card>
     );
@@ -342,6 +353,7 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
         <Space>
           <span>页面结构层级树</span>
           <Tag color="blue">{elements.length} 个元素</Tag>
+          {showOnlyClickable && <Tag color="green">仅显示可点击</Tag>}
         </Space>
       } 
       className="h-full"
@@ -349,7 +361,7 @@ export const UIElementTree: React.FC<UIElementTreeProps> = ({
       <div className="h-96 overflow-auto">
         <Tree
           treeData={treeData}
-          selectedKeys={selectedElementId ? [selectedElementId] : []}
+          selectedKeys={selectedKeys}
           onSelect={handleSelect}
           showIcon
           defaultExpandAll

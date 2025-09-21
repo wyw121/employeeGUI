@@ -36,10 +36,7 @@ import { XmlPageCacheService } from '../../services/XmlPageCacheService';
 import { EnhancedXmlCacheService, type CachedViewData } from '../../services/EnhancedXmlCacheService';
 import type { UnifiedViewData, EnhancedUIElement } from '../../services/UnifiedViewDataManager';
 
-import { ElementSourceFinder } from './ElementSourceFinder';
-import PageSelector from './PageSelector';
-import HierarchyTreeViewer from './HierarchyTreeViewer';
-import ElementMatchInfo from './ElementMatchInfo';
+import { ElementSourceFinder, PageSelector, HierarchyTreeViewer, ElementMatchInfo } from './';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;

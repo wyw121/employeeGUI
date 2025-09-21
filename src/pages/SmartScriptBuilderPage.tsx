@@ -81,6 +81,17 @@ const { TextArea } = Input;
 // ==================== 智能操作配置 ====================
 
 const SMART_ACTION_CONFIGS = {
+  // 通讯录自动化操作 - 置顶优先显示
+  [SmartActionType.CONTACT_IMPORT_WORKFLOW]: {
+    name: '通讯录导入',
+    description: '完整的通讯录导入工作流程',
+    icon: '📱',
+    color: 'green',
+    category: 'contact',
+    parameters: [],
+    advanced: []
+  },
+
   // 基础操作
   [SmartActionType.TAP]: {
     name: '基础点击',
@@ -259,29 +270,6 @@ const SMART_ACTION_CONFIGS = {
       { key: 'enable_smart_recovery', label: '启用智能恢复', type: 'boolean', default: true },
       { key: 'detailed_logging', label: '详细日志记录', type: 'boolean', default: true },
       { key: 'screenshot_on_error', label: '出错时截图', type: 'boolean', default: true },
-    ]
-  },
-
-  // 通讯录自动化操作 - 新增
-  [SmartActionType.CONTACT_IMPORT_WORKFLOW]: {
-    name: '通讯录导入',
-    description: '完整的通讯录导入工作流程',
-    icon: '📱',
-    color: 'green',
-    category: 'contact',
-    parameters: [
-      { key: 'source_file_path', label: '通讯录文件路径', type: 'file', required: true, 
-        accept: '.vcf,.csv,.xlsx', description: '支持VCF、CSV、Excel格式' },
-      { key: 'device_id', label: '目标设备', type: 'device_selector', required: false },
-      { key: 'template_type', label: '导入模板', type: 'select', required: true,
-        options: ['BASIC_IMPORT', 'BATCH_IMPORT', 'SAFE_IMPORT'], default: 'BASIC_IMPORT' },
-    ],
-    advanced: [
-      { key: 'batch_size', label: '批处理大小', type: 'number', default: 50, min: 1, max: 100 },
-      { key: 'delay_between_batches', label: '批次间延迟(ms)', type: 'number', default: 1000 },
-      { key: 'verify_import', label: '验证导入结果', type: 'boolean', default: true },
-      { key: 'backup_before_import', label: '导入前备份', type: 'boolean', default: true },
-      { key: 'enable_cleanup', label: '启用清理步骤', type: 'boolean', default: false },
     ]
   },
 
@@ -1448,7 +1436,8 @@ const SmartScriptBuilderPage: React.FC = () => {
           form={form}
           layout="vertical"
           initialValues={{
-            step_type: SmartActionType.SMART_TAP,
+            step_type: SmartActionType.CONTACT_IMPORT_WORKFLOW, // 默认选择通讯录导入
+            name: '通讯录导入', // 默认步骤名称
             wait_after: 1000,
           }}
         >
@@ -1474,10 +1463,10 @@ const SmartScriptBuilderPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="name"
-                label="步骤名称"
-                rules={[{ required: true, message: '请输入步骤名称' }]}
+                label="步骤名称 (可选)"
+                help="默认为对应操作类型名称"
               >
-                <Input placeholder="请输入步骤名称" />
+                <Input placeholder="步骤名称将自动设置为操作类型名称" />
               </Form.Item>
             </Col>
             <Col span={12}>

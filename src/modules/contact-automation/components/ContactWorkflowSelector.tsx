@@ -3,10 +3,9 @@
  */
 
 import React, { useState } from 'react';
-import { Modal, Space, Card, Button, Upload, Form, Select, Input, Tag, Typography, Divider } from 'antd';
+import { Modal, Space, Card, Button, Tag, Typography, Divider } from 'antd';
 import { 
   ContactsOutlined, 
-  UploadOutlined, 
   FileExcelOutlined,
   PhoneOutlined,
   DeleteOutlined,
@@ -16,7 +15,6 @@ import { CONTACT_AUTOMATION_TEMPLATES, generateContactImportWorkflowSteps } from
 import type { ExtendedSmartScriptStep } from '../../../types/loopScript';
 
 const { Title, Text, Paragraph } = Typography;
-const { Option } = Select;
 
 interface ContactWorkflowSelectorProps {
   visible: boolean;
@@ -31,25 +29,21 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
   onStepsGenerated,
   deviceId
 }) => {
-  const [form] = Form.useForm();
   const [selectedTemplate, setSelectedTemplate] = useState<string>('BASIC_IMPORT');
-  const [sourceFile, setSourceFile] = useState<string>('');
 
   const handleGenerateSteps = () => {
-    // 移除表单验证，直接获取当前表单值
-    const values = form.getFieldsValue();
+    // 直接使用默认值和选择的模板生成步骤，无需验证
     const template = CONTACT_AUTOMATION_TEMPLATES[selectedTemplate];
     if (!template) return;
 
     const steps = template.generateSteps({
-      sourceFile: sourceFile || values.source_file_path || '', // 允许空值
-      deviceId: deviceId || values.device_id || '', // 允许空值
-      batchSize: values.batch_size || 20
+      sourceFile: '', // 空值，后续在步骤中配置
+      deviceId: deviceId || '', // 允许空值
+      batchSize: 20 // 默认批次大小
     });
 
     onStepsGenerated(steps);
     onCancel();
-    form.resetFields();
   };
 
   const templateConfigs = Object.entries(CONTACT_AUTOMATION_TEMPLATES).map(([key, config]) => ({
@@ -62,7 +56,7 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
       title="配置通讯录导入工作流"
       open={visible}
       onCancel={onCancel}
-      width={700}
+      width={600}
       footer={[
         <Button key="cancel" onClick={onCancel}>
           取消
@@ -72,14 +66,11 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
         </Button>
       ]}
     >
-      <Form form={form} layout="vertical">
-        {/* 模板选择 */}
-        <Form.Item 
-          label="选择导入模板" 
-          name="template"
-          initialValue="BASIC_IMPORT"
-        >
-          <div className="space-y-3">
+      <div className="space-y-4">
+        {/* 简化的模板选择 */}
+        <div>
+          <Text strong className="block mb-3">选择导入模板</Text>
+          <div className="space-y-2">
             {templateConfigs.map((template) => (
               <Card
                 key={template.key}
@@ -107,62 +98,9 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
               </Card>
             ))}
           </div>
-        </Form.Item>
+        </div>
 
         <Divider />
-
-        {/* 文件配置 */}
-        <Form.Item
-          label="通讯录文件路径 (可选)"
-          name="source_file_path"
-          help="可以现在配置，也可以在步骤卡片中后续编辑"
-        >
-          <Space.Compact style={{ width: '100%' }}>
-            <Input 
-              placeholder="可选：输入文件路径或点击选择文件"
-              value={sourceFile}
-              onChange={(e) => setSourceFile(e.target.value)}
-            />
-            <Upload
-              beforeUpload={(file) => {
-                const filePath = (file as any).path || file.name;
-                setSourceFile(filePath);
-                form.setFieldsValue({ source_file_path: filePath });
-                return false; // 阻止自动上传
-              }}
-              showUploadList={false}
-              accept=".vcf,.csv,.xlsx,.xls"
-            >
-              <Button icon={<UploadOutlined />}>选择文件</Button>
-            </Upload>
-          </Space.Compact>
-        </Form.Item>
-
-        {/* 设备选择 */}
-        <Form.Item
-          label="目标设备ID (可选)"
-          name="device_id"
-          initialValue={deviceId}
-          help="留空将在执行时选择当前设备"
-        >
-          <Input placeholder="可选：指定设备ID或在步骤中配置" />
-        </Form.Item>
-
-        {/* 高级配置 */}
-        {selectedTemplate === 'BATCH_IMPORT' && (
-          <Form.Item
-            label="批次大小"
-            name="batch_size"
-            initialValue={20}
-          >
-            <Select>
-              <Option value={10}>10 (适合旧设备)</Option>
-              <Option value={20}>20 (推荐)</Option>
-              <Option value={50}>50 (高性能设备)</Option>
-              <Option value={100}>100 (大批量)</Option>
-            </Select>
-          </Form.Item>
-        )}
 
         {/* 预览将生成的步骤 */}
         <div className="bg-gray-50 p-4 rounded-md">
@@ -171,18 +109,18 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
             <div className="flex items-center space-x-2">
               <FileExcelOutlined className="text-blue-500" />
               <Text>1. 生成VCF文件 - 从源文件转换为标准格式</Text>
-              <Tag color="green">可在步骤中编辑</Tag>
+              <Tag color="green">可编辑</Tag>
             </div>
             <div className="flex items-center space-x-2">
               <PhoneOutlined className="text-green-500" />
               <Text>2. 导入联系人到设备 - 通过ADB推送并导入</Text>
-              <Tag color="green">可在步骤中编辑</Tag>
+              <Tag color="green">可编辑</Tag>
             </div>
             {selectedTemplate === 'SAFE_IMPORT' && (
               <div className="flex items-center space-x-2">
                 <TableOutlined className="text-orange-500" />
                 <Text>0. 备份现有联系人 - 安全防护措施</Text>
-                <Tag color="green">可在步骤中编辑</Tag>
+                <Tag color="green">可编辑</Tag>
               </div>
             )}
             <div className="flex items-center space-x-2">
@@ -195,7 +133,7 @@ export const ContactWorkflowSelector: React.FC<ContactWorkflowSelectorProps> = (
             💡 所有参数都可以在生成步骤后，在步骤卡片中进行编辑和配置
           </Paragraph>
         </div>
-      </Form>
+      </div>
     </Modal>
   );
 };

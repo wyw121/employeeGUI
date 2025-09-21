@@ -125,6 +125,19 @@ impl SmartScriptExecutor {
         logs.push(format!("🚀 开始执行步骤: {}", step.name));
         logs.push(format!("📱 目标设备: {}", self.device_id));
         logs.push(format!("🔧 步骤类型: {:?}", step.step_type));
+        
+        // 详细记录步骤参数
+        let params: HashMap<String, serde_json::Value> = 
+            serde_json::from_value(step.parameters.clone())?;
+        let step_details = format!(
+            "📊 步骤详细信息: ID='{}', 坐标=({},{}), 参数={:?}",
+            step.id,
+            params.get("x").and_then(|v| v.as_i64()).unwrap_or(0),
+            params.get("y").and_then(|v| v.as_i64()).unwrap_or(0),
+            step.parameters
+        );
+        info!("{}", step_details);
+        logs.push(step_details);
 
         let result = match step.step_type {
             // 基础操作类型
@@ -213,10 +226,15 @@ impl SmartScriptExecutor {
         let params: HashMap<String, serde_json::Value> = 
             serde_json::from_value(step.parameters.clone())?;
         
+        // 优先使用 parameters 中的坐标，因为 SmartScriptStep 结构体中只有这些
         let x = params["x"].as_i64().unwrap_or(0) as i32;
         let y = params["y"].as_i64().unwrap_or(0) as i32;
         
-        logs.push(format!("📍 点击坐标: ({}, {})", x, y));
+        logs.push(format!("📍 点击坐标: ({}, {}) (从 parameters: x={}/y={})", 
+            x, y, 
+            params.get("x").map(|v| v.as_i64().unwrap_or(0)).unwrap_or(0),
+            params.get("y").map(|v| v.as_i64().unwrap_or(0)).unwrap_or(0)
+        ));
         
         // 使用带重试的点击执行
         match self.execute_click_with_retry(x, y, logs).await {
@@ -273,11 +291,15 @@ impl SmartScriptExecutor {
             
             Ok("应用启动成功".to_string())
         } else {
-            // 普通智能点击
+            // 普通智能点击 - 从 parameters 获取坐标
             let x = params["x"].as_i64().unwrap_or(0) as i32;
             let y = params["y"].as_i64().unwrap_or(0) as i32;
             
-            logs.push(format!("智能点击坐标: ({}, {})", x, y));
+            logs.push(format!("智能点击坐标: ({}, {}) (从 parameters: x={}/y={})", 
+                x, y, 
+                params.get("x").map(|v| v.as_i64().unwrap_or(0)).unwrap_or(0),
+                params.get("y").map(|v| v.as_i64().unwrap_or(0)).unwrap_or(0)
+            ));
             
             let session = get_device_session(&self.device_id).await?;
             let command = format!("input tap {} {}", x, y);
@@ -535,14 +557,21 @@ impl SmartScriptExecutor {
         info!("📋 前端发送的完整脚本步骤详情:");
         logs.push("📋 前端发送的完整脚本步骤详情:".to_string());
         for (i, step) in steps.iter().enumerate() {
-            let step_details = format!(
-                "步骤 {}: 名称='{}', ID='{}', 类型={:?}, 目标='{}', 动作='{}', 坐标=({},{}), 参数={:?}",
-                i + 1, step.name, step.id, step.step_type, 
-                step.target_text.as_deref().unwrap_or("无"),
-                step.action.as_deref().unwrap_or("无"),
-                step.x.unwrap_or(0), step.y.unwrap_or(0),
-                step.parameters
-            );
+            let params: Result<HashMap<String, serde_json::Value>, _> = 
+                serde_json::from_value(step.parameters.clone());
+            let step_details = match params {
+                Ok(p) => format!(
+                    "步骤 {}: 名称='{}', ID='{}', 类型={:?}, 坐标=({},{}), 参数={:?}",
+                    i + 1, step.name, step.id, step.step_type, 
+                    p.get("x").and_then(|v| v.as_i64()).unwrap_or(0),
+                    p.get("y").and_then(|v| v.as_i64()).unwrap_or(0),
+                    step.parameters
+                ),
+                Err(_) => format!(
+                    "步骤 {}: 名称='{}', ID='{}', 类型={:?}, 参数={:?}",
+                    i + 1, step.name, step.id, step.step_type, step.parameters
+                )
+            };
             info!("  {}", step_details);
             logs.push(format!("  {}", step_details));
         }
@@ -579,8 +608,22 @@ impl SmartScriptExecutor {
         // 执行每个步骤
         for (index, step) in enabled_steps.iter().enumerate() {
             let step_start = std::time::Instant::now();
-            logs.push(format!("📋 执行步骤 {}/{}: {} (类型: {:?})", 
-                index + 1, enabled_steps.len(), step.name, step.step_type));
+            let params: Result<HashMap<String, serde_json::Value>, _> = 
+                serde_json::from_value(step.parameters.clone());
+            let detailed_info = match params {
+                Ok(p) => format!(
+                    "📋 执行步骤 {}/{}: 名称='{}', ID='{}', 类型={:?}, 坐标=({},{})",
+                    index + 1, enabled_steps.len(), step.name, step.id, step.step_type,
+                    p.get("x").and_then(|v| v.as_i64()).unwrap_or(0),
+                    p.get("y").and_then(|v| v.as_i64()).unwrap_or(0)
+                ),
+                Err(_) => format!(
+                    "📋 执行步骤 {}/{}: 名称='{}', ID='{}', 类型={:?}",
+                    index + 1, enabled_steps.len(), step.name, step.id, step.step_type
+                )
+            };
+            info!("{}", detailed_info);
+            logs.push(detailed_info);
 
             // 执行单个步骤
             match self.execute_single_step(step.clone()).await {

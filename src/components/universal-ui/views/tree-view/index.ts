@@ -1,2 +1,3 @@
-export { UIElementTree } from './UIElementTree';
-export type { UITreeNode } from './utils';
+export { default as UIElementTree } from './UIElementTree';
+export type { TreeNodeData } from './utils';
+export { buildTreeData } from './utils';

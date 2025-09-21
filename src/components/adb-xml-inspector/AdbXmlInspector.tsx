@@ -24,9 +24,7 @@ import {
   SearchOutlined,
   CopyOutlined,
   EyeOutlined,
-  BugOutlined,
-  ExpandOutlined,
-  CompressOutlined
+  BugOutlined
 } from '@ant-design/icons';
 import { UiNode, AdbXmlInspectorProps } from './types';
 import {
@@ -78,7 +76,7 @@ function TreeRow({ node, depth, selected, onSelect, filter }: TreeRowProps) {
           paddingLeft: depth * 12 + 8,
           padding: '4px 8px',
           cursor: 'pointer',
-          backgroundColor: selected === node ? '#f0f9ff' : 'transparent',
+          backgroundColor: selected === node ? 'rgba(24, 144, 255, 0.2)' : 'transparent',
           border: selected === node ? '1px solid #1890ff' : '1px solid transparent',
           borderRadius: '4px',
           marginBottom: '2px',
@@ -89,7 +87,7 @@ function TreeRow({ node, depth, selected, onSelect, filter }: TreeRowProps) {
         onClick={() => onSelect(node)}
         onMouseEnter={(e) => {
           if (selected !== node) {
-            e.currentTarget.style.backgroundColor = '#fafafa';
+            e.currentTarget.style.backgroundColor = 'var(--dark-bg-hover, #333333)';
           }
         }}
         onMouseLeave={(e) => {
@@ -230,13 +228,14 @@ function NodeDetail({ node }: NodeDetailProps) {
           <div style={{ 
             marginTop: '4px', 
             padding: '8px', 
-            background: '#f5f5f5', 
-            border: '1px solid #d9d9d9', 
+            background: 'var(--dark-bg-tertiary, #1f1f1f)', 
+            border: '1px solid var(--dark-border-primary, #404040)', 
             borderRadius: '4px',
             fontSize: '11px', 
             fontFamily: 'monospace',
             wordBreak: 'break-all',
-            lineHeight: 1.4
+            lineHeight: 1.4,
+            color: 'var(--dark-text-primary, #ffffff)'
           }}>
             {xPath}
           </div>
@@ -313,9 +312,9 @@ function ScreenPreview({ root, selected }: ScreenPreviewProps) {
         <div
           style={{ 
             position: 'relative',
-            background: '#fafafa',
+            background: 'var(--dark-bg-tertiary, #1f1f1f)',
             borderRadius: '6px',
-            border: '1px solid #d9d9d9',
+            border: '1px solid var(--dark-border-primary, #404040)',
             overflow: 'hidden',
             width: viewW,
             height: viewH,
@@ -379,17 +378,18 @@ function ScreenPreview({ root, selected }: ScreenPreviewProps) {
         </div>
         
         {selected?.attrs["bounds"] && (
-          <div style={{ fontSize: '11px', color: '#666' }}>
+          <div style={{ fontSize: '11px', color: 'var(--dark-text-secondary, #e6e6e6)' }}>
             <Text type="secondary" style={{ fontSize: '11px' }}>选中元素bounds:</Text>
             <div style={{ 
               marginTop: '4px', 
               padding: '4px 6px', 
-              background: '#f5f5f5', 
-              border: '1px solid #d9d9d9', 
+              background: 'var(--dark-bg-tertiary, #1f1f1f)', 
+              border: '1px solid var(--dark-border-primary, #404040)', 
               borderRadius: '3px',
               fontFamily: 'monospace',
               fontSize: '10px',
-              wordBreak: 'break-all'
+              wordBreak: 'break-all',
+              color: 'var(--dark-text-primary, #ffffff)'
             }}>
               {selected.attrs["bounds"]}
             </div>
@@ -404,7 +404,7 @@ function ScreenPreview({ root, selected }: ScreenPreviewProps) {
 
 const AdbXmlInspector: React.FC<AdbXmlInspectorProps> = ({
   initialXml = '',
-  height = 600,
+  height = 400,
   showTips = true,
   onNodeSelected,
   className = ''
@@ -469,7 +469,7 @@ const AdbXmlInspector: React.FC<AdbXmlInspectorProps> = ({
   const containerHeight = height;
 
   return (
-    <div className={`${className}`} style={{ height: containerHeight }}>
+    <div className={`adb-xml-inspector ${className || 'xml-inspector-in-modal'}`} style={{ height: containerHeight }}>
       {/* 顶部工具栏 */}
       <div style={{ marginBottom: '16px' }}>
         <Space direction="vertical" style={{ width: '100%' }} size="small">

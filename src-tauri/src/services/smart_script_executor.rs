@@ -530,6 +530,22 @@ impl SmartScriptExecutor {
 
         info!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len());
         logs.push(format!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len()));
+        
+        // 详细记录每个传入步骤的信息
+        info!("📋 前端发送的完整脚本步骤详情:");
+        logs.push("📋 前端发送的完整脚本步骤详情:".to_string());
+        for (i, step) in steps.iter().enumerate() {
+            let step_details = format!(
+                "步骤 {}: 名称='{}', ID='{}', 类型={:?}, 目标='{}', 动作='{}', 坐标=({},{}), 参数={:?}",
+                i + 1, step.name, step.id, step.step_type, 
+                step.target_text.as_deref().unwrap_or("无"),
+                step.action.as_deref().unwrap_or("无"),
+                step.x.unwrap_or(0), step.y.unwrap_or(0),
+                step.parameters
+            );
+            info!("  {}", step_details);
+            logs.push(format!("  {}", step_details));
+        }
 
         // 1. 使用新的模块化控制流预处理器
         let processed_steps = match self.preprocessor.lock().unwrap().preprocess_for_legacy_executor(steps) {

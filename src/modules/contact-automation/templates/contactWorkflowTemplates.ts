@@ -10,7 +10,7 @@ import type { ContactImportStep } from '../types';
  * 生成通讯录导入工作流的三个步骤
  */
 export function generateContactImportWorkflowSteps(
-  sourceFilePath: string,
+  sourceFilePath?: string,  // 改为可选参数
   deviceId?: string
 ): ExtendedSmartScriptStep[] {
   
@@ -26,7 +26,7 @@ export function generateContactImportWorkflowSteps(
       enabled: true,
       order: 1,
       parameters: {
-        source_file_path: sourceFilePath,
+        source_file_path: sourceFilePath || '', // 允许空值，后续在步骤中配置
         output_dir: './vcf_output',
         encoding: 'utf-8',
         include_phone: true,
@@ -52,7 +52,7 @@ export function generateContactImportWorkflowSteps(
       order: 2,
       parameters: {
         vcf_file_path: '${contact_vcf_gen_' + baseTimestamp + '.output_file}', // 引用上一步的输出
-        device_id: deviceId || '${selected_device_id}',
+        device_id: deviceId || '', // 允许空值，后续在步骤中配置
         import_method: 'adb_push_and_import',
         batch_size: 50,
         delay_between_batches: 1000,
@@ -76,7 +76,7 @@ export function generateContactImportWorkflowSteps(
       enabled: false, // 默认禁用，用户可选择启用
       order: 3,
       parameters: {
-        device_id: deviceId || '${selected_device_id}',
+        device_id: deviceId || '', // 允许空值，后续在步骤中配置
         delete_method: 'by_import_session',
         import_session_id: '${contact_import_' + baseTimestamp + '.session_id}',
         confirm_before_delete: true,
@@ -103,7 +103,7 @@ export const CONTACT_AUTOMATION_TEMPLATES = {
     description: '简单的通讯录文件导入流程',
     icon: '📱',
     category: 'contact',
-    generateSteps: (params: { sourceFile: string; deviceId?: string }) => 
+    generateSteps: (params: { sourceFile?: string; deviceId?: string }) => 
       generateContactImportWorkflowSteps(params.sourceFile, params.deviceId)
   },
 
@@ -113,7 +113,7 @@ export const CONTACT_AUTOMATION_TEMPLATES = {
     description: '大量联系人分批导入，避免设备卡顿',
     icon: '📦',
     category: 'contact',
-    generateSteps: (params: { sourceFile: string; deviceId?: string; batchSize?: number }) => {
+    generateSteps: (params: { sourceFile?: string; deviceId?: string; batchSize?: number }) => {
       const steps = generateContactImportWorkflowSteps(params.sourceFile, params.deviceId);
       // 修改批量大小
       steps[1].parameters.batch_size = params.batchSize || 20;
@@ -128,7 +128,7 @@ export const CONTACT_AUTOMATION_TEMPLATES = {
     description: '导入前创建备份，支持一键恢复',
     icon: '🛡️',
     category: 'contact',
-    generateSteps: (params: { sourceFile: string; deviceId?: string }) => {
+    generateSteps: (params: { sourceFile?: string; deviceId?: string }) => {
       const steps = generateContactImportWorkflowSteps(params.sourceFile, params.deviceId);
       
       // 添加备份步骤
@@ -140,7 +140,7 @@ export const CONTACT_AUTOMATION_TEMPLATES = {
         enabled: true,
         order: 0,
         parameters: {
-          device_id: params.deviceId || '${selected_device_id}',
+          device_id: params.deviceId || '', // 允许空值
           backup_path: './contact_backups',
           backup_format: 'vcf',
           include_metadata: true,

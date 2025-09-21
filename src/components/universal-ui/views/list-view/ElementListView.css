@@ -1,0 +1,347 @@
+/**
+ * 列表视图组件样式
+ */
+
+.element-list-view {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 600px;
+}
+
+/* 搜索区域 */
+.search-section {
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.2);
+}
+
+.search-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search-icon {
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-text {
+  color: white;
+}
+
+.search-title {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.search-subtitle {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.search-input .ant-input {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 8px !important;
+}
+
+.search-input .ant-input:focus {
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 标签页区域 */
+.tabs-section {
+  margin-bottom: 20px;
+}
+
+.tabs-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  user-select: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tab-item:hover {
+  transform: translateY(-1px);
+}
+
+.tab-item.active {
+  transform: translateY(-2px);
+}
+
+.tab-count {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  min-width: 20px;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* 元素网格区域 */
+.elements-grid {
+  min-height: 400px;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+
+/* 元素卡片样式 */
+.element-card {
+  border-radius: 12px;
+  padding: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  color: white;
+}
+
+.element-card:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+.element-card.quality-legendary:hover {
+  box-shadow: 0 8px 25px #ff6b6b50, inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.element-card.quality-epic:hover {
+  box-shadow: 0 8px 25px #a55eea50, inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.element-card.quality-rare:hover {
+  box-shadow: 0 8px 25px #3742fa50, inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.element-card.quality-uncommon:hover {
+  box-shadow: 0 8px 25px #2ed57350, inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.element-card.quality-common:hover {
+  box-shadow: 0 8px 25px #747d8c50, inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 品质光效 */
+.quality-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+/* 卡片内容 */
+.card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+}
+
+.element-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+.element-index {
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: #fff;
+}
+
+.text-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.element-title {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.element-description {
+  font-size: 11px;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.element-position {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.status-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.status-tag {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.status-tag.clickable {
+  background: rgba(46, 213, 115, 0.9);
+  color: white;
+}
+
+.status-tag.scrollable {
+  background: rgba(52, 152, 219, 0.9);
+  color: white;
+}
+
+.status-tag.has-text {
+  background: rgba(155, 89, 182, 0.9);
+  color: white;
+}
+
+.select-button {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  backdrop-filter: blur(4px);
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 40px;
+  color: #666;
+  border-radius: 16px;
+  border: 2px dashed #dee2e6;
+  position: relative;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #495057;
+}
+
+.empty-description {
+  font-size: 14px;
+  color: #868e96;
+  line-height: 1.5;
+}
+
+/* 分页区域 */
+.pagination-section {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.pagination-section .ant-pagination {
+  user-select: none;
+}
+
+.pagination-section .ant-pagination-item {
+  border-radius: 6px;
+}
+
+.pagination-section .ant-pagination-item-active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: #667eea;
+}
+
+.pagination-section .ant-pagination-item-active a {
+  color: white;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .element-list-view {
+    padding: 12px;
+  }
+  
+  .grid-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .tabs-container {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .tab-item {
+    justify-content: center;
+  }
+}

@@ -28,7 +28,7 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import { UIElement } from '../../api/universalUIAPI';
-import { UIElementTree } from '../universal-ui/UIElementTree';
+import { UIElementTree } from '../universal-ui/views/tree-view';
 import './UnifiedVisualizationView.css';
 
 const { Title, Text } = Typography;

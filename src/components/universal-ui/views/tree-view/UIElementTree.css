@@ -1,0 +1,208 @@
+/**
+ * 树形视图组件样式
+ */
+
+.ui-element-tree {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ui-element-tree .ant-tree {
+  background: transparent;
+}
+
+.ui-element-tree .ant-tree-treenode {
+  padding: 4px 0;
+}
+
+.ui-element-tree .ant-tree-node-content-wrapper {
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.ui-element-tree .ant-tree-node-content-wrapper:hover {
+  background-color: #e6f7ff;
+  border-color: #40a9ff;
+}
+
+.ui-element-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background-color: #bae7ff;
+  border-color: #1890ff;
+}
+
+.ui-element-tree .ant-tree-title {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  font-size: 12px;
+}
+
+.ui-element-tree .ant-tree-switcher {
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+.ui-element-tree .ant-tree-switcher-icon {
+  font-size: 10px;
+}
+
+.ui-element-tree .element-text {
+  color: #1890ff;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-element-tree .element-desc {
+  color: #52c41a;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-element-tree .element-id {
+  background: #fff2e8;
+  color: #fa8c16;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.ui-element-tree .element-type {
+  background: #f6f6f6;
+  color: #666;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.ui-element-tree .element-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ui-element-tree .status-tag {
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.ui-element-tree .status-clickable {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.ui-element-tree .status-scrollable {
+  background: #e6f7ff;
+  color: #1890ff;
+  border: 1px solid #91d5ff;
+}
+
+.ui-element-tree .element-position {
+  color: #999;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* 元素图标样式 */
+.ui-element-tree .element-icon {
+  margin-right: 6px;
+  font-size: 14px;
+}
+
+.ui-element-tree .icon-clickable {
+  color: #52c41a;
+}
+
+.ui-element-tree .icon-scrollable {
+  color: #1890ff;
+}
+
+.ui-element-tree .icon-text {
+  color: #722ed1;
+}
+
+.ui-element-tree .icon-image {
+  color: #fa8c16;
+}
+
+.ui-element-tree .icon-default {
+  color: #999;
+}
+
+/* 统计信息 */
+.tree-stats {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.tree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: #666;
+}
+
+.tree-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 空状态 */
+.tree-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.tree-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.tree-empty-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* 加载状态 */
+.tree-loading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.tree-loading .ant-spin {
+  display: block;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ui-element-tree {
+    padding: 8px;
+  }
+  
+  .ui-element-tree .ant-tree-title {
+    font-size: 11px;
+  }
+  
+  .tree-legend {
+    flex-direction: column;
+    gap: 6px;
+  }
+}

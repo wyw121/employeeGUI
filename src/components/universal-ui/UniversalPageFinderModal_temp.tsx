@@ -202,8 +202,8 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
   const [showOnlyClickable, setShowOnlyClickable] = useState(false);
   const [elements, setElements] = useState<VisualUIElement[]>([]);
   const [categories, setCategories] = useState<VisualElementCategory[]>([]);
-  
-  // UIElement数组用于API调用（提升到组件顶部，确保唯一）
+
+  // 将VisualUIElement转换为UIElement的函数（用于交互管理器）
   const convertVisualToUIElement = (visualElement: VisualUIElement): UIElement => {
     return {
       id: visualElement.id,
@@ -226,10 +226,9 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
       content_desc: visualElement.description
     };
   };
-  
-  const uiElements = elements.map(convertVisualToUIElement);
 
   // 使用新的元素选择管理器
+  const uiElements = elements.map(convertVisualToUIElement);
   const selectionManager = useElementSelectionManager(
     uiElements,
     (selectedElement) => {
@@ -957,8 +956,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
   // 状态管理
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [analyzing, setAnalyzing] = useState(false);
-  const [elements, setElements] = useState<VisualUIElement[]>([]);
-  const [filteredElements, setFilteredElements] = useState<VisualUIElement[]>([]);
+  const [elements, setElements] = useState<UIElement[]>([]);
+  const [filteredElements, setFilteredElements] = useState<UIElement[]>([]);
   const [searchText, setSearchText] = useState('');
   const [selectedTab, setSelectedTab] = useState('all');
   const [analysisResult, setAnalysisResult] = useState<string>('');
@@ -978,45 +977,6 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     setSearchText('');
     setAnalysisResult('');
     setAnalyzing(false);
-    setSelectedElementId('');
-  };
-
-  // 将VisualUIElement转换为UIElement的函数（用于主组件API调用）
-  const convertVisualToUIElement = (visualElement: VisualUIElement): UIElement => {
-    return {
-      id: visualElement.id,
-      text: visualElement.text,
-      element_type: visualElement.type,
-      xpath: '',
-      bounds: {
-        left: visualElement.position.x,
-        top: visualElement.position.y,
-        right: visualElement.position.x + visualElement.position.width,
-        bottom: visualElement.position.y + visualElement.position.height
-      },
-      is_clickable: visualElement.clickable,
-      is_scrollable: false,
-      is_enabled: true,
-      checkable: false,
-      checked: false,
-      selected: false,
-      password: false,
-      content_desc: visualElement.description
-    };
-  };
-
-  // 转换后的UIElement数组，用于API调用
-  const uiElements = elements.map(convertVisualToUIElement);
-
-  // 处理VisualUIElement的选择
-  const handleVisualElementSelect = (element: VisualUIElement) => {
-    setSelectedElementId(element.id);
-    
-    if (!element.clickable || !onElementSelected) return;
-    
-    // 转换为 UIElement 格式并回调
-    const uiElement = convertVisualToUIElement(element);
-    onElementSelected(uiElement);
   };
 
   // 页面分析
@@ -1051,11 +1011,13 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
           message.info('正在优化元素列表...');
           try {
             const deduplicatedElements = await UniversalUIAPI.deduplicateElements(extractedElements);
-            setElementsWithConvert(deduplicatedElements);
+            setElements(deduplicatedElements);
+            setFilteredElements(deduplicatedElements);
             message.success(`分析完成！找到 ${deduplicatedElements.length} 个唯一元素`);
           } catch (dedupeError) {
             console.warn('元素去重失败，使用原始元素列表:', dedupeError);
-            setElementsWithConvert(extractedElements);
+            setElements(extractedElements);
+            setFilteredElements(extractedElements);
             message.success(`分析完成！找到 ${extractedElements.length} 个元素（跳过去重）`);
           }
         } else {
@@ -1081,31 +1043,31 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
       setFilteredElements(elements);
       return;
     }
-    // 用UIElement数组进行API调用
-    const filteredUI = UniversalUIAPI.searchElementsByText(uiElements, value);
-    // 转换回VisualUIElement
-    const filtered = filteredUI.map(ui => elements.find(el => el.id === ui.id)).filter(Boolean) as VisualUIElement[];
+
+    const filtered = UniversalUIAPI.searchElementsByText(elements, value);
     setFilteredElements(filtered);
   };
 
   // 按类型过滤
   const handleTabChange = (key: string) => {
     setSelectedTab(key);
-    let filtered: VisualUIElement[] = [];
+    
+    let filtered: UIElement[] = [];
+    
     if (key === 'all') {
       filtered = elements;
     } else if (key === 'interactive') {
-      const filteredUI = UniversalUIAPI.filterInteractiveElements(uiElements);
-      filtered = filteredUI.map(ui => elements.find(el => el.id === ui.id)).filter(Boolean) as VisualUIElement[];
+      filtered = UniversalUIAPI.filterInteractiveElements(elements);
     } else {
-      const grouped = UniversalUIAPI.groupElementsByType(uiElements);
-      filtered = (grouped[key] || []).map(ui => elements.find(el => el.id === ui.id)).filter(Boolean) as VisualUIElement[];
+      const grouped = UniversalUIAPI.groupElementsByType(elements);
+      filtered = grouped[key] || [];
     }
+    
     // 如果有搜索条件，继续应用搜索
     if (searchText.trim()) {
-      const filteredUI = UniversalUIAPI.searchElementsByText(filtered.map(convertVisualToUIElement), searchText);
-      filtered = filteredUI.map(ui => elements.find(el => el.id === ui.id)).filter(Boolean) as VisualUIElement[];
+      filtered = UniversalUIAPI.searchElementsByText(filtered, searchText);
     }
+    
     setFilteredElements(filtered);
   };
 
@@ -1515,16 +1477,18 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     );
   };
 
-  // 统计信息（useMemo，替代getElementTypeStats）
-  const stats = React.useMemo(() => {
-    const interactive = elements.filter(el => el.clickable);
-    const types = Array.from(new Set(elements.map(el => el.type)));
+  // 获取元素类型统计
+  const getElementTypeStats = () => {
+    const grouped = UniversalUIAPI.groupElementsByType(elements);
+    const interactive = UniversalUIAPI.filterInteractiveElements(elements);
+    
     return {
       total: elements.length,
       interactive: interactive.length,
-      types: types.length
+      types: Object.keys(grouped).length,
+      grouped
     };
-  }, [elements]);
+  };
 
   // 处理缓存页面选择
   const handleCachePageSelected = async (cachedPage: CachedXmlPage) => {
@@ -1558,7 +1522,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
               console.log('📋 去重后的元素数量:', deduplicatedElements.length);
               
               // 更新元素列表
-              setElementsWithConvert(deduplicatedElements);
+              setElements(deduplicatedElements);
+              setFilteredElements(deduplicatedElements);
               
               message.success({
                 content: (
@@ -1575,7 +1540,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
               });
             } catch (dedupeError) {
               console.warn('缓存页面元素去重失败，使用原始元素列表:', dedupeError);
-              setElementsWithConvert(extractedElements);
+              setElements(extractedElements);
+              setFilteredElements(extractedElements);
               
               message.success({
                 content: (
@@ -1637,40 +1603,7 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
     }
   };
 
-  // UIElement => VisualUIElement 转换工具
-  function convertToVisualUIElement(element: UIElement): VisualUIElement {
-    return {
-      id: element.id,
-      text: element.text,
-      description: element.content_desc ?? '',
-      type: element.element_type,
-      category: getCategory(element), // 你可以自定义分类逻辑
-      position: {
-        x: element.bounds.left,
-        y: element.bounds.top,
-        width: element.bounds.right - element.bounds.left,
-        height: element.bounds.bottom - element.bounds.top,
-      },
-      clickable: element.is_clickable,
-      importance: 'medium', // 可根据业务调整
-      userFriendlyName: element.text || element.element_type,
-    };
-  }
-
-  function getCategory(element: UIElement): string {
-    if (element.element_type === 'TextView') return 'text';
-    if (element.element_type === 'ImageView') return 'image';
-    if (element.element_type === 'ViewGroup') return 'container';
-    if (element.is_clickable) return 'interactive';
-    return 'all';
-  }
-
-  // 在 setElements 时自动转换类型
-  const setElementsWithConvert = (rawElements: UIElement[]) => {
-    const visualElements = rawElements.map(convertToVisualUIElement);
-    setElements(visualElements);
-    setFilteredElements(visualElements);
-  };
+  const stats = getElementTypeStats();
 
   return (
     <Modal
@@ -1975,7 +1908,7 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                     position: 'absolute',
                     top: -20,
                     right: -20,
-                                       width: '100px',
+                    width: '100px',
                     height: '100px',
                     background: 'rgba(255, 255, 255, 0.1)',
                     borderRadius: '50%',
@@ -2124,7 +2057,7 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                   >
                     <UIElementTree
                       elements={elements}
-                      onElementSelect={handleVisualElementSelect}
+                      onElementSelect={handleTreeElementSelect}
                       selectedElementId={selectedElementId}
                     />
                   </ErrorBoundary>
@@ -2132,17 +2065,18 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                   // 可视化视图 - 使用新的独立组件
                   <VisualElementView 
                     elements={elements}
-                    onElementSelect={handleVisualElementSelect}
+                    onElementSelect={onElementSelected}
                     selectedElementId={selectedElementId}
                   />
                 ) : (
                   // 列表视图 - 使用新的独立组件
                   <ElementListView 
-                    elements={filteredElements}
-                    onElementSelect={handleVisualElementSelect}
+                    elements={elements}
+                    onElementSelect={onElementSelected}
+                    selectedElementId={selectedElementId}
                   />
-                )}
-              </div>
+                )
+              )}
             ) : (
               <div style={{ textAlign: 'center', padding: 50, color: '#999' }}>
                 <EyeOutlined style={{ fontSize: 48, marginBottom: 16 }} />

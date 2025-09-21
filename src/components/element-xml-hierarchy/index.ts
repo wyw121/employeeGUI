@@ -8,3 +8,8 @@ export { default as PageSelector } from './PageSelector';
 export { default as HierarchyTreeViewer } from './HierarchyTreeViewer';
 export { default as ElementMatchInfo } from './ElementMatchInfo';
 export { ElementSourceFinder } from './ElementSourceFinder';
+
+// 新增模块
+export { ElementFieldsViewer } from './ElementFieldsViewer';
+export { EnhancedHierarchyTreeViewer } from './EnhancedHierarchyTreeViewer';
+export { ElementFieldsViewerGuide } from './ElementFieldsViewerGuide';

@@ -97,7 +97,11 @@ const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
       <div className="flex-1 min-h-0">
         {loading ? (
           <div className="h-full flex items-center justify-center">
-            <Spin tip="加载页面数据..." size="large" />
+            <Spin size="large">
+              <div className="p-8 text-center text-gray-500">
+                加载页面数据...
+              </div>
+            </Spin>
           </div>
         ) : selectedPage ? (
           <CachedHierarchyTreeViewer

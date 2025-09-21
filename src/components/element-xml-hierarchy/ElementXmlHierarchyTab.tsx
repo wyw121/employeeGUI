@@ -36,7 +36,7 @@ import { XmlPageCacheService } from '../../services/XmlPageCacheService';
 import { EnhancedXmlCacheService, type CachedViewData } from '../../services/EnhancedXmlCacheService';
 import type { UnifiedViewData, EnhancedUIElement } from '../../services/UnifiedViewDataManager';
 
-import { ElementSourceFinder, PageSelector, HierarchyTreeViewer, ElementMatchInfo } from './';
+import { ElementSourceFinder, PageSelector, HierarchyTreeViewer, ElementMatchInfo, EnhancedHierarchyTreeViewer } from './';
 import HierarchyTreeViewerFixed from './HierarchyTreeViewerFixed';
 
 const { Text, Title } = Typography;
@@ -50,6 +50,8 @@ interface ElementXmlHierarchyTabProps {
   element: CompatibleUIElement;
   /** 是否可见 */
   visible?: boolean;
+  /** 是否使用增强的字段展示模式 */
+  useEnhancedViewer?: boolean;
 }
 
 // 元素类型转换适配器
@@ -96,7 +98,8 @@ interface ElementSourceResult {
 
 export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
   element,
-  visible = true
+  visible = true,
+  useEnhancedViewer = true // 默认使用增强模式
 }) => {
   // 状态管理
   const [loading, setLoading] = useState(false);
@@ -357,11 +360,38 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
 
       {/* 主要内容：层级树浏览器 */}
       {elementSource?.cachedViewData && (
-        <HierarchyTreeViewerFixed
-          viewData={elementSource.cachedViewData.unifiedData}
-          targetElement={elementSource.matchedEnhancedElement}
-          showDetails={true}
-        />
+        <>
+          {useEnhancedViewer ? (
+            // 使用增强的字段展示树查看器
+            <Card 
+              title={
+                <Space>
+                  <BranchesOutlined />
+                  增强XML层级树
+                  <Tag color="geekblue">字段详情展示</Tag>
+                  <Tag color="orange">
+                    {elementSource.cachedViewData.unifiedData.rawElements?.length || 0} 个元素
+                  </Tag>
+                </Space>
+              }
+              size="small"
+            >
+              <EnhancedHierarchyTreeViewer
+                elements={elementSource.cachedViewData.unifiedData.rawElements || []}
+                targetElement={elementSource.matchedEnhancedElement || adaptElementToUniversalUIType(element)}
+                loading={loading}
+                showSearch={true}
+              />
+            </Card>
+          ) : (
+            // 使用原来的树查看器
+            <HierarchyTreeViewerFixed
+              viewData={elementSource.cachedViewData.unifiedData}
+              targetElement={elementSource.matchedEnhancedElement}
+              showDetails={true}
+            />
+          )}
+        </>
       )}
     </div>
   );

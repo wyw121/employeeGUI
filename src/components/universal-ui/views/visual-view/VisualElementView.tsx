@@ -6,15 +6,18 @@
 import React, { useState, useMemo } from 'react';
 import { Input, Button, Space, Alert, Typography, Tag } from 'antd';
 import { SearchOutlined, AppstoreOutlined } from '@ant-design/icons';
-import type { VisualUIElement, VisualElementCategory, UniversalUIProps } from '../../types';
+import type { VisualUIElement, VisualElementCategory } from '../../types/';
 import { useElementSelectionManager, ElementSelectionPopover } from '../../element-selection';
 import type { UIElement } from '../../../../api/universalUIAPI';
 
 const { Title, Text } = Typography;
 
 // 可视化视图属性接口
-interface VisualElementViewProps extends UniversalUIProps {
-  // 可以扩展特定属性
+interface VisualElementViewProps {
+  xmlContent?: string;
+  elements?: UIElement[];
+  onElementSelect?: (element: UIElement) => void;
+  selectedElementId?: string;
 }
 
 export const VisualElementView: React.FC<VisualElementViewProps> = ({ 

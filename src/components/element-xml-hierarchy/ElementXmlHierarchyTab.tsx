@@ -37,9 +37,9 @@ import { EnhancedXmlCacheService, type CachedViewData } from '../../services/Enh
 import type { UnifiedViewData, EnhancedUIElement } from '../../services/UnifiedViewDataManager';
 
 import { ElementSourceFinder } from './ElementSourceFinder';
-import { PageSelector } from './PageSelector';
-import { HierarchyTreeViewer } from './HierarchyTreeViewer';
-import { ElementMatchInfo } from './ElementMatchInfo';
+import PageSelector from './PageSelector';
+import HierarchyTreeViewer from './HierarchyTreeViewer';
+import ElementMatchInfo from './ElementMatchInfo';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -82,7 +82,6 @@ const adaptElementToUniversalUIType = (element: CompatibleUIElement): UIElement 
     content_desc: mapperElement.content_desc
   } as UIElement;
 };
-}
 
 interface ElementSourceResult {
   /** 匹配的缓存页面 */
@@ -215,7 +214,7 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
     return {
       totalElements: unifiedData.enhancedElements.length,
       clickableElements: unifiedData.enhancedElements.filter(el => el.is_clickable).length,
-      treeNodes: unifiedData.treeViewData.nodes.length,
+      treeNodes: unifiedData.treeViewData.hierarchyMap?.size || 0,
       hasVisualData: !!unifiedData.visualViewData,
       pageTitle: elementSource.cachedPage?.pageTitle || '未知页面'
     };

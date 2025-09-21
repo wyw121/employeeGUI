@@ -33,7 +33,8 @@ import {
   BranchesOutlined,
   DatabaseOutlined,
   GroupOutlined,
-  BulbOutlined
+  BulbOutlined,
+  BugOutlined
 } from '@ant-design/icons';
 import ElementNameMapper, { 
   UIElement, 
@@ -47,6 +48,7 @@ import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
 import BatchRuleConfigPanel from './BatchRuleConfigPanel';
 import ErrorBoundary from '../ErrorBoundary';
 import CachedElementXmlHierarchyTab from '../element-xml-hierarchy/CachedElementXmlHierarchyTab';
+import { AdbXmlInspector } from '../adb-xml-inspector';
 import type { UIElement as UniversalUIElement } from '../../api/universalUIAPI';
 
 const { Title, Text, Paragraph } = Typography;
@@ -1080,7 +1082,9 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
       }
       open={visible}
       onCancel={onClose}
-      width={800}
+      width={1000}
+      style={{ maxHeight: '90vh' }}
+      bodyStyle={{ maxHeight: '70vh', overflow: 'auto' }}
       footer={
         <Space>
           <Button onClick={onClose}>取消</Button>
@@ -1463,6 +1467,66 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
               elementType={element?.element_type || 'follow_button'}
               elementData={element}
               stepName={element?.text || '当前元素'}
+            />
+          </ErrorBoundary>
+        </div>
+      </TabPane>
+
+      {/* ADB XML检查器标签页 */}
+      <TabPane 
+        tab={
+          <Space>
+            <BugOutlined style={{ color: '#52c41a' }} />
+            XML检查器
+            <Tag color="green">Debug</Tag>
+          </Space>
+        } 
+        key="xml-inspector"
+      >
+        <div className="p-4">
+          {/* 功能介绍 */}
+          <Alert
+            message={
+              <Space>
+                <BugOutlined />
+                ADB XML层级检查器
+              </Space>
+            }
+            description={
+              <div>
+                <Typography.Text>
+                  可视化分析Android UiAutomator导出的XML层级结构，帮助精确定位元素。
+                  支持导入XML文件、搜索节点、查看元素详情、复制XPath路径等功能。
+                </Typography.Text>
+                <br />
+                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                  💡 提示：此工具可用于调试元素定位问题和优化匹配策略
+                </Typography.Text>
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ marginBottom: '16px' }}
+          />
+          
+          {/* ADB XML检查器组件 */}
+          <ErrorBoundary fallback={
+            <Alert 
+              message="XML检查器加载失败" 
+              description="该组件出现渲染错误，请尝试刷新页面或检查数据格式。"
+              type="error" 
+              showIcon 
+            />
+          }>
+            <AdbXmlInspector
+              height={400}
+              showTips={false}
+              onNodeSelected={(node, xpath) => {
+                console.log('📍 XML检查器选中节点:', node);
+                console.log('📍 生成的XPath:', xpath);
+                message.success(`已选中节点: ${xpath.substring(0, 50)}${xpath.length > 50 ? '...' : ''}`);
+              }}
+              className="xml-inspector-in-modal"
             />
           </ErrorBoundary>
         </div>

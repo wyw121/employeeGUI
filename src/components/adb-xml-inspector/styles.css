@@ -1,0 +1,103 @@
+/**
+ * ADB XML检查器样式
+ * 专为在模态框环境中使用而优化
+ */
+
+/* 主容器样式 */
+.xml-inspector-in-modal {
+  .ant-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+  }
+  
+  .ant-card-head {
+    background: #fafafa;
+    border-bottom: 1px solid #e8e8e8;
+    padding: 8px 12px;
+    min-height: auto;
+  }
+  
+  .ant-card-head-title {
+    padding: 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  
+  .ant-card-body {
+    padding: 12px;
+  }
+  
+  /* 紧凑间距 */
+  .ant-space-item {
+    margin-bottom: 0;
+  }
+  
+  /* 工具栏优化 */
+  .ant-btn-sm {
+    font-size: 12px;
+    height: 28px;
+    padding: 0 8px;
+  }
+  
+  /* 输入框优化 */
+  .ant-input-sm {
+    font-size: 12px;
+  }
+  
+  /* 文本区域优化 */
+  .ant-input {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  
+  /* 节点树样式优化 */
+  .select-text {
+    .group {
+      transition: all 0.2s ease;
+    }
+    
+    .group:hover {
+      background: #f0f9ff;
+      border-left: 2px solid #3b82f6;
+    }
+  }
+  
+  /* Badge样式 */
+  span.inline-flex {
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  
+  /* 网格布局优化 */
+  .grid {
+    gap: 8px;
+  }
+  
+  /* 预览区域优化 */
+  .relative.bg-gray-50 {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+  }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}

@@ -129,10 +129,17 @@ export enum SmartActionType {
   LOOP_START = 'loop_start',
   LOOP_END = 'loop_end',
   
-  // 应用操作 - 新增
+  // 应用操作
   LAUNCH_APP = 'launch_app',
   CLOSE_APP = 'close_app',
   SWITCH_APP = 'switch_app',
+  
+  // 通讯录自动化操作 - 新增
+  CONTACT_IMPORT_WORKFLOW = 'contact_import_workflow',
+  CONTACT_GENERATE_VCF = 'contact_generate_vcf',
+  CONTACT_IMPORT_TO_DEVICE = 'contact_import_to_device',
+  CONTACT_DELETE_IMPORTED = 'contact_delete_imported',
+  CONTACT_BACKUP_EXISTING = 'contact_backup_existing',
   
   // 复合操作
   COMPLETE_WORKFLOW = 'complete_workflow',

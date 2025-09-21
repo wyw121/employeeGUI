@@ -70,6 +70,8 @@ import { DraggableStepsContainer } from '../components/DraggableStepsContainer';
 import { EnhancedDraggableStepsContainer } from '../components/EnhancedDraggableStepsContainer';
 // 🆕 导入循环逻辑类型
 import type { ExtendedSmartScriptStep, LoopConfig } from '../types/loopScript';
+// 🆕 导入通讯录自动化模块
+import { ContactWorkflowSelector, generateContactImportWorkflowSteps } from '../modules/contact-automation';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -260,6 +262,29 @@ const SMART_ACTION_CONFIGS = {
     ]
   },
 
+  // 通讯录自动化操作 - 新增
+  [SmartActionType.CONTACT_IMPORT_WORKFLOW]: {
+    name: '通讯录导入',
+    description: '完整的通讯录导入工作流程',
+    icon: '📱',
+    color: 'green',
+    category: 'contact',
+    parameters: [
+      { key: 'source_file_path', label: '通讯录文件路径', type: 'file', required: true, 
+        accept: '.vcf,.csv,.xlsx', description: '支持VCF、CSV、Excel格式' },
+      { key: 'device_id', label: '目标设备', type: 'device_selector', required: false },
+      { key: 'template_type', label: '导入模板', type: 'select', required: true,
+        options: ['BASIC_IMPORT', 'BATCH_IMPORT', 'SAFE_IMPORT'], default: 'BASIC_IMPORT' },
+    ],
+    advanced: [
+      { key: 'batch_size', label: '批处理大小', type: 'number', default: 50, min: 1, max: 100 },
+      { key: 'delay_between_batches', label: '批次间延迟(ms)', type: 'number', default: 1000 },
+      { key: 'verify_import', label: '验证导入结果', type: 'boolean', default: true },
+      { key: 'backup_before_import', label: '导入前备份', type: 'boolean', default: true },
+      { key: 'enable_cleanup', label: '启用清理步骤', type: 'boolean', default: false },
+    ]
+  },
+
   // 循环控制操作
   [SmartActionType.LOOP_START]: {
     name: '循环开始',
@@ -366,6 +391,8 @@ const SmartScriptBuilderPage: React.FC = () => {
   });
   const [executionResult, setExecutionResult] = useState<SmartExecutionResult | null>(null);
   const [form] = Form.useForm();
+  // 🆕 通讯录工作流相关状态
+  const [showContactWorkflowSelector, setShowContactWorkflowSelector] = useState(false);
 
   // 初始化设备选择
   useEffect(() => {
@@ -449,6 +476,14 @@ const SmartScriptBuilderPage: React.FC = () => {
       console.log('🔍 表单验证后的所有值:', values);
       const { step_type, name, description, ...parameters } = values;
       console.log('🔍 解构后的 parameters:', parameters);
+
+      // 🆕 特殊处理通讯录导入工作流
+      if (step_type === SmartActionType.CONTACT_IMPORT_WORKFLOW) {
+        // 显示通讯录工作流配置器，让用户配置详细参数
+        setShowContactWorkflowSelector(true);
+        setIsModalVisible(false);
+        return;
+      }
 
       const newStep: ExtendedSmartScriptStep = {
         id: editingStep?.id || `step_${Date.now()}`,
@@ -621,6 +656,17 @@ const SmartScriptBuilderPage: React.FC = () => {
       }
       return step;
     }));
+  };
+
+  // 🆕 处理通讯录工作流步骤生成
+  const handleContactWorkflowStepsGenerated = (generatedSteps: ExtendedSmartScriptStep[]) => {
+    console.log('📱 生成的通讯录工作流步骤:', generatedSteps);
+    
+    // 添加生成的步骤到步骤列表
+    setSteps(prev => [...prev, ...generatedSteps]);
+    
+    message.success(`已生成 ${generatedSteps.length} 个通讯录导入步骤`);
+    setShowContactWorkflowSelector(false);
   };
 
   // 🆕 打开元素名称编辑器
@@ -1824,6 +1870,14 @@ const SmartScriptBuilderPage: React.FC = () => {
             message.warning('使用基础模式填充步骤信息' + (isQuickAnalyzer ? '，请点击确定完成创建' : ''));
           }
         }}
+      />
+
+      {/* 🆕 通讯录工作流选择器 */}
+      <ContactWorkflowSelector
+        visible={showContactWorkflowSelector}
+        onCancel={() => setShowContactWorkflowSelector(false)}
+        onStepsGenerated={handleContactWorkflowStepsGenerated}
+        deviceId={currentDeviceId}
       />
 
       {/* 🆕 元素名称编辑器模态框 */}

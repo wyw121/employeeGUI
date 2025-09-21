@@ -2,7 +2,8 @@ import { CheckCircleOutlined, ContactsOutlined, FileTextOutlined, HeartOutlined,
 import { Alert, Button, Card, Col, Divider, message, Row, Space, Tabs, Typography } from 'antd';
 import React, { useState } from 'react';
 import { ContactImportManager, ContactReader, XiaohongshuAutoFollow } from '../components/contact';
-import type { Contact, VcfImportResult } from '../types';
+import ContactImportManagerTabbed, { VcfImportResult as TabbedVcfImportResult } from '../components/contact/ContactImportManagerTabbed';
+import type { Contact } from '../types';
 // 使用相对导入来确保类型一致性
 import type { ContactDocument as ReaderContactDocument } from '../components/contact/ContactReader';
 
@@ -11,7 +12,7 @@ const { Title, Paragraph, Text } = Typography;
 export const ContactManagementPage: React.FC = () => {
     const [parsedDocument, setParsedDocument] = useState<ReaderContactDocument | null>(null);
     const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
-    const [importResults, setImportResults] = useState<VcfImportResult[]>([]);
+    const [importResults, setImportResults] = useState<TabbedVcfImportResult[]>([]);
     const [activeTab, setActiveTab] = useState<string>('upload');
 
     const handleContactsParsed = (document: ReaderContactDocument) => {
@@ -29,12 +30,12 @@ export const ContactManagementPage: React.FC = () => {
         }
     };
 
-    const handleImportComplete = (results: VcfImportResult[]) => {
+    const handleImportComplete = (results: TabbedVcfImportResult[]) => {
         setImportResults(results);
         setActiveTab('results');
         
-        const totalImported = results.reduce((sum, result) => sum + result.importedContacts, 0);
-        const successCount = results.filter(result => result.success).length;
+        const totalImported = results.reduce((sum, result) => sum + (result.importedContacts || 0), 0);
+        const successCount = results.filter(result => result.isValid).length;
         
         message.success(`导入完成！成功设备: ${successCount}/${results.length}，总导入联系人: ${totalImported}`);
     };
@@ -289,7 +290,7 @@ export const ContactManagementPage: React.FC = () => {
                             ),
                             disabled: selectedContacts.length === 0,
                             children: selectedContacts.length > 0 ? (
-                                <ContactImportManager
+                                <ContactImportManagerTabbed
                                     contacts={selectedContacts}
                                     onImportComplete={handleImportComplete}
                                     onError={handleImportError}
@@ -334,7 +335,7 @@ export const ContactManagementPage: React.FC = () => {
                                         <Col span={6}>
                                             <Card size="small" className="text-center">
                                                 <div className="text-2xl font-bold text-green-600">
-                                                    {importResults.filter(r => r.success).length}
+                                                    {importResults.filter(r => r.isValid).length}
                                                 </div>
                                                 <div className="text-sm text-gray-600">成功设备</div>
                                             </Card>
@@ -342,7 +343,7 @@ export const ContactManagementPage: React.FC = () => {
                                         <Col span={6}>
                                             <Card size="small" className="text-center">
                                                 <div className="text-2xl font-bold text-purple-600">
-                                                    {importResults.reduce((sum, r) => sum + r.importedContacts, 0)}
+                                                    {importResults.reduce((sum, r) => sum + (r.importedContacts || 0), 0)}
                                                 </div>
                                                 <div className="text-sm text-gray-600">总导入数</div>
                                             </Card>
@@ -350,34 +351,34 @@ export const ContactManagementPage: React.FC = () => {
                                         <Col span={6}>
                                             <Card size="small" className="text-center">
                                                 <div className="text-2xl font-bold text-red-600">
-                                                    {importResults.reduce((sum, r) => sum + r.failedContacts, 0)}
+                                                    {importResults.filter(r => !r.isValid).length}
                                                 </div>
-                                                <div className="text-sm text-gray-600">失败数量</div>
+                                                <div className="text-sm text-gray-600">失败设备</div>
                                             </Card>
                                         </Col>
                                     </Row>
 
                                     <div className="space-y-3">
                                         {importResults.map((result, index) => (
-                                            <Card key={`result-${result.totalContacts}-${result.importedContacts}-${index}`} size="small">
+                                            <Card key={`result-${result.name}-${index}`} size="small">
                                                 <Row align="middle" justify="space-between">
                                                     <Col>
                                                         <Space>
                                                             <MobileOutlined />
-                                                            <Text strong>设备 {index + 1}</Text>
+                                                            <Text strong>{result.name}</Text>
                                                         </Space>
                                                     </Col>
                                                     <Col>
-                                                        {result.success ? (
+                                                        {result.isValid ? (
                                                             <Alert
                                                                 type="success"
-                                                                message={`成功导入 ${result.importedContacts}/${result.totalContacts} 个联系人`}
+                                                                message={`成功导入 ${result.importedContacts || 0}/${result.totalContacts || 0} 个联系人`}
                                                                 banner
                                                             />
                                                         ) : (
                                                             <Alert
                                                                 type="error"
-                                                                message={result.message}
+                                                                message={result.errorMessage || '导入失败'}
                                                                 banner
                                                             />
                                                         )}

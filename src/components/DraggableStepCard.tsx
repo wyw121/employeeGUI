@@ -278,7 +278,6 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 onConfirm={(e) => {
                   e?.stopPropagation();
                   onDelete(step.id);
-                  message.success(`已删除步骤: ${step.name}`);
                 }}
                 onCancel={(e) => {
                   e?.stopPropagation();

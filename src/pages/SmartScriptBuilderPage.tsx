@@ -481,16 +481,10 @@ const SmartScriptBuilderPage: React.FC = () => {
     }
   };
 
-  // 删除步骤
+  // 删除步骤（由组件级 Popconfirm 调用）
   const handleDeleteStep = (stepId: string) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除这个步骤吗？',
-      onOk: () => {
-        setSteps(prev => prev.filter(s => s.id !== stepId));
-        message.success('步骤删除成功');
-      },
-    });
+    setSteps(prev => prev.filter(s => s.id !== stepId));
+    message.success('步骤删除成功');
   };
 
   // 切换步骤启用状态

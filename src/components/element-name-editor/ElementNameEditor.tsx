@@ -46,11 +46,38 @@ import { ExtendedUIElement, adaptToAndroidXMLFields } from './ElementDataAdapter
 import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
 import BatchRuleConfigPanel from './BatchRuleConfigPanel';
 import ErrorBoundary from '../ErrorBoundary';
-import { ElementXmlHierarchyTab } from '../element-xml-hierarchy';
+import CachedElementXmlHierarchyTab from '../element-xml-hierarchy/CachedElementXmlHierarchyTab';
+import type { UIElement as UniversalUIElement } from '../../api/universalUIAPI';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
 const { TabPane } = Tabs;
+
+// ========== 类型适配器函数 ==========
+
+/**
+ * 将ElementNameEditor的UIElement转换为Universal UI的UIElement
+ */
+const adaptElementToUniversalUIType = (element: UIElement): UniversalUIElement => {
+  return {
+    id: element.id || element.resource_id || element.text || 'unknown',
+    text: element.text || '',
+    element_type: element.element_type || '',
+    class_name: element.element_type || '',
+    resource_id: element.resource_id || '',
+    content_desc: element.content_desc || '',
+    bounds: element.bounds || { left: 0, top: 0, right: 0, bottom: 0 },
+    xpath: '',
+    is_clickable: element.clickable || false,
+    is_scrollable: false,
+    is_enabled: true,
+    is_focused: false,
+    checkable: element.clickable || false,
+    checked: false,
+    selected: false,
+    password: false
+  } as UniversalUIElement;
+};
 
 // ========== 组件接口定义 ==========
 
@@ -1029,9 +1056,12 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
         />
 
         {/* 集成我们的XML层级查看组件 */}
-        <ElementXmlHierarchyTab 
-          element={element}
-          visible={true}
+        <CachedElementXmlHierarchyTab 
+          targetElement={adaptElementToUniversalUIType(element)}
+          onElementSelect={(selectedElement) => {
+            console.log('从XML层级树选中元素:', selectedElement);
+            // 可以在这里添加元素选择的处理逻辑
+          }}
         />
       </div>
     );

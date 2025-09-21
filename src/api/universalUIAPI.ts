@@ -202,8 +202,11 @@ export class UniversalUIAPI {
           const selected = node.getAttribute('selected') === 'true';
           const password = node.getAttribute('password') === 'true';
           
-          // 只保留有意义的元素
-          if (text || contentDesc || resourceId || clickable) {
+          // 🎯 保持基础过滤：保留所有有效的UI节点，让层级树视图负责显示控制
+          const hasValidBounds = bounds.right > bounds.left && bounds.bottom > bounds.top;
+          const hasMinimumSize = (bounds.right - bounds.left) >= 1 && (bounds.bottom - bounds.top) >= 1;
+          
+          if (hasValidBounds && hasMinimumSize) {
             const element: UIElement = {
               id: `element_${elements.length}`,
               element_type: className || 'unknown',
@@ -461,8 +464,12 @@ export class UniversalUIAPI {
           const selected = node.getAttribute('selected') === 'true';
           const password = node.getAttribute('password') === 'true';
           
-          // 只保留有意义的元素
-          if (text || contentDesc || resourceId || clickable) {
+          // 🎯 保持基础过滤：保留所有有效的UI节点，让层级树视图负责显示控制
+          // 只过滤掉明显无效或异常的元素
+          const hasValidBounds = bounds.right > bounds.left && bounds.bottom > bounds.top;
+          const hasMinimumSize = (bounds.right - bounds.left) >= 1 && (bounds.bottom - bounds.top) >= 1;
+          
+          if (hasValidBounds && hasMinimumSize) {
             elements.push({
               id: `element_${elements.length}`,
               element_type: className || 'unknown',
@@ -471,10 +478,10 @@ export class UniversalUIAPI {
               xpath: this.generateXPath(node, depth),
               resource_id: resourceId,
               class_name: className,
-              is_clickable: clickable,  // 使用正确的字段名
-              is_scrollable: scrollable, // 修正字段名
-              is_enabled: enabled,       // 修正字段名
-              is_focused: false,         // 添加缺失的字段
+              is_clickable: clickable,
+              is_scrollable: scrollable,
+              is_enabled: enabled,
+              is_focused: false,
               checkable,
               checked,
               selected,

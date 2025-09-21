@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Tree, Card, Space, Tag, Typography, Row, Col, Button, Input, Tooltip, Alert } from 'antd';
+import { Tree, Card, Space, Tag, Typography, Row, Col, Button, Input, Tooltip, Alert, Checkbox, Divider, Collapse } from 'antd';
 import { 
   SearchOutlined,
   ExpandAltOutlined,
@@ -12,14 +12,38 @@ import {
   EyeOutlined,
   AimOutlined,
   BranchesOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  FilterOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 
 import type { TreeDataNode } from 'antd';
-import type { UnifiedViewData, EnhancedUIElement } from '../../types/UniversalUITypes';
+import type { UnifiedViewData, EnhancedUIElement } from '../../services/UnifiedViewDataManager';
 
 const { Text } = Typography;
 const { Search } = Input;
+const { Panel } = Collapse;
+
+// 节点类型定义
+interface NodeTypeFilter {
+  containers: boolean;    // 容器元素 (Layout, ViewGroup 等)
+  interactive: boolean;   // 交互元素 (clickable, scrollable)
+  textual: boolean;      // 文本元素 (有文本内容的)
+  media: boolean;        // 媒体元素 (ImageView, VideoView 等)
+  input: boolean;        // 输入元素 (EditText, CheckBox 等)
+  decorative: boolean;   // 装饰性元素 (无内容的View等)
+}
+
+// 节点属性过滤
+interface NodeAttributeFilter {
+  hasText: boolean;       // 有文本
+  hasContentDesc: boolean; // 有内容描述
+  hasResourceId: boolean;  // 有资源ID
+  isClickable: boolean;    // 可点击
+  isScrollable: boolean;   // 可滚动
+  isEnabled: boolean;      // 已启用
+  isVisible: boolean;      // 可见
+}
 
 interface HierarchyTreeViewerProps {
   /** 统一视图数据 */
@@ -51,8 +75,92 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [autoExpanded, setAutoExpanded] = useState(false);
+  
+  // 🔧 节点类型过滤控制
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<NodeTypeFilter>({
+    containers: true,
+    interactive: true,
+    textual: true,
+    media: true,
+    input: true,
+    decorative: false, // 默认隐藏装饰性元素
+  });
+  
+  // 🔧 节点属性过滤控制
+  const [nodeAttributeFilter, setNodeAttributeFilter] = useState<NodeAttributeFilter>({
+    hasText: false,
+    hasContentDesc: false,
+    hasResourceId: false,
+    isClickable: false,
+    isScrollable: false,
+    isEnabled: false,
+    isVisible: false,
+  });
 
-  // 计算元素匹配分数
+  // 🔧 分类节点类型
+  const classifyNodeType = (element: EnhancedUIElement): keyof NodeTypeFilter => {
+    const elementType = element.element_type?.toLowerCase() || '';
+    
+    // 交互元素
+    if (element.is_clickable || element.is_scrollable) {
+      return 'interactive';
+    }
+    
+    // 输入元素
+    if (elementType.includes('edit') || elementType.includes('input') || 
+        elementType.includes('checkbox') || elementType.includes('radio')) {
+      return 'input';
+    }
+    
+    // 文本元素
+    if (element.text && element.text.trim()) {
+      return 'textual';
+    }
+    
+    // 媒体元素
+    if (elementType.includes('image') || elementType.includes('video') || 
+        elementType.includes('media')) {
+      return 'media';
+    }
+    
+    // 容器元素
+    if (elementType.includes('layout') || elementType.includes('group') ||
+        elementType.includes('container') || elementType.includes('frame')) {
+      return 'containers';
+    }
+    
+    // 装饰性元素 - 没有文本、描述或交互功能的元素
+    return 'decorative';
+  };
+  
+  // 🔧 检查节点是否应该显示
+  const shouldShowNode = (element: EnhancedUIElement): boolean => {
+    // 类型过滤
+    const nodeType = classifyNodeType(element);
+    if (!nodeTypeFilter[nodeType]) {
+      return false;
+    }
+    
+    // 属性过滤 - 如果任何属性过滤器启用了，元素必须满足对应条件
+    const attributeFilters = [
+      { enabled: nodeAttributeFilter.hasText, check: () => Boolean(element.text?.trim()) },
+      { enabled: nodeAttributeFilter.hasContentDesc, check: () => Boolean(element.content_desc?.trim()) },
+      { enabled: nodeAttributeFilter.hasResourceId, check: () => Boolean(element.resource_id?.trim()) },
+      { enabled: nodeAttributeFilter.isClickable, check: () => Boolean(element.is_clickable) },
+      { enabled: nodeAttributeFilter.isScrollable, check: () => Boolean(element.is_scrollable) },
+      { enabled: nodeAttributeFilter.isEnabled, check: () => Boolean(element.is_enabled) },
+      { enabled: nodeAttributeFilter.isVisible, check: () => true }, // 所有解析出的元素都是可见的
+    ];
+    
+    // 如果有任何属性过滤器启用了
+    const enabledFilters = attributeFilters.filter(f => f.enabled);
+    if (enabledFilters.length > 0) {
+      // 元素必须满足所有启用的属性过滤条件
+      return enabledFilters.every(f => f.check());
+    }
+    
+    return true;
+  };
   const calculateMatchScore = (element: EnhancedUIElement, target?: EnhancedUIElement): number => {
     if (!target) return 0;
     
@@ -65,24 +173,24 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
     }
     
     // resource-id 匹配 (30%)
-    if (element.attributes?.['resource-id'] && target.attributes?.['resource-id']) {
-      if (element.attributes['resource-id'] === target.attributes['resource-id']) score += 30;
+    if (element.resource_id && target.resource_id) {
+      if (element.resource_id === target.resource_id) score += 30;
     }
     
     // class 匹配 (20%)
-    if (element.elementType && target.elementType) {
-      if (element.elementType === target.elementType) score += 20;
-      else if (element.elementType.includes(target.elementType) || target.elementType.includes(element.elementType)) score += 10;
+    if (element.element_type && target.element_type) {
+      if (element.element_type === target.element_type) score += 20;
+      else if (element.element_type.includes(target.element_type) || target.element_type.includes(element.element_type)) score += 10;
     }
     
     // content-desc 匹配 (10%)
-    if (element.attributes?.['content-desc'] && target.attributes?.['content-desc']) {
-      if (element.attributes['content-desc'] === target.attributes['content-desc']) score += 10;
+    if (element.content_desc && target.content_desc) {
+      if (element.content_desc === target.content_desc) score += 10;
     }
     
     // clickable 属性 (5%)
-    if (element.attributes?.clickable && target.attributes?.clickable) {
-      if (element.attributes.clickable === target.attributes.clickable) score += 5;
+    if (element.is_clickable !== undefined && target.is_clickable !== undefined) {
+      if (element.is_clickable === target.is_clickable) score += 5;
     }
     
     return score;
@@ -90,33 +198,38 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
 
   // 生成树形数据结构
   const treeData = useMemo(() => {
-    if (!viewData?.treeView?.hierarchyMap) return [];
+    if (!viewData?.treeViewData?.hierarchyMap) return [];
 
     const buildTreeNodes = (elementMap: Map<string, EnhancedUIElement>, parentId?: string): TreeNodeData[] => {
       const children: TreeNodeData[] = [];
       
       for (const [id, element] of elementMap.entries()) {
-        const elementParentId = element.parentId || (element.bounds?.parent ? 'root' : undefined);
+        // 改进父级关系判断逻辑
+        const elementParentId = element.parentId || (element.depth === 0 ? undefined : 'root');
         
-        if (elementParentId === parentId) {
+        if (elementParentId === parentId || (!parentId && !element.parentId)) {
           const matchScore = calculateMatchScore(element, targetElement);
           const isHighMatch = matchScore > 70;
-          const isTarget = targetElement && (
-            element.id === targetElement.id ||
-            (element.attributes?.['resource-id'] && 
-             element.attributes['resource-id'] === targetElement.attributes?.['resource-id'])
-          );
-
-          // 构建节点标题
+        const isTarget = targetElement && (
+          element.id === targetElement.id ||
+          (element.resource_id && 
+           element.resource_id === targetElement.resource_id) ||
+          (element.text && targetElement.text && element.text === targetElement.text)
+        );          // 构建节点标题
           const nodeTitle = (
-            <div className="flex items-center justify-between group">
-              <Space size={4}>
+            <div className="flex items-center justify-between group w-full">
+              <Space size={4} className="flex-1">
+                {/* 层级深度指示器 */}
+                <Tag color="cyan" style={{ fontSize: '8px', margin: 0, minWidth: '20px' }}>
+                  L{element.depth || 0}
+                </Tag>
+                
                 {/* 元素类型图标 */}
                 <Tag 
                   color={isTarget ? 'red' : isHighMatch ? 'green' : 'blue'} 
                   style={{ fontSize: '10px', margin: 0 }}
                 >
-                  {element.elementType?.split('.').pop() || 'Unknown'}
+                  {element.element_type?.split('.').pop() || 'Unknown'}
                 </Tag>
                 
                 {/* 元素文本 */}
@@ -124,20 +237,25 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
                   style={{ 
                     fontSize: '12px',
                     fontWeight: isTarget ? 'bold' : isHighMatch ? '500' : 'normal',
-                    color: isTarget ? '#f5222d' : isHighMatch ? '#52c41a' : '#333'
+                    color: isTarget ? '#f5222d' : isHighMatch ? '#52c41a' : '#333',
+                    maxWidth: '200px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
                   }}
+                  title={element.text || element.content_desc || '无文本'}
                 >
-                  {element.text || element.attributes?.['content-desc'] || '无文本'}
+                  {element.text || element.content_desc || '无文本'}
                 </Text>
 
                 {/* resource-id 显示 */}
-                {element.attributes?.['resource-id'] && (
+                {element.resource_id && (
                   <Text 
                     type="secondary" 
                     style={{ fontSize: '10px' }}
                     code
                   >
-                    #{element.attributes['resource-id'].split('/').pop()}
+                    #{element.resource_id.split('/').pop()}
                   </Text>
                 )}
 
@@ -154,7 +272,7 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
 
               {/* 操作按钮（悬停显示） */}
               <Space size={2} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                {element.attributes?.clickable === 'true' && (
+                {element.is_clickable && (
                   <Tooltip title="可点击元素">
                     <AimOutlined style={{ color: '#1890ff', fontSize: '12px' }} />
                   </Tooltip>
@@ -184,18 +302,68 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
             element: element,
             matchScore,
             isTarget,
-            children: childNodes.length > 0 ? childNodes : undefined
+            children: childNodes.length > 0 ? childNodes : undefined,
+            isLeaf: childNodes.length === 0
           };
 
           children.push(treeNode);
         }
       }
 
-      // 按匹配度排序，高匹配度的排在前面
-      return children.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+      // 按层级深度和匹配度排序
+      return children.sort((a, b) => {
+        // 首先按匹配度排序（高匹配度优先）
+        const scoreDiff = (b.matchScore || 0) - (a.matchScore || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        
+        // 然后按层级深度排序
+        const depthA = a.element.depth || 0;
+        const depthB = b.element.depth || 0;
+        return depthA - depthB;
+      });
     };
 
-    return buildTreeNodes(viewData.treeView.hierarchyMap);
+    // 先尝试从根节点开始构建
+    const rootNodes = buildTreeNodes(viewData.treeView.hierarchyMap, undefined);
+    
+    // 如果没有找到根节点，尝试其他方式构建树
+    if (rootNodes.length === 0) {
+      console.log('⚠️ 没有找到根节点，尝试按深度构建树结构...');
+      
+      const allElements = Array.from(viewData.treeView.hierarchyMap.values());
+      const elementsByDepth = new Map<number, EnhancedUIElement[]>();
+      
+      // 按深度分组
+      allElements.forEach(element => {
+        const depth = element.depth || 0;
+        if (!elementsByDepth.has(depth)) {
+          elementsByDepth.set(depth, []);
+        }
+        elementsByDepth.get(depth)!.push(element);
+      });
+      
+      // 构建平铺的树结构（如果无法构建层级关系）
+      const flatNodes: TreeNodeData[] = [];
+      elementsByDepth.forEach((elements, depth) => {
+        elements.forEach(element => {
+          const matchScore = calculateMatchScore(element, targetElement);
+          const isTarget = targetElement && element.id === targetElement.id;
+          
+          flatNodes.push({
+            key: element.id,
+            title: `[深度${depth}] ${element.text || element.attributes?.['content-desc'] || 'Unknown'}`,
+            element,
+            matchScore,
+            isTarget,
+            isLeaf: true
+          });
+        });
+      });
+      
+      return flatNodes.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    }
+    
+    return rootNodes;
   }, [viewData, targetElement]);
 
   // 自动展开高匹配度的节点

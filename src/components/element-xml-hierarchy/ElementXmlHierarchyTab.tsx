@@ -37,6 +37,7 @@ import { EnhancedXmlCacheService, type CachedViewData } from '../../services/Enh
 import type { UnifiedViewData, EnhancedUIElement } from '../../services/UnifiedViewDataManager';
 
 import { ElementSourceFinder, PageSelector, HierarchyTreeViewer, ElementMatchInfo } from './';
+import HierarchyTreeViewerFixed from './HierarchyTreeViewerFixed';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -131,7 +132,8 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
       }
 
       // 2. 使用智能查找器找到最佳匹配页面
-      const sourceResult = await ElementSourceFinder.findBestSourcePage(element, pages);
+      const universalElement = adaptElementToUniversalUIType(element);
+      const sourceResult = await ElementSourceFinder.findBestSourcePage(universalElement, pages);
       setElementSource(sourceResult);
       
       // 3. 设置默认选中的页面索引
@@ -170,8 +172,9 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
       const cachedViewData = await EnhancedXmlCacheService.loadEnhancedPageData(targetPage);
       
       // 在新页面中查找匹配的元素
+      const universalElement = adaptElementToUniversalUIType(element);
       const matchResult = ElementSourceFinder.findElementInUnifiedData(
-        element, 
+        universalElement, 
         cachedViewData.unifiedData
       );
       
@@ -303,7 +306,7 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
 
       {/* 元素匹配信息 */}
       <ElementMatchInfo 
-        element={element}
+        element={adaptElementToUniversalUIType(element)}
         sourceResult={elementSource}
       />
 
@@ -354,10 +357,10 @@ export const ElementXmlHierarchyTab: React.FC<ElementXmlHierarchyTabProps> = ({
 
       {/* 主要内容：层级树浏览器 */}
       {elementSource?.cachedViewData && (
-        <HierarchyTreeViewer
-          unifiedData={elementSource.cachedViewData.unifiedData}
-          matchedElement={elementSource.matchedEnhancedElement}
-          matchedIndex={elementSource.matchedElementIndex}
+        <HierarchyTreeViewerFixed
+          viewData={elementSource.cachedViewData.unifiedData}
+          targetElement={elementSource.matchedEnhancedElement}
+          showDetails={true}
         />
       )}
     </div>

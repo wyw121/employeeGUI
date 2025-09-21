@@ -162,10 +162,10 @@ async fn analyze_and_act(device_id: &str, ui_content: &str) -> Result<ActionResu
             }
         }
         
-        // 如果没有找到特定按钮，尝试点击屏幕中央
-        click_coordinates(device_id, 540, 960).await?;
+        // 如果没有找到特定按钮，返回失败而不是盲目点击
+        println!("⚠️  在联系人应用中未找到特定按钮，跳过盲目点击");
         return Ok(ActionResult {
-            step_name: "在联系人应用中点击屏幕中央".to_string(),
+            step_name: "在联系人应用中未找到可操作按钮".to_string(),
             is_complete: false,
         });
     }
@@ -247,16 +247,10 @@ async fn click_element_by_resource_id(device_id: &str, resource_id: &str) -> Res
     
     let result = click_cmd.output().await;
     
-    // 如果uiautomator2不可用，使用坐标点击
+    // 如果uiautomator2不可用，返回错误而不是使用硬编码坐标
     if result.is_err() {
-        println!("⚠️ uiautomator2不可用，尝试坐标点击");
-        
-        // 这里可以解析XML获取坐标，暂时使用默认坐标
-        if resource_id == "android:id/button_always" {
-            click_coordinates(device_id, 883, 1660).await?;
-        } else if resource_id == "android:id/button_once" {
-            click_coordinates(device_id, 756, 1660).await?;
-        }
+        println!("⚠️ uiautomator2不可用，且无法获取按钮坐标，操作失败");
+        return Err("无法点击按钮：uiautomator2不可用且无按钮坐标信息".to_string());
     }
     
     Ok(())

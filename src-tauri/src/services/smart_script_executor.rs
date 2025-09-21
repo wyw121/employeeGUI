@@ -428,25 +428,57 @@ impl SmartScriptExecutor {
         
         // 记录查找参数
         logs.push("🎯 批量匹配查找参数:".to_string());
+        logs.push(format!("📋 参数详情: {:?}", params));
         
-        // 获取要查找的元素文本
+        // 获取要查找的元素文本 - 增强参数获取逻辑
         let element_text = params.get("element_text")
             .or_else(|| params.get("text"))
+            .or_else(|| params.get("target_text"))  // 添加更多可能的参数名
             .and_then(|v| v.as_str())
             .unwrap_or("");
         
-        if element_text.is_empty() {
-            logs.push("❌ 批量匹配失败: 没有提供元素文本".to_string());
-            return Err(anyhow::anyhow!("批量匹配需要元素文本"));
-        }
+        // 如果没有找到element_text，尝试从步骤名称或描述中推断
+        let final_element_text = if element_text.is_empty() {
+            // 检查是否是关注相关的批量匹配
+            if step.name.contains("关注") || step.description.contains("关注") {
+                logs.push("🔍 从步骤名称/描述中推断出这是批量关注操作".to_string());
+                "关注"
+            } else {
+                logs.push("❌ 批量匹配失败: 没有提供元素文本且无法从步骤名称推断".to_string());
+                return Err(anyhow::anyhow!("批量匹配需要元素文本"));
+            }
+        } else {
+            element_text
+        };
         
-        logs.push(format!("  📝 目标元素文本: {}", element_text));
+        logs.push(format!("  📝 目标元素文本: '{}'", final_element_text));
         
         // 在UI dump中搜索匹配的元素
-        let element_coords = self.find_element_in_ui(&ui_dump, element_text, logs).await?;
+        let element_coords = self.find_element_in_ui(&ui_dump, final_element_text, logs).await?;
         
         if let Some((x, y)) = element_coords {
             logs.push(format!("🎯 动态找到元素坐标: ({}, {})", x, y));
+            
+            // 验证坐标合理性（避免错误的硬编码坐标）
+            if (x, y) == (540, 960) {
+                logs.push("⚠️  检测到可疑的硬编码坐标 (540, 960)，这可能是错误的".to_string());
+                logs.push("🔄 重新尝试查找关注按钮...".to_string());
+                // 强制使用关注按钮查找逻辑
+                if let Some(correct_coords) = self.find_all_follow_buttons(&ui_dump, logs).await? {
+                    logs.push(format!("✅ 重新找到正确的关注按钮坐标: ({}, {})", correct_coords.0, correct_coords.1));
+                    let click_result = self.execute_click_with_retry(correct_coords.0, correct_coords.1, logs).await;
+                    match click_result {
+                        Ok(output) => {
+                            logs.push(format!("✅ 点击命令输出: {}", output));
+                            return Ok(format!("✅ 批量匹配成功: 重新找到并点击关注按钮 -> 坐标({}, {})", correct_coords.0, correct_coords.1));
+                        }
+                        Err(e) => {
+                            logs.push(format!("❌ 点击操作失败: {}", e));
+                            return Err(e);
+                        }
+                    }
+                }
+            }
             
             // 执行点击操作
             let click_result = self.execute_click_with_retry(x, y, logs).await;
@@ -454,7 +486,7 @@ impl SmartScriptExecutor {
             match click_result {
                 Ok(output) => {
                     logs.push(format!("✅ 点击命令输出: {}", output));
-                    Ok(format!("✅ 批量匹配成功: 动态找到并点击元素'{}' -> 坐标({}, {})", element_text, x, y))
+                    Ok(format!("✅ 批量匹配成功: 动态找到并点击元素'{}' -> 坐标({}, {})", final_element_text, x, y))
                 }
                 Err(e) => {
                     logs.push(format!("❌ 点击操作失败: {}", e));
@@ -462,19 +494,28 @@ impl SmartScriptExecutor {
                 }
             }
         } else {
-            logs.push(format!("❌ 批量匹配失败: 未在当前UI中找到元素'{}'", element_text));
-            Err(anyhow::anyhow!("未找到目标元素: {}", element_text))
+            logs.push(format!("❌ 批量匹配失败: 未在当前UI中找到元素'{}'", final_element_text));
+            Err(anyhow::anyhow!("未找到目标元素: {}", final_element_text))
         }
     }
 
     /// 通用批量匹配 - 查找所有匹配元素，支持排除特定文本
     async fn find_element_in_ui(&self, ui_dump: &str, element_text: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
-        logs.push(format!("🔍 批量匹配搜索: '{}'", element_text));
+        info!("🔍🔍🔍 [ENHANCED] 批量匹配搜索: '{}'", element_text);
+        info!("📊📊📊 [ENHANCED] UI dump 长度: {} 字符", ui_dump.len());
+        logs.push(format!("🔍🔍🔍 [ENHANCED] 批量匹配搜索: '{}'", element_text));
+        logs.push(format!("📊📊📊 [ENHANCED] UI dump 长度: {} 字符", ui_dump.len()));
         
         // 检查是否是批量关注场景
         if element_text == "关注" {
-            logs.push("🎯 批量关注模式：查找所有关注按钮，排除已关注".to_string());
-            return self.find_all_follow_buttons(ui_dump, logs).await;
+            info!("🎯🎯🎯 [ENHANCED] 批量关注模式：查找所有关注按钮，排除已关注");
+            info!("🔄🔄🔄 [ENHANCED] 调用 find_all_follow_buttons 方法...");
+            logs.push("🎯🎯🎯 [ENHANCED] 批量关注模式：查找所有关注按钮，排除已关注".to_string());
+            logs.push("🔄🔄🔄 [ENHANCED] 调用 find_all_follow_buttons 方法...".to_string());
+            let result = self.find_all_follow_buttons(ui_dump, logs).await;
+            info!("📋📋📋 [ENHANCED] find_all_follow_buttons 返回结果: {:?}", result);
+            logs.push(format!("📋📋📋 [ENHANCED] find_all_follow_buttons 返回结果: {:?}", result));
+            return result;
         }
         
         // 通用单个元素匹配逻辑
@@ -540,7 +581,10 @@ impl SmartScriptExecutor {
 
     /// 通用批量关注按钮查找 - 支持所有APP，自动排除"已关注"
     async fn find_all_follow_buttons(&self, ui_dump: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
-        logs.push("🎯 通用批量关注模式启动...".to_string());
+        info!("🎯🎯🎯 [ENHANCED] 通用批量关注模式启动...");
+        info!("🔍🔍🔍 [ENHANCED] 搜索策略：查找所有'关注'按钮，排除'已关注'按钮");
+        logs.push("🎯🎯🎯 [ENHANCED] 通用批量关注模式启动...".to_string());
+        logs.push("🔍🔍🔍 [ENHANCED] 搜索策略：查找所有'关注'按钮，排除'已关注'按钮".to_string());
         
         let mut candidates = Vec::new();
         
@@ -562,6 +606,7 @@ impl SmartScriptExecutor {
         ];
         
         logs.push(format!("🔍 开始扫描UI dump，共{}行", ui_dump.lines().count()));
+        info!("🔍 开始扫描UI dump，共{}行", ui_dump.lines().count());
         
         for (line_num, line) in ui_dump.lines().enumerate() {
             // 首先检查是否匹配排除模式
@@ -586,6 +631,7 @@ impl SmartScriptExecutor {
                     if regex.is_match(line) {
                         // 进一步验证是否为可点击按钮
                         if line.contains(r#"clickable="true""#) {
+                            info!("✅ 第{}行匹配模式{}: 找到可点击关注按钮", line_num + 1, pattern_idx + 1);
                             logs.push(format!("✅ 第{}行匹配模式{}: 找到可点击关注按钮", line_num + 1, pattern_idx + 1));
                             
                             if let Some(coords) = self.extract_bounds_from_line(line, logs) {
@@ -596,6 +642,10 @@ impl SmartScriptExecutor {
                                     2 => 3, // content-desc包含关注
                                     _ => 4,
                                 };
+                                
+                                // 记录候选按钮的详细信息
+                                logs.push(format!("📍 候选按钮 {}: 坐标({}, {}), 优先级{}", 
+                                    candidates.len() + 1, coords.0, coords.1, priority));
                                 
                                 candidates.push((coords, priority, line_num + 1, line.to_string()));
                             }
@@ -612,11 +662,20 @@ impl SmartScriptExecutor {
         candidates.sort_by_key(|&(_, priority, _, _)| priority);
         
         if candidates.is_empty() {
+            info!("❌ 未找到任何可用的关注按钮");
             logs.push("❌ 未找到任何可用的关注按钮".to_string());
+            logs.push("💡 请检查当前页面是否包含关注按钮，或者按钮文本是否为'关注'".to_string());
             return Ok(None);
         }
         
+        info!("🎯 共找到{}个关注按钮候选", candidates.len());
         logs.push(format!("🎯 共找到{}个关注按钮候选", candidates.len()));
+        
+        // 列出所有候选按钮信息
+        for (idx, (coords, priority, line_num, _)) in candidates.iter().enumerate() {
+            logs.push(format!("  📋 候选{}: 第{}行, 坐标({}, {}), 优先级{}", 
+                idx + 1, line_num, coords.0, coords.1, priority));
+        }
         
         // 选择优先级最高的候选
         let (best_coords, best_priority, best_line, best_content) = &candidates[0];
@@ -624,6 +683,13 @@ impl SmartScriptExecutor {
             best_line, best_priority, best_coords.0, best_coords.1));
         logs.push(format!("📝 按钮内容预览: {}", 
             best_content.chars().take(100).collect::<String>()));
+        
+        // 最终验证坐标的合理性
+        if best_coords.0 <= 0 || best_coords.1 <= 0 || best_coords.0 > 2000 || best_coords.1 > 3000 {
+            logs.push(format!("⚠️  坐标({}, {})看起来不合理，请检查XML解析", best_coords.0, best_coords.1));
+        } else {
+            logs.push(format!("✅ 坐标({}, {})看起来合理", best_coords.0, best_coords.1));
+        }
         
         Ok(Some(*best_coords))
     }
@@ -1123,7 +1189,7 @@ impl SmartScriptExecutor {
     }
 }
 
-#[command]
+#[tauri::command]
 pub async fn execute_single_step_test(
     device_id: String,
     step: SmartScriptStep,

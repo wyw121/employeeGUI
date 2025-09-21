@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use std::path::Path;
 
 /// 增强版导入方法

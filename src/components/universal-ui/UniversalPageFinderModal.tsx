@@ -46,9 +46,7 @@ import { XmlCachePageSelector } from '../xml-cache/XmlCachePageSelector';
 import { XmlPageCacheService, CachedXmlPage, XmlPageContent } from '../../services/XmlPageCacheService';
 import { ErrorBoundary } from '../ErrorBoundary';
 // 使用新的独立视图组件
-import { VisualElementView } from './views/visual-view';
-import { ElementListView } from './views/list-view';
-import UIElementTree from './views/tree-view/UIElementTree';
+import { VisualElementView, ElementListView, UIElementTree } from './views';
 // 使用新的元素选择模块
 import { useElementSelectionManager, ElementSelectionPopover } from './element-selection';
 

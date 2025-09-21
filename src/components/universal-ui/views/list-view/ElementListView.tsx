@@ -34,6 +34,7 @@ const convertVisualToUIElement = (element: VisualUIElement): UIElement => {
     is_clickable: element.clickable,
     is_scrollable: element.scrollable || false,
     is_enabled: element.enabled !== false,
+    is_focused: element.focused || false,
     resource_id: '',
     class_name: element.type || '',
     xpath: '',
@@ -41,7 +42,6 @@ const convertVisualToUIElement = (element: VisualUIElement): UIElement => {
     checkable: false,
     checked: false,
     focusable: false,
-    focused: element.focused || false,
     selected: element.selected || false,
     password: false
   } as UIElement;

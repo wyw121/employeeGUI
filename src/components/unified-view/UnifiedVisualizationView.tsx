@@ -28,7 +28,7 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import { UIElement } from '../../api/universalUIAPI';
-import { UIElementTree } from '../universal-ui/views/tree-view';
+import { UIElementTree } from '../universal-ui/views';
 import './UnifiedVisualizationView.css';
 
 const { Title, Text } = Typography;
@@ -396,7 +396,11 @@ export const UnifiedVisualizationView: React.FC<UnifiedVisualizationViewProps> =
             }}>
               <UIElementTree
                 elements={filteredElements}
-                onElementSelect={onElementSelect}
+                onElementSelect={(elements) => {
+                  if (elements.length > 0 && onElementSelect) {
+                    onElementSelect(elements[0]);
+                  }
+                }}
               />
             </div>
           </TabPane>

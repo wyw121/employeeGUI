@@ -52,6 +52,7 @@ export const convertVisualToUIElement = (element: VisualUIElement): UIElement =>
     is_clickable: element.clickable,
     is_scrollable: element.scrollable || false,
     is_enabled: element.enabled !== false,
+    is_focused: element.focused || false,
     resource_id: '',
     class_name: element.type || '',
     xpath: '',
@@ -59,7 +60,6 @@ export const convertVisualToUIElement = (element: VisualUIElement): UIElement =>
     checkable: false,
     checked: false,
     focusable: element.focused || false,
-    focused: element.focused || false,
     selected: element.selected || false,
     password: false, // 添加缺少的password属性
   } as UIElement;

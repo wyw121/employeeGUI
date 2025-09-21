@@ -17,6 +17,7 @@ export interface UIElement {
   is_clickable: boolean;  // 修正字段名，匹配Rust后端
   is_scrollable: boolean; // 修正字段名，匹配Rust后端
   is_enabled: boolean;    // 修正字段名，匹配Rust后端
+  is_focused: boolean;    // 添加缺失的字段
   checkable: boolean;
   checked: boolean;
   selected: boolean;
@@ -214,6 +215,7 @@ export class UniversalUIAPI {
               is_clickable: clickable,
               is_scrollable: scrollable,
               is_enabled: enabled,
+              is_focused: false, // 添加缺失的字段
               checkable,
               checked,
               selected,
@@ -472,6 +474,7 @@ export class UniversalUIAPI {
               is_clickable: clickable,  // 使用正确的字段名
               is_scrollable: scrollable, // 修正字段名
               is_enabled: enabled,       // 修正字段名
+              is_focused: false,         // 添加缺失的字段
               checkable,
               checked,
               selected,

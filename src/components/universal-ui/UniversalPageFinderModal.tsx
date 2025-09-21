@@ -131,6 +131,9 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
   const handleSmartElementSelect = (element: VisualUIElement) => {
     if (!element.clickable || !onElementSelected) return;
     
+    // 安全地获取position数据，提供默认值
+    const position = element.position || { x: 0, y: 0, width: 100, height: 50 };
+    
     // 转换为 UIElement 格式
     const uiElement: UIElement = {
       id: element.id,
@@ -138,14 +141,15 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
       element_type: element.type,
       xpath: '',
       bounds: {
-        left: element.position.x,
-        top: element.position.y,
-        right: element.position.x + element.position.width,
-        bottom: element.position.y + element.position.height
+        left: position.x,
+        top: position.y,
+        right: position.x + position.width,
+        bottom: position.y + position.height
       },
       is_clickable: element.clickable,
       is_scrollable: false,
       is_enabled: true,
+      is_focused: false,
       checkable: false,
       checked: false,
       selected: false,
@@ -205,20 +209,24 @@ const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps> = ({
   
   // UIElement数组用于API调用（提升到组件顶部，确保唯一）
   const convertVisualToUIElement = (visualElement: VisualUIElement): UIElement => {
+    // 安全地获取position数据，提供默认值
+    const position = visualElement.position || { x: 0, y: 0, width: 100, height: 50 };
+    
     return {
       id: visualElement.id,
       text: visualElement.text,
       element_type: visualElement.type,
       xpath: '',
       bounds: {
-        left: visualElement.position.x,
-        top: visualElement.position.y,
-        right: visualElement.position.x + visualElement.position.width,
-        bottom: visualElement.position.y + visualElement.position.height
+        left: position.x,
+        top: position.y,
+        right: position.x + position.width,
+        bottom: position.y + position.height
       },
       is_clickable: visualElement.clickable,
       is_scrollable: false,
       is_enabled: true,
+      is_focused: false,
       checkable: false,
       checked: false,
       selected: false,
@@ -984,20 +992,24 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
 
   // 将VisualUIElement转换为UIElement的函数（用于主组件API调用）
   const convertVisualToUIElement = (visualElement: VisualUIElement): UIElement => {
+    // 安全地获取position数据，提供默认值
+    const position = visualElement.position || { x: 0, y: 0, width: 100, height: 50 };
+    
     return {
       id: visualElement.id,
       text: visualElement.text,
       element_type: visualElement.type,
       xpath: '',
       bounds: {
-        left: visualElement.position.x,
-        top: visualElement.position.y,
-        right: visualElement.position.x + visualElement.position.width,
-        bottom: visualElement.position.y + visualElement.position.height
+        left: position.x,
+        top: position.y,
+        right: position.x + position.width,
+        bottom: position.y + position.height
       },
       is_clickable: visualElement.clickable,
       is_scrollable: false,
       is_enabled: true,
+      is_focused: false,
       checkable: false,
       checked: false,
       selected: false,
@@ -2137,8 +2149,8 @@ export const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> =
                 ) : viewMode === 'visual' ? (
                   // 可视化视图 - 使用新的独立组件
                   <VisualElementView 
-                    elements={uiElements}
-                    onElementSelect={handleTreeElementSelect}
+                    elements={elements}
+                    onElementSelect={handleVisualElementSelect}
                     selectedElementId={selectedElementId}
                   />
                 ) : (

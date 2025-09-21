@@ -15,8 +15,8 @@ const { Title, Text } = Typography;
 // 可视化视图属性接口
 interface VisualElementViewProps {
   xmlContent?: string;
-  elements?: UIElement[];
-  onElementSelect?: (element: UIElement) => void;
+  elements?: VisualUIElement[];
+  onElementSelect?: (element: VisualUIElement) => void;
   selectedElementId?: string;
 }
 
@@ -34,15 +34,18 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
 
   // 转换 VisualUIElement 到 UIElement 用于气泡弹窗
   const convertVisualToUIElement = (element: VisualUIElement): UIElement => {
+    // 安全地获取position数据，提供默认值
+    const position = element.position || { x: 0, y: 0, width: 100, height: 50 };
+    
     return {
       id: element.id,
       element_type: element.type || '',
       text: element.text || '',
       bounds: {
-        left: element.position.x,
-        top: element.position.y,
-        right: element.position.x + element.position.width,
-        bottom: element.position.y + element.position.height
+        left: position.x,
+        top: position.y,
+        right: position.x + position.width,
+        bottom: position.y + position.height
       },
       xpath: element.id, // 使用id作为xpath
       resource_id: '',
@@ -50,6 +53,7 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
       is_clickable: element.clickable || false,
       is_scrollable: false,
       is_enabled: true,
+      is_focused: false,
       checkable: false,
       checked: false,
       selected: element.id === selectedElementId,

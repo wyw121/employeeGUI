@@ -46,6 +46,7 @@ import { ExtendedUIElement, adaptToAndroidXMLFields } from './ElementDataAdapter
 import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
 import BatchRuleConfigPanel from './BatchRuleConfigPanel';
 import ErrorBoundary from '../ErrorBoundary';
+import { ElementXmlHierarchyTab } from '../element-xml-hierarchy';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -1017,251 +1018,21 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
   const renderHierarchyStructure = () => {
     if (!element) return null;
 
-    const hasParent = element.parent;
-    const hasSiblings = element.siblings && element.siblings.length > 0;
-    // 暂时移除children属性，因为UIElement接口中没有定义
-    const hasChildren = false; // element.children && element.children.length > 0;
-
-    const renderElementNode = (el: UIElement, level: number = 0, label: string = '') => (
-      <div 
-        key={`${el.resource_id || el.text || 'unknown'}-${level}`}
-        style={{ 
-          marginLeft: level * 20, 
-          padding: '8px', 
-          border: level === 1 ? '2px solid #1890ff' : '1px solid #d9d9d9', 
-          borderRadius: '6px', 
-          margin: '4px 0',
-          background: level === 1 ? '#f0f8ff' : '#fafafa'
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <Space>
-            {label && <Tag color={
-              label === '当前元素' ? 'blue' :
-              label === '父元素' ? 'green' :
-              label === '子元素' ? 'purple' : 'default'
-            }>{label}</Tag>}
-            <Text strong>{el.element_type || 'Unknown'}</Text>
-            {el.text && <Text code>{el.text}</Text>}
-            {el.resource_id && (
-              <Text type="secondary" style={{ fontSize: '11px' }}>
-                ID: {el.resource_id}
-              </Text>
-            )}
-          </Space>
-          <Space size="small">
-            <Tag color={el.clickable ? 'success' : 'default'}>
-              {el.clickable ? '可点击' : '不可点击'}
-            </Tag>
-            {el.bounds && (
-              <Text type="secondary" style={{ fontSize: '10px' }}>
-                {`[${el.bounds.left},${el.bounds.top}][${el.bounds.right},${el.bounds.bottom}]`}
-              </Text>
-            )}
-          </Space>
-        </div>
-        
-        {/* 显示关键属性 */}
-        <div className="mt-2">
-          {el.content_desc && (
-            <div style={{ fontSize: '11px' }}>
-              <Text type="secondary">描述: </Text>
-              <Text>{el.content_desc}</Text>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-
     return (
       <div className="space-y-4">
+        {/* 功能说明 */}
         <Alert
-          message="层级结构说明"
-          description="显示目标元素在页面中的层级位置关系，包括父元素、当前元素、子元素和兄弟元素。这些信息有助于理解元素的上下文环境并提高定位精度。"
+          message="XML层级结构查看器"
+          description="查看元素在XML页面中的完整层级结构，支持智能匹配和多页面对比。基于Universal UI缓存数据，提供准确的元素定位信息。"
           type="info"
           showIcon
         />
 
-        <Row gutter={16}>
-          {/* 左侧：层级树视图 */}
-          <Col span={16}>
-            <Card 
-              title={
-                <Space>
-                  <BranchesOutlined />
-                  元素层级树
-                </Space>
-              }
-              size="small"
-            >
-              <div className="max-h-500 overflow-y-auto">
-                {/* 父元素 */}
-                {hasParent && (
-                  <div className="mb-4">
-                    <Title level={5} style={{ fontSize: '14px', margin: '8px 0' }}>
-                      🔼 父元素层级
-                    </Title>
-                    {renderElementNode(element.parent!, 0, '父元素')}
-                  </div>
-                )}
-
-                {/* 当前元素 */}
-                <div className="mb-4">
-                  <Title level={5} style={{ fontSize: '14px', margin: '8px 0' }}>
-                    🎯 当前目标元素
-                  </Title>
-                  {renderElementNode(element, 1, '当前元素')}
-                </div>
-
-                {/* 兄弟元素 */}
-                {hasSiblings && (
-                  <div className="mb-4">
-                    <Title level={5} style={{ fontSize: '14px', margin: '8px 0' }}>
-                      ↔️ 兄弟元素 ({element.siblings!.length} 个)
-                    </Title>
-                    <div className="max-h-200 overflow-y-auto">
-                      {element.siblings!.slice(0, 5).map((sibling, index) => 
-                        renderElementNode(sibling, 0, `兄弟元素 ${index + 1}`)
-                      )}
-                      {element.siblings!.length > 5 && (
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          还有 {element.siblings!.length - 5} 个兄弟元素...
-                        </Text>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 子元素 - 暂时隐藏，因为UIElement没有children属性 */}
-                {false && hasChildren && (
-                  <div className="mb-4">
-                    <Title level={5} style={{ fontSize: '14px', margin: '8px 0' }}>
-                      🔽 子元素 (0 个)
-                    </Title>
-                  </div>
-                )}
-
-                {/* 无层级关系的提示 */}
-                {!hasParent && !hasSiblings && !hasChildren && (
-                  <div className="text-center py-8">
-                    <BranchesOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />
-                    <div className="mt-4">
-                      <Text type="secondary">当前元素没有检测到层级关系信息</Text>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        这可能是因为XML数据中缺少父子关系或兄弟关系的引用
-                      </Text>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </Col>
-
-          {/* 右侧：层级分析 */}
-          <Col span={8}>
-            <div className="space-y-4">
-              {/* 层级统计 */}
-              <Card 
-                title={
-                  <Space>
-                    <span>📊</span>
-                    层级统计
-                  </Space>
-                }
-                size="small"
-              >
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Text type="secondary">父元素:</Text>
-                    <Tag color={hasParent ? 'green' : 'default'}>
-                      {hasParent ? '有' : '无'}
-                    </Tag>
-                  </div>
-                  <div className="flex justify-between">
-                    <Text type="secondary">兄弟元素:</Text>
-                    <Tag color={hasSiblings ? 'blue' : 'default'}>
-                      {hasSiblings ? `${element.siblings!.length} 个` : '无'}
-                    </Tag>
-                  </div>
-                  <div className="flex justify-between">
-                    <Text type="secondary">子元素:</Text>
-                    <Tag color="default">无</Tag>
-                  </div>
-                </div>
-              </Card>
-
-              {/* 层级定位建议 */}
-              <Card 
-                title={
-                  <Space>
-                    <span>💡</span>
-                    层级定位建议
-                  </Space>
-                }
-                size="small"
-              >
-                <div className="space-y-2">
-                  {hasParent && element.parent?.resource_id && (
-                    <Alert
-                      message="可使用父元素定位"
-                      description={`父元素有明确的resource-id: ${element.parent.resource_id}`}
-                      type="success"
-                      showIcon={false}
-                      style={{ fontSize: '11px', padding: '6px 12px' }}
-                    />
-                  )}
-                  
-                  {hasSiblings && element.siblings!.some(s => s.text || s.resource_id) && (
-                    <Alert
-                      message="可使用兄弟元素定位"
-                      description="部分兄弟元素有可用的定位属性"
-                      type="info"
-                      showIcon={false}
-                      style={{ fontSize: '11px', padding: '6px 12px' }}
-                    />
-                  )}
-                  
-                  {!hasParent && !hasSiblings && (
-                    <Alert
-                      message="建议使用绝对定位"
-                      description="缺少层级关系，建议使用元素自身属性定位"
-                      type="warning"
-                      showIcon={false}
-                      style={{ fontSize: '11px', padding: '6px 12px' }}
-                    />
-                  )}
-                </div>
-              </Card>
-
-              {/* 相关元素操作 */}
-              <Card 
-                title={
-                  <Space>
-                    <span>🛠️</span>
-                    相关操作
-                  </Space>
-                }
-                size="small"
-              >
-                <div className="space-y-2">
-                  <Button size="small" block disabled>
-                    选择父元素作为锚点
-                  </Button>
-                  <Button size="small" block disabled>
-                    分析兄弟元素特征
-                  </Button>
-                  <Button size="small" block disabled>
-                    生成层级定位代码
-                  </Button>
-                  <Text type="secondary" style={{ fontSize: '10px' }}>
-                    * 这些功能正在开发中
-                  </Text>
-                </div>
-              </Card>
-            </div>
-          </Col>
-        </Row>
+        {/* 集成我们的XML层级查看组件 */}
+        <ElementXmlHierarchyTab 
+          element={element}
+          visible={true}
+        />
       </div>
     );
   };

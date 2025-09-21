@@ -5,8 +5,9 @@
  */
 
 import React, { useMemo, useCallback, useState } from 'react';
-import { Tree, Card, Space, Tag, Typography, Input, Select, Button, Tooltip } from 'antd';
-import { SearchOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Tree, Card, Input, Select, Button, Tooltip, Dropdown, message, Tag, Typography, Space } from 'antd';
+import type { MenuProps } from 'antd';
+import { SearchOutlined, FilterOutlined, ReloadOutlined, CopyOutlined, ExpandAltOutlined, CompressOutlined, AimOutlined } from '@ant-design/icons';
 import { UIElement } from '../../../../api/universalUIAPI';
 import type { DataNode } from 'antd/es/tree';
 
@@ -54,6 +55,8 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
   const [filterType, setFilterType] = useState(showOnlyClickable ? FILTER_OPTIONS.CLICKABLE : FILTER_OPTIONS.ALL);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [autoExpanded, setAutoExpanded] = useState(false);
+  const [contextMenuElement, setContextMenuElement] = useState<UIElement | null>(null);
+  const [rightClickedNode, setRightClickedNode] = useState<UITreeNode | null>(null);
   // 性能优化的元素过滤
   const filteredElements = useMemo(() => {
     let filtered = elements;
@@ -358,7 +361,7 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
       console.error('🚨 构建UI树时发生错误:', error);
       return [];
     }
-  }, [filteredElements, renderNodeTitle, getElementIcon, calculateDepth, findParentElement, removeCircularReferences]);
+  }, [filteredElements, renderNodeTitle, getElementIcon]);
 
   // 计算元素深度（基于bounds包含关系）- 优化版
   const calculateDepth = useCallback((element: UIElement, allElements: UIElement[]): number => {
@@ -483,11 +486,9 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
 
   // 处理展开状态
   const handleExpand = useCallback((expandedKeys: React.Key[]) => {
+    console.log('🔧 Tree展开事件:', expandedKeys);
     setExpandedKeys(expandedKeys);
-    if (!autoExpanded) {
-      setAutoExpanded(true);
-    }
-  }, [autoExpanded]);
+  }, []);
 
   // 重置搜索和过滤
   const handleReset = useCallback(() => {
@@ -497,8 +498,171 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
     setAutoExpanded(false);
   }, []);
 
+  // 复制元素信息到剪贴板
+  const copyElementInfo = useCallback((element: UIElement) => {
+    const info = {
+      id: element.id,
+      text: element.text,
+      contentDesc: element.content_desc,
+      resourceId: element.resource_id,
+      elementType: element.element_type,
+      bounds: element.bounds,
+      isClickable: element.is_clickable,
+      isScrollable: element.is_scrollable,
+      qualityScore: assessElementQuality(element)
+    };
+    
+    const infoText = JSON.stringify(info, null, 2);
+    navigator.clipboard.writeText(infoText).then(() => {
+      message.success('元素信息已复制到剪贴板');
+    }).catch(() => {
+      message.error('复制失败');
+    });
+  }, [assessElementQuality]);
+
+  // 展开所有子节点
+  const expandAllChildren = useCallback((nodeKey: React.Key) => {
+    const getAllChildKeys = (data: UITreeNode[]): React.Key[] => {
+      let keys: React.Key[] = [];
+      data.forEach(node => {
+        keys.push(node.key);
+        if (node.children) {
+          keys = keys.concat(getAllChildKeys(node.children));
+        }
+      });
+      return keys;
+    };
+
+    const treeData = buildTreeData();
+    const findNodeAndChildren = (data: UITreeNode[], key: React.Key): React.Key[] => {
+      for (const node of data) {
+        if (node.key === key) {
+          return node.children ? getAllChildKeys(node.children) : [];
+        }
+        if (node.children) {
+          const result = findNodeAndChildren(node.children, key);
+          if (result.length > 0) return result;
+        }
+      }
+      return [];
+    };
+
+    const childKeys = findNodeAndChildren(treeData, nodeKey);
+    setExpandedKeys(prev => [...prev, nodeKey, ...childKeys]);
+  }, [buildTreeData]);
+
+  // 折叠所有子节点
+  const collapseAllChildren = useCallback((nodeKey: React.Key) => {
+    const getAllChildKeys = (data: UITreeNode[]): React.Key[] => {
+      let keys: React.Key[] = [];
+      data.forEach(node => {
+        keys.push(node.key);
+        if (node.children) {
+          keys = keys.concat(getAllChildKeys(node.children));
+        }
+      });
+      return keys;
+    };
+
+    const treeData = buildTreeData();
+    const findNodeAndChildren = (data: UITreeNode[], key: React.Key): React.Key[] => {
+      for (const node of data) {
+        if (node.key === key) {
+          return node.children ? getAllChildKeys(node.children) : [];
+        }
+        if (node.children) {
+          const result = findNodeAndChildren(node.children, key);
+          if (result.length > 0) return result;
+        }
+      }
+      return [];
+    };
+
+    const childKeys = findNodeAndChildren(treeData, nodeKey);
+    setExpandedKeys(prev => prev.filter(key => key !== nodeKey && !childKeys.includes(key)));
+  }, [buildTreeData]);
+
+  // 定位到元素（模拟功能）
+  const focusOnElement = useCallback((element: UIElement) => {
+    message.info(`定位到元素: ${element.text || element.resource_id || element.element_type}`);
+    onElementSelect([element]);
+  }, [onElementSelect]);
+
+  // 右键菜单项
+  const getContextMenuItems = useCallback((element: UIElement): MenuProps['items'] => {
+    return [
+      {
+        key: 'copy',
+        icon: <CopyOutlined />,
+        label: '复制元素信息',
+        onClick: () => copyElementInfo(element)
+      },
+      {
+        type: 'divider'
+      },
+      {
+        key: 'expand',
+        icon: <ExpandAltOutlined />,
+        label: '展开所有子节点',
+        onClick: () => expandAllChildren(element.id)
+      },
+      {
+        key: 'collapse',
+        icon: <CompressOutlined />,
+        label: '折叠所有子节点',
+        onClick: () => collapseAllChildren(element.id)
+      },
+      {
+        type: 'divider'
+      },
+      {
+        key: 'focus',
+        icon: <AimOutlined />,
+        label: '定位到此元素',
+        onClick: () => focusOnElement(element)
+      },
+      {
+        key: 'info',
+        label: '元素详情',
+        children: [
+          {
+            key: 'quality',
+            label: `质量评分: ${assessElementQuality(element)}/100`
+          },
+          {
+            key: 'bounds',
+            label: element.bounds ? 
+              `位置: (${element.bounds.left}, ${element.bounds.top}) - (${element.bounds.right}, ${element.bounds.bottom})` :
+              '位置: 未知'
+          },
+          {
+            key: 'size',
+            label: element.bounds ? 
+              `尺寸: ${element.bounds.right - element.bounds.left} × ${element.bounds.bottom - element.bounds.top}` :
+              '尺寸: 未知'
+          }
+        ]
+      }
+    ];
+  }, [copyElementInfo, expandAllChildren, collapseAllChildren, focusOnElement, assessElementQuality]);
+
+  // 处理右键点击
+  const handleRightClick = useCallback((info: any) => {
+    const { node } = info;
+    setRightClickedNode(node);
+    setContextMenuElement(node.element);
+  }, []);
+
   const treeData = buildTreeData();
   const selectedKeys = selectedElements.map(el => el.id);
+  
+  // 调试信息
+  console.log('🌳 树数据构建完成:', {
+    treeDataCount: treeData.length,
+    expandedKeys: expandedKeys.length,
+    filteredElements: filteredElements.length,
+    hasChildren: treeData.some(node => node.children && node.children.length > 0)
+  });
   
   // 计算统计信息
   const stats = useMemo(() => ({
@@ -596,6 +760,26 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
             onClick={handleReset}
             title="重置搜索和过滤"
           />
+          <Button
+            icon={<ExpandAltOutlined />}
+            onClick={() => {
+              // 获取所有节点的key并展开
+              const allKeys = filteredElements.map(el => el.id);
+              setExpandedKeys(allKeys);
+            }}
+            title="展开所有节点"
+          >
+            全展开
+          </Button>
+          <Button
+            icon={<CompressOutlined />}
+            onClick={() => {
+              setExpandedKeys([]);
+            }}
+            title="折叠所有节点"
+          >
+            全折叠
+          </Button>
         </div>
         
         {/* 统计信息 */}
@@ -614,18 +798,40 @@ const UIElementTree: React.FC<UIElementTreeProps> = ({
 
       {/* 树形视图 */}
       <div className="h-96 overflow-auto">
-        <Tree
-          treeData={treeData}
-          selectedKeys={selectedKeys}
-          expandedKeys={autoExpanded ? undefined : expandedKeys}
-          onSelect={handleSelect}
-          onExpand={handleExpand}
-          showIcon
-          defaultExpandAll={!autoExpanded}
-          className="ui-element-tree"
-          virtual
-          height={384} // 固定高度支持虚拟滚动
-        />
+        <Dropdown
+          menu={{ items: contextMenuElement ? getContextMenuItems(contextMenuElement) : [] }}
+          trigger={['contextMenu']}
+          onOpenChange={(visible) => {
+            if (!visible) {
+              setContextMenuElement(null);
+              setRightClickedNode(null);
+            }
+          }}
+        >
+          <Tree
+            treeData={treeData}
+            selectedKeys={selectedKeys}
+            expandedKeys={expandedKeys}
+            onSelect={(keys, info) => {
+              console.log('🖱️ Tree节点选择事件:', keys, info);
+              if (info.node?.element) {
+                handleSelect(keys, info);
+              }
+            }}
+            onExpand={(keys, info) => {
+              console.log('🔧 Tree展开事件:', keys, info);
+              handleExpand(keys);
+            }}
+            onRightClick={(info) => {
+              console.log('🖱️ Tree右键事件:', info);
+              handleRightClick(info);
+            }}
+            showIcon
+            className="ui-element-tree"
+            virtual
+            height={384} // 固定高度支持虚拟滚动
+          />
+        </Dropdown>
       </div>
       
       {/* 图例说明 */}

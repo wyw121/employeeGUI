@@ -4,6 +4,7 @@
 
 export { VisualToUIElementConverter } from './VisualToUIElementConverter';
 export { ElementContextCreator } from './ElementContextCreator';
+export { UIElementToVisualConverter } from './UIElementToVisualConverter';
 
 export type {
   ElementContext,
@@ -14,6 +15,9 @@ export type {
 // 便捷的导出别名
 import { VisualToUIElementConverter } from './VisualToUIElementConverter';
 import { ElementContextCreator } from './ElementContextCreator';
+import { UIElementToVisualConverter } from './UIElementToVisualConverter';
 
 export const convertVisualToUIElement = VisualToUIElementConverter.convertSimple;
 export const createElementContext = ElementContextCreator.createSimpleContext;
+export const createContextFromUIElement = ElementContextCreator.createContextFromUIElement;
+export const convertUIToVisualElement = UIElementToVisualConverter.convertSimple;

@@ -54,3 +54,18 @@ export interface ConversionResult {
     hasValidBounds: boolean;
   };
 }
+
+// 通用转换结果
+export interface GenericConversionResult<T> {
+  success: boolean;
+  visualElement?: VisualUIElement;
+  uiElement?: UIElement;
+  result?: T;
+  error?: Error;
+  metadata: {
+    conversionType: string;
+    timestamp: number;
+    hasPosition: boolean;
+    hasText: boolean;
+  };
+}

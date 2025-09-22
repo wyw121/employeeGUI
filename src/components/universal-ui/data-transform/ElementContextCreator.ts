@@ -4,6 +4,7 @@
  */
 
 import { VisualUIElement } from '../xml-parser/types';
+import { UIElement } from '../../../api/universalUIAPI';
 import { ElementContext } from './types';
 
 export class ElementContextCreator {
@@ -277,5 +278,38 @@ export class ElementContextCreator {
    */
   private static createSimpleSiblingContext(element: VisualUIElement): ElementContext {
     return this.createSimpleChildContext(element); // 使用相同的简化逻辑
+  }
+
+  /**
+   * 从UIElement创建ElementContext
+   * @param element UIElement
+   * @returns ElementContext
+   */
+  static createContextFromUIElement(element: UIElement): ElementContext {
+    return {
+      text: element.text || '',
+      contentDesc: element.content_desc || '',
+      resourceId: '', // UIElement通常没有resourceId信息
+      className: element.element_type,
+      bounds: `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`,
+      clickable: element.is_clickable,
+      selected: element.selected,
+      enabled: element.is_enabled,
+      focusable: false, // 默认值，UIElement通常没有这个信息
+      scrollable: element.is_scrollable,
+      checkable: element.checkable,
+      checked: element.checked,
+      position: {
+        x: element.bounds.left,
+        y: element.bounds.top,
+        width: element.bounds.right - element.bounds.left,
+        height: element.bounds.bottom - element.bounds.top,
+      },
+      screenWidth: 1080, // 默认屏幕宽度
+      screenHeight: 1920, // 默认屏幕高度
+      parentElements: [], // UIElement转换时通常没有关系信息
+      siblingElements: [],
+      childElements: [],
+    };
   }
 }

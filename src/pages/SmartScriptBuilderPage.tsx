@@ -72,6 +72,9 @@ import { EnhancedDraggableStepsContainer } from '../components/EnhancedDraggable
 import type { ExtendedSmartScriptStep, LoopConfig } from '../types/loopScript';
 // 🆕 导入通讯录自动化模块
 import { ContactWorkflowSelector, generateContactImportWorkflowSteps } from '../modules/contact-automation';
+// 🆕 导入增强元素信息模块
+import { EnhancedUIElement, EnhancedStepParameters, EnhancedElementInfoService } from '../modules/enhanced-element-info';
+import { EnhancedStepCard } from '../modules/enhanced-step-card';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -1798,86 +1801,144 @@ const SmartScriptBuilderPage: React.FC = () => {
           setIsQuickAnalyzer(false); // 重置快捷模式标记
         }}
         onElementSelected={(element) => {
-          // 当用户选择元素时，将元素信息填入表单
-          console.log('🎯 接收到智能分析元素:', element);
+          // 当用户选择元素时，将增强元素信息填入表单
+          console.log('🎯 接收到增强智能分析元素:', element);
           console.log('🎯 快捷模式:', isQuickAnalyzer);
           
           try {
+            // 🔍 检查是否为增强元素信息（兼容多种数据格式）
+            const isEnhanced = !!(
+              (element as any).isEnhanced ||  // 简化标识
+              (element as any).xmlCacheId ||   // XML缓存ID
+              (element as any).xmlContent ||   // XML内容
+              (element as any).enhancedElement // 完整增强信息
+            );
+            
+            console.log('🔍 元素类型检查:', {
+              isEnhanced,
+              hasIsEnhanced: !!(element as any).isEnhanced,
+              hasXmlCacheId: !!(element as any).xmlCacheId,
+              hasXmlContent: !!(element as any).xmlContent,
+              hasEnhancedElement: !!(element as any).enhancedElement,
+              element
+            });
+            
             // 使用智能步骤生成器处理元素
             const stepInfo = SmartStepGenerator.generateStepInfo(element);
             
             // 填充表单字段
-            form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT); // 🆕 设置为智能元素查找
+            form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT);
             form.setFieldValue('search_criteria', stepInfo.searchCriteria);
             form.setFieldValue('name', stepInfo.name);
             form.setFieldValue('description', stepInfo.description);
             form.setFieldValue('click_if_found', true);
             
-            // 🆕 保存完整的元素属性到表单中，以便后续的元素名称编辑使用
-            form.setFieldValue('text', element.text);
-            form.setFieldValue('element_text', element.text); // 备用字段
-            form.setFieldValue('element_type', element.element_type);
-            form.setFieldValue('resource_id', element.resource_id);
-            form.setFieldValue('content_desc', element.content_desc);
-            form.setFieldValue('bounds', element.bounds);
-            form.setFieldValue('smartDescription', (element as any).smartDescription);
-            form.setFieldValue('smartAnalysis', (element as any).smartAnalysis);
-            // 保存指纹匹配需要的额外属性
-            if ((element as any).class_name) {
-              form.setFieldValue('class_name', (element as any).class_name);
+            // 🆕 保存增强元素信息到表单参数中
+            if (isEnhanced) {
+              console.log('✅ 检测到增强元素信息，保存完整数据');
+              
+              // 构建增强步骤参数（兼容多种数据格式）
+              const enhancedParams = {
+                // 保持原有参数
+                text: element.text,
+                element_text: element.text,
+                element_type: element.element_type,
+                resource_id: element.resource_id,
+                content_desc: element.content_desc,
+                bounds: element.bounds,
+                smartDescription: (element as any).smartDescription,
+                smartAnalysis: (element as any).smartAnalysis,
+                
+                // 🆕 新增：完整增强元素信息（兼容不同格式）
+                isEnhanced: true,
+                xmlCacheId: (element as any).xmlCacheId || 'unknown',
+                xmlContent: (element as any).xmlContent || '',
+                xmlTimestamp: (element as any).xmlTimestamp || Date.now(),
+                deviceId: (element as any).deviceId,
+                deviceName: (element as any).deviceName,
+                
+                // 元素摘要信息
+                elementSummary: {
+                  displayName: element.text || element.element_type || 'Unknown',
+                  elementType: element.element_type || 'Unknown',
+                  position: element.bounds ? {
+                    x: element.bounds.left,
+                    y: element.bounds.top,
+                    width: element.bounds.right - element.bounds.left,
+                    height: element.bounds.bottom - element.bounds.top
+                  } : { x: 0, y: 0, width: 0, height: 0 },
+                  xmlSource: (element as any).xmlCacheId || 'unknown',
+                  confidence: (element as any).smartAnalysis?.confidence || 0.8
+                }
+              };
+              
+              // 保存增强参数到表单
+              Object.entries(enhancedParams).forEach(([key, value]) => {
+                form.setFieldValue(key, value);
+              });
+              
+              console.log('💾 已保存增强步骤参数:', enhancedParams);
+            } else {
+              // 降级处理：保存基础元素属性
+              form.setFieldValue('text', element.text);
+              form.setFieldValue('element_text', element.text);
+              form.setFieldValue('element_type', element.element_type);
+              form.setFieldValue('resource_id', element.resource_id);
+              form.setFieldValue('content_desc', element.content_desc);
+              form.setFieldValue('bounds', element.bounds);
+              form.setFieldValue('smartDescription', (element as any).smartDescription);
+              form.setFieldValue('smartAnalysis', (element as any).smartAnalysis);
+              
+              console.log('⚠️ 使用基础元素信息（未增强）');
             }
-            if ((element as any).clickable !== undefined) {
-              form.setFieldValue('clickable', (element as any).clickable);
-            }
-            if ((element as any).parent) {
-              form.setFieldValue('parent', (element as any).parent);
-            }
-            if ((element as any).siblings) {
-              form.setFieldValue('siblings', (element as any).siblings);
-            }
-            
-            console.log('🎯 已保存完整的元素属性到表单');
             
             setShowPageAnalyzer(false);
-            setIsQuickAnalyzer(false); // 重置快捷模式标记
+            setIsQuickAnalyzer(false);
             
-            // 🆕 如果是快捷模式，自动打开步骤编辑模态框
+            // 快捷模式处理
             if (isQuickAnalyzer) {
-              setEditingStep(null); // 确保是创建新步骤
-              setIsModalVisible(true); // 打开步骤编辑模态框
+              setEditingStep(null);
+              setIsModalVisible(true);
               
-              // 显示快捷成功消息
               message.success({
                 content: (
                   <div>
                     <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                      🚀 快捷步骤生成成功！
+                      🚀 快捷步骤生成成功！{isEnhanced ? ' (增强信息)' : ''}
                     </div>
                     <div style={{ fontSize: '12px', color: '#666' }}>
-                      {stepInfo.name} - 请点击确定完成创建
+                    {stepInfo.name} - 请点击确定完成创建
                     </div>
+                    {isEnhanced && (
+                      <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                        📄 XML缓存: {(element as any).xmlCacheId || 'unknown'}
+                      </div>
+                    )}
                   </div>
                 ),
                 duration: 4
               });
             } else {
-              // 普通模式的成功消息
               message.success({
                 content: (
                   <div>
                     <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                      🎯 智能步骤生成成功！
+                      🎯 智能步骤生成成功！{isEnhanced ? ' (增强信息)' : ''}
                     </div>
                     <div style={{ fontSize: '12px', color: '#666' }}>
                       {stepInfo.name}
                     </div>
+                    {isEnhanced && (
+                      <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                        📄 XML缓存: {(element as any).xmlCacheId || 'unknown'}
+                      </div>
+                    )}
                   </div>
                 ),
                 duration: 3
               });
             }
             
-            // 调试信息：预览生成的步骤
             SmartStepGenerator.previewStepInfo(element);
             
           } catch (error) {

@@ -5,7 +5,8 @@ import { Card, Typography, Button } from 'antd';
 import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { DraggableStepCard, SmartScriptStep } from './DraggableStepCard';
+import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
+import { SmartScriptStep } from '../types/smartScript'; // 使用统一的类型定义
 
 const { Title } = Typography;
 
@@ -152,7 +153,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
         <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
             {steps.map((step, index) => (
-              <DraggableStepCard
+              <SmartStepCardWrapper
                 key={step.id}
                 step={step}
                 index={index}

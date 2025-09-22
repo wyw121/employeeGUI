@@ -66,10 +66,12 @@ export const ElementSelectionPopover: React.FC<ElementSelectionPopoverProps> = (
         }
         onConfirm={(e) => {
           if (e) e.stopPropagation();
+          console.log('🎯 ElementSelectionPopover: onConfirm called');
           onConfirm();
         }}
         onCancel={(e) => {
           if (e) e.stopPropagation();
+          console.log('🎯 ElementSelectionPopover: onCancel called');
           onCancel();
         }}
         placement="top" // 气泡在鼠标上方显示，箭头指向下方（鼠标位置）

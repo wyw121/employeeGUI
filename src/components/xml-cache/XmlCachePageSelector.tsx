@@ -218,11 +218,27 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
     }
   };
 
+  // 定义内联样式来控制 List.Item actions 区域宽度
+  const listItemStyles = `
+    .xml-cache-list-item .ant-list-item-action {
+      margin-left: 8px !important;
+      min-width: 32px !important;
+      flex: 0 0 32px !important;
+    }
+    .xml-cache-list-item .ant-list-item-action > li {
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+  `;
+
   return (
-    <div style={{ 
-      padding: '16px',
-      backgroundColor: 'transparent'
-    }}>
+    <>
+      {/* 注入样式 */}
+      <style dangerouslySetInnerHTML={{ __html: listItemStyles }} />
+      <div style={{ 
+        padding: '16px',
+        backgroundColor: 'transparent'
+      }}>
       {/* 标题和操作栏 */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -258,47 +274,47 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
           onChange={(e) => handleSearch(e.target.value)}
         />
         
-        {/* 统计信息 */}
+        {/* 统计信息 - 优化小屏布局 */}
         {showStats && cacheStats && (
-          <Row gutter={16} style={{ marginBottom: '16px' }}>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic 
-                  title="总页面数" 
-                  value={cacheStats.totalPages} 
-                  prefix={<FileTextOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic 
-                  title="缓存大小" 
-                  value={formatFileSize(cacheStats.totalSize)} 
-                  prefix={<AppstoreOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic 
-                  title="应用数量" 
-                  value={Object.keys(cacheStats.appPackages || {}).length} 
-                  prefix={<MobileOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card size="small">
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                    {filteredPages.length}
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>显示页面</div>
-                </div>
-              </Card>
-            </Col>
-          </Row>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(2, 1fr)', // 改为2列布局
+            gap: '8px', 
+            marginBottom: '12px' 
+          }}>
+            <Card 
+              size="small" 
+              style={{ 
+                textAlign: 'center', 
+                padding: '8px 4px',
+                minHeight: 'auto',
+              }}
+              bodyStyle={{ padding: '8px 4px' }}
+            >
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px' }}>
+                总页面数
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1890ff' }}>
+                {cacheStats.totalPages}
+              </div>
+            </Card>
+            <Card 
+              size="small" 
+              style={{ 
+                textAlign: 'center', 
+                padding: '8px 4px',
+                minHeight: 'auto',
+              }}
+              bodyStyle={{ padding: '8px 4px' }}
+            >
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px' }}>
+                缓存大小
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#52c41a' }}>
+                {formatFileSize(cacheStats.totalSize)}
+              </div>
+            </Card>
+          </div>
         )}
       </div>
 
@@ -319,14 +335,16 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
             dataSource={filteredPages}
             renderItem={(page) => (
               <List.Item
+                className="xml-cache-list-item"
                 style={{ 
-                  padding: '8px 12px',
+                  padding: '8px 8px', // 减少内边距
                   border: '1px solid #374151',
                   borderRadius: '6px',
                   marginBottom: '4px',
                   backgroundColor: '#374151',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s',
+                  minHeight: 'auto', // 允许自适应高度
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = '#4b5563';
@@ -338,56 +356,92 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
                 }}
                 onClick={() => handlePageSelect(page)}
                 actions={[
-                  <Popconfirm
-                    title="删除缓存?"
-                    onConfirm={(e) => {
-                      e?.stopPropagation();
-                      handleDeletePage(page);
-                    }}
-                    okText="删除"
-                    cancelText="取消"
-                  >
-                    <Button 
-                      type="text" 
-                      danger 
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ fontSize: '12px' }}
-                    />
-                  </Popconfirm>
+                  <div key="delete" style={{ width: '32px', textAlign: 'center' }}>
+                    <Popconfirm
+                      title="删除?"
+                      onConfirm={(e) => {
+                        e?.stopPropagation();
+                        handleDeletePage(page);
+                      }}
+                      okText="删除"
+                      cancelText="取消"
+                    >
+                      <Button 
+                        type="text" 
+                        danger 
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ 
+                          fontSize: '10px', 
+                          padding: '4px',
+                          minWidth: '24px',  // 最小宽度
+                          width: '24px',     // 固定宽度
+                          height: '24px'     // 固定高度
+                        }}
+                      />
+                    </Popconfirm>
+                  </div>
                 ]}
               >
                 <List.Item.Meta
                   avatar={
                     <span style={{ 
-                      fontSize: '16px',
+                      fontSize: '14px', // 缩小图标
                       display: 'inline-block',
-                      width: '24px',
-                      textAlign: 'center'
+                      width: '20px', // 缩小宽度
+                      textAlign: 'center',
+                      flexShrink: 0, // 防止收缩
                     }}>
                       {getAppIcon(page.appPackage)}
                     </span>
                   }
                   title={
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text strong style={{ fontSize: '14px', color: '#f9fafb' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', // 改为垂直布局
+                      gap: '2px',
+                      minWidth: 0, // 允许收缩
+                    }}>
+                      <Text 
+                        strong 
+                        style={{ 
+                          fontSize: '12px', 
+                          color: '#f9fafb',
+                          lineHeight: '1.2',
+                          wordBreak: 'break-all', // 强制换行
+                          overflow: 'hidden',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2, // 最多显示2行
+                          WebkitBoxOrient: 'vertical' as any,
+                        }}
+                        title={page.pageTitle} // 悬浮显示完整标题
+                      >
                         {page.pageTitle}
                       </Text>
-                      <Text type="secondary" style={{ fontSize: '11px', color: '#d1d5db' }}>
+                      <Text 
+                        type="secondary" 
+                        style={{ 
+                          fontSize: '10px', 
+                          color: '#d1d5db',
+                          lineHeight: '1',
+                        }}
+                      >
                         {formatTime(page.createdAt)}
                       </Text>
                     </div>
                   }
                   description={
-                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                      <Space size="small">
-                        <span>{page.deviceId}</span>
-                        <span>•</span>
-                        <span>{page.clickableCount}个元素</span>
-                        <span>•</span>
-                        <span>{formatFileSize(page.fileSize)}</span>
-                      </Space>
+                    <div style={{ 
+                      fontSize: '10px', 
+                      color: '#9ca3af',
+                      lineHeight: '1.2',
+                      marginTop: '4px',
+                    }}>
+                      <div style={{ marginBottom: '2px' }}>{page.deviceId}</div>
+                      <div>
+                        {page.clickableCount}个元素 • {formatFileSize(page.fileSize)}
+                      </div>
                     </div>
                   }
                 />
@@ -396,7 +450,8 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
           />
         )}
       </Spin>
-    </div>
+      </div>
+    </>
   );
 };
 

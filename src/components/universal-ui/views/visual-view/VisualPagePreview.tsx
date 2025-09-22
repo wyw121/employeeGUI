@@ -3,11 +3,11 @@
  * 从 UniversalPageFinderModal 的 renderPagePreview 函数提取
  */
 
-import React from 'react';
-import { Typography } from 'antd';
-import type { VisualUIElement, VisualElementCategory } from '../../types';
-import type { UIElement } from '../../../../api/universalUIAPI';
-import { useElementSelectionManager } from '../../element-selection';
+import React from "react";
+import { Typography } from "antd";
+import type { VisualUIElement, VisualElementCategory } from "../../types";
+import type { UIElement } from "../../../../api/universalUIAPI";
+import { useElementSelectionManager } from "../../element-selection";
 import {
   calculateCanvasScale,
   analyzeAppAndPageInfo,
@@ -16,7 +16,7 @@ import {
   shouldShowElementLabel,
   calculateLabelFontSize,
   type AppPageInfo,
-} from './VisualViewUtils';
+} from "./VisualViewUtils";
 
 const { Text, Title } = Typography;
 
@@ -39,13 +39,14 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
   onElementClick,
   convertVisualToUIElement,
 }) => {
+  // 设备外框（bezel）内边距，让设备看起来比页面更大，但不改变页面坐标/缩放
+  const DEVICE_FRAME_PADDING = 24; // px，可调
   // 如果没有元素，显示等待状态
   if (elements.length === 0) {
     return (
       <div
         style={{
           width: "100%",
-          height: 600,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -60,7 +61,12 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
   }
 
   // 计算画布尺寸和缩放比例
-  const canvasData = calculateCanvasScale(elements, 380, 550);
+  // 仅按宽度缩放，父容器高度自适应，尽量避免滚动
+  const canvasData = calculateCanvasScale(
+    elements,
+    380,
+    Number.MAX_SAFE_INTEGER
+  );
   const { maxX, maxY, scale, scaledWidth, scaledHeight } = canvasData;
 
   // 智能分析APP和页面信息
@@ -70,7 +76,6 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
     <div
       style={{
         width: "100%",
-        height: 600,
         border: "1px solid #4b5563",
         borderRadius: 8,
         backgroundColor: "#1f2937",
@@ -109,26 +114,24 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
         </div>
       </div>
 
-      {/* 可滚动的预览区域 */}
+      {/* 预览区域（自适应高度，无滚动） */}
       <div
         style={{
-          flex: 1,
-          overflow: "auto",
           padding: "16px",
           position: "relative",
           backgroundColor: "#1f2937",
         }}
       >
-        {/* 设备边框模拟 */}
+        {/* 设备边框模拟（外框有额外 padding，不影响内层页面坐标） */}
         <div
           style={{
-            width: scaledWidth + 20,
-            height: scaledHeight + 20,
+            width: scaledWidth + DEVICE_FRAME_PADDING * 2,
+            height: scaledHeight + DEVICE_FRAME_PADDING * 2,
             margin: "0 auto",
             position: "relative",
             backgroundColor: "#000",
             borderRadius: "20px",
-            padding: "10px",
+            padding: `${DEVICE_FRAME_PADDING}px`,
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
           }}
         >
@@ -263,7 +266,11 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
                   }}
                 >
                   {/* 元素标签（仅在足够大时显示）*/}
-                  {shouldShowElementLabel(scaledBounds.width, scaledBounds.height, element.text) && (
+                  {shouldShowElementLabel(
+                    scaledBounds.width,
+                    scaledBounds.height,
+                    element.text
+                  ) && (
                     <div
                       style={{
                         fontSize: calculateLabelFontSize(scaledBounds.height),
@@ -322,21 +329,7 @@ export const VisualPagePreview: React.FC<VisualPagePreviewProps> = ({
           </div>
         </div>
 
-        {/* 缩放控制提示 */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "8px",
-            right: "8px",
-            background: "rgba(0, 0, 0, 0.7)",
-            color: "#fff",
-            padding: "4px 8px",
-            borderRadius: "4px",
-            fontSize: "10px",
-          }}
-        >
-          💡 滚动查看完整页面
-        </div>
+        {/* 取消滚动提示：容器已根据设备高度自适应 */}
       </div>
     </div>
   );

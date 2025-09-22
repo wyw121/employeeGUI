@@ -107,14 +107,22 @@ export const useElementSelectionManager = (
 
   // 确认选择元素
   const confirmSelection = useCallback(() => {
+    console.log('🔍 confirmSelection called, pendingSelection:', pendingSelection);
     if (pendingSelection) {
-      console.log('✅ 确认选择元素:', pendingSelection.element.text);
+      console.log('✅ 确认选择元素:', pendingSelection.element.text, 'ID:', pendingSelection.element.id);
       
-      // 调用回调函数
-      onElementSelected?.(pendingSelection.element);
-      
-      // 清除待确认状态
+      // 先清除待确认状态，避免在回调中重新触发
+      console.log('🧹 正在清除pendingSelection...');
       setPendingSelection(null);
+      console.log('🧹 setPendingSelection(null) 已调用');
+      
+      // 延迟调用回调函数，确保状态已经更新
+      setTimeout(() => {
+        console.log('📞 延迟调用 onElementSelected 回调');
+        onElementSelected?.(pendingSelection.element);
+      }, 0);
+    } else {
+      console.log('❌ confirmSelection: 没有待确认的选择');
     }
   }, [pendingSelection, onElementSelected]);
 

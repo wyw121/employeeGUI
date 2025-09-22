@@ -31,3 +31,6 @@ export * from "./statistics";
 
 // 智能导航测试页面
 export { default as SmartNavigationTestPage } from "./SmartNavigationTestPage";
+
+// Universal UI测试页面
+export { default as UniversalUITestPage } from "./UniversalUITestPage";

@@ -3,44 +3,50 @@
  * 整合所有XML解析功能的主要入口
  */
 
-import { VisualUIElement, XmlParseResult, ElementCategorizerOptions } from './types';
-import { BoundsParser } from './BoundsParser';
-import { ElementCategorizer } from './ElementCategorizer';
-import { AppPageAnalyzer } from './AppPageAnalyzer';
+import {
+  VisualUIElement,
+  XmlParseResult,
+  ElementCategorizerOptions,
+} from "./types";
+import { BoundsParser } from "./BoundsParser";
+import { ElementCategorizer } from "./ElementCategorizer";
+import { AppPageAnalyzer } from "./AppPageAnalyzer";
 
 export class XmlParser {
-  
   /**
    * 解析XML字符串，提取所有UI元素
    * @param xmlString XML字符串内容
    * @param options 解析选项
    * @returns 解析结果
    */
-  static parseXML(xmlString: string, options: ElementCategorizerOptions = {}): XmlParseResult {
+  static parseXML(
+    xmlString: string,
+    options: ElementCategorizerOptions = {}
+  ): XmlParseResult {
     if (!xmlString) {
-      return this.createEmptyResult();
+      return XmlParser.createEmptyResult();
     }
-    
+
     try {
       const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-      
+      const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
       // 检查XML是否解析成功
-      const parserError = xmlDoc.querySelector('parsererror');
+      const parserError = xmlDoc.querySelector("parsererror");
       if (parserError) {
-        console.error('XML解析错误:', parserError.textContent);
-        return this.createEmptyResult();
+        console.error("XML解析错误:", parserError.textContent);
+        return XmlParser.createEmptyResult();
       }
-      
-      const allNodes = xmlDoc.querySelectorAll('node');
+
+      const allNodes = xmlDoc.querySelectorAll("node");
       const extractedElements: VisualUIElement[] = [];
       const elementCategories = ElementCategorizer.createDefaultCategories();
-      
+
       allNodes.forEach((node, index) => {
-        const element = this.parseNodeToElement(node, index, options);
+        const element = XmlParser.parseNodeToElement(node, index, options);
         if (element) {
           extractedElements.push(element);
-          
+
           // 将元素添加到相应类别
           const category = elementCategories[element.category];
           if (category) {
@@ -48,23 +54,23 @@ export class XmlParser {
           }
         }
       });
-      
+
       // 分析应用和页面信息
       const appInfo = AppPageAnalyzer.getSimpleAppAndPageInfo(xmlString);
-      
+
       // 过滤掉空的类别
-      const filteredCategories = Object.values(elementCategories)
-        .filter(cat => cat.elements.length > 0);
-      
+      const filteredCategories = Object.values(elementCategories).filter(
+        (cat) => cat.elements.length > 0
+      );
+
       return {
         elements: extractedElements,
         categories: filteredCategories,
-        appInfo
+        appInfo,
       };
-      
     } catch (error) {
-      console.error('XML解析失败:', error);
-      return this.createEmptyResult();
+      console.error("XML解析失败:", error);
+      return XmlParser.createEmptyResult();
     }
   }
 
@@ -76,42 +82,51 @@ export class XmlParser {
    * @returns VisualUIElement或null
    */
   private static parseNodeToElement(
-    node: Element, 
-    index: number, 
+    node: Element,
+    index: number,
     options: ElementCategorizerOptions
   ): VisualUIElement | null {
-    
     // 获取基本属性
-    const bounds = node.getAttribute('bounds') || '';
-    const text = node.getAttribute('text') || '';
-    const contentDesc = node.getAttribute('content-desc') || '';
-    const className = node.getAttribute('class') || '';
-    const clickable = node.getAttribute('clickable') === 'true';
-    const resourceId = node.getAttribute('resource-id') || '';
-    
+    const bounds = node.getAttribute("bounds") || "";
+    const text = node.getAttribute("text") || "";
+    const contentDesc = node.getAttribute("content-desc") || "";
+    const className = node.getAttribute("class") || "";
+    const clickable = node.getAttribute("clickable") === "true";
+    const resourceId = node.getAttribute("resource-id") || "";
+
     // 解析边界信息
     const position = BoundsParser.parseBounds(bounds);
-    
+
     // 基本有效性检查
-    if (!this.isValidElement(bounds, text, contentDesc, clickable, position, options)) {
+    if (
+      !this.isValidElement(
+        bounds,
+        text,
+        contentDesc,
+        clickable,
+        position,
+        options
+      )
+    ) {
       return null;
     }
-    
+
     // 分析元素属性
     const category = ElementCategorizer.categorizeElement(node);
     const userFriendlyName = ElementCategorizer.getUserFriendlyName(node);
     const importance = ElementCategorizer.getElementImportance(node);
-    
+
     return {
       id: `element-${index}`,
       text: text,
-      description: contentDesc || `${userFriendlyName}${clickable ? '（可点击）' : ''}`,
-      type: className.split('.').pop() || 'Unknown',
+      description:
+        contentDesc || `${userFriendlyName}${clickable ? "（可点击）" : ""}`,
+      type: className.split(".").pop() || "Unknown",
       category,
       position,
       clickable,
       importance,
-      userFriendlyName
+      userFriendlyName,
     };
   }
 
@@ -133,31 +148,30 @@ export class XmlParser {
     position: { width: number; height: number },
     options: ElementCategorizerOptions
   ): boolean {
-    
     // 边界有效性检查
-    if (!bounds || bounds === '[0,0][0,0]') {
+    if (!bounds || bounds === "[0,0][0,0]") {
       return false;
     }
-    
+
     // 尺寸有效性检查
     if (position.width <= 0 || position.height <= 0) {
       return false;
     }
-    
+
     // 内容有效性检查
     const hasContent = Boolean(text.trim() || contentDesc.trim());
     const isInteractive = clickable;
-    
+
     if (options.strictFiltering) {
       // 严格模式：必须有内容或可交互
       return hasContent || isInteractive;
     }
-    
+
     // 宽松模式：有内容、可点击、或允许非可点击元素
     if (!hasContent && !isInteractive) {
       return options.includeNonClickable === true;
     }
-    
+
     return true;
   }
 
@@ -170,9 +184,9 @@ export class XmlParser {
       elements: [],
       categories: [],
       appInfo: {
-        appName: '未知应用',
-        pageName: '未知页面'
-      }
+        appName: "未知应用",
+        pageName: "未知页面",
+      },
     };
   }
 
@@ -190,41 +204,40 @@ export class XmlParser {
     if (!xmlString) {
       return { totalNodes: 0, clickableNodes: 0, textNodes: 0, imageNodes: 0 };
     }
-    
+
     try {
       const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-      const allNodes = xmlDoc.querySelectorAll('node');
-      
+      const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+      const allNodes = xmlDoc.querySelectorAll("node");
+
       let clickableNodes = 0;
       let textNodes = 0;
       let imageNodes = 0;
-      
-      allNodes.forEach(node => {
-        if (node.getAttribute('clickable') === 'true') {
+
+      allNodes.forEach((node) => {
+        if (node.getAttribute("clickable") === "true") {
           clickableNodes++;
         }
-        
-        const text = node.getAttribute('text') || '';
+
+        const text = node.getAttribute("text") || "";
         if (text.trim()) {
           textNodes++;
         }
-        
-        const className = node.getAttribute('class') || '';
-        if (className.includes('ImageView')) {
+
+        const className = node.getAttribute("class") || "";
+        if (className.includes("ImageView")) {
           imageNodes++;
         }
       });
-      
+
       return {
         totalNodes: allNodes.length,
         clickableNodes,
         textNodes,
-        imageNodes
+        imageNodes,
       };
-      
     } catch (error) {
-      console.error('获取XML统计信息失败:', error);
+      console.error("获取XML统计信息失败:", error);
       return { totalNodes: 0, clickableNodes: 0, textNodes: 0, imageNodes: 0 };
     }
   }

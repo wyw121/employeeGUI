@@ -90,17 +90,24 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
         setXmlCacheId(sourceCacheId);
         buildTreeFromXml(sourceXmlContent);
         
-        // 如果有完整的增强元素信息，自动定位到目标节点
-        if (enhancedElement?.nodePath?.nodeIndex) {
-          const targetKey = `node_${enhancedElement.nodePath.nodeIndex}`;
-          setSelectedNodeKey(targetKey);
-          expandToNode(targetKey);
-        }
+        console.log('🔍 XML检查器加载完成:', {
+          xmlContentLength: sourceXmlContent.length,
+          cacheId: sourceCacheId,
+          hasEnhancedElement: !!enhancedElement
+        });
+        
       } else {
         console.warn('⚠️ 没有找到XML内容，无法构建树结构');
+        // 即使没有XML内容，也尝试显示基础信息
+        if (elementInfo) {
+          setXmlContent('<!-- XML内容不可用 -->');
+          setXmlCacheId(propXmlCacheId || 'no-xml');
+          // 创建基础节点信息用于显示
+          createBasicNodeFromElementInfo();
+        }
       }
     }
-  }, [enhancedElement, propXmlContent, propXmlCacheId, visible]);
+  }, [enhancedElement, propXmlContent, propXmlCacheId, elementInfo, visible]);
 
   /**
    * 从XML构建树结构
@@ -114,10 +121,131 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
       const tree = rootNodes.map(node => buildTreeNode(node, 0));
       
       setTreeData(tree);
+      
+      // 🎯 树构建完成后，自动定位到目标节点
+      setTimeout(() => {
+        autoLocateTargetNode(tree);
+      }, 100);
+      
     } catch (error) {
       console.error('XML树构建失败:', error);
       setTreeData([]);
     }
+  };
+
+  /**
+   * 创建基础节点信息（当没有完整XML时的降级方案）
+   */
+  const createBasicNodeFromElementInfo = () => {
+    if (!elementInfo) return;
+    
+    const basicNode: TreeNodeData = {
+      title: `🎯 ${elementInfo.element_type || 'Unknown'} ${elementInfo.text ? `("${elementInfo.text}")` : ''}`,
+      key: 'node_basic',
+      nodeIndex: 0,
+      isTarget: true,
+      nodeInfo: {
+        className: elementInfo.element_type || 'Unknown',
+        text: elementInfo.text,
+        contentDesc: elementInfo.content_desc,
+        bounds: elementInfo.bounds ? 
+          `[${elementInfo.bounds.left},${elementInfo.bounds.top}][${elementInfo.bounds.right},${elementInfo.bounds.bottom}]` : 
+          '未知',
+        clickable: true // 默认可点击
+      }
+    };
+    
+    setTreeData([basicNode]);
+    setSelectedNodeKey('node_basic');
+  };
+
+  /**
+   * 自动定位到目标节点
+   */
+  const autoLocateTargetNode = (tree: TreeNodeData[]) => {
+    // 方法1: 如果有完整的增强元素信息，使用节点索引定位
+    if (enhancedElement?.nodePath?.nodeIndex !== undefined) {
+      const targetKey = `node_${enhancedElement.nodePath.nodeIndex}`;
+      const targetNode = findNodeByKey(tree, targetKey);
+      
+      if (targetNode) {
+        console.log('🎯 通过节点索引定位到目标元素:', targetKey);
+        setSelectedNodeKey(targetKey);
+        expandToNode(targetKey);
+        return;
+      }
+    }
+    
+    // 方法2: 如果有元素信息，通过属性匹配查找
+    if (elementInfo) {
+      const targetNode = findNodeByAttributes(tree, elementInfo);
+      
+      if (targetNode) {
+        console.log('🎯 通过属性匹配定位到目标元素:', targetNode.key);
+        setSelectedNodeKey(targetNode.key);
+        expandToNode(targetNode.key);
+        return;
+      }
+    }
+    
+    // 方法3: 查找已标记为目标的节点
+    const targetNode = findTargetNode(tree);
+    if (targetNode) {
+      console.log('🎯 找到标记的目标节点:', targetNode.key);
+      setSelectedNodeKey(targetNode.key);
+      expandToNode(targetNode.key);
+      return;
+    }
+    
+    console.log('⚠️ 未能自动定位到目标元素');
+  };
+
+  /**
+   * 通过属性匹配查找目标节点
+   */
+  const findNodeByAttributes = (nodes: TreeNodeData[], elementInfo: any): TreeNodeData | null => {
+    for (const node of nodes) {
+      // 检查多个属性进行匹配
+      const matchText = elementInfo.text && node.nodeInfo.text === elementInfo.text;
+      const matchContentDesc = elementInfo.content_desc && node.nodeInfo.contentDesc === elementInfo.content_desc;
+      const matchClassName = elementInfo.element_type && node.nodeInfo.className.includes(elementInfo.element_type);
+      
+      // 边界匹配（如果有的话）
+      let matchBounds = false;
+      if (elementInfo.bounds) {
+        const expectedBounds = `[${elementInfo.bounds.left},${elementInfo.bounds.top}][${elementInfo.bounds.right},${elementInfo.bounds.bottom}]`;
+        matchBounds = node.nodeInfo.bounds === expectedBounds;
+      }
+      
+      // 如果有多个匹配条件，认为找到了
+      const matchCount = [matchText, matchContentDesc, matchClassName, matchBounds].filter(Boolean).length;
+      if (matchCount >= 2) {
+        return node;
+      }
+      
+      // 递归查找子节点
+      if (node.children) {
+        const found = findNodeByAttributes(node.children, elementInfo);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * 查找已标记为目标的节点
+   */
+  const findTargetNode = (nodes: TreeNodeData[]): TreeNodeData | null => {
+    for (const node of nodes) {
+      if (node.isTarget) {
+        return node;
+      }
+      if (node.children) {
+        const found = findTargetNode(node.children);
+        if (found) return found;
+      }
+    }
+    return null;
   };
 
   /**
@@ -130,8 +258,33 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
     const bounds = xmlNode.getAttribute('bounds') || '';
     const clickable = xmlNode.getAttribute('clickable') === 'true';
     
-    // 判断是否为目标节点
-    const isTarget = enhancedElement && nodeIndex === enhancedElement.nodePath.nodeIndex;
+    // 🎯 更智能的目标节点判断
+    let isTarget = false;
+    
+    // 方法1: 通过节点索引匹配
+    if (enhancedElement?.nodePath?.nodeIndex === nodeIndex) {
+      isTarget = true;
+    }
+    
+    // 方法2: 通过elementInfo属性匹配
+    if (!isTarget && elementInfo) {
+      const matchText = elementInfo.text && text === elementInfo.text;
+      const matchContentDesc = elementInfo.content_desc && contentDesc === elementInfo.content_desc;
+      const matchClassName = elementInfo.element_type && className.includes(elementInfo.element_type);
+      
+      // 边界匹配
+      let matchBounds = false;
+      if (elementInfo.bounds) {
+        const expectedBounds = `[${elementInfo.bounds.left},${elementInfo.bounds.top}][${elementInfo.bounds.right},${elementInfo.bounds.bottom}]`;
+        matchBounds = bounds === expectedBounds;
+      }
+      
+      // 如果有2个或以上匹配条件，认为是目标节点
+      const matchCount = [matchText, matchContentDesc, matchClassName, matchBounds].filter(Boolean).length;
+      if (matchCount >= 2) {
+        isTarget = true;
+      }
+    }
     
     // 构建显示标题
     let title = className.split('.').pop() || className;

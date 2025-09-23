@@ -3,26 +3,17 @@ import {
   Button,
   Tooltip,
   Popover,
-  Space,
   Badge,
-  Typography,
-  Divider,
-  Tag,
-  Alert
 } from 'antd';
 import {
   PlayCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   LoadingOutlined,
-  InfoCircleOutlined,
-  BugOutlined,
-  ClockCircleOutlined
 } from '@ant-design/icons';
 import { useSingleStepTest } from '../hooks/useSingleStepTest';
-import type { SmartScriptStep, SingleStepTestResult } from '../types/smartScript';
-
-const { Text, Paragraph } = Typography;
+import type { SmartScriptStep } from '../types/smartScript';
+import { TestResultDetail, TestResultTitle } from './step-card';
 
 interface StepTestButtonProps {
   step: SmartScriptStep;
@@ -90,98 +81,6 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
     };
   };
 
-  // 渲染测试结果详情
-  const renderTestResult = (result: SingleStepTestResult) => (
-    <div style={{ maxWidth: 300 }}>
-      <div className="mb-3">
-        <Space align="center">
-          {result.success ? (
-            <CheckCircleOutlined className="text-green-500" />
-          ) : (
-            <CloseCircleOutlined className="text-red-500" />
-          )}
-          <Text strong>
-            {result.success ? '测试成功' : '测试失败'}
-          </Text>
-          <Tag color={result.success ? 'green' : 'red'}>
-            {result.duration_ms}ms
-          </Tag>
-        </Space>
-      </div>
-
-      <Divider style={{ margin: '8px 0' }} />
-
-      <div className="space-y-2">
-        <div>
-          <Text type="secondary" className="text-xs">执行消息:</Text>
-          <Paragraph className="text-xs mb-1" copyable>
-            {result.message}
-          </Paragraph>
-        </div>
-
-        {result.page_state && (
-          <div>
-            <Text type="secondary" className="text-xs">页面状态:</Text>
-            <Tag color="blue">{result.page_state}</Tag>
-          </div>
-        )}
-
-        {result.ui_elements && result.ui_elements.length > 0 && (
-          <div>
-            <Text type="secondary" className="text-xs">找到元素:</Text>
-            <Badge count={result.ui_elements.length} size="small" />
-          </div>
-        )}
-
-        {result.logs && result.logs.length > 0 && (
-          <div>
-            <Text type="secondary" className="text-xs">执行日志:</Text>
-            <div className="max-h-20 overflow-y-auto bg-gray-50 p-2 rounded text-xs">
-              {result.logs.map((log, index) => (
-                <div key={index} className="text-gray-600">
-                  {log}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!result.success && result.error_details && (
-          <Alert
-            message="错误详情"
-            description={result.error_details}
-            type="error"
-            showIcon
-          />
-        )}
-
-        {result.extracted_data && Object.keys(result.extracted_data).length > 0 && (
-          <div>
-            <Text type="secondary" className="text-xs">提取数据:</Text>
-            <div className="bg-blue-50 p-2 rounded text-xs">
-              <pre>{JSON.stringify(result.extracted_data, null, 2)}</pre>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <Divider style={{ margin: '8px 0' }} />
-
-      <div className="flex justify-end">
-        <Button 
-          size="small" 
-          type="text" 
-          onClick={() => {
-            clearStepResult(step.id);
-            setShowResultPopover(false);
-          }}
-        >
-          清除结果
-        </Button>
-      </div>
-    </div>
-  );
-
   const buttonProps = getButtonProps();
 
   const testButton = (
@@ -200,13 +99,17 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
   if (testResult) {
     return (
       <Popover
-        content={renderTestResult(testResult)}
-        title={
-          <Space>
-            <BugOutlined />
-            <span>测试结果: {step.name}</span>
-          </Space>
+        content={
+          <TestResultDetail
+            result={testResult}
+            stepName={step.name}
+            onClear={() => {
+              clearStepResult(step.id);
+              setShowResultPopover(false);
+            }}
+          />
         }
+        title={<TestResultTitle stepName={step.name} />}
         trigger="click"
         placement="topLeft"
         open={showResultPopover}

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { UiNode } from './types';
+import { UiNode, SearchOptions } from './types';
 import { nodeLabel } from './utils';
 import styles from './GridElementView.module.css';
+import { MatchBadges } from './MatchBadges';
 
 const Badge: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className={styles.badge}>{children}</span>
@@ -13,6 +14,7 @@ export interface TreeRowProps {
   selected: UiNode | null;
   onSelect: (n: UiNode) => void;
   filter: string;
+  searchOptions?: Partial<SearchOptions>;
   expandAll: boolean;
   collapseVersion: number;
   expandDepth: number;
@@ -28,6 +30,7 @@ export const TreeRow: React.FC<TreeRowProps> = ({
   selected,
   onSelect,
   filter,
+  searchOptions,
   expandAll,
   collapseVersion,
   expandDepth,
@@ -44,8 +47,11 @@ export const TreeRow: React.FC<TreeRowProps> = ({
     const kw = (filter || '').trim();
     if (!kw) return text;
     try {
-      const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(esc, 'ig');
+      const caseSensitive = !!searchOptions?.caseSensitive;
+      const useRegex = !!searchOptions?.useRegex;
+      const re = useRegex
+        ? new RegExp(kw, caseSensitive ? 'g' : 'ig')
+        : new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'ig');
       const parts = text.split(re);
       const matches = text.match(re) || [];
       const res: React.ReactNode[] = [];
@@ -117,6 +123,7 @@ export const TreeRow: React.FC<TreeRowProps> = ({
           <Badge>{highlight(node.attrs['class'] || node.tag)}</Badge>
           {node.attrs['resource-id'] && <Badge>id:{highlight(node.attrs['resource-id'].split('/').pop() || '')}</Badge>}
           {node.attrs['clickable'] === 'true' && <Badge>clickable</Badge>}
+          <MatchBadges node={node} keyword={filter} />
           {!matched && hasActiveFilter && <Badge>不匹配(继承可见)</Badge>}
         </div>
       </div>
@@ -124,7 +131,21 @@ export const TreeRow: React.FC<TreeRowProps> = ({
       {isVisible && effectiveOpen && (
         <div>
           {node.children.map((c, i) => (
-            <TreeRow key={i} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} filter={filter} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} />
+            <TreeRow
+              key={i}
+              node={c}
+              depth={depth + 1}
+              selected={selected}
+              onSelect={onSelect}
+              filter={filter}
+              searchOptions={searchOptions}
+              expandAll={expandAll}
+              collapseVersion={collapseVersion}
+              expandDepth={expandDepth}
+              matchedSet={matchedSet}
+              selectedAncestors={selectedAncestors}
+              showMatchedOnly={showMatchedOnly}
+            />
           ))}
         </div>
       )}

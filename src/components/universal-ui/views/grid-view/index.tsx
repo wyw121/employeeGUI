@@ -4,4 +4,10 @@
  */
 
 export { GridElementView } from './GridElementView';
-export type { UiNode } from './GridElementView';
+export type { UiNode, AdvancedFilter } from './types';
+export { FilterBar } from './FilterBar';
+export { MatchResultsPanel } from './MatchResultsPanel';
+export { ScreenPreview } from './ScreenPreview';
+export { NodeDetail } from './NodeDetail';
+export { Breadcrumbs } from './Breadcrumbs';
+export { XPathBuilder } from './XPathBuilder';

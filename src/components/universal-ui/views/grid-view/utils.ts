@@ -1,4 +1,4 @@
-import { UiNode, AdvancedFilter } from './types';
+import { UiNode, AdvancedFilter, SearchOptions } from './types';
 
 export function parseBounds(bounds?: string) {
   if (!bounds) return null as any;
@@ -74,13 +74,34 @@ export function attachParents(n: UiNode | null) {
   }
 }
 
-export function matchNode(n: UiNode, kw: string): boolean {
+export function matchNode(n: UiNode, kw: string, opts?: Partial<SearchOptions>): boolean {
   if (!kw) return true;
+  const caseSensitive = !!opts?.caseSensitive;
+  const useRegex = !!opts?.useRegex;
+  const f = opts?.fields || {};
+  const haystacks = [
+    (f.id ?? true) ? n.attrs['resource-id'] : undefined,
+    (f.text ?? true) ? n.attrs['text'] : undefined,
+    (f.desc ?? true) ? n.attrs['content-desc'] : undefined,
+    (f.className ?? true) ? n.attrs['class'] : undefined,
+    (f.tag ?? true) ? n.tag : undefined,
+    (f.pkg ?? false) ? n.attrs['package'] : undefined,
+  ].filter(Boolean) as string[];
+
+  if (useRegex) {
+    try {
+      const re = new RegExp(kw, caseSensitive ? 'g' : 'ig');
+      return haystacks.some(s => re.test(s));
+    } catch {
+      // 回退到普通包含
+    }
+  }
+
+  if (caseSensitive) {
+    return haystacks.some(s => s.includes(kw));
+  }
   const lower = kw.toLowerCase();
-  const fields = [n.attrs['resource-id'], n.attrs['text'], n.attrs['content-desc'], n.attrs['class'], n.tag]
-    .filter(Boolean)
-    .map(s => (s as string).toLowerCase());
-  return fields.some(s => s.includes(lower));
+  return haystacks.some(s => s.toLowerCase().includes(lower));
 }
 
 export function matchNodeAdvanced(n: UiNode, filter: AdvancedFilter | null | undefined): boolean {
@@ -88,6 +109,9 @@ export function matchNodeAdvanced(n: UiNode, filter: AdvancedFilter | null | und
   const rid = (filter.resourceId || '').toLowerCase();
   const txt = (filter.text || '').toLowerCase();
   const cls = (filter.className || '').toLowerCase();
+  const pkg = (filter.packageName || '').toLowerCase();
+  const clickable = filter.clickable; // boolean | null
+  const nodeEnabled = filter.nodeEnabled; // boolean | null
 
   const checks: boolean[] = [];
   if (rid) checks.push((n.attrs['resource-id'] || '').toLowerCase().includes(rid));
@@ -97,15 +121,18 @@ export function matchNodeAdvanced(n: UiNode, filter: AdvancedFilter | null | und
     checks.push(t.includes(txt) || cd.includes(txt));
   }
   if (cls) checks.push((n.attrs['class'] || n.tag).toLowerCase().includes(cls));
+  if (pkg) checks.push((n.attrs['package'] || '').toLowerCase().includes(pkg));
+  if (clickable !== null && clickable !== undefined) checks.push(((n.attrs['clickable'] || '').toLowerCase() === 'true') === clickable);
+  if (nodeEnabled !== null && nodeEnabled !== undefined) checks.push(((n.attrs['enabled'] || '').toLowerCase() === 'true') === nodeEnabled);
 
   if (checks.length === 0) return true; // 未填写任何条件则视为通过
   return filter.mode === 'AND' ? checks.every(Boolean) : checks.some(Boolean);
 }
 
-export function makeCombinedMatcher(keyword: string, adv: AdvancedFilter | null | undefined) {
+export function makeCombinedMatcher(keyword: string, adv: AdvancedFilter | null | undefined, opts?: Partial<SearchOptions>) {
   const kw = (keyword || '').trim();
   return (n: UiNode) => {
-    const kwOk = !kw || matchNode(n, kw);
+    const kwOk = !kw || matchNode(n, kw, opts);
     const advOk = matchNodeAdvanced(n, adv);
     return kwOk && advOk;
   };
@@ -191,4 +218,55 @@ export function findByPredicateXPath(root: UiNode | null, xp: string): UiNode | 
     for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
   }
   return cand[0] ?? null;
+}
+
+export function findAllByPredicateXPath(root: UiNode | null, xp: string): UiNode[] {
+  if (!root) return [];
+  const equalRe = /^\/\/(\*|[A-Za-z_][\w.-]*)(?:\[@([\w:-]+)=(['\"])((?:\\.|[^\\])*?)\3\])?$/;
+  const containsAttrRe = /^\/\/(\*|[A-Za-z_][\w.-]*)\[contains\(@([\w:-]+),(['\"])((?:\\.|[^\\])*?)\3\)\]$/;
+  const textEqualRe = /^\/\/(\*|[A-Za-z_][\w.-]*)\[text\(\)=(['\"])((?:\\.|[^\\])*?)\2\]$/;
+  const textContainsRe = /^\/\/(\*|[A-Za-z_][\w.-]*)\[contains\(text\(\),(['\"])((?:\\.|[^\\])*?)\2\)\]$/;
+
+  type Mode = 'equal' | 'containsAttr' | 'textEqual' | 'textContains';
+  let mode: Mode | null = null;
+  let tag = '*';
+  let attr: string | null = null;
+  let val: string | null = null;
+  let m: RegExpMatchArray | null = null;
+  if ((m = xp.match(equalRe))) {
+    mode = 'equal'; tag = m[1]; attr = m[2] || null; val = (m[4] ?? null) as any;
+  } else if ((m = xp.match(containsAttrRe))) {
+    mode = 'containsAttr'; tag = m[1]; attr = m[2]; val = m[4];
+  } else if ((m = xp.match(textEqualRe))) {
+    mode = 'textEqual'; tag = m[1]; val = m[3];
+  } else if ((m = xp.match(textContainsRe))) {
+    mode = 'textContains'; tag = m[1]; val = m[3];
+  } else {
+    return [];
+  }
+
+  const stk: UiNode[] = [root];
+  const res: UiNode[] = [];
+  const lowerVal = (val || '').toLowerCase();
+  while (stk.length) {
+    const n = stk.pop()!;
+    const tagOk = tag === '*' || n.tag === tag;
+    let predOk = true;
+    if (mode === 'equal' && attr) predOk = (n.attrs[attr] ?? '') === (val ?? '');
+    else if (mode === 'containsAttr' && attr) predOk = (n.attrs[attr] ?? '').toLowerCase().includes(lowerVal);
+    else if (mode === 'textEqual') predOk = (n.attrs['text'] ?? '') === (val ?? '');
+    else if (mode === 'textContains') predOk = (n.attrs['text'] ?? '').toLowerCase().includes(lowerVal);
+    if (tagOk && predOk) res.push(n);
+    for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
+  }
+  return res;
+}
+
+export function findNearestClickableAncestor(n: UiNode | null | undefined): UiNode | null {
+  let cur = n || null;
+  while (cur) {
+    if ((cur.attrs['clickable'] || '').toLowerCase() === 'true') return cur;
+    cur = cur.parent || null;
+  }
+  return null;
 }

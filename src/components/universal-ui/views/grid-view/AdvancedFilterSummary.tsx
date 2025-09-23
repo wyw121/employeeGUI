@@ -13,6 +13,9 @@ export const AdvancedFilterSummary: React.FC<AdvancedFilterSummaryProps> = ({ va
   if (value.resourceId) chips.push(`id~"${value.resourceId}"`);
   if (value.text) chips.push(`text/desc~"${value.text}"`);
   if (value.className) chips.push(`class~"${value.className}"`);
+  if (value.packageName) chips.push(`pkg~"${value.packageName}"`);
+  if (value.clickable !== null) chips.push(`clickable:${value.clickable}`);
+  if (value.nodeEnabled !== null) chips.push(`enabled:${value.nodeEnabled}`);
   if (chips.length === 0) return null;
   return (
     <div className="mt-1 flex items-center gap-2 text-xs text-neutral-500">

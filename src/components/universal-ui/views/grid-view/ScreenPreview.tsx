@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { UiNode } from './types';
 import { parseBounds } from './utils';
 import styles from './GridElementView.module.css';
 
-export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; }> = ({ root, selected, onSelect }) => {
+type ScaleMode = 'fit' | 'actual' | 'custom';
+
+export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; matchedSet?: Set<UiNode>; }> = ({ root, selected, onSelect, matchedSet }) => {
+  const [scaleMode, setScaleMode] = useState<ScaleMode>('fit');
+  const [zoom, setZoom] = useState<number>(100); // percent for custom
   const screen = useMemo(() => {
     function findBounds(n?: UiNode | null): ReturnType<typeof parseBounds> {
       if (!n) return null as any;
@@ -31,23 +35,44 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
     return result;
   }, [root]);
 
-  const viewW = 300;
-  const scale = screen.width > 0 ? viewW / screen.width : 1;
+  const baseW = 300;
+  let scale = screen.width > 0 ? baseW / screen.width : 1;
+  if (scaleMode === 'actual') scale = 1;
+  if (scaleMode === 'custom') scale = (zoom / 100);
+  const viewW = Math.round(screen.width * scale);
   const viewH = Math.max(100, Math.round(screen.height * scale));
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="text-base font-semibold">屏幕预览</div>
-        <div className="text-xs text-neutral-500">{screen.width}×{screen.height}</div>
+        <div className="flex items-center gap-2 text-xs text-neutral-500">
+          <span>{screen.width}×{screen.height}</span>
+          <span>·</span>
+          <button className="underline" onClick={() => setScaleMode('fit')} title="适配宽度">适配</button>
+          <button className="underline" onClick={() => setScaleMode('actual')} title="实际像素">实际</button>
+          <span>
+            <label className="mr-1">缩放</label>
+            <input
+              type="range"
+              min={25}
+              max={300}
+              step={5}
+              value={scaleMode === 'custom' ? zoom : Math.round(scale * 100)}
+              onChange={(e) => { setScaleMode('custom'); setZoom(parseInt(e.target.value, 10) || 100); }}
+            />
+            <span className="ml-1">{Math.round(scale * 100)}%</span>
+          </span>
+        </div>
       </div>
       <div className={`${styles.previewBox} relative`} style={{ width: viewW, height: viewH }}>
         {boxes.map(({ n, b }, i) => {
           const sel = n === selected;
+          const matched = matchedSet?.has(n);
           return (
             <div
               key={i}
-              className={`${styles.elementRect} ${sel ? styles.elementRectActive : ''}`}
+              className={`${styles.elementRect} ${matched ? styles.elementRectMatched : ''} ${sel ? styles.elementRectActive : ''}`}
               style={{
                 left: Math.round(b.x1 * scale),
                 top: Math.round(b.y1 * scale),

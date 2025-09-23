@@ -44,6 +44,33 @@ export const FilterBar: React.FC<FilterBarProps> = ({ value, onChange }) => {
         onChange={(e) => set({ className: e.target.value })}
         style={{ width: 160 }}
       />
+      <input
+        className={styles.input}
+        placeholder="package"
+        value={value.packageName}
+        onChange={(e) => set({ packageName: e.target.value })}
+        style={{ width: 180 }}
+      />
+      <select
+        className={styles.input}
+        value={value.clickable === null ? 'any' : value.clickable ? 'true' : 'false'}
+        onChange={(e) => set({ clickable: e.target.value === 'any' ? null : e.target.value === 'true' })}
+        style={{ width: 120 }}
+      >
+        <option value="any">clickable:any</option>
+        <option value="true">clickable:true</option>
+        <option value="false">clickable:false</option>
+      </select>
+      <select
+        className={styles.input}
+        value={value.nodeEnabled === null ? 'any' : value.nodeEnabled ? 'true' : 'false'}
+        onChange={(e) => set({ nodeEnabled: e.target.value === 'any' ? null : e.target.value === 'true' })}
+        style={{ width: 120 }}
+      >
+        <option value="any">enabled:any</option>
+        <option value="true">enabled:true</option>
+        <option value="false">enabled:false</option>
+      </select>
     </div>
   );
 };

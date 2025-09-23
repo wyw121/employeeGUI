@@ -58,6 +58,7 @@ import {
   CachedXmlPage,
   XmlPageContent,
 } from "../../services/XmlPageCacheService";
+import XmlCacheManager from "../../services/XmlCacheManager";
 import { ErrorBoundary } from "../ErrorBoundary";
 
 // 🆕 使用新的模块化XML解析功能
@@ -97,6 +98,10 @@ interface UniversalPageFinderModalProps {
   onClose: () => void;
   onElementSelected?: (element: UIElement) => void;
   initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
+  loadFromStepXml?: { // 🆕 从步骤XML源加载
+    stepId: string;
+    xmlCacheId?: string;
+  };
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
@@ -104,11 +109,13 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   onClose,
   onElementSelected,
   initialViewMode = "visual", // 🆕 默认为 visual 视图
+  loadFromStepXml, // 🆕 从步骤XML源加载
 }) => {
   // === 状态管理 ===
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
+  const [currentXmlCacheId, setCurrentXmlCacheId] = useState<string>(""); // XML缓存ID
   const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid">(
     initialViewMode // 🆕 使用传入的初始视图模式
   ); // 可视化分析Tab内部的四视图切换
@@ -144,6 +151,67 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
   }, [visible, refreshDevices]);
 
+  // === 从步骤XML源加载处理 ===
+  useEffect(() => {
+    if (visible && loadFromStepXml?.xmlCacheId) {
+      console.log("🔄 从步骤XML源加载数据:", loadFromStepXml);
+      handleLoadFromStepXml(loadFromStepXml.xmlCacheId);
+    }
+  }, [visible, loadFromStepXml]);
+
+  // 处理从步骤关联的XML缓存加载数据
+  const handleLoadFromStepXml = async (xmlCacheId: string) => {
+    try {
+      const xmlCacheManager = XmlCacheManager.getInstance();
+      const cacheEntry = xmlCacheManager.getCachedXml(xmlCacheId);
+      
+      if (!cacheEntry) {
+        console.warn("⚠️ 未找到XML缓存条目:", xmlCacheId);
+        message.warning("未找到步骤关联的页面数据");
+        return;
+      }
+
+      console.log("✅ 加载步骤关联的XML数据:", {
+        xmlCacheId,
+        deviceId: cacheEntry.deviceId,
+        elementCount: cacheEntry.pageInfo.elementCount,
+        timestamp: new Date(cacheEntry.timestamp).toLocaleString()
+      });
+
+      // 设置XML内容和缓存ID
+      setCurrentXmlContent(cacheEntry.xmlContent);
+      setCurrentXmlCacheId(xmlCacheId);
+      
+      // 设置设备信息
+      setSelectedDevice(cacheEntry.deviceId);
+      
+      // 解析XML并提取UI元素
+      const elements = await UniversalUIAPI.extractPageElements(cacheEntry.xmlContent);
+      setUIElements(elements);
+
+      // 使用新的模块化XML解析功能
+      if (cacheEntry.xmlContent) {
+        try {
+          const parseResult = parseXML(cacheEntry.xmlContent);
+          setElements(parseResult.elements);
+          setCategories(parseResult.categories);
+          console.log("✅ 步骤XML解析完成:", {
+            elementsCount: parseResult.elements.length,
+            categoriesCount: parseResult.categories.length,
+          });
+        } catch (parseError) {
+          console.error("❌ 步骤XML解析失败:", parseError);
+        }
+      }
+      
+      message.success(`已加载步骤关联的页面数据 (${elements.length} 个元素)`);
+      
+    } catch (error) {
+      console.error("❌ 加载步骤XML数据失败:", error);
+      message.error("加载步骤关联的页面数据失败");
+    }
+  };
+
   // 获取页面UI结构
   const getPageUIElements = async (device: string) => {
     if (!device) {
@@ -157,9 +225,39 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       const xmlContent = await UniversalUIAPI.analyzeUniversalUIPage(device);
       setCurrentXmlContent(xmlContent);
 
+      // 生成唯一的XML缓存ID并保存
+      const uniqueCacheId = `xml_${Date.now()}_${device}`;
+      setCurrentXmlCacheId(uniqueCacheId);
+      
+      console.log("📦 生成XML缓存ID:", uniqueCacheId);
+
+      // 缓存XML数据到管理器
+      const xmlCacheManager = XmlCacheManager.getInstance();
+      const cacheEntry = {
+        cacheId: uniqueCacheId,
+        xmlContent: xmlContent,
+        deviceId: device,
+        deviceName: devices.find(d => d.id === device)?.name || device,
+        timestamp: Date.now(),
+        pageInfo: {
+          appPackage: 'com.xingin.xhs', // TODO: 动态获取包名
+          activityName: '未知Activity', // TODO: 动态获取Activity
+          pageTitle: '当前页面',
+          pageType: '分析页面',
+          elementCount: 0 // 会在解析后更新
+        }
+      };
+
+      xmlCacheManager.cacheXmlPage(cacheEntry);
+      
+      console.log("✅ XML页面已缓存:", uniqueCacheId);
+
       // 然后提取元素
       const elements = await UniversalUIAPI.extractPageElements(xmlContent);
       setUIElements(elements);
+
+      // 更新缓存条目的元素数量
+      cacheEntry.pageInfo.elementCount = elements.length;
 
       // 🆕 使用新的模块化XML解析功能解析视觉元素
       if (xmlContent) {
@@ -235,12 +333,17 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   // 智能元素选择处理
   const handleSmartElementSelect = async (element: UIElement) => {
     console.log("🎯 智能元素选择:", element);
+    console.log("🔍 使用XML缓存ID:", { currentXmlCacheId, hasContent: !!currentXmlContent });
 
     try {
+      // 使用正确的XML缓存ID，确保步骤能正确关联到其原始XML源
+      const xmlCacheId = currentXmlCacheId || `xml_${Date.now()}`;
+      console.log("📋 最终使用的XML缓存ID:", xmlCacheId);
+      
       // 🆕 创建增强元素信息，包含完整XML上下文
       const enhancedElement = await EnhancedElementCreator.createEnhancedElement(element, {
         xmlContent: currentXmlContent,
-        xmlCacheId: `xml_${Date.now()}`,
+        xmlCacheId: xmlCacheId,
         packageName: 'com.xingin.xhs', // 小红书包名，TODO: 动态获取
         pageInfo: {
           appName: '小红书',

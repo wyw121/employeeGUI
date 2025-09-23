@@ -73,6 +73,7 @@ import { ContactWorkflowSelector, generateContactImportWorkflowSteps } from '../
 // 🆕 导入增强元素信息模块
 import { EnhancedUIElement, EnhancedStepParameters, EnhancedElementInfoService } from '../modules/enhanced-element-info';
 import { EnhancedStepCard } from '../modules/enhanced-step-card';
+import XmlCacheManager from '../services/XmlCacheManager';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -447,6 +448,14 @@ const SmartScriptBuilderPage: React.FC = () => {
 
   // 🆕 处理修改步骤参数
   const handleEditStepParams = (step: ExtendedSmartScriptStep) => {
+    console.log('📝 开始修改步骤参数:', {
+      stepId: step.id,
+      stepName: step.name,
+      xmlCacheId: step.parameters?.xmlCacheId,
+      hasXmlContent: !!step.parameters?.xmlContent,
+      allParameterKeys: Object.keys(step.parameters || {})
+    });
+    
     setEditingStepForParams(step); // 标记当前修改的步骤
     setIsQuickAnalyzer(false); // 清除快捷模式
     setShowPageAnalyzer(true);
@@ -480,8 +489,9 @@ const SmartScriptBuilderPage: React.FC = () => {
         return;
       }
 
+      const stepId = editingStep?.id || `step_${Date.now()}`;
       const newStep: ExtendedSmartScriptStep = {
-        id: editingStep?.id || `step_${Date.now()}`,
+        id: stepId,
         step_type,
         name,
         description,
@@ -496,12 +506,31 @@ const SmartScriptBuilderPage: React.FC = () => {
         post_conditions: [],
       };
 
+      // 🆕 建立步骤与XML源的关联
+      if (parameters.xmlCacheId && parameters.xmlCacheId !== 'unknown') {
+        const xmlCacheManager = XmlCacheManager.getInstance();
+        xmlCacheManager.linkStepToXml(stepId, parameters.xmlCacheId, {
+          elementPath: parameters.element_path,
+          selectionContext: {
+            selectedBounds: parameters.bounds,
+            searchCriteria: parameters.search_criteria || parameters.target_value || '',
+            confidence: parameters.confidence || 0.8
+          }
+        });
+        
+        console.log(`🔗 步骤已关联XML源:`, {
+          stepId,
+          xmlCacheId: parameters.xmlCacheId,
+          hasElementPath: !!parameters.element_path
+        });
+      }
+
       if (editingStep) {
         setSteps(prev => prev.map(s => s.id === editingStep.id ? newStep : s));
         message.success('步骤更新成功');
       } else {
         setSteps(prev => [...prev, newStep]);
-        message.success('步骤添加成功');
+        message.success(`步骤添加成功${parameters.xmlCacheId ? '（已关联XML源）' : ''}`);
       }
 
       setIsModalVisible(false);
@@ -1669,6 +1698,11 @@ const SmartScriptBuilderPage: React.FC = () => {
       <UniversalPageFinderModal
         visible={showPageAnalyzer}
         initialViewMode={editingStepForParams ? "grid" : "visual"} // 🆕 修改参数时使用网格检查器视图
+        // 🆕 从步骤XML源加载
+        loadFromStepXml={editingStepForParams ? {
+          stepId: editingStepForParams.id,
+          xmlCacheId: editingStepForParams.parameters?.xmlCacheId
+        } : undefined}
         onClose={() => {
           setShowPageAnalyzer(false);
           setIsQuickAnalyzer(false); // 重置快捷模式标记

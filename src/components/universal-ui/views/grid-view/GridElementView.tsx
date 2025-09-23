@@ -17,8 +17,8 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import type { VisualUIElement } from "../../types";
 import styles from './GridElementView.module.css';
-import { UiNode, AdvancedFilter } from './types';
-import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath } from './utils';
+import { UiNode, AdvancedFilter, SearchOptions } from './types';
+import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath } from './utils';
 import { TreeRow } from './TreeRow';
 import { NodeDetail } from './NodeDetail';
 import { ScreenPreview } from './ScreenPreview';
@@ -26,6 +26,14 @@ import { MatchResultsPanel } from './MatchResultsPanel';
 import { FilterBar } from './FilterBar';
 import { AdvancedFilterSummary } from './AdvancedFilterSummary';
 import { Breadcrumbs } from './Breadcrumbs';
+import { XPathBuilder } from './XPathBuilder';
+import { XPathTestResultsPanel } from './XPathTestResultsPanel';
+import { MatchCountSummary } from './MatchCountSummary';
+import { loadPrefs, savePrefs } from './prefs';
+import { SearchFieldToggles } from './SearchFieldToggles';
+import { getSearchHistory, addSearchHistory, clearSearchHistory, getFavoriteSearches, toggleFavoriteSearch, getXPathHistory, addXPathHistory, clearXPathHistory, getFavoriteXPaths, toggleFavoriteXPath } from './history';
+import { useGridHotkeys } from './useGridHotkeys';
+import { downloadText } from './exporters';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -66,10 +74,63 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [matchIndex, setMatchIndex] = useState<number>(-1);
   const [xPathInput, setXPathInput] = useState<string>("");
   const [showMatchedOnly, setShowMatchedOnly] = useState<boolean>(false);
-  const [advFilter, setAdvFilter] = useState<AdvancedFilter>({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '' });
+  const [advFilter, setAdvFilter] = useState<AdvancedFilter>({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '', packageName: '', clickable: null, nodeEnabled: null });
+  const [autoSelectOnParse, setAutoSelectOnParse] = useState<boolean>(false);
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>({ caseSensitive: false, useRegex: false });
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [favSearch, setFavSearch] = useState<string[]>([]);
+  const [xpathHistory, setXpathHistory] = useState<string[]>([]);
+  const [favXPath, setFavXPath] = useState<string[]>([]);
+  const [xpathTestNodes, setXpathTestNodes] = useState<UiNode[]>([]);
+
+  // 初始化首选项
+  useEffect(() => {
+    const p = loadPrefs();
+    setAutoSelectOnParse(p.autoSelectOnParse);
+    setShowMatchedOnly(p.showMatchedOnly);
+    setExpandDepth(p.expandDepth);
+  // 兼容旧版本偏好，并带出字段选择
+  setSearchOptions({ caseSensitive: (p as any).caseSensitive ?? false, useRegex: (p as any).useRegex ?? false, fields: p.searchFields });
+  // 初始化历史与收藏
+  setSearchHistory(getSearchHistory());
+  setFavSearch(getFavoriteSearches());
+  setXpathHistory(getXPathHistory());
+  setFavXPath(getFavoriteXPaths());
+  }, []);
+
+  // 持久化首选项
+  useEffect(() => {
+    savePrefs({
+      autoSelectOnParse,
+      showMatchedOnly,
+      expandDepth,
+      caseSensitive: searchOptions.caseSensitive,
+      useRegex: searchOptions.useRegex,
+      searchFields: {
+        id: searchOptions.fields?.id ?? true,
+        text: searchOptions.fields?.text ?? true,
+        desc: searchOptions.fields?.desc ?? true,
+        className: searchOptions.fields?.className ?? true,
+        tag: searchOptions.fields?.tag ?? true,
+        pkg: searchOptions.fields?.pkg ?? false,
+      },
+    });
+  }, [autoSelectOnParse, showMatchedOnly, expandDepth, searchOptions]);
+
+  // 参考输入框引用
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const xpathRef = useRef<HTMLInputElement | null>(null);
+
+  // 全局快捷键：Ctrl+F 聚焦搜索，F3/Shift+F3 导航匹配，Ctrl+L 聚焦 XPath 输入
+  useGridHotkeys({
+    focusSearch: () => searchRef.current?.focus(),
+    nextMatch: () => goToMatch(1),
+    prevMatch: () => goToMatch(-1),
+    focusXPath: () => xpathRef.current?.focus(),
+  });
 
   // 上传文件（可选）
-  const fileRef = useRef<HTMLInputElement | null>(null);
 
   // 初始化时如果有 xmlContent 则自动解析
   useEffect(() => {
@@ -85,13 +146,16 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     if (tree) {
       attachParents(tree);
       setRoot(tree);
-      setSelected(tree);
       // 重置展开与匹配状态
       setExpandAll(false);
       setCollapseVersion(v => v + 1);
       setExpandDepth(2);
       setMatches([]);
       setMatchIndex(-1);
+      // 解析完成后，如启用“自动定位”，则尝试定位首个匹配
+      if (autoSelectOnParse) {
+        setTimeout(() => locateFirstMatch(), 0);
+      }
     } else {
       alert("XML 解析失败，请检查格式");
     }
@@ -101,7 +165,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const locateFirstMatch = () => {
     const kw = filter.trim();
     const anyAdv = advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className);
-    const combined = makeCombinedMatcher(kw, advFilter);
+  const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
     if (!kw && !anyAdv) return; // 无任何条件则不定位
     const dfs = (n?: UiNode | null): UiNode | null => {
       if (!n) return null;
@@ -133,7 +197,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     }
     const result: UiNode[] = [];
     const stk: UiNode[] = [root];
-    const combined = makeCombinedMatcher(kw, advFilter);
+  const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
     while (stk.length) {
       const n = stk.pop()!;
       if (combined(n)) result.push(n);
@@ -141,7 +205,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     }
     setMatches(result);
     setMatchIndex(result.length > 0 ? 0 : -1);
-  }, [root, filter, advFilter]);
+  }, [root, filter, advFilter, searchOptions]);
 
   // 当选中节点改变时，同步匹配索引
   useEffect(() => {
@@ -177,6 +241,13 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     const n = findByXPathRoot(root, xp) || findByPredicateXPath(root, xp);
     if (n) setSelected(n);
     else alert('未找到匹配的 XPath 节点');
+    // 额外：计算全部命中用于测试面板（绝对路径命中则仅显示该节点，否则尝试谓词查找全部）
+    if (n && findByXPathRoot(root, xp)) {
+      setXpathTestNodes([n]);
+    } else {
+      const all = findAllByPredicateXPath(root, xp);
+      setXpathTestNodes(all);
+    }
   };
 
   const loadDemo = () => {
@@ -227,26 +298,66 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             />
             <button className={styles.btn} onClick={() => fileRef.current?.click()}>导入 XML 文件</button>
             <button className={styles.btn} onClick={loadDemo}>填充示例</button>
+            <button className={styles.btn} onClick={() => downloadText(xmlText, 'current.xml', 'application/xml')}>导出当前 XML</button>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="搜索：resource-id/text/content-desc/class"
-              className={styles.input}
-              onKeyDown={(e) => { if (e.key === 'Enter') locateFirstMatch(); }}
-            />
+            <div className="relative">
+              <input
+                list="grid-search-history"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="搜索：resource-id/text/content-desc/class"
+                className={styles.input}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    locateFirstMatch();
+                    addSearchHistory(filter);
+                    setSearchHistory(getSearchHistory());
+                  }
+                }}
+                ref={searchRef}
+              />
+              <datalist id="grid-search-history">
+                {favSearch.map((s, i) => (<option key={`fav-${i}`} value={s} />))}
+                {searchHistory.filter(s => !favSearch.includes(s)).map((s, i) => (<option key={`h-${i}`} value={s} />))}
+              </datalist>
+            </div>
+            <button className={styles.btn} title="收藏/取消收藏当前搜索" onClick={() => { const ok = toggleFavoriteSearch(filter); setFavSearch(getFavoriteSearches()); }}>{favSearch.includes(filter.trim()) ? '★' : '☆'}</button>
+            <button className={styles.btn} title="清空搜索历史" onClick={() => { clearSearchHistory(); setSearchHistory([]); }}>清空历史</button>
+            <button
+              className={styles.btn}
+              onClick={async () => {
+                try {
+                  const txt = await navigator.clipboard.readText();
+                  if (txt && txt.trim()) {
+                    setXmlText(txt);
+                  } else {
+                    alert('剪贴板为空');
+                  }
+                } catch (err) {
+                  alert('无法读取剪贴板，请检查浏览器/应用权限');
+                }
+              }}
+            >粘贴 XML</button>
             <button className={styles.btn} onClick={() => onParse()}>解析 XML</button>
             <button className={styles.btn} onClick={() => setExpandAll(true)}>展开全部</button>
             <button className={styles.btn} onClick={() => { setExpandAll(false); setCollapseVersion(v => v + 1); }}>折叠全部</button>
             <button className={styles.btn} onClick={locateFirstMatch}>定位匹配</button>
             <button className={styles.btn} onClick={() => goToMatch(-1)}>上一个</button>
             <button className={styles.btn} onClick={() => goToMatch(1)}>下一个</button>
-            <span className="text-xs text-neutral-500">{matches.length > 0 ? `${(matchIndex>=0?matchIndex+1:0)}/${matches.length}` : '0/0'}</span>
+            <MatchCountSummary total={matches.length} index={matchIndex} autoSelectOnParse={autoSelectOnParse} onToggleAutoSelect={setAutoSelectOnParse} />
           </div>
         </div>
   {/* 第二排：按层级展开与 XPath 精准定位 */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="text-xs text-neutral-500 flex items-center gap-1">
+            <input type="checkbox" checked={searchOptions.caseSensitive} onChange={(e) => setSearchOptions(s => ({ ...s, caseSensitive: e.target.checked }))} /> 区分大小写
+          </label>
+          <label className="text-xs text-neutral-500 flex items-center gap-1">
+            <input type="checkbox" checked={searchOptions.useRegex} onChange={(e) => setSearchOptions(s => ({ ...s, useRegex: e.target.checked }))} /> 使用正则
+          </label>
+          <SearchFieldToggles value={searchOptions} onChange={setSearchOptions} />
+          <span className="mx-2 h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
           <label className="text-xs text-neutral-500">展开到层级</label>
           <select
             className={styles.input}
@@ -263,22 +374,34 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             <option value={6}>6</option>
           </select>
           <span className="mx-2 h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
-          <input
-            value={xPathInput}
-            onChange={(e) => setXPathInput(e.target.value)}
-            placeholder="/hierarchy/node[1]/node[2]"
-            className={styles.input}
-            style={{ width: 260 }}
-            onKeyDown={(e) => { if (e.key === 'Enter') locateXPath(); }}
-          />
+          <div className="relative">
+            <input
+              list="grid-xpath-history"
+              value={xPathInput}
+              onChange={(e) => setXPathInput(e.target.value)}
+              placeholder="/hierarchy/node[1]/node[2]"
+              className={styles.input}
+              style={{ width: 260 }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { locateXPath(); addXPathHistory(xPathInput); setXpathHistory(getXPathHistory()); } }}
+              ref={xpathRef}
+            />
+            <datalist id="grid-xpath-history">
+              {favXPath.map((s, i) => (<option key={`favx-${i}`} value={s} />))}
+              {xpathHistory.filter(s => !favXPath.includes(s)).map((s, i) => (<option key={`xh-${i}`} value={s} />))}
+            </datalist>
+          </div>
+          <button className={styles.btn} title="收藏/取消收藏当前 XPath" onClick={() => { const ok = toggleFavoriteXPath(xPathInput); setFavXPath(getFavoriteXPaths()); }}>{favXPath.includes(xPathInput.trim()) ? '★' : '☆'}</button>
+          <button className={styles.btn} title="清空 XPath 历史" onClick={() => { clearXPathHistory(); setXpathHistory([]); }}>清空历史</button>
           <button className={styles.btn} onClick={locateXPath}>定位 XPath</button>
+          <span className="mx-2 h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
+          <button className={styles.btn} onClick={() => { const t = findNearestClickableAncestor(selected); if (t) setSelected(t); }}>选中可点击父级</button>
           <span className="mx-2 h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
           <label className="text-xs text-neutral-500 flex items-center gap-1">
             <input type="checkbox" checked={showMatchedOnly} onChange={(e) => setShowMatchedOnly(e.target.checked)} /> 仅显示匹配路径
           </label>
           <span className="text-[10px] text-neutral-400">支持 //*[@resource-id='xxx']</span>
           <span className="mx-2 h-4 w-px bg-neutral-200 dark:bg-neutral-800" />
-          <button className={styles.btn} onClick={() => { setFilter(''); setAdvFilter({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '' }); }}>清空筛选</button>
+          <button className={styles.btn} onClick={() => { setFilter(''); setAdvFilter({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '', packageName: '', clickable: null, nodeEnabled: null }); }}>清空筛选</button>
           <button className={styles.btn} onClick={() => { setShowMatchedOnly(true); locateFirstMatch(); }}>展开匹配路径</button>
         </div>
         {/* 第三排：高级过滤器 */}
@@ -287,7 +410,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           <AdvancedFilterSummary
             value={advFilter}
             onClear={() => {
-              setAdvFilter({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '' });
+              setAdvFilter({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '', packageName: '', clickable: null, nodeEnabled: null });
               setFilter('');
             }}
           />
@@ -315,7 +438,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             <div className={`${styles.cardBody} ${styles.tree}`}>
               <div className="mb-2"><Breadcrumbs selected={selected} onSelect={(n) => setSelected(n)} /></div>
               {root ? (
-                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} filter={filter} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className))} />
+                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} />
               ) : (
                 <div className="p-3 text-sm text-neutral-500">解析 XML 后在此展示树结构…</div>
               )}
@@ -331,6 +454,14 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             keyword={filter}
             advFilter={advFilter}
             onJump={(idx, node) => { setMatchIndex(idx); setSelected(node); }}
+            onInsertXPath={(xp) => setXPathInput(xp)}
+            searchOptions={searchOptions}
+          />
+          <XPathTestResultsPanel nodes={xpathTestNodes} onJump={(n) => setSelected(n)} />
+          <XPathBuilder
+            node={selected}
+            onApply={(xp) => { setXPathInput(xp); /* 先更新输入，再定位 */ setTimeout(() => locateXPath(), 0); }}
+            onInsert={(xp) => { setXPathInput(xp); }}
           />
           <div className={styles.card}>
             <div className={styles.cardBody}>
@@ -339,7 +470,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           </div>
           <div className={styles.card}>
             <div className={styles.cardBody}>
-              <ScreenPreview root={root} selected={selected} onSelect={(n) => setSelected(n)} />
+              <ScreenPreview root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
             </div>
           </div>
         </div>

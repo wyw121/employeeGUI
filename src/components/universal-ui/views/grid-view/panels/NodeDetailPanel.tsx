@@ -6,7 +6,7 @@ import { MatchPresetsRow } from './node-detail/MatchPresetsRow';
 import type { MatchCriteria, MatchResultSummary } from './node-detail/types';
 import { useAdb } from '../../../../../application/hooks/useAdb';
 import { MatchingStrategySelector } from './node-detail/MatchingStrategySelector';
-import { SelectedFieldsTable } from './node-detail/SelectedFieldsTable';
+import { SelectedFieldsChips, SelectedFieldsTable } from './node-detail/';
 import { PRESET_FIELDS, inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes } from './node-detail';
 
 interface NodeDetailPanelProps {
@@ -161,6 +161,8 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
             }}
           />
         </div>
+        {/* 字段快速勾选 Chips（与下方表格共用同一状态） */}
+        <SelectedFieldsChips selected={selectedFields} onToggle={toggleField} />
         {/* 字段勾选 + 值编辑（带复选框） */}
         <SelectedFieldsTable
           node={node}

@@ -27,6 +27,18 @@
   - 选中字段 + 值 的只读展示
   - props: `{ node: UiNode | null, fields: string[] }`
 
+- `SelectedFieldsEditor.tsx`
+  - 选中字段的可编辑输入（不含勾选逻辑，纯编辑器）
+  - props: `{ node: UiNode | null, fields: string[], values: Record<string,string>, onChange(next) }`
+
+- `SelectedFieldsTable.tsx`
+  - 集成“字段勾选 + 值编辑”的表格式组件（推荐）
+  - props: `{ node: UiNode | null, selected: string[], values: Record<string,string>, onToggle(field), onChangeValue(field,value), excludes?: Record<string,string[]>, onChangeExcludes?(field,next) }`
+
+- `NegativeConditionsEditor.tsx`
+  - 针对单字段维护“不包含（排除词）”集合的编辑器
+  - props: `{ field: string, excludes: string[], onChange(next: string[]) }`
+
 - `types.ts`
   - `MatchStrategy` | `MatchCriteria` | `MatchResultSummary`
 
@@ -40,6 +52,9 @@ import {
   MatchingStrategySelector,
   SelectedFieldsPreview,
   SelectedFieldsChips,
+  SelectedFieldsEditor,
+  SelectedFieldsTable,
+  NegativeConditionsEditor,
   // types
   MatchStrategy,
   MatchCriteria,

@@ -17,7 +17,7 @@ import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from
 // 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
 import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
-import { PRESET_FIELDS } from './universal-ui/views/grid-view/panels/node-detail';
+import { PRESET_FIELDS, normalizeExcludes } from './universal-ui/views/grid-view/panels/node-detail';
 
 const { Text } = Typography;
 
@@ -487,6 +487,8 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                           }
 
                           const baseParams = step.parameters || {};
+                          // 规范化 excludes：仅保留仍被选中的字段的排除词
+                          const normalizedExcludes = normalizeExcludes(prevMatching.excludes || {}, nextFields);
                           const nextParams = {
                             ...baseParams,
                             matching: {
@@ -494,6 +496,7 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                               strategy: next,
                               fields: nextFields,
                               values,
+                              excludes: normalizedExcludes,
                             },
                           };
                           onUpdateStepParameters?.(step.id, nextParams);

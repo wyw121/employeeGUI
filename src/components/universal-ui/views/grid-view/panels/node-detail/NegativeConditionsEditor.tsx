@@ -31,6 +31,10 @@ export const NegativeConditionsEditor: React.FC<NegativeConditionsEditorProps> =
     setDraft('');
     setOpen(false);
   };
+
+  const remove = (v: string) => {
+    onChange(excludes.filter(x => x !== v));
+  };
   return (
     <div className="flex items-start gap-2">
       <button
@@ -63,11 +67,6 @@ export const NegativeConditionsEditor: React.FC<NegativeConditionsEditorProps> =
           <span key={v} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800">
             不包含：{v}
             <button type="button" className="text-red-500" title="移除" onClick={() => remove(v)}>－</button>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
           </span>
         ))}
       </div>

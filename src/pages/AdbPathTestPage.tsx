@@ -83,9 +83,10 @@ export const AdbPathTestPage: React.FC = () => {
             {devices && (
               <Alert 
                 type="info" 
-                message="设备检测结果"
+                style={{ backgroundColor: '#0b1220', color: '#e5e7eb', borderColor: '#1f2937' }}
+                message={<span style={{ color: '#e5e7eb' }}>设备检测结果</span>}
                 description={
-                  <pre style={{ background: '#f5f5f5', padding: '8px', borderRadius: '4px' }}>
+                  <pre style={{ background: '#0b1220', color: '#e5e7eb', padding: '8px', borderRadius: '4px', margin: 0 }}>
                     {devices}
                   </pre>
                 }

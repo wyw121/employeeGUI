@@ -150,16 +150,16 @@ export class UniversalUIAPI {
   }
 
   /**
-   * 提取页面元素（前端实现，避免Rust编译问题）
+   * 提取页面元素 - 使用统一智能解析器，失败时使用前端解析
    */
   static async extractPageElements(xmlContent: string): Promise<UIElement[]> {
     try {
-      // 优先尝试后端解析
+      // 优先使用后端统一解析器
       try {
-        return await invoke<UIElement[]>('extract_page_elements_simple', { xml_content: xmlContent });
+        return await invoke<UIElement[]>('extract_page_elements', { xml_content: xmlContent });
       } catch (backendError) {
-        console.warn('后端解析失败，使用前端解析:', backendError);
-        // 后端失败时使用前端解析 - 🆕 支持上下文感知
+        console.warn('后端解析失败，使用前端上下文感知解析:', backendError);
+        // 后端失败时使用前端上下文感知解析
         return this.parseXMLToElementsWithContext(xmlContent);
       }
     } catch (error) {
@@ -169,7 +169,7 @@ export class UniversalUIAPI {
   }
 
   /**
-   * 🆕 上下文感知的XML解析器 - 构建完整的DOM树关系
+   * 前端XML解析器 - 上下文感知版本，构建完整的DOM树关系
    */
   private static parseXMLToElementsWithContext(xmlContent: string): UIElement[] {
     const elements: UIElement[] = [];
@@ -308,9 +308,7 @@ export class UniversalUIAPI {
       
     } catch (error) {
       console.error('上下文感知XML解析失败:', error);
-      // 降级到简单解析
-      console.log('降级到简单解析模式...');
-      return this.parseXMLToElements(xmlContent);
+      throw new Error(`XML解析失败: ${error}`);
     }
   }
 
@@ -429,85 +427,6 @@ export class UniversalUIAPI {
         distance_percent: distancePx / 1080 * 100 // 基于屏幕宽度的百分比
       }
     };
-  }
-
-  /**
-   * 前端XML解析器 - 简单版本（作为降级方案）
-   */
-  private static parseXMLToElements(xmlContent: string): UIElement[] {
-    const elements: UIElement[] = [];
-    
-    try {
-      // 创建DOM解析器
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-      
-      // 检查解析错误
-      const parseError = xmlDoc.querySelector('parsererror');
-      if (parseError) {
-        throw new Error(`XML解析错误: ${parseError.textContent}`);
-      }
-      
-      // 递归遍历所有节点
-      const traverseNode = (node: Element, depth: number = 0) => {
-        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'node') {
-          const bounds = this.parseBounds(node.getAttribute('bounds') || '');
-          const text = node.getAttribute('text') || '';
-          const contentDesc = node.getAttribute('content-desc') || '';
-          const resourceId = node.getAttribute('resource-id') || '';
-          const className = node.getAttribute('class') || '';
-          const clickable = node.getAttribute('clickable') === 'true';
-          const scrollable = node.getAttribute('scrollable') === 'true';
-          const enabled = node.getAttribute('enabled') !== 'false';
-          const checkable = node.getAttribute('checkable') === 'true';
-          const checked = node.getAttribute('checked') === 'true';
-          const selected = node.getAttribute('selected') === 'true';
-          const password = node.getAttribute('password') === 'true';
-          
-          // 🎯 保持基础过滤：保留所有有效的UI节点，让层级树视图负责显示控制
-          // 只过滤掉明显无效或异常的元素
-          const hasValidBounds = bounds.right > bounds.left && bounds.bottom > bounds.top;
-          const hasMinimumSize = (bounds.right - bounds.left) >= 1 && (bounds.bottom - bounds.top) >= 1;
-          
-          if (hasValidBounds && hasMinimumSize) {
-            elements.push({
-              id: `element_${elements.length}`,
-              element_type: className || 'unknown',
-              text,
-              bounds,
-              xpath: this.generateXPath(node, depth),
-              resource_id: resourceId,
-              class_name: className,
-              is_clickable: clickable,
-              is_scrollable: scrollable,
-              is_enabled: enabled,
-              is_focused: false,
-              checkable,
-              checked,
-              selected,
-              password,
-              content_desc: contentDesc,
-            });
-          }
-        }
-        
-        // 递归处理子节点
-        for (let i = 0; i < node.children.length; i++) {
-          traverseNode(node.children[i], depth + 1);
-        }
-      };
-      
-      // 从根节点开始遍历
-      const rootNodes = xmlDoc.querySelectorAll('hierarchy > node');
-      rootNodes.forEach(node => traverseNode(node, 0));
-      
-      console.log(`前端解析完成，提取到 ${elements.length} 个UI元素`);
-      return elements;
-      
-    } catch (error) {
-      console.error('前端XML解析失败:', error);
-      throw new Error(`前端XML解析失败: ${error}`);
-    }
   }
 
   /**

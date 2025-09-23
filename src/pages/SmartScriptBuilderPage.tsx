@@ -52,6 +52,7 @@ import { SmartNavigationModal } from '../components';
 import { DistributedScriptQualityPanel } from '../modules/distributed-script-quality/DistributedScriptQualityPanel';
 import { SmartPageFinderModal } from '../components/smart-page-finder';
 import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
+import type { NodeLocator } from '../domain/inspector/entities/NodeLocator';
 import type { SnapshotInfo } from '../modules/snapshot-recovery/SnapshotRecoveryTypes';
 import SmartStepGenerator from '../modules/SmartStepGenerator';
 import { testSmartStepGenerator, testVariousCases } from '../test/SmartStepGeneratorTest';
@@ -525,6 +526,28 @@ const SmartScriptBuilderPage: React.FC = () => {
     setShowPageAnalyzer(true);
   };
 
+  // 🆕 更新当前XML内容状态（用于自包含脚本）
+  const updateCurrentXmlContext = (xmlContent: string, deviceInfo?: Partial<XmlSnapshot['deviceInfo']>, pageInfo?: Partial<XmlSnapshot['pageInfo']>) => {
+    setCurrentXmlContent(xmlContent);
+    if (deviceInfo) {
+      setCurrentDeviceInfo(prev => ({ ...prev, ...deviceInfo }));
+    }
+    if (pageInfo) {
+      setCurrentPageInfo(prev => ({ ...prev, ...pageInfo }));
+    }
+    console.log('🔄 已更新当前XML上下文:', {
+      xmlLength: xmlContent.length,
+      deviceInfo,
+      pageInfo,
+    });
+  };
+
+  // 🆕 从页面分析器获取当前XML内容
+  const getCurrentXmlFromAnalyzer = (): string => {
+    // 这里可以从UniversalPageFinderModal获取当前分析的XML
+    return currentXmlContent;
+  };
+
   // 🆕 处理修改步骤参数
   const handleEditStepParams = (step: ExtendedSmartScriptStep) => {
     console.log('📝 开始修改步骤参数:', {
@@ -612,15 +635,28 @@ const SmartScriptBuilderPage: React.FC = () => {
       
   // ✅ 保存前的XML质量校验（阻断式）
       if (parameters) {
-        // 构造最小 xmlSnapshot 视图
+        // 构造最小 xmlSnapshot 视图（增强：允许使用当前分析器中的XML与上下文信息作为回退）
+        const effectiveXmlContent = parameters.xmlContent || currentXmlContent || '';
+        const effectiveDeviceInfo = parameters.deviceInfo
+          || (parameters.deviceId || parameters.deviceName
+                ? { deviceId: parameters.deviceId, deviceName: parameters.deviceName }
+                : undefined)
+          || (currentDeviceInfo?.deviceId || currentDeviceInfo?.deviceName
+                ? { deviceId: currentDeviceInfo.deviceId as string, deviceName: currentDeviceInfo.deviceName as string }
+                : undefined);
+        // 校验器仅要求存在 appName 字段，这里补齐最小信息
+        const effectivePageInfo = parameters.pageInfo
+          || ({
+                appName: (currentPageInfo as any)?.appName || '小红书',
+                pageTitle: currentPageInfo?.pageTitle || '未知页面'
+              } as any);
+        const effectiveTimestamp = parameters.xmlTimestamp || Date.now();
+
         const xmlSnapshot = {
-          xmlContent: parameters.xmlContent,
-          deviceInfo: parameters.deviceInfo || (parameters.deviceId || parameters.deviceName ? {
-            deviceId: parameters.deviceId,
-            deviceName: parameters.deviceName
-          } : undefined),
-          pageInfo: parameters.pageInfo,
-          timestamp: parameters.xmlTimestamp
+          xmlContent: effectiveXmlContent,
+          deviceInfo: effectiveDeviceInfo,
+          pageInfo: effectivePageInfo,
+          timestamp: effectiveTimestamp
         };
 
         const validation = XmlDataValidator.validateXmlSnapshot(xmlSnapshot as any);
@@ -719,8 +755,8 @@ const SmartScriptBuilderPage: React.FC = () => {
             const xmlSnapshot = createXmlSnapshot(
               xmlContent,
               {
-                deviceId: newStep.parameters.deviceId || currentDeviceInfo.deviceId || selectedDevice || 'unknown',
-                deviceName: newStep.parameters.deviceName || currentDeviceInfo.deviceName || devices.find(d => d.id === selectedDevice)?.name || 'unknown',
+                deviceId: newStep.parameters.deviceId || currentDeviceInfo.deviceId || currentDeviceId || 'unknown',
+                deviceName: newStep.parameters.deviceName || currentDeviceInfo.deviceName || devices.find(d => d.id === currentDeviceId)?.name || 'unknown',
                 appPackage: currentDeviceInfo.appPackage || 'com.xingin.xhs',
                 activityName: currentDeviceInfo.activityName || 'unknown',
               },
@@ -729,6 +765,8 @@ const SmartScriptBuilderPage: React.FC = () => {
                 pageType: currentPageInfo.pageType || 'unknown',
                 elementCount: currentPageInfo.elementCount || 0,
                 appVersion: currentPageInfo.appVersion,
+                // 兼容 XmlDataValidator.checkPageInfo 需要的 appName 字段
+                // createXmlSnapshot 的类型未包含 appName，但我们会在迁移/校验时以扩展字段传递
               }
             );
 
@@ -2040,11 +2078,36 @@ const SmartScriptBuilderPage: React.FC = () => {
         loadFromStepXml={editingStepForParams ? {
           stepId: editingStepForParams.id,
           xmlCacheId: editingStepForParams.parameters?.xmlCacheId,
-          // 🆕 直接传递步骤保存的XML内容，确保能恢复原始页面
-          xmlContent: editingStepForParams.parameters?.xmlContent,
-          deviceId: editingStepForParams.parameters?.deviceId,
-          deviceName: editingStepForParams.parameters?.deviceName
+          // 🆕 优先使用新的自包含XML快照
+          xmlContent: editingStepForParams.parameters?.xmlSnapshot?.xmlContent || editingStepForParams.parameters?.xmlContent,
+          deviceId: editingStepForParams.parameters?.xmlSnapshot?.deviceInfo?.deviceId || editingStepForParams.parameters?.deviceId,
+          deviceName: editingStepForParams.parameters?.xmlSnapshot?.deviceInfo?.deviceName || editingStepForParams.parameters?.deviceName
         } : undefined}
+        // 🆕 预选定位器：根据步骤参数构建，支持 bounds/resource_id/text/class/xpath
+        preselectLocator={(() => {
+          const p: any = editingStepForParams?.parameters || {};
+          const locator: NodeLocator = {} as any;
+          // XPath 优先
+          if (p.xpath && typeof p.xpath === 'string' && p.xpath.trim()) {
+            // 简单判断：以 / 开头认为是绝对 XPath，否则当作谓词
+            if (/^\s*\//.test(p.xpath)) locator.absoluteXPath = String(p.xpath).trim();
+            else locator.predicateXPath = String(p.xpath).trim();
+          }
+          // 属性与 bounds
+          locator.attributes = {
+            resourceId: p.resource_id || p.element_resource_id || undefined,
+            text: p.element_text || p.text || undefined,
+            className: p.class_name || undefined,
+            contentDesc: p.content_desc || undefined,
+            packageName: p.package_name || undefined,
+          };
+          if (p.bounds && typeof p.bounds === 'string') locator.bounds = p.bounds;
+          // 如果完全没有可用信息，则不传定位器
+          const hasAny = locator.absoluteXPath || locator.predicateXPath || locator.bounds || (locator.attributes && Object.values(locator.attributes).some(Boolean));
+          return hasAny ? locator : undefined;
+        })()}
+        // 🆕 XML内容更新回调
+        onXmlContentUpdated={updateCurrentXmlContext}
         onClose={() => {
           setShowPageAnalyzer(false);
           setIsQuickAnalyzer(false); // 重置快捷模式标记

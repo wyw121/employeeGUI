@@ -18,6 +18,7 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import type { VisualUIElement } from "../../types";
 import styles from './GridElementView.module.css';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
+import type { NodeLocator } from '../../../../domain/inspector/entities/NodeLocator';
 import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath } from './utils';
 import { TreeRow } from './TreeRow';
 import { NodeDetail } from './NodeDetail';
@@ -43,6 +44,11 @@ interface GridElementViewProps {
   elements?: VisualUIElement[];
   onElementSelect?: (element: VisualUIElement) => void;
   selectedElementId?: string;
+  // Inspector 集成：提供会话与步骤创建，以及外部定位能力
+  sessionId?: string;
+  onCreateStep?: (sessionId: string, node: UiNode) => void;
+  locator?: NodeLocator;
+  locatorResolve?: (root: UiNode | null, locator: NodeLocator) => UiNode | null;
 }
 
 // =============== 工具函数（见 ./utils） ===============
@@ -61,6 +67,10 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   elements = [],
   onElementSelect,
   selectedElementId = "",
+  sessionId,
+  onCreateStep,
+  locator,
+  locatorResolve,
 }) => {
   // XML 文本与解析树
   const [xmlText, setXmlText] = useState<string>("");
@@ -155,6 +165,17 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
       // 解析完成后，如启用“自动定位”，则尝试定位首个匹配
       if (autoSelectOnParse) {
         setTimeout(() => locateFirstMatch(), 0);
+      }
+      // 外部提供 locator 时，优先执行精确定位
+      if (locator && locatorResolve) {
+        setTimeout(() => {
+          try {
+            const n = locatorResolve(tree, locator);
+            if (n) setSelected(n);
+          } catch {
+            // ignore
+          }
+        }, 0);
       }
     } else {
       alert("XML 解析失败，请检查格式");
@@ -465,6 +486,11 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           />
           <div className={styles.card}>
             <div className={styles.cardBody}>
+              {sessionId && onCreateStep && selected && (
+                <div className="mb-2 flex justify-end">
+                  <button className={styles.btn} onClick={() => onCreateStep(sessionId, selected!)}>生成步骤卡片</button>
+                </div>
+              )}
               <NodeDetail node={selected} />
             </div>
           </div>

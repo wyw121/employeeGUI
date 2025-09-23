@@ -64,6 +64,9 @@ import { LocalStepRepository } from "../../infrastructure/inspector/LocalStepRep
 // 🆕 导入分布式检查器服务
 import { DistributedInspectorService } from "../../application/services/DistributedInspectorService";
 import { distributedStepLookupService } from "../../application/services/DistributedStepLookupService";
+// 🆕 引入定位类型与工具，用于网格检查器的自动定位
+import type { NodeLocator } from "../../domain/inspector/entities/NodeLocator";
+import { findByXPathRoot, findAllByPredicateXPath, findNearestClickableAncestor } from "./views/grid-view/utils";
 
 // 🆕 使用新的模块化XML解析功能
 import {
@@ -111,6 +114,7 @@ interface UniversalPageFinderModalProps {
     timestamp: number;
     elementCount?: number;
   }) => void;
+  onXmlContentUpdated?: (xmlContent: string, deviceInfo?: any, pageInfo?: any) => void; // 🆕 XML内容更新回调
   initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
   loadFromStepXml?: { // 🆕 从步骤XML源加载
     stepId: string;
@@ -119,6 +123,8 @@ interface UniversalPageFinderModalProps {
     deviceId?: string;   // 🆕 设备信息（用于显示）
     deviceName?: string; // 🆕 设备名称
   };
+  // 🆕 修改参数时预选元素定位器（基于步骤指纹构建）
+  preselectLocator?: NodeLocator;
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
@@ -127,8 +133,10 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   onElementSelected,
   snapshotOnlyMode,
   onSnapshotCaptured,
+  onXmlContentUpdated, // 🆕 XML内容更新回调
   initialViewMode = "visual", // 🆕 默认为 visual 视图
   loadFromStepXml, // 🆕 从步骤XML源加载
+  preselectLocator,
 }) => {
   // === 状态管理 ===
   const [selectedDevice, setSelectedDevice] = useState<string>("");
@@ -223,6 +231,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       // 设置XML内容和缓存ID
       setCurrentXmlContent(stepXmlInfo.xmlContent);
       setCurrentXmlCacheId(`direct_${stepXmlInfo.stepId}_${Date.now()}`);
+      if (onXmlContentUpdated) {
+        const deviceInfo = stepXmlInfo.deviceId ? {
+          deviceId: stepXmlInfo.deviceId,
+          deviceName: stepXmlInfo.deviceName || stepXmlInfo.deviceId,
+          appPackage: 'com.xingin.xhs',
+          activityName: 'unknown',
+        } : undefined;
+        onXmlContentUpdated(stepXmlInfo.xmlContent, deviceInfo, { appName: '小红书', pageTitle: '步骤内置XML' } as any);
+      }
       
       // 如果有设备信息，设置设备选择
       if (stepXmlInfo.deviceId) {
@@ -291,6 +308,14 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       // 设置XML内容和临时缓存ID
       setCurrentXmlContent(xmlSnapshot.xmlContent);
       setCurrentXmlCacheId(`distributed_${stepId}_${xmlSnapshot.xmlHash}`);
+      // 通知父组件（用于自包含脚本保存前校验）
+      if (onXmlContentUpdated) {
+        const deviceInfo = xmlSnapshot.deviceInfo || undefined;
+        // 兼容上层校验需要的最小字段
+        const pageInfo = { ...xmlSnapshot.pageInfo } as any;
+        if (!pageInfo.appName) pageInfo.appName = '小红书';
+        onXmlContentUpdated(xmlSnapshot.xmlContent, deviceInfo, pageInfo);
+      }
       
       // 如果有设备信息，设置设备选择
       if (xmlSnapshot.deviceInfo?.deviceId) {
@@ -352,6 +377,17 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       // 设置XML内容和缓存ID
       setCurrentXmlContent(cacheEntry.xmlContent);
       setCurrentXmlCacheId(xmlCacheId);
+      if (onXmlContentUpdated) {
+        const deviceInfo = {
+          deviceId: cacheEntry.deviceId,
+          deviceName: cacheEntry.deviceName,
+          appPackage: cacheEntry.pageInfo?.appPackage || 'com.xingin.xhs',
+          activityName: cacheEntry.pageInfo?.activityName || 'unknown',
+        };
+        const pageInfo = { ...cacheEntry.pageInfo } as any;
+        if (!pageInfo.appName) pageInfo.appName = '小红书';
+        onXmlContentUpdated(cacheEntry.xmlContent, deviceInfo, pageInfo);
+      }
       
       // 设置设备信息
       setSelectedDevice(cacheEntry.deviceId);
@@ -397,6 +433,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       setCurrentXmlContent(xml);
       const xmlCacheId = `step_${stepId}`;
       setCurrentXmlCacheId(xmlCacheId);
+      if (onXmlContentUpdated) {
+        onXmlContentUpdated(xml, undefined, { appName: '小红书', pageTitle: '步骤快照' } as any);
+      }
 
       const elements = await UniversalUIAPI.extractPageElements(xml);
       setUIElements(elements);
@@ -431,6 +470,22 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       // 首先获取XML内容
       const xmlContent = await UniversalUIAPI.analyzeUniversalUIPage(device);
       setCurrentXmlContent(xmlContent);
+
+      // 🆕 通知父组件XML内容已更新
+      if (onXmlContentUpdated) {
+        const deviceInfo = {
+          deviceId: device,
+          deviceName: devices.find(d => d.id === device)?.name || device,
+          appPackage: 'com.xingin.xhs',
+          activityName: 'unknown',
+        };
+        const pageInfo = {
+          pageTitle: '当前页面',
+          pageType: '分析页面',
+          elementCount: 0, // 会在解析后更新
+        };
+        onXmlContentUpdated(xmlContent, deviceInfo, pageInfo);
+      }
 
       // 生成唯一的XML缓存ID并保存
       const uniqueCacheId = `xml_${Date.now()}_${device}`;
@@ -935,6 +990,38 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 elements={elements}
                 onElementSelect={handleVisualElementSelect}
                 selectedElementId={selectedElementId}
+                // 🆕 传入定位器以在解析后自动选中步骤元素
+                locator={preselectLocator}
+                locatorResolve={(root, locator) => {
+                  try {
+                    if (!root || !locator) return null;
+                    // 1) 绝对 XPath 优先
+                    if (locator.absoluteXPath) {
+                      const n = findByXPathRoot(root, locator.absoluteXPath);
+                      if (n) return n;
+                    }
+                    // 2) 谓词 XPath
+                    if (locator.predicateXPath) {
+                      const all = findAllByPredicateXPath(root, locator.predicateXPath);
+                      const picked = pickByAttributes(all, locator);
+                      if (picked) return picked;
+                    }
+                    // 3) 基于属性的回退匹配
+                    const allNodes: any[] = [];
+                    const stk: any[] = root ? [root] : [];
+                    while (stk.length) {
+                      const n = stk.pop();
+                      allNodes.push(n);
+                      for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
+                    }
+                    const picked = pickByAttributes(allNodes, locator);
+                    if (picked) return picked;
+                    // 4) 可点击祖先
+                    return findNearestClickableAncestor(picked);
+                  } catch {
+                    return null;
+                  }
+                }}
               />
             </ErrorBoundary>
           ) : (
@@ -949,6 +1036,26 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       )}
     </Card>
   );
+
+  // 🆕 属性匹配辅助：与 LocatorService.pickByAttributes 逻辑一致的轻量实现
+  function pickByAttributes(nodes: any[], locator: NodeLocator) {
+    if (!nodes || nodes.length === 0) return null;
+    const L = locator.attributes;
+    const wantBounds = (locator as any).bounds as string | undefined;
+    let best: any = null; let bestScore = -1;
+    for (const n of nodes) {
+      const a = n?.attrs || {};
+      let s = 0;
+      if (L?.resourceId && a['resource-id'] === L.resourceId) s += 3;
+      if (L?.className && a['class'] === L.className) s += 2;
+      if (L?.text && (a['text'] || '').includes(L.text)) s += 1;
+      if (L?.contentDesc && (a['content-desc'] || '').includes(L.contentDesc)) s += 1;
+      if (L?.packageName && a['package'] === L.packageName) s += 1;
+      if (wantBounds && a['bounds'] === wantBounds) s += 4; // 边界高度权重，精准定位
+      if (s > bestScore) { bestScore = s; best = n; }
+    }
+    return best;
+  }
 
   // 列表视图Tab
   const renderListTab = () => (

@@ -27,6 +27,7 @@ import {
     Typography
 } from 'antd';
 import React, { useState } from 'react';
+import InspectorPage from '../pages/InspectorPage';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
@@ -42,6 +43,7 @@ const { Title, Text } = Typography;
 export const AntDesignIntegrationDemo: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState('dashboard'); // 默认选中仪表板
   const [selectedDevice, setSelectedDevice] = useState<string>('');
+  const [inspectorOpen, setInspectorOpen] = useState<{open: boolean; sessionId?: string; stepId?: string}>({ open: false });
 
   const handleDeviceSelect = (deviceId: string) => {
     setSelectedDevice(deviceId);
@@ -203,6 +205,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             </Title>
 
             <Space>
+              <Button onClick={() => setInspectorOpen({ open: true })} type="primary">打开检查器</Button>
               <Badge count={5} style={{ backgroundColor: '#ff6b8a' }}>
                 <Button icon={<SyncOutlined />} size="large">
                   刷新设备
@@ -227,6 +230,13 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               height: '100%',
               overflow: 'auto'
             }}>
+            {inspectorOpen.open && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000 }} onClick={() => setInspectorOpen({ open: false })}>
+                <div style={{ width: '95vw', height: '90vh', margin: '4vh auto 0', background: '#111', borderRadius: 12, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                  <InspectorPage sessionId={inspectorOpen.sessionId} stepId={inspectorOpen.stepId} />
+                </div>
+              </div>
+            )}
             {selectedKey === 'dashboard' && (
               <div className="space-y-6">
                 {/* 统计卡片 */}

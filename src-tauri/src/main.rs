@@ -45,7 +45,7 @@ use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::universal_ui_service::*;
 use services::universal_ui_page_analyzer::*;
-use services::simple_xml_parser::*;
+// use services::simple_xml_parser::*; // 已删除：统一使用智能解析器
 use services::xiaohongshu_service::{XiaohongshuService, *};
 use services::xiaohongshu_long_connection_service::{XiaohongshuLongConnectionService, *};
 use std::sync::Mutex;
@@ -912,8 +912,7 @@ fn main() {
             execute_universal_ui_click,  // 执行智能导航点击
             // Universal UI 页面分析功能
             analyze_universal_ui_page,        // 分析Universal UI页面
-            extract_page_elements,            // 提取页面元素
-            // extract_page_elements_simple,     // 简化提取页面元素 - 暂时禁用
+            extract_page_elements,            // 提取页面元素（统一智能解析器）
             classify_ui_elements,             // 分类UI元素
             deduplicate_elements,             // 去重元素
             identify_page_type,               // 识别页面类型

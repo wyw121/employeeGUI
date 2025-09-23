@@ -544,88 +544,25 @@ pub async fn analyze_universal_ui_page(
     }
 }
 
-/// 提取页面元素
+/// 提取页面元素 - 统一智能解析器
 #[tauri::command]
 pub async fn extract_page_elements(
     xml_content: String,
 ) -> Result<Vec<UIElement>, String> {
     info!("🔍 开始提取页面元素，XML长度: {}", xml_content.len());
     
-    // 简化版本：直接解析XML并提取基本信息
-    let mut elements = Vec::new();
-    let mut reader = Reader::from_str(&xml_content);
-    reader.config_mut().trim_text(true);
+    let analyzer = UniversalUIPageAnalyzer::new();
     
-    let mut buf = Vec::new();
-    let mut id_counter = 0;
-    
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
-                if e.name().as_ref() == b"node" {
-                    id_counter += 1;
-                    
-                    // 基础属性解析
-                    let mut text = String::new();
-                    let mut class_name = String::new();
-                    let mut resource_id: Option<String> = None;
-                    let mut content_desc = String::new();
-                    let mut is_clickable = false;
-                    
-                    for attr in e.attributes() {
-                        if let Ok(attr) = attr {
-                            match attr.key.as_ref() {
-                                b"text" => text = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"class" => class_name = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"resource-id" => {
-                                    let id = String::from_utf8_lossy(&attr.value).to_string();
-                                    if !id.is_empty() {
-                                        resource_id = Some(id);
-                                    }
-                                },
-                                b"content-desc" => content_desc = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"clickable" => is_clickable = String::from_utf8_lossy(&attr.value) == "true",
-                                _ => {}
-                            }
-                        }
-                    }
-                    
-                    // 只保留有用的元素
-                    if !text.is_empty() || !content_desc.is_empty() || is_clickable || resource_id.is_some() {
-                        let element = UIElement {
-                            id: format!("element_{}", id_counter),
-                            element_type: if is_clickable { "Button".to_string() } else { class_name.split('.').last().unwrap_or("Unknown").to_string() },
-                            text,
-                            content_desc,
-                            resource_id,
-                            class_name,
-                            bounds: ElementBounds { left: 0, top: 0, right: 0, bottom: 0 }, // 简化版本暂不解析bounds
-                            is_clickable,
-                            is_scrollable: false,
-                            is_enabled: true,
-                            is_focused: false,
-                            is_selected: false,
-                            children: Vec::new(),
-                            parent: None,
-                            depth: 0,
-                        };
-                        
-                        elements.push(element);
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                error!("XML解析错误: {}", e);
-                break;
-            }
-            _ => {}
+    match analyzer.parse_xml_elements(&xml_content) {
+        Ok(elements) => {
+            info!("✅ 成功提取 {} 个元素", elements.len());
+            Ok(elements)
+        },
+        Err(e) => {
+            error!("❌ 提取元素失败: {}", e);
+            Err(format!("提取元素失败: {}", e))
         }
-        buf.clear();
     }
-    
-    info!("✅ 提取完成，共找到 {} 个元素", elements.len());
-    Ok(elements)
 }
 
 /// 分类UI元素

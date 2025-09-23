@@ -40,6 +40,9 @@ import { BreadcrumbPanel } from './panels/BreadcrumbPanel';
 import { NodeDetailPanel } from './panels/NodeDetailPanel';
 import { ScreenPreviewPanel } from './panels/ScreenPreviewPanel';
 import { ResultsAndXPathPanel } from './panels/ResultsAndXPathPanel';
+import { XPathHelpPanel } from './panels/XPathHelpPanel';
+import { FieldDocPanel } from './panels/FieldDocPanel';
+import { XPathTemplatesPanel } from './panels/XPathTemplatesPanel';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -510,6 +513,9 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             xpathTestNodes={xpathTestNodes}
             onJumpToNode={(n) => setSelected(n)}
           />
+          <XPathTemplatesPanel node={selected} onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }} onInsert={(xp) => setXPathInput(xp)} />
+          <FieldDocPanel />
+          <XPathHelpPanel />
         </div>
       </div>
 

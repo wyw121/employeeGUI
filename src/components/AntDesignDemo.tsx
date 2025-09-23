@@ -31,7 +31,7 @@ import InspectorPage from '../pages/InspectorPage';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
-import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
+import AdbCenterPage from '../pages/adb/AdbCenterPage';
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import RealTimeDeviceMonitorPage from '../pages/device-monitor/RealTimeDeviceMonitorPage';
 import SmartVcfImporter from './SmartVcfImporter';
@@ -56,14 +56,9 @@ export const AntDesignIntegrationDemo: React.FC = () => {
       label: '仪表板',
     },
     {
-      key: 'devices',
+      key: 'adb-center',
       icon: <MobileOutlined />,
-      label: '实时设备监控',
-    },
-    {
-      key: 'adb-test',
-      icon: <ThunderboltOutlined />,
-      label: 'ADB诊断',
+      label: 'ADB 中心',
     },
     {
       key: 'contacts',
@@ -298,8 +293,8 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               </div>
             )}
 
-            {selectedKey === 'devices' && (
-              <RealTimeDeviceMonitorPage />
+            {selectedKey === 'adb-center' && (
+              <AdbCenterPage />
             )}
 
             {selectedKey === 'contacts' && (
@@ -318,12 +313,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
               <PermissionTestPage />
             )}
 
-            {selectedKey === 'adb-test' && (
-              <>
-                {console.log('🎯 渲染 ADB 诊断模块页面，selectedKey:', selectedKey)}
-                <ComprehensiveAdbPage />
-              </>
-            )}
+            {/* 旧的 ADB 诊断入口已并入 ADB 中心 */}
 
             {selectedKey === 'acquisition' && (
               <Card title={`${menuItems.find(item => item.key === selectedKey)?.label} 功能`}>

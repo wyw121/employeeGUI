@@ -80,7 +80,7 @@ import {
 } from "./enhanced-element-creation";
 import { EnhancedUIElement } from "../../modules/enhanced-element-info/types";
 // 🆕 使用外置的视图组件
-import { VisualElementView, ElementListView, UIElementTree } from "./views";
+import { VisualElementView, ElementListView, UIElementTree, GridElementView } from "./views";
 import {
   useElementSelectionManager,
   ElementSelectionPopover,
@@ -96,20 +96,22 @@ interface UniversalPageFinderModalProps {
   visible: boolean;
   onClose: () => void;
   onElementSelected?: (element: UIElement) => void;
+  initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   visible,
   onClose,
   onElementSelected,
+  initialViewMode = "visual", // 🆕 默认为 visual 视图
 }) => {
   // === 状态管理 ===
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"visual" | "tree" | "list">(
-    "visual"
-  ); // 可视化分析Tab内部的三视图切换
+  const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid">(
+    initialViewMode // 🆕 使用传入的初始视图模式
+  ); // 可视化分析Tab内部的四视图切换
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -287,10 +289,10 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       } as UIElement;
 
       console.log("🚀 传递增强元素信息:", {
-        hasEnhancedElement: !!enhancedElementWithCompat.enhancedElement,
-        hasXmlContent: !!enhancedElementWithCompat.xmlContent,
-        hasElementSummary: !!enhancedElementWithCompat.elementSummary,
-        smartDescription: enhancedElementWithCompat.smartDescription
+        hasEnhancedElement: !!(enhancedElementWithCompat as any).enhancedElement,
+        hasXmlContent: !!(enhancedElementWithCompat as any).xmlContent,
+        hasElementSummary: !!(enhancedElementWithCompat as any).elementSummary,
+        smartDescription: (enhancedElementWithCompat as any).smartDescription
       });
 
       if (onElementSelected) {
@@ -308,6 +310,13 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
 
     onClose();
+  };
+
+  // 处理可视化元素选择（适配函数）
+  const handleVisualElementSelect = async (element: VisualUIElement) => {
+    // 转换 VisualUIElement 到 UIElement
+    const uiElement = convertVisualToUIElement(element);
+    await handleSmartElementSelect(uiElement);
   };
 
   // 过滤元素
@@ -528,6 +537,13 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
               >
                 列表视图
               </Button>
+              <Button
+                type={viewMode === "grid" ? "primary" : "default"}
+                icon={<AppstoreOutlined />}
+                onClick={() => setViewMode("grid")}
+              >
+                网格检查器
+              </Button>
             </Space.Compact>
           )}
         </div>
@@ -559,6 +575,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
               selectedElementId={selectedElementId}
               selectionManager={selectionManager}
             />
+          ) : viewMode === "grid" ? (
+            <ErrorBoundary>
+              <GridElementView
+                xmlContent={currentXmlContent}
+                elements={elements}
+                onElementSelect={handleVisualElementSelect}
+                selectedElementId={selectedElementId}
+              />
+            </ErrorBoundary>
           ) : (
             renderInlineListView()
           )}

@@ -10,7 +10,8 @@ import {
   DeleteOutlined,
   SettingOutlined,
   DragOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -57,8 +58,10 @@ export interface DraggableStepCardProps {
   onDelete: (stepId: string) => void;
   /** 切换启用状态回调 */
   onToggle: (stepId: string) => void;
-  /** 编辑元素名称回调 */
-  onEditElementName?: (step: SmartScriptStep) => void;
+  /** 修改参数按钮回调 - 打开页面分析器进行参数配置 */
+  onOpenPageAnalyzer?: () => void;
+  /** 修改步骤参数回调 */
+  onEditStepParams?: (step: SmartScriptStep) => void;
   /** 测试步骤组件 */
   StepTestButton?: React.ComponentType<any>;
   /** 更新步骤参数回调 */
@@ -76,7 +79,8 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
   onEdit,
   onDelete,
   onToggle,
-  onEditElementName,
+  onOpenPageAnalyzer,
+  onEditStepParams,
   StepTestButton,
   onUpdateStepParameters,
   onBatchMatch
@@ -287,19 +291,19 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 </Tag>
               )}
               
-              {/* 修改元素参数按钮 - 仅对智能元素查找步骤显示 */}
-              {step.step_type === 'smart_find_element' && onEditElementName && (
+              {/* 修改参数按钮 - 仅对智能元素查找步骤显示 */}
+              {step.step_type === 'smart_find_element' && onEditStepParams && (
                 <Button
                   size="small"
                   type="link"
-                  icon={<SettingOutlined />}
+                  icon={<EyeOutlined />}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEditElementName(step);
+                    onEditStepParams(step);
                   }}
                   style={{ padding: '0 4px', fontSize: '12px' }}
                 >
-                  修改元素参数
+                  修改参数
                 </Button>
               )}
             </div>

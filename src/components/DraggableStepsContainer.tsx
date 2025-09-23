@@ -25,16 +25,16 @@ export interface DraggableStepsContainerProps {
   onDeleteStep: (stepId: string) => void;
   /** 切换步骤启用状态回调 */
   onToggleStep: (stepId: string) => void;
-  /** 编辑元素名称回调 */
-  onEditElementName?: (step: SmartScriptStep) => void;
+  /** 打开页面分析器回调 */
+  onOpenPageAnalyzer?: () => void;
+  /** 修改步骤参数回调 */
+  onEditStepParams?: (step: SmartScriptStep) => void;
   /** 测试步骤组件 */
   StepTestButton?: React.ComponentType<any>;
   /** 容器标题 */
   title?: React.ReactNode;
   /** 更新步骤参数回调 */
   onUpdateStepParameters?: (stepId: string, parameters: any) => void;
-  /** 打开智能页面分析器回调 */
-  onOpenPageAnalyzer?: () => void;
   /** 创建循环回调 */
   onCreateLoop?: () => void;
   /** 创建通讯录导入工作流回调 */
@@ -51,11 +51,11 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onEditStep,
   onDeleteStep,
   onToggleStep,
-  onEditElementName,
+  onOpenPageAnalyzer,
+  onEditStepParams,
   StepTestButton,
   title = <span>步骤列表</span>,
   onUpdateStepParameters,
-  onOpenPageAnalyzer,
   onCreateLoop,
   onCreateContactImport,
   onBatchMatch
@@ -162,7 +162,8 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 onEdit={onEditStep}
                 onDelete={onDeleteStep}
                 onToggle={onToggleStep}
-                onEditElementName={onEditElementName}
+                onOpenPageAnalyzer={onOpenPageAnalyzer}
+                onEditStepParams={onEditStepParams}
                 StepTestButton={StepTestButton}
                 onUpdateStepParameters={onUpdateStepParameters}
                 onBatchMatch={onBatchMatch}

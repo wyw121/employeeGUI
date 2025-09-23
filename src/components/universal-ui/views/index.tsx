@@ -12,5 +12,8 @@ export { ElementListView } from './list-view';
 // 树形视图
 export { UIElementTree } from './tree-view';
 
+// 网格视图 (ADB XML 检查器)
+export { GridElementView } from './grid-view';
+
 // 默认导出
 export { VisualElementView as default } from './visual-view';

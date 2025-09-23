@@ -5,6 +5,7 @@
 
 import React from "react";
 import { DraggableStepCard, DraggableStepCardProps } from "./DraggableStepCard";
+import { EnhancedStepCard } from "../modules/enhanced-step-card/EnhancedStepCard";
 import { SmartScriptStep } from "../types/smartScript"; // 使用统一的类型定义
 
 interface SmartStepCardWrapperProps

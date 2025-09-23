@@ -27,14 +27,14 @@ export interface EnhancedDraggableStepsContainerProps {
   onDeleteLoop: (loopId: string) => void;
   /** 切换步骤启用状态回调 */
   onToggleStep: (stepId: string) => void;
-  /** 编辑元素名称回调 */
-  onEditElementName?: (step: ExtendedSmartScriptStep) => void;
+  /** 打开页面分析器回调 */
+  onOpenPageAnalyzer?: () => void;
+  /** 修改步骤参数回调 */
+  onEditStepParams?: (step: ExtendedSmartScriptStep) => void;
   /** 测试步骤组件 */
   StepTestButton?: React.ComponentType<any>;
   /** 容器标题 */
   title?: React.ReactNode;
-  /** 打开智能页面分析器回调 */
-  onOpenPageAnalyzer?: () => void;
   /** 创建循环回调 */
   onCreateLoop?: () => void;
   /** 创建通讯录导入工作流回调 */
@@ -56,10 +56,10 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   onDeleteStep,
   onDeleteLoop,
   onToggleStep,
-  onEditElementName,
+  onOpenPageAnalyzer,
+  onEditStepParams,
   StepTestButton,
   title = <span>智能步骤列表</span>,
-  onOpenPageAnalyzer,
   onCreateLoop,
   onCreateContactImport,
   onAddStep,
@@ -199,11 +199,11 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         onEditStep={onEditStep}
         onDeleteStep={onDeleteStep}
         onToggleStep={onToggleStep}
-        onEditElementName={onEditElementName}
+        onOpenPageAnalyzer={onOpenPageAnalyzer}
+        onEditStepParams={onEditStepParams}
         StepTestButton={StepTestButton}
         title="步骤列表"
         onUpdateStepParameters={handleUpdateStepParameters}
-        onOpenPageAnalyzer={onOpenPageAnalyzer}
         onCreateLoop={onCreateLoop}
         onCreateContactImport={onCreateContactImport}
         onBatchMatch={onBatchMatch}

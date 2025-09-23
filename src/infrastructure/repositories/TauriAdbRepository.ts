@@ -159,5 +159,25 @@ export class TauriAdbRepository implements IAdbRepository {
       return false;
     }
   }
+
+  async clearAdbKeys(): Promise<void> {
+    try {
+      await invoke('clear_adb_keys');
+    } catch (error) {
+      throw new Error(`清理本机ADB密钥失败: ${error}`);
+    }
+  }
+
+  async pairWireless(hostPort: string, code: string): Promise<string> {
+    try {
+      // 通过简化命令执行器执行 adb pair
+      // 注意：底层 main.rs 的 execute_adb_command_simple 会在固定 adb 路径下执行
+      const cmd = `pair ${hostPort} ${code}`;
+      const result = await invoke<string>('execute_adb_command_simple', { command: cmd });
+      return result;
+    } catch (error) {
+      throw new Error(`无线调试配对失败: ${error}`);
+    }
+  }
 }
 

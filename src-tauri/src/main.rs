@@ -613,6 +613,29 @@ async fn delete_file(path: String) -> Result<(), String> {
     }
 }
 
+// 清理本机 ADB 密钥，强制下次授权
+#[tauri::command]
+async fn clear_adb_keys() -> Result<(), String> {
+    use std::path::PathBuf;
+
+    // Windows: C:\Users\<User>\.android\adbkey*
+    let home = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
+    let android_dir = home.join(".android");
+    let key = android_dir.join("adbkey");
+    let key_pub = android_dir.join("adbkey.pub");
+
+    let mut errs: Vec<String> = Vec::new();
+    for p in [key, key_pub].iter() {
+        if p.exists() {
+            if let Err(e) = std::fs::remove_file(p) {
+                errs.push(format!("删除 {:?} 失败: {}", p, e));
+            }
+        }
+    }
+
+    if errs.is_empty() { Ok(()) } else { Err(errs.join("; ")) }
+}
+
 // ====== 智能页面分析相关命令 ======
 
 /// 分析当前页面，获取可操作元素
@@ -815,6 +838,7 @@ fn main() {
             execute_adb_command_simple,
             write_file,
             delete_file,
+            clear_adb_keys,
             // 日志桥接命令
             get_logs,
             get_adb_command_logs,

@@ -59,5 +59,18 @@ export interface IAdbRepository {
    * 测试连接
    */
   testConnection(adbPath: string): Promise<boolean>;
+
+  /**
+   * 清理本机已保存的 ADB 密钥（~/.android/adbkey*），
+   * 以便下次连接时重新生成并弹出授权对话框。
+   */
+  clearAdbKeys(): Promise<void>;
+
+  /**
+   * 无线调试配对（Android 11+），等价于执行 `adb pair <host:pairPort>` 并输入配对码。
+   * @param hostPort 形如 "192.168.1.10:37123" 的配对地址
+   * @param code 6 位配对码
+   */
+  pairWireless(hostPort: string, code: string): Promise<string>;
 }
 

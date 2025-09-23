@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAdb } from "../application/hooks/useAdb";
 import { DeviceStatus } from "../domain/adb/entities/Device";
@@ -92,7 +92,6 @@ import {
   EnhancedStepParameters,
   EnhancedElementInfoService,
 } from "../modules/enhanced-element-info";
-import { EnhancedStepCard } from "../modules/enhanced-step-card";
 import XmlCacheManager from "../services/XmlCacheManager";
 // 🧪 XML数据质量校验
 import { XmlDataValidator } from "../modules/distributed-script-quality/XmlDataValidator";
@@ -826,11 +825,19 @@ const SmartScriptBuilderPage: React.FC = () => {
   };
 
   // 🆕 更新当前XML内容状态（用于自包含脚本）
-  const updateCurrentXmlContext = (
+  const updateCurrentXmlContext = useCallback((
     xmlContent: string,
     deviceInfo?: Partial<XmlSnapshot["deviceInfo"]>,
     pageInfo?: Partial<XmlSnapshot["pageInfo"]>
   ) => {
+    // 🔧 防重复处理：检查内容是否真的发生了变化
+    if (currentXmlContent === xmlContent) {
+      console.log("⏸️ XML内容相同，跳过状态更新:", {
+        xmlLength: xmlContent.length
+      });
+      return;
+    }
+
     setCurrentXmlContent(xmlContent);
     if (deviceInfo) {
       setCurrentDeviceInfo((prev) => ({ ...prev, ...deviceInfo }));
@@ -843,7 +850,7 @@ const SmartScriptBuilderPage: React.FC = () => {
       deviceInfo,
       pageInfo,
     });
-  };
+  }, [currentXmlContent]); // 🔧 添加依赖项检查
 
   // 🆕 从页面分析器获取当前XML内容
   const getCurrentXmlFromAnalyzer = (): string => {
@@ -2521,9 +2528,6 @@ const SmartScriptBuilderPage: React.FC = () => {
           <Form.Item name="xmlContent" hidden>
             <Input />
           </Form.Item>
-          <Form.Item name="isEnhanced" hidden>
-            <Input />
-          </Form.Item>
           <Form.Item name="xmlTimestamp" hidden>
             <Input />
           </Form.Item>
@@ -2639,7 +2643,7 @@ const SmartScriptBuilderPage: React.FC = () => {
           }
         }}
         // 🆕 从步骤XML源加载 - 优先使用步骤保存的XML快照
-        loadFromStepXml={
+        loadFromStepXml={useMemo(() => 
           editingStepForParams
             ? {
                 stepId: editingStepForParams.id,
@@ -2655,8 +2659,12 @@ const SmartScriptBuilderPage: React.FC = () => {
                   editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
                     ?.deviceName || editingStepForParams.parameters?.deviceName,
               }
-            : undefined
-        }
+            : undefined,
+          [editingStepForParams?.id, 
+           editingStepForParams?.parameters?.xmlSnapshot?.xmlContent,
+           editingStepForParams?.parameters?.xmlContent,
+           editingStepForParams?.parameters?.xmlCacheId]
+        )}
         // 🆕 预选定位器：根据步骤参数构建，支持 bounds/resource_id/text/class/xpath
         preselectLocator={(() => {
           const p: any = editingStepForParams?.parameters || {};
@@ -2709,24 +2717,7 @@ const SmartScriptBuilderPage: React.FC = () => {
           });
 
           try {
-            // 🔍 检查是否为增强元素信息（兼容多种数据格式）
-            const isEnhanced = !!(
-              (
-                (element as any).isEnhanced || // 简化标识
-                (element as any).xmlCacheId || // XML缓存ID
-                (element as any).xmlContent || // XML内容
-                (element as any).enhancedElement
-              ) // 完整增强信息
-            );
-
-            console.log("🔍 元素类型检查:", {
-              isEnhanced,
-              hasIsEnhanced: !!(element as any).isEnhanced,
-              hasXmlCacheId: !!(element as any).xmlCacheId,
-              hasXmlContent: !!(element as any).xmlContent,
-              hasEnhancedElement: !!(element as any).enhancedElement,
-              element,
-            });
+            console.log("🎯 处理选择的元素:", element);
 
             // 使用智能步骤生成器处理元素
             const stepInfo = SmartStepGenerator.generateStepInfo(element);
@@ -2824,68 +2815,27 @@ const SmartScriptBuilderPage: React.FC = () => {
               console.warn('构建页面快照时出现问题（可忽略）:', e);
             }
 
-            // 🆕 保存增强元素信息到表单参数中（不再写入 xmlContent/xmlCacheId 等旧字段）
-            if (isEnhanced) {
-              console.log("✅ 检测到增强元素信息，保存完整数据");
+            // 🆕 保存基础元素信息到表单参数中
+            console.log("✅ 保存基础元素信息");
 
-              // 构建增强步骤参数（兼容多种数据格式）
-              const enhancedParams = {
-                // 保持原有参数
-                text: element.text,
-                element_text: element.text,
-                element_type: element.element_type,
-                resource_id: element.resource_id,
-                content_desc: element.content_desc,
-                bounds: element.bounds,
-                smartDescription: (element as any).smartDescription,
-                smartAnalysis: (element as any).smartAnalysis,
+            // 构建基础步骤参数
+            const basicParams = {
+              text: element.text,
+              element_text: element.text,
+              element_type: element.element_type,
+              resource_id: element.resource_id,
+              content_desc: element.content_desc,
+              bounds: element.bounds,
+              smartDescription: (element as any).smartDescription,
+              smartAnalysis: (element as any).smartAnalysis,
+            };
 
-                // 🆕 新增：完整增强元素信息（兼容不同格式）
-                isEnhanced: true,
+            // 保存参数到表单
+            Object.entries(basicParams).forEach(([key, value]) => {
+              form.setFieldValue(key, value);
+            });
 
-                // 元素摘要信息
-                elementSummary: {
-                  displayName:
-                    element.text || element.element_type || "Unknown",
-                  elementType: element.element_type || "Unknown",
-                  position: element.bounds
-                    ? {
-                        x: element.bounds.left,
-                        y: element.bounds.top,
-                        width: element.bounds.right - element.bounds.left,
-                        height: element.bounds.bottom - element.bounds.top,
-                      }
-                    : { x: 0, y: 0, width: 0, height: 0 },
-                  xmlSource: 'embedded',
-                  confidence: (element as any).smartAnalysis?.confidence || 0.8,
-                },
-              };
-
-              // 保存增强参数到表单
-              Object.entries(enhancedParams).forEach(([key, value]) => {
-                form.setFieldValue(key, value);
-              });
-
-              console.log("💾 已保存增强步骤参数:", enhancedParams);
-            } else {
-              // 降级处理：保存基础元素属性
-              form.setFieldValue("text", element.text);
-              form.setFieldValue("element_text", element.text);
-              form.setFieldValue("element_type", element.element_type);
-              form.setFieldValue("resource_id", element.resource_id);
-              form.setFieldValue("content_desc", element.content_desc);
-              form.setFieldValue("bounds", element.bounds);
-              form.setFieldValue(
-                "smartDescription",
-                (element as any).smartDescription
-              );
-              form.setFieldValue(
-                "smartAnalysis",
-                (element as any).smartAnalysis
-              );
-
-              console.log("⚠️ 使用基础元素信息（未增强）");
-            }
+            console.log("💾 已保存基础步骤参数:", basicParams);
 
             // 关闭页面分析器并重置状态
             setShowPageAnalyzer(false);
@@ -2913,27 +2863,6 @@ const SmartScriptBuilderPage: React.FC = () => {
                     smartAnalysis: (element as any).smartAnalysis,
                     // 统一写入定位器
                     ...(builtLocator ? { elementLocator: builtLocator } : {}),
-                    // 如果是增强信息，更新增强参数（不再写 xmlContent/xmlCacheId 等旧字段）
-                    ...(isEnhanced && {
-                      isEnhanced: true,
-                      elementSummary: {
-                        displayName:
-                          element.text || element.element_type || "Unknown",
-                        elementType: element.element_type || "Unknown",
-                        position: element.bounds
-                          ? {
-                              x: element.bounds.left,
-                              y: element.bounds.top,
-                              width: element.bounds.right - element.bounds.left,
-                              height:
-                                element.bounds.bottom - element.bounds.top,
-                            }
-                          : { x: 0, y: 0, width: 0, height: 0 },
-                        xmlSource: 'embedded',
-                        confidence:
-                          (element as any).smartAnalysis?.confidence || 0.8,
-                      },
-                    }),
                   };
 
                   // 同步写入页面快照（若可用）
@@ -2979,22 +2908,11 @@ const SmartScriptBuilderPage: React.FC = () => {
                 content: (
                   <div>
                     <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                      ✏️ 步骤参数修改成功！{isEnhanced ? " (增强信息)" : ""}
+                      ✏️ 步骤参数修改成功！
                     </div>
                     <div style={{ fontSize: "12px", color: "#666" }}>
                       {editingStepForParams.name} → {stepInfo.name}
                     </div>
-                    {isEnhanced && (
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#999",
-                          marginTop: "2px",
-                        }}
-                      >
-                        📄 XML缓存: {(element as any).xmlCacheId || "unknown"}
-                      </div>
-                    )}
                   </div>
                 ),
                 duration: 3,
@@ -3009,22 +2927,11 @@ const SmartScriptBuilderPage: React.FC = () => {
                 content: (
                   <div>
                     <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                      🚀 快捷步骤生成成功！{isEnhanced ? " (增强信息)" : ""}
+                      🚀 快捷步骤生成成功！
                     </div>
                     <div style={{ fontSize: "12px", color: "#666" }}>
                       {stepInfo.name} - 请点击确定完成创建
                     </div>
-                    {isEnhanced && (
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#999",
-                          marginTop: "2px",
-                        }}
-                      >
-                        📄 XML缓存: {(element as any).xmlCacheId || "unknown"}
-                      </div>
-                    )}
                   </div>
                 ),
                 duration: 4,
@@ -3036,22 +2943,11 @@ const SmartScriptBuilderPage: React.FC = () => {
                 content: (
                   <div>
                     <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                      🎯 智能步骤生成成功！{isEnhanced ? " (增强信息)" : ""}
+                      🎯 智能步骤生成成功！
                     </div>
                     <div style={{ fontSize: "12px", color: "#666" }}>
                       {stepInfo.name}
                     </div>
-                    {isEnhanced && (
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#999",
-                          marginTop: "2px",
-                        }}
-                      >
-                        📄 XML缓存: {(element as any).xmlCacheId || "unknown"}
-                      </div>
-                    )}
                   </div>
                 ),
                 duration: 3,

@@ -189,6 +189,19 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   // === 从步骤XML源加载处理 ===
   useEffect(() => {
     if (visible && loadFromStepXml?.stepId) {
+      // 🔧 防重复处理：检查是否已经加载了相同的XML内容
+      const currentXmlLength = currentXmlContent.length;
+      const targetXmlLength = loadFromStepXml.xmlContent?.length || 0;
+      
+      if (currentXmlLength > 0 && currentXmlLength === targetXmlLength) {
+        console.log("⏸️ 跳过重复的XML加载:", {
+          stepId: loadFromStepXml.stepId,
+          currentLength: currentXmlLength,
+          targetLength: targetXmlLength
+        });
+        return;
+      }
+
       (async () => {
         console.log("🔄 从步骤XML源加载数据:", loadFromStepXml);
         let ok = false;
@@ -219,7 +232,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
         }
       })();
     }
-  }, [visible, loadFromStepXml]);
+  }, [visible, loadFromStepXml?.stepId, loadFromStepXml?.xmlContent?.length]); // 🔧 使用更稳定的依赖项
 
   // 🆕 直接从传递的XML内容加载数据（最高优先级）
   const handleLoadFromDirectXmlContent = async (stepXmlInfo: {
@@ -229,6 +242,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     deviceName?: string;
   }): Promise<boolean> => {
     try {
+      // 🔧 防重复处理：检查是否已经加载了相同的内容
+      if (currentXmlContent === stepXmlInfo.xmlContent) {
+        console.log("⏸️ XML内容相同，跳过重复加载:", {
+          stepId: stepXmlInfo.stepId,
+          xmlLength: stepXmlInfo.xmlContent.length
+        });
+        return true;
+      }
+
       console.log("✨ 从步骤直接传递的XML内容加载:", {
         stepId: stepXmlInfo.stepId,
         xmlLength: stepXmlInfo.xmlContent.length,
@@ -239,7 +261,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       // 设置XML内容和缓存ID
       setCurrentXmlContent(stepXmlInfo.xmlContent);
       setCurrentXmlCacheId(`direct_${stepXmlInfo.stepId}_${Date.now()}`);
-      if (onXmlContentUpdated) {
+      
+      // 🔧 只有在内容确实发生变化时才调用回调
+      if (onXmlContentUpdated && currentXmlContent !== stepXmlInfo.xmlContent) {
         const deviceInfo = stepXmlInfo.deviceId
           ? {
               deviceId: stepXmlInfo.deviceId,

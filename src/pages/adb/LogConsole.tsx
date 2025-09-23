@@ -7,6 +7,9 @@ import { exportJson, exportNdjson } from './logs/exporters';
 import { LogFilterBar } from './logs/LogFilterBar';
 import { LogDetailsDrawer } from './logs/LogDetailsDrawer';
 import { LogQuickPresets } from './logs/LogQuickPresets';
+import { SessionTimelinePanel } from './logs/SessionTimelinePanel';
+import { LogMessage } from './logs/LogMessage';
+import { DetailsBlock } from './logs/DetailsBlock';
 
 const { Text } = Typography;
 
@@ -137,6 +140,11 @@ export const LogConsole: React.FC = () => {
         title="诊断结果"
         extra={
           <Space direction="vertical" size={8}>
+            <SessionTimelinePanel
+              results={results as any}
+              currentSessionId={sessionId}
+              onSelectSession={(sid) => setSessionId(sid)}
+            />
             <LogQuickPresets
               onOnlyErrors={onlyErrors}
               onOnlyAdb={onlyAdb}
@@ -202,11 +210,9 @@ export const LogConsole: React.FC = () => {
                       </Button>
                     )}
                   </Space>
-                  <Text>{(r as any).message || JSON.stringify(r)}</Text>
+                  <LogMessage message={(r as any).message || JSON.stringify(r)} highlightText={keyword} />
                   {(r as any).details && expanded[(r as any).id] && (
-                    <pre style={{ background: '#fafafa', padding: 8, borderRadius: 4, margin: 0, maxHeight: 260, overflow: 'auto' }}>
-                      {(() => { try { const obj = JSON.parse((r as any).details); return JSON.stringify(obj, null, 2);} catch { return String((r as any).details);} })()}
-                    </pre>
+                    <DetailsBlock value={(r as any).details} />
                   )}
                 </Space>
               </List.Item>
@@ -215,7 +221,13 @@ export const LogConsole: React.FC = () => {
         )}
       </Card>
 
-      <LogDetailsDrawer open={drawerOpen} onClose={closeDrawer} record={drawerRecord} />
+      <LogDetailsDrawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        record={drawerRecord}
+        onSelectDevice={(id) => setDeviceId(id)}
+        onSelectSession={(sid) => setSessionId(sid)}
+      />
     </Space>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
 import { useAdb } from '../application/hooks/useAdb';
-import RealTimeDeviceMonitor from '../components/device/RealTimeDeviceMonitor';
+import RealTimeDeviceMonitorPage from './device-monitor/RealTimeDeviceMonitorPage';
 import AdbPathTestPage from './AdbPathTestPage';
 import AdbAuthorizationWizard from './AdbAuthorizationWizard';
 
@@ -41,7 +41,7 @@ export const ComprehensiveAdbPage: React.FC = () => {
       label: '实时设备监控',
       children: (
         <div style={{ padding: '0', background: 'transparent' }}>
-          <RealTimeDeviceMonitor />
+          <RealTimeDeviceMonitorPage />
         </div>
       )
     },

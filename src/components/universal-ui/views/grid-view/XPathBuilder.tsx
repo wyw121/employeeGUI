@@ -98,6 +98,9 @@ export const XPathBuilder: React.FC<XPathBuilderProps> = ({ node, onApply, onIns
             <button className={styles.btn} onClick={() => { if (!xpathInput.trim()) return; onApply(xpathInput.trim()); addXPathHistory(xpathInput.trim()); setXpathHistory(getXPathHistory()); }}>应用</button>
           </div>
         </div>
+        <div className="mt-1 text-[12px] text-neutral-500">
+          提示：XPath 是在 XML 里查找节点的“路径表达式”。下方为基于当前节点属性自动生成的 XPath 候选，点击即可应用或复制。
+        </div>
       </div>
       <div className={styles.cardBody}>
         <ul className="space-y-1">
@@ -109,7 +112,7 @@ export const XPathBuilder: React.FC<XPathBuilderProps> = ({ node, onApply, onIns
                 title={c.xpath}
               >
                 <span className="text-xs text-neutral-500 mr-2">{c.label}</span>
-                      className="w-full text-left px-2 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                <span className="font-mono text-[12px] break-all">{c.xpath}</span>
               </button>
               <div className="mt-1 flex items-center gap-2">
                 <CopyChip text={c.xpath} label="复制" />

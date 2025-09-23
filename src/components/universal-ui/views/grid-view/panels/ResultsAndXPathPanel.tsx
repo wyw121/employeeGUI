@@ -52,6 +52,9 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
             <button className={styles.btn} onClick={() => setActive('xpath')} style={{ background: active==='xpath' ? 'var(--g-surface-hover)' : undefined }}>XPath 工具</button>
           </div>
         </div>
+        <div className="hidden md:block text-[12px] text-neutral-500" title="XPath 是一种在 XML/HTML 文档中定位节点的路径表达式。例如 //*[@resource-id='xxx'] 或 //android.widget.Button[text()='确定']。">
+          XPath：用于在 XML 中精确定位元素，例如 //*[@resource-id='xxx']
+        </div>
       </div>
       {!collapsed && (
         <div className={styles.cardBody}>

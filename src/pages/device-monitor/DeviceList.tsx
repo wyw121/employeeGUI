@@ -1,0 +1,17 @@
+import React from 'react';
+import { Empty, Row, Col } from 'antd';
+import { DeviceCard } from './DeviceCard';
+import type { DeviceListProps } from './types';
+
+export const DeviceList: React.FC<DeviceListProps> = ({ devices, onSelectDevice }) => {
+  if (!devices || devices.length === 0) return <Empty description="暂无设备" />;
+  return (
+    <Row gutter={[12, 12]}>
+      {devices.map((d) => (
+        <Col key={d.id} xs={24} sm={12} md={8} lg={6}>
+          <DeviceCard device={d} onSelect={onSelectDevice} />
+        </Col>
+      ))}
+    </Row>
+  );
+};

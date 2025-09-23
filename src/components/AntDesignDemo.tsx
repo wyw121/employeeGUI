@@ -33,7 +33,7 @@ import PermissionTestPage from '../pages/PermissionTestPage';
 import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import { ComprehensiveAdbPage } from '../pages/ComprehensiveAdbPage'; // 新的ADB模块
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
-import RealDeviceManager from './device/RealDeviceManager';
+import RealTimeDeviceMonitorPage from '../pages/device-monitor/RealTimeDeviceMonitorPage';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 
@@ -58,7 +58,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
     {
       key: 'devices',
       icon: <MobileOutlined />,
-      label: '设备管理',
+      label: '实时设备监控',
     },
     {
       key: 'adb-test',
@@ -299,10 +299,7 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             )}
 
             {selectedKey === 'devices' && (
-              <RealDeviceManager 
-                selectedDevice={selectedDevice}
-                onDeviceSelect={handleDeviceSelect}
-              />
+              <RealTimeDeviceMonitorPage />
             )}
 
             {selectedKey === 'contacts' && (

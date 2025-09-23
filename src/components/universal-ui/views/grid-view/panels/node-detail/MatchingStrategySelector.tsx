@@ -1,6 +1,5 @@
 import React from 'react';
-
-export type MatchStrategy = 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard';
+import type { MatchStrategy } from './types';
 
 export interface MatchingStrategySelectorProps {
   value: MatchStrategy;
@@ -13,6 +12,7 @@ const STRATEGY_LIST: Array<{ key: MatchStrategy; label: string; tip: string }> =
   { key: 'relaxed',      label: '宽松匹配', tip: '少数字段或模糊匹配，兼容性好' },
   { key: 'positionless', label: '匹配任意位置', tip: '忽略位置（bounds/index），适应布局调整' },
   { key: 'standard',     label: '标准匹配', tip: '跨设备稳定，仅用语义字段，忽略分辨率/位置' },
+  { key: 'custom',       label: '自定义', tip: '使用下方勾选字段自由组合；与预设不一致时自动切换为自定义' },
 ];
 
 /**

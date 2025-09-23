@@ -14,6 +14,7 @@ const STRATEGY_META: Record<string, { color: string; label: string; tip: string 
   relaxed: { color: 'green', label: '宽松', tip: '宽松匹配：少数字段或模糊匹配，兼容性更好' },
   positionless: { color: 'purple', label: '无位置', tip: '无位置匹配：忽略 bounds，仅用语义字段匹配' },
   standard: { color: 'cyan', label: '标准', tip: '标准匹配：跨设备稳定，忽略位置/分辨率差异，仅用语义字段' },
+  custom: { color: 'gray', label: '自定义', tip: '自定义匹配：由用户勾选的字段集合，可能与任何预设不同' },
 };
 
 export const MatchingStrategyTag: React.FC<MatchingStrategyTagProps> = ({ strategy, small }) => {

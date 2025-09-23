@@ -119,6 +119,10 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [panelActivateKey, setPanelActivateKey] = useState<number>(0);
   const [panelHighlightNode, setPanelHighlightNode] = useState<UiNode | null>(null);
   const [panelActivateTab, setPanelActivateTab] = useState<'results' | 'xpath'>('results');
+  // 跟随节点详情的当前匹配策略，供“匹配结果”按钮使用
+  const [currentStrategy, setCurrentStrategy] = useState<string>('standard'); // may be 'custom' as inferred
+  // 跟随节点详情的字段勾选集合
+  const [currentFields, setCurrentFields] = useState<string[]>([]);
 
   // 悬停联动处理：树/结果列表/测试列表悬停时预览高亮
   const handleHoverNode = (n: UiNode | null) => {
@@ -573,7 +577,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         {/* 右侧 */}
         <div className="space-y-4">
           <PreferencesPanel />
-          <NodeDetailPanel node={selected} onMatched={handleMatchedFromDevice} onApplyToStep={onApplyCriteria as any} />
+          <NodeDetailPanel node={selected} onMatched={handleMatchedFromDevice} onApplyToStep={onApplyCriteria as any} onStrategyChanged={(s) => setCurrentStrategy(s)} onFieldsChanged={(fs) => setCurrentFields(fs)} />
           <LocatorAdvisorPanel
             node={selected}
             onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
@@ -607,6 +611,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             activateKey={panelActivateKey}
             highlightNode={panelHighlightNode}
             onSelectForStep={onApplyCriteria as any}
+            currentStrategy={currentStrategy as any}
+            currentFields={currentFields}
           />
           <XPathTemplatesPanel node={selected} onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }} onInsert={(xp) => setXPathInput(xp)} />
           <FieldDocPanel />

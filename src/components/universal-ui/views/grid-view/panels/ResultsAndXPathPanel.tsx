@@ -32,6 +32,10 @@ interface ResultsAndXPathPanelProps {
   activateTab?: 'results' | 'xpath';
   activateKey?: number; // 每次变化触发一次切换
   highlightNode?: UiNode | null; // 在 XPath 测试结果中高亮此节点
+  // 跟随节点详情的当前匹配策略
+  currentStrategy?: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard' | 'custom';
+  // 跟随节点详情的字段勾选集合（优先级高于预设字段）
+  currentFields?: string[];
 }
 
 export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
@@ -52,6 +56,8 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
   highlightNode,
   onHoverNode,
   onSelectForStep,
+  currentStrategy,
+  currentFields,
 }) => {
   const [active, setActive] = useState<TabKey>('results');
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -89,6 +95,8 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
               highlightNode={highlightNode}
               onHoverNode={onHoverNode}
               onSelectForStep={onSelectForStep}
+              currentStrategy={currentStrategy}
+              currentFields={currentFields}
             />
           ) : (
             <div className="space-y-4">

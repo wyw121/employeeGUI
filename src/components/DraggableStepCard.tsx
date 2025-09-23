@@ -13,7 +13,7 @@ import {
   ReloadOutlined,
   EyeOutlined
 } from '@ant-design/icons';
-import { MatchingStrategyTag } from './step-card';
+import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from './step-card';
 // 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
 import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
@@ -306,6 +306,35 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 <Tag color="blue" className="bg-blue-100 text-blue-700 border-blue-300">
                   🔄 循环体内
                 </Tag>
+              )}
+
+              {/* 滚动方向与参数（仅 smart_scroll）*/}
+              {step.step_type === 'smart_scroll' && (
+                <div
+                  className="ml-2 flex items-center gap-2"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ScrollDirectionSelector
+                    value={step.parameters?.direction ?? 'down'}
+                    onChange={(dir) => onUpdateStepParameters?.(step.id, {
+                      ...step.parameters,
+                      direction: dir,
+                    })}
+                  />
+                  <ScrollParamsEditor
+                    value={{
+                      distance: step.parameters?.distance,
+                      speed_ms: step.parameters?.speed_ms,
+                    }}
+                    onChange={(val) => onUpdateStepParameters?.(step.id, {
+                      ...step.parameters,
+                      ...val,
+                    })}
+                  />
+                </div>
               )}
               
               {/* 修改参数按钮 - 仅对智能元素查找步骤显示 */}

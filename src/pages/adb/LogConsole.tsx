@@ -137,12 +137,12 @@ export const LogConsole: React.FC = () => {
       {lastError && (<Alert type="error" showIcon message="最近错误" description={String(lastError)} />)}
 
       <Card
-        title={<span style={{ color: '#e5e7eb' }}>诊断结果</span>}
-        style={{ backgroundColor: '#0b1220', color: '#e5e7eb' }}
-        headStyle={{ backgroundColor: '#0b1220', borderBottom: '1px solid #1f2937' }}
-        bodyStyle={{ backgroundColor: '#0b1220' }}
+        title={<span style={{ color: 'var(--text-primary)' }}>诊断结果</span>}
+        style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+        headStyle={{ backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-primary)' }}
+        bodyStyle={{ backgroundColor: 'var(--bg-secondary)' }}
         extra={
-          <Space direction="vertical" size={8} style={{ backgroundColor: '#0b1220', padding: 8, borderRadius: 6 }}>
+          <Space direction="vertical" size={8} style={{ backgroundColor: 'var(--bg-secondary)', padding: 8, borderRadius: 6 }}>
             <SessionTimelinePanel
               results={results as any}
               currentSessionId={sessionId}
@@ -183,7 +183,7 @@ export const LogConsole: React.FC = () => {
         }
       >
         {filtered.length === 0 ? (
-          <Text type="secondary" style={{ color: '#9ca3af' }}>暂无诊断数据</Text>
+          <Text type="secondary" style={{ color: 'var(--text-secondary)' }}>暂无诊断数据</Text>
         ) : (
           <List
             size="small"
@@ -193,7 +193,7 @@ export const LogConsole: React.FC = () => {
                 <Space direction="vertical" size={4} style={{ width: '100%' }}>
                   <Space wrap>
                     <Button type="link" size="small" onClick={() => openDrawer(r)} style={{ padding: 0 }}>
-                      <Text strong style={{ color: '#e5e7eb' }}>{(r as any).name || r.id}</Text>
+                      <Text strong style={{ color: 'var(--text-primary)' }}>{(r as any).name || r.id}</Text>
                     </Button>
                     <Tag color={statusColor((r as any).status)} onClick={() => setStatus((r as any).status)} style={{ cursor: 'pointer' }}>{(r as any).status}</Tag>
                     <Tag color={categoryColor((r as any).category)} onClick={() => setCategory(((r as any).category) || 'all')} style={{ cursor: 'pointer' }}>{(r as any).category || 'general'}</Tag>
@@ -206,7 +206,7 @@ export const LogConsole: React.FC = () => {
                     {(r as any).sessionId && (
                       <Tag onClick={() => setSessionId((r as any).sessionId)} style={{ cursor: 'pointer' }}>会话:{(r as any).sessionId}</Tag>
                     )}
-                    <Text type="secondary" style={{ color: '#9ca3af' }}>{normalizeTimestamp((r as any).timestamp).toLocaleString()}</Text>
+                    <Text type="secondary" style={{ color: 'var(--text-secondary)' }}>{normalizeTimestamp((r as any).timestamp).toLocaleString()}</Text>
                     {(r as any).details && (
                       <Button size="small" onClick={() => toggleExpand((r as any).id)}>
                         {expanded[(r as any).id] ? '隐藏详情' : '详情'}

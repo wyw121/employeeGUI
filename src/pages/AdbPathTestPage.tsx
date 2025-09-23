@@ -83,10 +83,10 @@ export const AdbPathTestPage: React.FC = () => {
             {devices && (
               <Alert 
                 type="info" 
-                style={{ backgroundColor: '#0b1220', color: '#e5e7eb', borderColor: '#1f2937' }}
-                message={<span style={{ color: '#e5e7eb' }}>设备检测结果</span>}
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
+                message={<span style={{ color: 'var(--text-primary)' }}>设备检测结果</span>}
                 description={
-                  <pre style={{ background: '#0b1220', color: '#e5e7eb', padding: '8px', borderRadius: '4px', margin: 0 }}>
+                  <pre style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', margin: 0 }}>
                     {devices}
                   </pre>
                 }

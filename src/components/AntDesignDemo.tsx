@@ -11,21 +11,23 @@ import {
     RobotOutlined
 } from '@ant-design/icons';
 import {
-    App,
-    Avatar,
-    Badge,
-    Button,
-    Card,
-    ConfigProvider,
-    Divider,
-    Layout,
-    Menu,
-    Progress,
-    Space,
-    Statistic,
-    theme,
-    Typography
+  App,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  Layout,
+  Menu,
+  Progress,
+  Space,
+  Statistic,
+  Typography,
+  Switch,
+  Tooltip
 } from 'antd';
+import { AppThemeProvider, useTheme } from '../theme';
+import '../styles/theme.css';
 import React, { useState } from 'react';
 import InspectorPage from '../pages/InspectorPage';
 import ContactManagementPage from '../pages/ContactManagementPage';
@@ -40,10 +42,11 @@ import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-export const AntDesignIntegrationDemo: React.FC = () => {
+const DemoInner: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState('dashboard'); // 默认选中仪表板
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [inspectorOpen, setInspectorOpen] = useState<{open: boolean; sessionId?: string; stepId?: string}>({ open: false });
+  const { mode, setMode } = useTheme();
 
   const handleDeviceSelect = (deviceId: string) => {
     setSelectedDevice(deviceId);
@@ -98,63 +101,6 @@ export const AntDesignIntegrationDemo: React.FC = () => {
   ];
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.darkAlgorithm,
-        token: {
-          // Sindre风格的主色调
-          colorPrimary: '#ff6b8a',
-          colorSuccess: '#43e97b',
-          colorWarning: '#faad14',
-          colorError: '#f5576c',
-          colorInfo: '#4facfe',
-
-          // 背景色调
-          colorBgContainer: '#161b22',
-          colorBgElevated: '#21262d',
-          colorBgLayout: '#0d1117',
-
-          // 文字色调
-          colorText: '#f0f6fc',
-          colorTextSecondary: '#8b949e',
-          colorTextTertiary: '#6e7681',
-
-          // 边框和分割
-          colorBorder: '#30363d',
-          colorSplit: '#21262d',
-
-          // 圆角和间距
-          borderRadius: 12,
-          borderRadiusLG: 16,
-        },
-        components: {
-          Layout: {
-            headerBg: '#161b22',
-            bodyBg: '#0d1117',
-          },
-          Menu: {
-            colorBgContainer: '#161b22',
-            itemBg: 'transparent',
-            itemSelectedBg: 'rgba(255, 107, 138, 0.1)',
-            itemSelectedColor: '#ff6b8a',
-            itemHoverBg: 'rgba(255, 255, 255, 0.05)',
-          },
-          Card: {
-            colorBgContainer: 'rgba(255, 255, 255, 0.05)',
-            colorBorderSecondary: 'rgba(255, 255, 255, 0.1)',
-          },
-          Table: {
-            colorBgContainer: 'rgba(255, 255, 255, 0.02)',
-            colorBorderSecondary: 'rgba(255, 255, 255, 0.1)',
-          },
-          Button: {
-            controlHeight: 36,
-            borderRadius: 10,
-            fontWeight: 500,
-          }
-        }
-      }}
-    >
       <App>
         <Layout style={{ minHeight: '100vh' }}>
         {/* 侧边栏 */}
@@ -200,6 +146,14 @@ export const AntDesignIntegrationDemo: React.FC = () => {
             </Title>
 
             <Space>
+              <Tooltip title={mode === 'dark' ? '切换到浅色' : '切换到深色'}>
+                <Switch
+                  checkedChildren="🌙"
+                  unCheckedChildren="☀️"
+                  checked={mode === 'dark'}
+                  onChange={(v) => setMode(v ? 'dark' : 'light')}
+                />
+              </Tooltip>
               <Button onClick={() => setInspectorOpen({ open: true })} type="primary">打开检查器</Button>
               <Badge count={5} style={{ backgroundColor: '#ff6b8a' }}>
                 <Button icon={<SyncOutlined />} size="large">
@@ -345,7 +299,14 @@ export const AntDesignIntegrationDemo: React.FC = () => {
         </Layout>
       </Layout>
       </App>
-    </ConfigProvider>
+  );
+};
+
+export const AntDesignIntegrationDemo: React.FC = () => {
+  return (
+    <AppThemeProvider>
+      <DemoInner />
+    </AppThemeProvider>
   );
 };
 

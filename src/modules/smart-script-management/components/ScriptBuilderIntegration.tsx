@@ -242,7 +242,7 @@ export const ScriptBuilderIntegration: React.FC<ScriptBuilderIntegrationProps> =
         return;
       }
 
-      // 转换分布式步骤为UI步骤格式
+      // 转换分布式步骤为UI步骤格式（仅写入新结构：xmlSnapshot/elementLocator）
       const uiSteps = distributedScript.steps.map(distStep => ({
         id: distStep.id,
         name: distStep.name,
@@ -251,12 +251,35 @@ export const ScriptBuilderIntegration: React.FC<ScriptBuilderIntegrationProps> =
         enabled: true,
         parameters: {
           ...distStep.params,
-          xmlContent: distStep.xmlSnapshot.xmlContent,
-          xmlCacheId: `imported_${distStep.id}`,
-          deviceInfo: distStep.xmlSnapshot.deviceInfo,
-          pageInfo: distStep.xmlSnapshot.pageInfo,
-          locator: distStep.locator,
-          // 从定位器提取传统参数格式
+          xmlSnapshot: {
+            xmlContent: distStep.xmlSnapshot.xmlContent,
+            xmlHash: distStep.xmlSnapshot.xmlHash,
+            timestamp: distStep.xmlSnapshot.timestamp,
+            deviceInfo: {
+              deviceId: distStep.xmlSnapshot.deviceInfo?.deviceId || 'unknown',
+              deviceName: distStep.xmlSnapshot.deviceInfo?.deviceName || 'unknown',
+              appPackage: distStep.xmlSnapshot.pageInfo?.appPackage || 'com.xingin.xhs',
+              activityName: distStep.xmlSnapshot.pageInfo?.activityName || 'unknown',
+            },
+            pageInfo: {
+              pageTitle: distStep.xmlSnapshot.pageInfo?.pageTitle || '未知页面',
+              pageType: 'unknown',
+              elementCount: 0,
+            }
+          },
+          elementLocator: {
+            selectedBounds: { left: 0, top: 0, right: 0, bottom: 0 },
+            elementPath: distStep.locator.absoluteXPath || distStep.locator.predicateXPath || '',
+            confidence: 0.8,
+            additionalInfo: {
+              xpath: distStep.locator.absoluteXPath,
+              resourceId: distStep.locator.attributes?.resourceId,
+              text: distStep.locator.attributes?.text,
+              contentDesc: distStep.locator.attributes?.contentDesc,
+              className: distStep.locator.attributes?.className,
+            }
+          },
+          // 兼容展示字段（只读用途，不再写入旧 xmlContent/xmlCacheId）
           xpath: distStep.locator.absoluteXPath,
           resource_id: distStep.locator.attributes?.resourceId,
           text: distStep.locator.attributes?.text,

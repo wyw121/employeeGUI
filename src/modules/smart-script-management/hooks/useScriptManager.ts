@@ -128,7 +128,6 @@ export function useScriptEditor() {
         execution_count: 0,
         success_rate: 0,
         average_duration_ms: 0,
-        target_devices: [],
         dependencies: []
       }
     };

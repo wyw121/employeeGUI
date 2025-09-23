@@ -319,7 +319,9 @@ export class ScriptSerializer {
   ): any {
     const currentTime = new Date().toISOString();
     const scriptId = metadata.id || `script_${Date.now()}`;
-    
+    // 设备无关：不持久化设备列表（target_devices），仅保留其他元数据
+    const { target_devices, ...restMetadata } = metadata || {};
+
     return {
       id: scriptId,
       name: name || `智能脚本_${new Date().toLocaleString()}`,
@@ -341,9 +343,9 @@ export class ScriptSerializer {
         execution_count: metadata.execution_count || 0,
         success_rate: metadata.success_rate || 0,
         average_duration_ms: metadata.average_duration_ms || 0,
-        target_devices: metadata.target_devices || [],
+        // 设备无关：不写入 target_devices 字段
         dependencies: metadata.dependencies || [],
-        ...metadata
+        ...restMetadata
       }
     };
   }

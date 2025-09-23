@@ -17,7 +17,7 @@ const { Title, Text } = Typography;
 
 export const RealTimeDeviceMonitorPage: React.FC = () => {
   const { devices, deviceStats, isTracking, startTracking, stopTracking, refreshDevices, lastEvent } = useRealTimeDevices();
-  const { restartAdbServer, selectDevice } = useAdb();
+  const { restartAdbServer, selectDevice, selectedDevice } = useAdb();
 
   const [filters, setFilters] = useState<DeviceFiltersState>({ statuses: [], connections: [], keyword: '' });
   const [sortKey, setSortKey] = useState<DeviceSortKey>('online-first');
@@ -71,7 +71,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
       <Row gutter={12}>
         <Col span={16}>
           <Card title={`设备列表 (${filteredDevices.length})`}>
-            <DeviceList devices={filteredDevices} onSelectDevice={(id) => selectDevice(id)} />
+            <DeviceList devices={filteredDevices} onSelectDevice={(id) => selectDevice(id)} selectedId={(selectedDevice as any)?.id ?? null} />
           </Card>
         </Col>
         <Col span={8}>

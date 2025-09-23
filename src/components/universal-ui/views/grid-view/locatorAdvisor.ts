@@ -23,25 +23,42 @@ export function adviseLocators(node: UiNode | null): LocatorSuggestion[] {
   const desc = node.attrs['content-desc'];
   const cls = node.attrs['class'];
 
-  if (rid) list.push({ label: 'id 等值', xpath: `//*[@resource-id='${rid}']`, score: 90, reasons: ['resource-id 通常稳定'] });
+  // 安全拼接 XPath 字面量：
+  // - 若字符串中不含单引号，使用单引号包裹
+  // - 若不含双引号，使用双引号包裹
+  // - 若同时包含单/双引号，使用 concat() 拼接
+  const quoteXPathLiteral = (s: string): string => {
+    if (s.indexOf("'") === -1) return `'${s}'`;
+    if (s.indexOf('"') === -1) return `"${s}"`;
+    const parts = s.split("'");
+    // 形如 concat('part1', "'", 'part2', "'", 'part3')
+    const seq: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i].length > 0) seq.push(`'${parts[i]}'`);
+      if (i !== parts.length - 1) seq.push('"\'"');
+    }
+    return `concat(${seq.join(',')})`;
+  };
+
+  if (rid) list.push({ label: 'id 等值', xpath: `//*[@resource-id=${quoteXPathLiteral(rid)}]`, score: 90, reasons: ['resource-id 通常稳定'] });
   if (rid) {
     const tail = rid.split('/').pop();
-    if (tail) list.push({ label: 'id 包含', xpath: `//*[contains(@resource-id,'${tail}')]`, score: 80, reasons: ['适应不同构建变体'] });
+    if (tail) list.push({ label: 'id 包含', xpath: `//*[contains(@resource-id,${quoteXPathLiteral(tail)})]`, score: 80, reasons: ['适应不同构建变体'] });
     const slash = rid.indexOf('/');
     if (slash > 0) {
       const prefix = rid.slice(0, slash + 1);
-      list.push({ label: 'id 前缀 starts-with', xpath: `//*[starts-with(@resource-id,'${prefix}')]`, score: 78, reasons: ['前缀稳定，尾部变动'] });
+      list.push({ label: 'id 前缀 starts-with', xpath: `//*[starts-with(@resource-id,${quoteXPathLiteral(prefix)})]`, score: 78, reasons: ['前缀稳定，尾部变动'] });
     }
   }
 
-  if (txt) list.push({ label: 'text 等值', xpath: `//*[text()='${txt}']`, score: 70, reasons: ['文本可能随语言/内容变化'] });
-  if (txt) list.push({ label: 'text 包含', xpath: `//*[contains(text(),'${txt}')]`, score: 60, reasons: ['包含匹配更宽松，易误中'] });
+  if (txt) list.push({ label: 'text 等值', xpath: `//*[text()=${quoteXPathLiteral(txt)}]`, score: 70, reasons: ['文本可能随语言/内容变化'] });
+  if (txt) list.push({ label: 'text 包含', xpath: `//*[contains(text(),${quoteXPathLiteral(txt)})]`, score: 60, reasons: ['包含匹配更宽松，易误中'] });
 
-  if (desc) list.push({ label: 'content-desc 等值', xpath: `//*[@content-desc='${desc}']`, score: 75, reasons: ['无障碍描述相对稳定'] });
-  if (desc) list.push({ label: 'content-desc 包含', xpath: `//*[contains(@content-desc,'${desc}')]`, score: 68, reasons: ['包含匹配更宽松'] });
+  if (desc) list.push({ label: 'content-desc 等值', xpath: `//*[@content-desc=${quoteXPathLiteral(desc)}]`, score: 75, reasons: ['无障碍描述相对稳定'] });
+  if (desc) list.push({ label: 'content-desc 包含', xpath: `//*[contains(@content-desc,${quoteXPathLiteral(desc)})]`, score: 68, reasons: ['包含匹配更宽松'] });
 
-  if (cls && rid) list.push({ label: 'class + id', xpath: `//${cls}[@resource-id='${rid}']`, score: 88, reasons: ['类名 + id 更精确'] });
-  if (cls && txt) list.push({ label: 'class + text', xpath: `//${cls}[text()='${txt}']`, score: 72, reasons: ['文本易变'] });
+  if (cls && rid) list.push({ label: 'class + id', xpath: `//${cls}[@resource-id=${quoteXPathLiteral(rid)}]`, score: 88, reasons: ['类名 + id 更精确'] });
+  if (cls && txt) list.push({ label: 'class + text', xpath: `//${cls}[text()=${quoteXPathLiteral(txt)}]`, score: 72, reasons: ['文本易变'] });
 
   // 绝对路径（备选）
   const abs = buildXPath(node);

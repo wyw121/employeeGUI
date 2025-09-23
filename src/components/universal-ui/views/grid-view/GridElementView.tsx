@@ -101,6 +101,10 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [xpathHistory, setXpathHistory] = useState<string[]>([]);
   const [favXPath, setFavXPath] = useState<string[]>([]);
   const [xpathTestNodes, setXpathTestNodes] = useState<UiNode[]>([]);
+  // 右侧面板联动控制
+  const [panelActivateKey, setPanelActivateKey] = useState<number>(0);
+  const [panelHighlightNode, setPanelHighlightNode] = useState<UiNode | null>(null);
+  const [panelActivateTab, setPanelActivateTab] = useState<'results' | 'xpath'>('results');
 
   // 初始化首选项
   useEffect(() => {
@@ -274,10 +278,15 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     // 额外：计算全部命中用于测试面板（绝对路径命中则仅显示该节点，否则尝试谓词查找全部）
     if (n && findByXPathRoot(root, xp)) {
       setXpathTestNodes([n]);
+      setPanelHighlightNode(n);
     } else {
       const all = findAllByPredicateXPath(root, xp);
       setXpathTestNodes(all);
+      setPanelHighlightNode(all && all.length > 0 ? all[0] : null);
     }
+    // 切换到 XPath 工具页签并触发一次联动
+    setPanelActivateTab('xpath');
+    setPanelActivateKey((k) => k + 1);
   };
 
   const loadDemo = () => {
@@ -518,6 +527,9 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             onInsertOnly={(xp) => setXPathInput(xp)}
             xpathTestNodes={xpathTestNodes}
             onJumpToNode={(n) => setSelected(n)}
+            activateTab={panelActivateTab}
+            activateKey={panelActivateKey}
+            highlightNode={panelHighlightNode}
           />
           <XPathTemplatesPanel node={selected} onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }} onInsert={(xp) => setXPathInput(xp)} />
           <FieldDocPanel />

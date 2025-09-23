@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from "../GridElementView.module.css";
 import { UiNode, AdvancedFilter, SearchOptions } from "../types";
 import { MatchResultsPanel } from "../MatchResultsPanel";
@@ -23,6 +23,11 @@ interface ResultsAndXPathPanelProps {
   onInsertOnly: (xp: string) => void;
   xpathTestNodes: UiNode[];
   onJumpToNode: (n: UiNode) => void;
+
+  // 外部联动控制
+  activateTab?: 'results' | 'xpath';
+  activateKey?: number; // 每次变化触发一次切换
+  highlightNode?: UiNode | null; // 在 XPath 测试结果中高亮此节点
 }
 
 export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
@@ -38,9 +43,17 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
   onInsertOnly,
   xpathTestNodes,
   onJumpToNode,
+  activateTab,
+  activateKey,
+  highlightNode,
 }) => {
   const [active, setActive] = useState<TabKey>('results');
   const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  // 外部激活联动：当 activateKey 变化时，切换到指定 tab
+  useEffect(() => {
+    if (activateTab) setActive(activateTab);
+  }, [activateKey]);
 
   return (
     <div className={styles.card}>
@@ -70,7 +83,7 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
             />
           ) : (
             <div className="space-y-4">
-              <XPathTestResultsPanel nodes={xpathTestNodes} onJump={onJumpToNode} />
+              <XPathTestResultsPanel nodes={xpathTestNodes} onJump={onJumpToNode} highlightNode={highlightNode || null} />
               <XPathBuilder
                 node={selected}
                 onApply={onApplyXPath}

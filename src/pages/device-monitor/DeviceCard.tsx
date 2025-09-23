@@ -16,10 +16,12 @@ const statusTag = (status: string) => {
   return <Tag color={cfg.color}>{cfg.text}</Tag>;
 };
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onSelect }) => {
+export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onSelect, selected }) => {
   const icon = device.connection_type === 'emulator' ? <DesktopOutlined /> : <UsbOutlined />;
   return (
-    <Card size="small" hoverable onClick={() => onSelect?.(device.id)}>
+    <Card size="small" hoverable onClick={() => onSelect?.(device.id)}
+      style={selected ? { borderColor: '#ff6b8a' } : undefined}
+    >
       <Space direction="vertical" style={{ width: '100%' }}>
         <Space>
           {icon}

@@ -5,6 +5,7 @@ import { useAdb } from '../../application/hooks/useAdb';
 import RealTimeDeviceMonitorPage from '../device-monitor/RealTimeDeviceMonitorPage';
 import AdbAuthorizationWizard from '../AdbAuthorizationWizard';
 import AdbPathTestPage from '../AdbPathTestPage';
+import HeaderToolbar from './HeaderToolbar';
 
 const { Title, Paragraph } = Typography;
 
@@ -53,7 +54,7 @@ export const AdbCenterPage: React.FC = () => {
     <div style={{ padding: 24 }}>
       <Row gutter={[16, 16]}>
         <Col span={24}>
-          <Card>
+          <Card extra={<HeaderToolbar /> }>
             <Title level={2}><MobileOutlined /> ADB 中心</Title>
             <Paragraph>
               统一的 ADB 功能中心：实时设备监控、授权修复、路径检测、日志与系统状态，一处集中管理。

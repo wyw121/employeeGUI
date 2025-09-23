@@ -25,11 +25,13 @@ export interface DeviceFiltersProps {
 export interface DeviceListProps {
   devices: TrackedDevice[];
   onSelectDevice?: (id: string) => void;
+  selectedId?: string | null;
 }
 
 export interface DeviceCardProps {
   device: TrackedDevice;
   onSelect?: (id: string) => void;
+  selected?: boolean;
 }
 
 export interface StatusIndicatorsProps {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
 import { nodeLabel, buildXPath } from './utils';
 import styles from './GridElementView.module.css';
@@ -14,6 +14,7 @@ export interface MatchResultsPanelProps {
   advFilter?: AdvancedFilter;
   onInsertXPath?: (xpath: string) => void;
   searchOptions?: Partial<SearchOptions>;
+  highlightNode?: UiNode | null;
 }
 
 const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): React.ReactNode => {
@@ -38,7 +39,16 @@ const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): Rea
   }
 };
 
-export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions }) => {
+export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions, highlightNode }) => {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!listRef.current || !highlightNode) return;
+    const idx = matches.indexOf(highlightNode);
+    if (idx >= 0) {
+      const el = listRef.current.querySelector(`[data-match-item='${idx}']`) as HTMLElement | null;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightNode, matches]);
   const onExport = () => {
     const data = matches.map(n => ({ tag: n.tag, attrs: n.attrs }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -78,15 +88,15 @@ export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, m
           )}
         </div>
       </div>
-      <div className={styles.cardBody} style={{ maxHeight: 240, overflow: 'auto' }}>
+      <div className={styles.cardBody} style={{ maxHeight: 240, overflow: 'auto' }} ref={listRef}>
         {matches.length === 0 ? (
           <div className="text-sm text-neutral-500">无匹配结果</div>
         ) : (
           <ul className="space-y-1">
             {matches.map((n, i) => (
-              <li key={i}>
+              <li key={i} data-match-item={i}>
                 <button
-                  className={`w-full text-left px-2 py-1 rounded-md border border-transparent hover:border-neutral-200 dark:hover:border-neutral-700 ${i === matchIndex ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                  className={`w-full text-left px-2 py-1 rounded-md border ${n===highlightNode ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30' : 'border-transparent hover:border-neutral-200 dark:hover:border-neutral-700'} ${i === matchIndex ? 'bg-blue-50/60 dark:bg-blue-900/20' : ''}`}
                   onClick={() => onJump(i, n)}
                   title={n.attrs['class'] || n.tag}
                 >

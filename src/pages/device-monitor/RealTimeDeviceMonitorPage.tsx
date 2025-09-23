@@ -11,6 +11,8 @@ import { DeviceEventLog } from './DeviceEventLog';
 import { DeviceActionsPanel } from './DeviceActionsPanel';
 import { DeviceSortBar, DeviceSortKey } from './DeviceSortBar';
 import { DeviceEventStream } from './DeviceEventStream';
+import BatchActionsBar from './BatchActionsBar';
+import DeviceDetailDrawer from './DeviceDetailDrawer';
 import type { DeviceFiltersState } from './types';
 
 const { Title, Text } = Typography;
@@ -21,6 +23,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
 
   const [filters, setFilters] = useState<DeviceFiltersState>({ statuses: [], connections: [], keyword: '' });
   const [sortKey, setSortKey] = useState<DeviceSortKey>('online-first');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const filteredDevices = useMemo(() => {
     const base = devices.filter((d) => {
@@ -63,6 +66,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
           />
           <DeviceFilters value={filters} onChange={setFilters} />
           <DeviceSortBar value={sortKey} onChange={setSortKey} />
+          <BatchActionsBar />
         </Space>
       </Card>
 
@@ -82,6 +86,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
           </Space>
         </Col>
       </Row>
+      <DeviceDetailDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 };

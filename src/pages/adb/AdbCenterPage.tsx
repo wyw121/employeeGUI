@@ -6,6 +6,7 @@ import RealTimeDeviceMonitorPage from '../device-monitor/RealTimeDeviceMonitorPa
 import AdbAuthorizationWizard from '../AdbAuthorizationWizard';
 import AdbPathTestPage from '../AdbPathTestPage';
 import HeaderToolbar from './HeaderToolbar';
+import LogConsole from './LogConsole';
 
 const { Title, Paragraph } = Typography;
 
@@ -36,12 +37,7 @@ export const AdbCenterPage: React.FC = () => {
     {
       key: 'logs',
       label: '日志查看',
-      children: (
-        <Card title="系统日志">
-          <p>统一日志系统 - 通过 useAdb() 接口访问</p>
-          <p>此处可接入你的日志管理器或输出面板。</p>
-        </Card>
-      )
+      children: <LogConsole />
     },
     {
       key: 'status',

@@ -80,6 +80,7 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
               onJump={onJump}
               onInsertXPath={onInsertXPath}
               searchOptions={searchOptions}
+              highlightNode={highlightNode}
             />
           ) : (
             <div className="space-y-4">

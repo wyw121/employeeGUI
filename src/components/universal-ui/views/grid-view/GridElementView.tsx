@@ -211,7 +211,13 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
       return null;
     };
     const found = dfs(root);
-    if (found) setSelected(found);
+    if (found) {
+      setSelected(found);
+      // 在“匹配结果”中高亮并滚动
+      setPanelHighlightNode(found);
+      setPanelActivateTab('results');
+      setPanelActivateKey(k => k + 1);
+    }
   };
 
   // 计算当前匹配列表（不自动选中，供用户导航）

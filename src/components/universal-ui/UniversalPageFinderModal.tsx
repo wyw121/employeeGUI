@@ -135,6 +135,8 @@ interface UniversalPageFinderModalProps {
   };
   // 🆕 修改参数时预选元素定位器（基于步骤指纹构建）
   preselectLocator?: NodeLocator;
+  // 新增：当在“网格检查器/节点详情”里选择了匹配策略并点击“应用到步骤”时回调
+  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => void;
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
@@ -147,6 +149,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   initialViewMode = "visual", // 🆕 默认为 visual 视图
   loadFromStepXml, // 🆕 从步骤XML源加载
   preselectLocator,
+  onApplyCriteria,
 }) => {
   // === 状态管理 ===
   const [selectedDevice, setSelectedDevice] = useState<string>("");
@@ -1096,6 +1099,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                     return null;
                   }
                 }}
+                onApplyCriteria={onApplyCriteria}
               />
             </ErrorBoundary>
           ) : (

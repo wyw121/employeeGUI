@@ -49,12 +49,6 @@ export const InspectorPage: React.FC<Props> = ({ sessionId, stepId }) => {
       <GridElementView
         key={key}
         xmlContent={xmlText}
-        sessionId={activeSessionId || undefined}
-        onCreateStep={async (sid, node) => {
-          const stepId = await app.createStepFromSelection(sid, node, { name: '新步骤', actionType: 'click' });
-          // 简单提示：在真实 UI 中可弹出配置面板
-          console.log('创建步骤成功：', stepId);
-        }}
         locator={locatorData || undefined}
         locatorResolve={(root, loc) => locator.resolve(root, loc)}
       />

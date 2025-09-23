@@ -26,12 +26,20 @@ export interface DeviceListProps {
   devices: TrackedDevice[];
   onSelectDevice?: (id: string) => void;
   selectedId?: string | null;
+  // Multi-select support
+  selectable?: boolean;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string, checked: boolean) => void;
 }
 
 export interface DeviceCardProps {
   device: TrackedDevice;
   onSelect?: (id: string) => void;
   selected?: boolean;
+  // Multi-select support
+  selectable?: boolean;
+  checked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
 }
 
 export interface StatusIndicatorsProps {

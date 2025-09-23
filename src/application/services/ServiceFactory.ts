@@ -9,6 +9,8 @@ import { DeviceManagerService } from '../../domain/adb/services/DeviceManagerSer
 import { ConnectionService } from '../../domain/adb/services/ConnectionService';
 import { DiagnosticService } from '../../domain/adb/services/DiagnosticService';
 import { AdbApplicationService } from './AdbApplicationService';
+import { IUiMatcherRepository } from '../../domain/page-analysis/repositories/IUiMatcherRepository';
+import { TauriUiMatcherRepository } from '../../infrastructure/repositories/TauriUiMatcherRepository';
 
 /**
  * 服务容器
@@ -66,7 +68,8 @@ class ServiceContainer {
     // 注册Repository层 - 使用实时设备仓储实现事件驱动
     this.register('deviceRepository', () => new RealTimeDeviceRepository());
     this.register('adbRepository', () => new TauriAdbRepository());
-    this.register('diagnosticRepository', () => new TauriDiagnosticRepository());
+  this.register('diagnosticRepository', () => new TauriDiagnosticRepository());
+  this.register('uiMatcherRepository', () => new TauriUiMatcherRepository());
 
     // 注册Domain Service层
     this.register('deviceManagerService', () => {
@@ -89,7 +92,8 @@ class ServiceContainer {
       const deviceManager = this.get<DeviceManagerService>('deviceManagerService');
       const connectionService = this.get<ConnectionService>('connectionService');
       const diagnosticService = this.get<DiagnosticService>('diagnosticService');
-      return new AdbApplicationService(deviceManager, connectionService, diagnosticService);
+      const uiMatcherRepository = this.get<IUiMatcherRepository>('uiMatcherRepository');
+      return new AdbApplicationService(deviceManager, connectionService, diagnosticService, uiMatcherRepository);
     });
   }
 }

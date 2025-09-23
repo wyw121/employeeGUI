@@ -5,10 +5,15 @@ import styles from './GridElementView.module.css';
 
 type ScaleMode = 'fit' | 'actual' | 'custom';
 
-export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; matchedSet?: Set<UiNode>; highlightNode?: UiNode | null; highlightKey?: number; }> = ({ root, selected, onSelect, matchedSet, highlightNode, highlightKey }) => {
+export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; matchedSet?: Set<UiNode>; highlightNode?: UiNode | null; highlightKey?: number; enableFlashHighlight?: boolean; previewAutoCenter?: boolean; }> = ({ root, selected, onSelect, matchedSet, highlightNode, highlightKey, enableFlashHighlight = true, previewAutoCenter = true }) => {
   const [scaleMode, setScaleMode] = useState<ScaleMode>('fit');
   const [zoom, setZoom] = useState<number>(100); // percent for custom
   const flashRef = useRef<number>(0);
+  const rectRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const centerTimerRef = useRef<number | null>(null);
+  const lastUserScrollRef = useRef<number>(0);
+  const lastCenteredNodeRef = useRef<UiNode | null>(null);
   const screen = useMemo(() => {
     function findBounds(n?: UiNode | null): ReturnType<typeof parseBounds> {
       if (!n) return null as any;
@@ -35,6 +40,42 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
     walk(root);
     return result;
   }, [root]);
+  
+  // 监听滚动/滚轮，短时间内判定为用户主动滚动，避免“自动居中”打断用户操作
+  useEffect(() => {
+    const c = containerRef.current;
+    const mark = () => { lastUserScrollRef.current = Date.now(); };
+    c?.addEventListener('scroll', mark, { passive: true });
+    window.addEventListener('scroll', mark, { passive: true });
+    window.addEventListener('wheel', mark, { passive: true });
+    return () => {
+      c?.removeEventListener('scroll', mark);
+      window.removeEventListener('scroll', mark);
+      window.removeEventListener('wheel', mark);
+    };
+  }, []);
+
+  function isInView(_container: HTMLElement, el: HTMLElement, margin = 12) {
+    // 使用窗口视口判断，而不是内部容器（容器本身不滚动）
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const er = el.getBoundingClientRect();
+    const fullyAbove = er.bottom < 0 + margin;
+    const fullyBelow = er.top > vh - margin;
+    const fullyLeft = er.right < 0 + margin;
+    const fullyRight = er.left > vw - margin;
+    return !(fullyAbove || fullyBelow || fullyLeft || fullyRight);
+  }
+
+  function scrollIntoViewSafe(el: HTMLElement) {
+    if (typeof el.scrollIntoView === 'function') {
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      } catch {
+        el.scrollIntoView(true);
+      }
+    }
+  }
 
   const baseW = 300;
   let scale = screen.width > 0 ? baseW / screen.width : 1;
@@ -49,6 +90,32 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
       flashRef.current = (flashRef.current || 0) + 1;
     }
   }, [highlightKey]);
+
+  // 自动滚动/定位：仅在选中元素变化时触发，并带去抖与视口检测，避免“滚动锁死”
+  useEffect(() => {
+    if (!previewAutoCenter) return;
+    if (!selected) return;
+    const idx = boxes.findIndex(({ n }) => n === selected);
+    if (idx < 0) return;
+    const el = rectRefs.current[idx];
+    const container = containerRef.current;
+    if (!el || !container) return;
+
+    // 距离用户滚动太近则跳过自动定位
+    if (Date.now() - lastUserScrollRef.current < 300) return;
+
+    // 已在视口范围内则不再滚动
+    if (isInView(container, el, 12)) return;
+
+    // 去抖：短暂延迟合并多次变更
+    if (centerTimerRef.current) {
+      window.clearTimeout(centerTimerRef.current);
+    }
+    centerTimerRef.current = window.setTimeout(() => {
+      scrollIntoViewSafe(el);
+      lastCenteredNodeRef.current = selected;
+    }, 120);
+  }, [previewAutoCenter, selected, boxes]);
 
   return (
     <div className="space-y-3">
@@ -73,7 +140,7 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
           </span>
         </div>
       </div>
-      <div className={`${styles.previewBox} relative`} style={{ width: viewW, height: viewH }}>
+      <div ref={containerRef} className={`${styles.previewBox} relative`} style={{ width: viewW, height: viewH }}>
         {boxes.map(({ n, b }, i) => {
           const sel = n === selected;
           const matched = matchedSet?.has(n);
@@ -81,7 +148,8 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
           return (
             <div
               key={i}
-              className={`${styles.elementRect} ${matched ? styles.elementRectMatched : ''} ${sel ? styles.elementRectActive : ''} ${isHL ? styles.elementRectFlash : ''}`}
+              ref={(el) => { rectRefs.current[i] = el; }}
+              className={`${styles.elementRect} ${matched ? styles.elementRectMatched : ''} ${sel ? styles.elementRectActive : ''} ${isHL && enableFlashHighlight ? styles.elementRectFlash : ''}`}
               style={{
                 left: Math.round(b.x1 * scale),
                 top: Math.round(b.y1 * scale),

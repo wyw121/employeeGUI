@@ -15,6 +15,7 @@ export interface MatchResultsPanelProps {
   onInsertXPath?: (xpath: string) => void;
   searchOptions?: Partial<SearchOptions>;
   highlightNode?: UiNode | null;
+  onHoverNode?: (n: UiNode | null) => void;
 }
 
 const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): React.ReactNode => {
@@ -39,7 +40,7 @@ const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): Rea
   }
 };
 
-export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions, highlightNode }) => {
+export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions, highlightNode, onHoverNode }) => {
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!listRef.current || !highlightNode) return;
@@ -94,7 +95,7 @@ export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, m
         ) : (
           <ul className="space-y-1">
             {matches.map((n, i) => (
-              <li key={i} data-match-item={i}>
+              <li key={i} data-match-item={i} onMouseEnter={() => onHoverNode?.(n)} onMouseLeave={() => onHoverNode?.(null)}>
                 <button
                   className={`w-full text-left px-2 py-1 rounded-md border ${n===highlightNode ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30' : 'border-transparent hover:border-neutral-200 dark:hover:border-neutral-700'} ${i === matchIndex ? 'bg-blue-50/60 dark:bg-blue-900/20' : ''}`}
                   onClick={() => onJump(i, n)}

@@ -69,6 +69,27 @@
   - Tauri 后端调用实现
   - 外部服务适配器
 
+### 页面分析器（Grid Inspector）子模块补充：
+- 位置：`src/components/universal-ui/views/grid-view/panels/node-detail/`
+   - `MatchingStrategySelector.tsx`：策略选择子组件（absolute/strict/relaxed/positionless/standard）
+   - `SelectedFieldsPreview.tsx`：选中字段与值的只读预览子组件
+   - 以上组件仅负责展示与选择，状态由上层 `NodeDetailPanel.tsx` 承载，符合模块化扩展原则
+
+补充说明（模块导出与用法）：
+- 新增 `index.ts` 桶文件：集中导出 `MatchPresetsRow`、`MatchingStrategySelector`、`SelectedFieldsPreview`、`SelectedFieldsChips` 与 `types`，便于上层按需导入。
+- 子模块自述文件：`node-detail/README.md` 描述职责边界、属性约束与最佳导入方式，方便团队协作与后续扩展。
+- 推荐导入示例：
+   ```ts
+   import {
+      MatchPresetsRow,
+      MatchingStrategySelector,
+      SelectedFieldsPreview,
+      // types
+      MatchStrategy,
+      MatchCriteria,
+   } from '@/components/universal-ui/views/grid-view/panels/node-detail';
+   ```
+
 ### 关键配置文件：
 - `package.json`: 依赖管理和构建脚本
 - `src-tauri/tauri.conf.json`: Tauri 应用配置

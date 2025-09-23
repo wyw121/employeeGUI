@@ -13,6 +13,7 @@ export interface TreeRowProps {
   depth: number;
   selected: UiNode | null;
   onSelect: (n: UiNode) => void;
+  onHoverNode?: (n: UiNode | null) => void;
   filter: string;
   searchOptions?: Partial<SearchOptions>;
   expandAll: boolean;
@@ -38,6 +39,7 @@ export const TreeRow: React.FC<TreeRowProps> = ({
   selectedAncestors,
   showMatchedOnly,
   hasActiveFilter = false,
+  onHoverNode,
 }) => {
   const [open, setOpen] = useState(depth <= 2);
   useEffect(() => { setOpen(false); }, [collapseVersion]);
@@ -106,6 +108,8 @@ export const TreeRow: React.FC<TreeRowProps> = ({
         className={`${styles.treeRow} group hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-md ${selected === node ? styles.treeRowActive : ''}`}
         style={{ paddingLeft: depth * 12 + 8 }}
         onClick={() => onSelect(node)}
+            onMouseEnter={() => onHoverNode?.(node)}
+            onMouseLeave={() => onHoverNode?.(null)}
       >
         {hasChildren ? (
           <button
@@ -137,6 +141,7 @@ export const TreeRow: React.FC<TreeRowProps> = ({
               depth={depth + 1}
               selected={selected}
               onSelect={onSelect}
+                   onHoverNode={onHoverNode}
               filter={filter}
               searchOptions={searchOptions}
               expandAll={expandAll}

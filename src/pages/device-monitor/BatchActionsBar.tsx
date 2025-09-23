@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { Space, Button, Tooltip, message } from 'antd';
-import { ThunderboltOutlined, PoweroffOutlined, ReloadOutlined, DesktopOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, PoweroffOutlined, ReloadOutlined, DesktopOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { useAdb } from '../../application/hooks/useAdb';
 
-export const BatchActionsBar: React.FC = () => {
-  const { connectToEmulators, refreshDevices, runQuickDiagnostic, stopAdbServer, startAdbServer } = useAdb();
+interface Props {
+  selectedIds?: string[];
+}
+
+export const BatchActionsBar: React.FC<Props> = ({ selectedIds = [] }) => {
+  const { connectToEmulators, refreshDevices, runQuickDiagnostic, stopAdbServer, startAdbServer, batchDeviceOperation } = useAdb();
   const [loading, setLoading] = useState(false);
 
   const doAction = async (fn: () => Promise<any>, ok: string) => {
@@ -21,6 +25,17 @@ export const BatchActionsBar: React.FC = () => {
 
   return (
     <Space wrap>
+      <Tooltip title={selectedIds.length ? `批量断开 (${selectedIds.length})` : '先在列表勾选设备'}>
+        <Button
+          icon={<DisconnectOutlined />}
+          disabled={selectedIds.length === 0}
+          loading={loading}
+          onClick={() => doAction(() => batchDeviceOperation(selectedIds, 'disconnect'), '已发起批量断开')}
+          danger
+        >
+          批量断开
+        </Button>
+      </Tooltip>
       <Tooltip title="批量连接模拟器">
         <Button icon={<DesktopOutlined />} loading={loading} onClick={() => doAction(connectToEmulators, '已尝试连接模拟器')}>
           模拟器

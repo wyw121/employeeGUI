@@ -86,6 +86,7 @@ impl XmlJudgmentService {
     }
 
     /// 解析XML字符串为结构化数据
+    #[allow(dead_code)]
     pub fn parse_xml(xml_content: &str) -> Result<XmlElement, String> {
         // 简化的XML解析实现
         // 在实际项目中建议使用 quick-xml 或其他专业XML解析库
@@ -267,6 +268,7 @@ impl XmlJudgmentService {
     }
 
     /// 获取元素中心点坐标
+    #[allow(dead_code)]
     pub fn get_element_center(element: &XmlElement) -> Option<(i32, i32)> {
         if let Some((left, top, right, bottom)) = element.bounds {
             let center_x = (left + right) / 2;
@@ -310,4 +312,100 @@ pub async fn check_device_page_state(
 ) -> Result<bool, String> {
     let indicator_refs: Vec<&str> = indicators.iter().map(|s| s.as_str()).collect();
     XmlJudgmentService::check_page_state(&device_id, &indicator_refs).await
+}
+
+// ====== 新增：按匹配条件查找元素（用于脚本步骤绑定） ======
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MatchCriteriaDTO {
+    pub strategy: String,           // 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'
+    pub fields: Vec<String>,        // 勾选的字段
+    pub values: std::collections::HashMap<String, String>, // 字段值
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct MatchPreviewDTO {
+    pub text: Option<String>,
+    pub resource_id: Option<String>,
+    pub class_name: Option<String>,
+    pub package: Option<String>,
+    pub bounds: Option<String>,
+    pub xpath: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MatchResultDTO {
+    pub ok: bool,
+    pub message: String,
+    pub total: Option<usize>,
+    pub matchedIndex: Option<usize>,
+    pub preview: Option<MatchPreviewDTO>,
+}
+
+#[command]
+#[allow(non_snake_case)]
+pub async fn match_element_by_criteria(
+    deviceId: String,
+    criteria: MatchCriteriaDTO,
+) -> Result<MatchResultDTO, String> {
+    // 读取当前XML
+    let xml = XmlJudgmentService::get_ui_xml(&deviceId).await?;
+
+    // 简单行级匹配：按 <node ...> 行过滤
+    let lines: Vec<&str> = xml.lines().filter(|l| l.contains("<node")).collect();
+
+    if lines.is_empty() {
+        return Ok(MatchResultDTO { ok: false, message: "未解析到任何节点".into(), total: Some(0), matchedIndex: None, preview: None });
+    }
+
+    // 根据选择字段匹配；对 positionless/relaxed/strict/standard 策略忽略位置字段
+    let ignore_bounds = criteria.strategy == "positionless" || criteria.strategy == "relaxed" || criteria.strategy == "strict" || criteria.strategy == "standard";
+
+    let mut matched_idx: Option<usize> = None;
+    for (idx, line) in lines.iter().enumerate() {
+        let mut ok = true;
+        for f in &criteria.fields {
+            if *f == "bounds" && ignore_bounds { continue; }
+            if let Some(v) = criteria.values.get(f) {
+                // 宽松匹配：text/content-desc 使用包含，其他使用等值（字符串出现）
+                if f == "text" || f == "content-desc" {
+                    if !line.contains(&format!("{}=\"{}", f, v)) && !line.contains(v) {
+                        ok = false; break;
+                    }
+                } else if f == "resource-id" {
+                    if !line.contains(&format!("resource-id=\"{}\"", v)) && !line.contains(&format!("resource-id=\".*/{}\"", v)) {
+                        if !line.contains(v) { ok = false; break; }
+                    }
+                } else {
+                    if !line.contains(&format!("{}=\"{}\"", f, v)) { ok = false; break; }
+                }
+            }
+        }
+        if ok { matched_idx = Some(idx); break; }
+    }
+
+    if let Some(i) = matched_idx {
+        // 构造预览
+        let line = lines[i];
+        let get_attr = |name: &str| -> Option<String> {
+            let pat = format!("{}=\"", name);
+            if let Some(s) = line.find(&pat) {
+                let start = s + pat.len();
+                if let Some(e) = line[start..].find('"') { return Some(line[start..start+e].to_string()); }
+            }
+            None
+        };
+        let preview = MatchPreviewDTO {
+            text: get_attr("text"),
+            resource_id: get_attr("resource-id"),
+            class_name: get_attr("class"),
+            package: get_attr("package"),
+            bounds: get_attr("bounds"),
+            xpath: None,
+        };
+        Ok(MatchResultDTO { ok: true, message: "已匹配".into(), total: Some(lines.len()), matchedIndex: Some(i), preview: Some(preview) })
+    } else {
+        Ok(MatchResultDTO { ok: false, message: "未找到匹配元素".into(), total: Some(lines.len()), matchedIndex: None, preview: None })
+    }
 }

@@ -9,9 +9,10 @@ export interface XPathTestResultsPanelProps {
   nodes: UiNode[];
   onJump: (node: UiNode) => void;
   highlightNode?: UiNode | null;
+  onHoverNode?: (n: UiNode | null) => void;
 }
 
-export const XPathTestResultsPanel: React.FC<XPathTestResultsPanelProps> = ({ nodes, onJump, highlightNode }) => {
+export const XPathTestResultsPanel: React.FC<XPathTestResultsPanelProps> = ({ nodes, onJump, highlightNode, onHoverNode }) => {
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!listRef.current || !highlightNode) return;
@@ -31,7 +32,7 @@ export const XPathTestResultsPanel: React.FC<XPathTestResultsPanelProps> = ({ no
         ) : (
           <ul className="space-y-1">
             {nodes.map((n, i) => (
-              <li key={i} data-xpath-item={i}>
+              <li key={i} data-xpath-item={i} onMouseEnter={() => onHoverNode?.(n)} onMouseLeave={() => onHoverNode?.(null)}>
                 <button
                   className={`w-full text-left px-2 py-1 rounded-md border ${highlightNode===n ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30' : 'border-transparent hover:border-neutral-200 dark:hover:border-neutral-700'}`}
                   onClick={() => onJump(n)}

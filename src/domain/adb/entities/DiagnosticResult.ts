@@ -13,7 +13,10 @@ export class DiagnosticResult {
     public readonly canAutoFix: boolean = false,
     public readonly autoFixAction?: () => Promise<boolean>,
     public readonly timestamp: Date = new Date(),
-    public readonly category: DiagnosticCategory = DiagnosticCategory.GENERAL
+    public readonly category: DiagnosticCategory = DiagnosticCategory.GENERAL,
+    public readonly source?: string,
+    public readonly deviceId?: string,
+    public readonly sessionId?: string
   ) {}
 
   /**
@@ -104,7 +107,10 @@ export class DiagnosticResult {
       this.canAutoFix,
       this.autoFixAction,
       new Date(),
-      this.category
+      this.category,
+      this.source,
+      this.deviceId,
+      this.sessionId
     );
   }
 }

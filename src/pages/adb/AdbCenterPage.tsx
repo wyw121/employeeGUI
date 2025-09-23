@@ -3,7 +3,7 @@ import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
 import { MobileOutlined } from '@ant-design/icons';
 import { useAdb } from '../../application/hooks/useAdb';
 import RealTimeDeviceMonitorPage from '../device-monitor/RealTimeDeviceMonitorPage';
-import AdbAuthorizationWizard from '../AdbAuthorizationWizard';
+import ADBAuthWizard from './auth/ADBAuthWizard';
 import AdbPathTestPage from '../AdbPathTestPage';
 import HeaderToolbar from './HeaderToolbar';
 import LogConsole from './LogConsole';
@@ -27,7 +27,7 @@ export const AdbCenterPage: React.FC = () => {
     {
       key: 'auth',
       label: 'ADB 授权向导',
-      children: <AdbAuthorizationWizard />
+      children: <ADBAuthWizard />
     },
     {
       key: 'path',

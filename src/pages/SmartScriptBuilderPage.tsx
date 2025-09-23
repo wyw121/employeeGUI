@@ -2697,6 +2697,46 @@ const SmartScriptBuilderPage: React.FC = () => {
         })()}
         // 🆕 XML内容更新回调
         onXmlContentUpdated={updateCurrentXmlContext}
+        // 🆕 从“节点详情→应用到步骤”回写匹配策略
+        onApplyCriteria={(criteria) => {
+          try {
+            if (!editingStepForParams) {
+              // 非“修改参数”模式，忽略
+              return;
+            }
+            const stepId = editingStepForParams.id;
+            setSteps((prev) => prev.map((s) => {
+              if (s.id !== stepId) return s;
+              const p: any = { ...(s.parameters || {}) };
+              // 将匹配策略写入标准化字段 parameters.matching
+              p.matching = {
+                strategy: criteria.strategy,
+                fields: criteria.fields,
+                values: criteria.values,
+                updatedAt: Date.now(),
+              };
+              // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
+              p.elementLocator = p.elementLocator || {};
+              p.elementLocator.additionalInfo = {
+                ...(p.elementLocator.additionalInfo || {}),
+                xpath: p.elementLocator.additionalInfo?.xpath || undefined,
+                resourceId: p.elementLocator.additionalInfo?.resourceId || criteria.values['resource-id'],
+                text: p.elementLocator.additionalInfo?.text || criteria.values['text'],
+                contentDesc: p.elementLocator.additionalInfo?.contentDesc || criteria.values['content-desc'],
+                className: p.elementLocator.additionalInfo?.className || criteria.values['class'],
+              };
+              // 兼容后端现有执行器参数命名（尽量回写常用字段）
+              if (criteria.values['resource-id']) p.resource_id = criteria.values['resource-id'];
+              if (criteria.values['text']) p.text = criteria.values['text'];
+              if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
+              if (criteria.values['class']) p.class_name = criteria.values['class'];
+              if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
+              return { ...s, parameters: p };
+            }));
+          } catch (e) {
+            console.warn('应用匹配策略到步骤失败:', e);
+          }
+        }}
         onClose={() => {
           setShowPageAnalyzer(false);
           setIsQuickAnalyzer(false); // 重置快捷模式标记

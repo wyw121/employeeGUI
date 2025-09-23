@@ -5,12 +5,15 @@ import {
   DiagnosticResult,
   DiagnosticSummary,
   DiagnosticCategory,
+  DiagnosticStatus,
   DomainEvent
 } from '../../domain/adb';
 import { DeviceManagerService } from '../../domain/adb/services/DeviceManagerService';
 import { ConnectionService } from '../../domain/adb/services/ConnectionService';
 import { DiagnosticService } from '../../domain/adb/services/DiagnosticService';
 import { useAdbStore } from '../store/adbStore';
+import { IUiMatcherRepository, MatchCriteriaDTO, MatchResultDTO } from '../../domain/page-analysis/repositories/IUiMatcherRepository';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 /**
  * ADB应用服务
@@ -21,11 +24,14 @@ import { useAdbStore } from '../store/adbStore';
 export class AdbApplicationService {
   private deviceWatcher: (() => void) | null = null;
   private healthChecker: (() => void) | null = null;
+  private logUnlisteners: UnlistenFn[] = [];
+  private logBridgeReady = false;
 
   constructor(
     private deviceManager: DeviceManagerService,
     private connectionService: ConnectionService,
-    private diagnosticService: DiagnosticService
+    private diagnosticService: DiagnosticService,
+    private uiMatcherRepository: IUiMatcherRepository
   ) {
     // 设置事件处理器来同步状态到Store
     this.setupEventHandlers();
@@ -53,6 +59,11 @@ export class AdbApplicationService {
     try {
       store.setInitializing(true);
       store.setError(null);
+
+      // 先建立日志桥接订阅，确保初始化过程中产生的后端日志也能被捕获
+      if (!this.logBridgeReady) {
+        await this.setupLogBridgeSubscriptions();
+      }
 
       // 1. 初始化连接
       const connection = await this.connectionService.initializeConnection(config);
@@ -113,6 +124,7 @@ export class AdbApplicationService {
   reset(): void {
     this.stopDeviceWatching();
     this.stopHealthChecking();
+    this.teardownLogBridgeSubscriptions();
     useAdbStore.getState().reset();
   }
 
@@ -567,5 +579,173 @@ export class AdbApplicationService {
       this.healthChecker = null;
     }
   }
+
+  // ===== UI 元素匹配 =====
+
+  /**
+   * 根据匹配条件在真机当前界面查找元素
+   */
+  async matchElementByCriteria(deviceId: string, criteria: MatchCriteriaDTO): Promise<MatchResultDTO> {
+    const store = useAdbStore.getState();
+    try {
+      store.setLoading(true);
+  return await this.uiMatcherRepository.matchByCriteria(deviceId, criteria);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      store.setError(err);
+      throw err;
+    } finally {
+      store.setLoading(false);
+    }
+  }
+
+  /**
+   * 订阅后端日志事件，并转换为 DiagnosticResult 写入 Store
+   */
+  private async setupLogBridgeSubscriptions(): Promise<void> {
+    const store = useAdbStore.getState();
+
+    // 避免重复订阅
+    if (this.logBridgeReady) return;
+
+    // adb-command-log 事件
+    const unlistenAdb = await listen<AdbCommandLog>('adb-command-log', (event) => {
+      try {
+        const payload = event.payload;
+        const diag = this.mapAdbCommandLogToDiagnostic(payload);
+        store.addDiagnosticResult(diag);
+      } catch (e) {
+        console.error('Failed to map adb-command-log:', e, event.payload);
+      }
+    });
+
+    // 通用 log-entry 事件
+    const unlistenLog = await listen<BackendLogEntry>('log-entry', (event) => {
+      try {
+        const payload = event.payload;
+        const diag = this.mapBackendLogEntryToDiagnostic(payload);
+        store.addDiagnosticResult(diag);
+      } catch (e) {
+        console.error('Failed to map log-entry:', e, event.payload);
+      }
+    });
+
+    this.logUnlisteners.push(unlistenAdb, unlistenLog);
+    this.logBridgeReady = true;
+  }
+
+  /** 取消订阅日志事件 */
+  private teardownLogBridgeSubscriptions(): void {
+    if (this.logUnlisteners.length > 0) {
+      this.logUnlisteners.forEach((fn) => {
+        try { fn(); } catch {}
+      });
+      this.logUnlisteners = [];
+    }
+    this.logBridgeReady = false;
+  }
+
+  /** 将 ADB 命令日志映射为 DiagnosticResult */
+  private mapAdbCommandLogToDiagnostic(log: AdbCommandLog) : DiagnosticResult {
+    const args = log.args || [];
+    const joined = args.join(' ');
+    const isServerCmd = args.includes('start-server') || args.includes('kill-server');
+    const isConnectCmd = args.includes('connect') || args.includes('disconnect');
+    const category: DiagnosticCategory = isServerCmd
+      ? DiagnosticCategory.SERVER_STATUS
+      : (isConnectCmd ? DiagnosticCategory.DEVICE_CONNECTION : DiagnosticCategory.GENERAL);
+
+  const hasError = !!log.error && log.error.trim().length > 0;
+  const status = hasError ? DiagnosticStatus.ERROR : DiagnosticStatus.SUCCESS;
+    const name = `ADB: ${args[0] ?? 'command'}`;
+    const message = hasError 
+      ? `失败: adb ${joined} | ${log.error}`
+      : `成功: adb ${joined}`;
+
+    return new DiagnosticResult(
+      this.genId(),
+      name,
+      status,
+      message,
+      JSON.stringify(log),
+      undefined,
+      false,
+      undefined,
+      new Date(log.timestamp || Date.now()),
+      category,
+      'ADB',
+      (log as any).device_id || undefined,
+      (log as any).session_id || undefined
+    );
+  }
+
+  /** 将通用后端日志映射为 DiagnosticResult */
+  private mapBackendLogEntryToDiagnostic(entry: BackendLogEntry): DiagnosticResult {
+    // 等级 → 诊断状态
+    const status = entry.level === 'ERROR' 
+      ? DiagnosticStatus.ERROR 
+      : (entry.level === 'WARN' ? DiagnosticStatus.WARNING : DiagnosticStatus.SUCCESS);
+
+    // 类别映射
+    const cat = (entry.category || '').toUpperCase();
+    let category: DiagnosticCategory = DiagnosticCategory.GENERAL;
+    if (cat.includes('SERVER')) category = DiagnosticCategory.SERVER_STATUS;
+    else if (cat.includes('DEVICE')) category = DiagnosticCategory.DEVICE_CONNECTION;
+
+    const details = entry.details ?? undefined;
+    const name = `${entry.source || 'Backend'}: ${entry.category || 'log'}`;
+    const message = entry.message || '日志事件';
+
+    // 使用后端提供的 id 作为结果 id，避免重复
+    return new DiagnosticResult(
+      entry.id || this.genId(),
+      name,
+      status,
+      message,
+      details,
+      undefined,
+      false,
+      undefined,
+      new Date(entry.timestamp || Date.now()),
+      category,
+      entry.source || 'Backend',
+      entry.device_id || undefined,
+      entry.session_id || undefined
+    );
+  }
+
+  private genId(): string {
+    // 兼容不同环境生成唯一ID
+    const g = (globalThis as any);
+    if (g && g.crypto && typeof g.crypto.randomUUID === 'function') {
+      return g.crypto.randomUUID();
+    }
+    return 'log-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+}
+
+// ===== 后端事件载荷类型（与 Rust 后端保持同步的最小必要字段） =====
+interface AdbCommandLog {
+  command: string;
+  args: string[];
+  output: string;
+  error?: string | null;
+  exit_code?: number | null;
+  duration_ms: number;
+  timestamp: string;
+  device_id?: string | null;
+  session_id?: string | null;
+}
+
+interface BackendLogEntry {
+  id: string;
+  timestamp: string;
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+  category: string;
+  source: string;
+  message: string;
+  details?: string | null;
+  device_id?: string | null;
+  session_id: string;
 }
 

@@ -4,6 +4,9 @@ export interface GridViewPrefs {
   expandDepth: number;
   caseSensitive: boolean;
   useRegex: boolean;
+  autoSwitchTab?: boolean;         // 是否在定位后自动切换到对应页签
+  enableFlashHighlight?: boolean;  // 是否启用高亮闪烁
+  previewAutoCenter?: boolean;     // 屏幕预览是否自动居中/滚动到高亮
   searchFields?: {
     id?: boolean;
     text?: boolean;
@@ -22,6 +25,9 @@ const defaultPrefs: GridViewPrefs = {
   expandDepth: 2,
   caseSensitive: false,
   useRegex: false,
+  autoSwitchTab: true,
+  enableFlashHighlight: true,
+  previewAutoCenter: true,
   searchFields: { id: true, text: true, desc: true, className: true, tag: true, pkg: false },
 };
 
@@ -36,6 +42,9 @@ export function loadPrefs(): GridViewPrefs {
       expandDepth: Number.isFinite(parsed.expandDepth) ? Number(parsed.expandDepth) : defaultPrefs.expandDepth,
       caseSensitive: typeof parsed.caseSensitive === 'boolean' ? parsed.caseSensitive : defaultPrefs.caseSensitive,
       useRegex: typeof parsed.useRegex === 'boolean' ? parsed.useRegex : defaultPrefs.useRegex,
+      autoSwitchTab: typeof parsed.autoSwitchTab === 'boolean' ? parsed.autoSwitchTab : defaultPrefs.autoSwitchTab,
+      enableFlashHighlight: typeof parsed.enableFlashHighlight === 'boolean' ? parsed.enableFlashHighlight : defaultPrefs.enableFlashHighlight,
+      previewAutoCenter: typeof parsed.previewAutoCenter === 'boolean' ? parsed.previewAutoCenter : defaultPrefs.previewAutoCenter,
       searchFields: {
         id: parsed.searchFields?.id ?? defaultPrefs.searchFields!.id,
         text: parsed.searchFields?.text ?? defaultPrefs.searchFields!.text,

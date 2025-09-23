@@ -10,14 +10,16 @@ interface ScreenPreviewPanelProps {
   matchedSet: Set<UiNode>;
   highlightNode?: UiNode | null;
   highlightKey?: number;
+  enableFlashHighlight?: boolean;
+  previewAutoCenter?: boolean;
 }
 
-export const ScreenPreviewPanel: React.FC<ScreenPreviewPanelProps> = ({ root, selected, onSelect, matchedSet, highlightNode, highlightKey }) => {
+export const ScreenPreviewPanel: React.FC<ScreenPreviewPanelProps> = ({ root, selected, onSelect, matchedSet, highlightNode, highlightKey, enableFlashHighlight, previewAutoCenter }) => {
   return (
     <div className={styles.card}>
       <div className={styles.cardHeader}>屏幕预览</div>
       <div className={styles.cardBody}>
-        <ScreenPreview root={root} selected={selected} onSelect={onSelect} matchedSet={matchedSet} highlightNode={highlightNode} highlightKey={highlightKey} />
+        <ScreenPreview root={root} selected={selected} onSelect={onSelect} matchedSet={matchedSet} highlightNode={highlightNode} highlightKey={highlightKey} enableFlashHighlight={enableFlashHighlight} previewAutoCenter={previewAutoCenter} />
       </div>
     </div>
   );

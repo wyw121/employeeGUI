@@ -13,6 +13,7 @@ import {
   ReloadOutlined,
   EyeOutlined
 } from '@ant-design/icons';
+import { MatchingStrategyTag } from './step-card';
 
 const { Text } = Typography;
 
@@ -408,6 +409,10 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
         >
           <div className="flex items-center justify-between">
             <span>{step.description}</span>
+            {/* 显示匹配策略标签 */}
+            { (step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && (
+              <MatchingStrategyTag strategy={step.parameters?.matching?.strategy} small />
+            ) }
             
             {/* 批量匹配切换按钮 - 支持双向切换 */}
             {(step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && onBatchMatch && (

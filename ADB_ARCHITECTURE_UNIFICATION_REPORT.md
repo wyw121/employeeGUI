@@ -86,13 +86,27 @@ const {
 ```
 
 **使用范围**：
-- ✅ `XiaohongshuFollowPage.tsx`
-- ✅ `SmartScriptBuilderPage.tsx`
-- ✅ `DeviceManagementPage.tsx`
-- ✅ `ContactAutomationPage.tsx`
-- ✅ `VisualizationViewPage.tsx`
-- ✅ `PreciseAcquisitionPage.tsx`
-- ✅ 更多页面组件...
+
+### 4. 匹配策略（Matching Strategy）
+
+为适配不同设备、屏幕与分辨率，统一引入“策略化匹配”模型，并通过端到端路径打通：UI 预设 → `useAdb()` → 应用服务 → Tauri 仓储 → Rust 命令。
+
+- 支持的策略：
+  - `absolute`：绝对定位，包含 `bounds/index` 等位置字段，最精确但跨设备脆弱
+  - `strict`：严格匹配，常用语义字段组合（`resource-id/text/content-desc/class/package`）
+  - `relaxed`：宽松匹配，少数字段或模糊匹配
+  - `positionless`：无位置匹配，忽略位置相关字段
+  - `standard`：标准匹配（新增）—面向跨设备的稳定匹配，仅使用语义字段，忽略位置/分辨率差异
+
+- 端到端调用路径：
+  1) 前端 Inspector 网格视图 → 右侧节点详情 → 预设行（`MatchPresetsRow.tsx`）选择 `标准匹配`
+  2) 将 `criteria = { strategy: 'standard', fields, values }` 通过上层回调或“修改参数”写回步骤参数
+  3) 通过统一接口 `useAdb().matchElementByCriteria(deviceId, criteria)` 下发
+  4) 应用服务 `AdbApplicationService.matchElementByCriteria`
+  5) Tauri 仓储 `TauriUiMatcherRepository.matchByCriteria` → `invoke('match_element_by_criteria')`
+  6) Rust `xml_judgment_service::match_element_by_criteria` 中对 `standard` 策略自动忽略位置字段，仅按语义字段匹配
+
+- 步骤卡 UI：在 `DraggableStepCard` 中通过 `MatchingStrategyTag` 渲染当前步骤 `parameters.matching.strategy`，确保策略可见性与可维护性。
 
 ### 2. **状态管理统一**
 

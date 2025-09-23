@@ -30,6 +30,8 @@ pub struct AdbCommandLog {
     pub error: Option<String>,
     pub exit_code: Option<i32>,
     pub duration_ms: u64,
+    pub device_id: Option<String>,
+    pub session_id: String,
     pub timestamp: String,
 }
 
@@ -113,6 +115,19 @@ impl LogCollector {
         exit_code: Option<i32>,
         duration_ms: u64,
     ) {
+        // 从参数中解析设备ID（-s <serial>）
+        let mut parsed_device_id: Option<String> = None;
+        let mut i = 0usize;
+        while i < args.len() {
+            if args[i] == "-s" {
+                if i + 1 < args.len() {
+                    parsed_device_id = Some(args[i + 1].clone());
+                }
+                break;
+            }
+            i += 1;
+        }
+
         let adb_log = AdbCommandLog {
             command: command.to_string(),
             args: args.to_vec(),
@@ -120,6 +135,8 @@ impl LogCollector {
             error: error.map(|e| e.to_string()),
             exit_code,
             duration_ms,
+            device_id: parsed_device_id.clone(),
+            session_id: self.session_id.clone(),
             timestamp: chrono::Utc::now().to_rfc3339(),
         };
 
@@ -143,7 +160,7 @@ impl LogCollector {
             "AdbService",
             &format!("执行ADB命令: {} {:?}", command, args),
             Some(&serde_json::to_string(&adb_log).unwrap_or_default()),
-            None,
+            parsed_device_id.as_deref(),
         );
     }
 

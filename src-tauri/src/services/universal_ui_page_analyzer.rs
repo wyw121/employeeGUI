@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use quick_xml::{Reader, events::Event};
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
+use anyhow::Result as AnyResult;
 use tracing::{info, warn, error};
 use crate::types::page_analysis::ElementBounds;
 
@@ -76,7 +76,7 @@ impl UniversalUIPageAnalyzer {
     }
 
     /// 分析页面XML内容
-    pub fn analyze_page(&self, xml_content: &str, package_name: &str, activity_name: &str) -> Result<PageAnalysisResult> {
+    pub fn analyze_page(&self, xml_content: &str, package_name: &str, activity_name: &str) -> AnyResult<PageAnalysisResult> {
         let start_time = std::time::Instant::now();
         
         info!("🔍 开始分析页面: {} - {}", package_name, activity_name);
@@ -112,7 +112,7 @@ impl UniversalUIPageAnalyzer {
     }
 
     /// 解析XML内容，提取UI元素（增强版）
-    fn parse_xml_elements(&self, xml_content: &str) -> Result<Vec<UIElement>> {
+    fn parse_xml_elements(&self, xml_content: &str) -> AnyResult<Vec<UIElement>> {
         let mut elements = Vec::new();
         let mut reader = Reader::from_str(xml_content);
         reader.config_mut().trim_text(true);
@@ -162,7 +162,7 @@ impl UniversalUIPageAnalyzer {
     }
 
     /// 解析节点属性
-    fn parse_node_attributes(&self, element: &quick_xml::events::BytesStart, element_id: &str, depth: u32) -> Result<UIElement> {
+    fn parse_node_attributes(&self, element: &quick_xml::events::BytesStart, element_id: &str, depth: u32) -> AnyResult<UIElement> {
         let mut text = String::new();
         let mut resource_id = None;
         let mut class_name = String::new();

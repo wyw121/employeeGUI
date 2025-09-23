@@ -224,6 +224,7 @@ async fn get_adb_version() -> Result<String, String> {
 #[tauri::command]
 async fn start_adb_server_simple() -> Result<String, String> {
     use std::process::Command;
+    use std::time::Instant;
 
     let adb_path = "platform-tools/adb.exe";
     let mut cmd = Command::new(adb_path);
@@ -234,16 +235,50 @@ async fn start_adb_server_simple() -> Result<String, String> {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    match cmd.output() {
+    let start = Instant::now();
+    let res = cmd.output();
+    let dur = start.elapsed();
+    match res {
         Ok(output) => {
             if output.status.success() {
+                // 记录ADB命令日志
+                let out_str = String::from_utf8_lossy(&output.stdout).to_string();
+                let err_str = String::from_utf8_lossy(&output.stderr).to_string();
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &vec!["start-server".to_string()],
+                    &out_str,
+                    if err_str.is_empty() { None } else { Some(err_str.as_str()) },
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Ok("ADB服务器启动成功".to_string())
             } else {
                 let error = String::from_utf8_lossy(&output.stderr);
+                // 记录失败日志
+                let out_str = String::from_utf8_lossy(&output.stdout).to_string();
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &vec!["start-server".to_string()],
+                    &out_str,
+                    Some(error.as_ref()),
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Err(format!("ADB服务器启动失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
+        Err(e) => {
+            LOG_COLLECTOR.add_adb_command_log(
+                adb_path,
+                &vec!["start-server".to_string()],
+                "",
+                Some(&format!("{}", e)),
+                None,
+                dur.as_millis() as u64,
+            );
+            Err(format!("无法执行ADB命令: {}", e))
+        },
     }
 }
 
@@ -251,6 +286,7 @@ async fn start_adb_server_simple() -> Result<String, String> {
 #[tauri::command]
 async fn kill_adb_server_simple() -> Result<String, String> {
     use std::process::Command;
+    use std::time::Instant;
 
     let adb_path = "platform-tools/adb.exe";
     let mut cmd = Command::new(adb_path);
@@ -261,16 +297,48 @@ async fn kill_adb_server_simple() -> Result<String, String> {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    match cmd.output() {
+    let start = Instant::now();
+    let res = cmd.output();
+    let dur = start.elapsed();
+    match res {
         Ok(output) => {
             if output.status.success() {
+                let out_str = String::from_utf8_lossy(&output.stdout).to_string();
+                let err_str = String::from_utf8_lossy(&output.stderr).to_string();
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &vec!["kill-server".to_string()],
+                    &out_str,
+                    if err_str.is_empty() { None } else { Some(err_str.as_str()) },
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Ok("ADB服务器停止成功".to_string())
             } else {
                 let error = String::from_utf8_lossy(&output.stderr);
+                let out_str = String::from_utf8_lossy(&output.stdout).to_string();
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &vec!["kill-server".to_string()],
+                    &out_str,
+                    Some(error.as_ref()),
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Err(format!("ADB服务器停止失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
+        Err(e) => {
+            LOG_COLLECTOR.add_adb_command_log(
+                adb_path,
+                &vec!["kill-server".to_string()],
+                "",
+                Some(&format!("{}", e)),
+                None,
+                dur.as_millis() as u64,
+            );
+            Err(format!("无法执行ADB命令: {}", e))
+        },
     }
 }
 
@@ -278,6 +346,7 @@ async fn kill_adb_server_simple() -> Result<String, String> {
 #[tauri::command]
 async fn execute_adb_command_simple(command: String) -> Result<String, String> {
     use std::process::Command;
+    use std::time::Instant;
 
     let adb_path = "platform-tools/adb.exe";
     let args: Vec<&str> = command.split_whitespace().collect();
@@ -290,17 +359,47 @@ async fn execute_adb_command_simple(command: String) -> Result<String, String> {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    match cmd.output() {
+    let start = Instant::now();
+    let res = cmd.output();
+    let dur = start.elapsed();
+    match res {
         Ok(output) => {
             if output.status.success() {
                 let result = String::from_utf8_lossy(&output.stdout);
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &args.iter().map(|s| s.to_string()).collect::<Vec<String>>() ,
+                    &result.to_string(),
+                    None,
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Ok(result.to_string())
             } else {
                 let error = String::from_utf8_lossy(&output.stderr);
+                let out_str = String::from_utf8_lossy(&output.stdout).to_string();
+                LOG_COLLECTOR.add_adb_command_log(
+                    adb_path,
+                    &args.iter().map(|s| s.to_string()).collect::<Vec<String>>() ,
+                    &out_str,
+                    Some(error.as_ref()),
+                    output.status.code(),
+                    dur.as_millis() as u64,
+                );
                 Err(format!("ADB命令执行失败: {}", error))
             }
         }
-        Err(e) => Err(format!("无法执行ADB命令: {}", e)),
+        Err(e) => {
+            LOG_COLLECTOR.add_adb_command_log(
+                adb_path,
+                &args.iter().map(|s| s.to_string()).collect::<Vec<String>>() ,
+                "",
+                Some(&format!("{}", e)),
+                None,
+                dur.as_millis() as u64,
+            );
+            Err(format!("无法执行ADB命令: {}", e))
+        },
     }
 }
 
@@ -804,10 +903,17 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .setup(|_app| {
-            // 设置日志收集器的app handle以便实时发送日志到前端
-            // 注意：这里需要通过不安全的方式来设置，因为LOG_COLLECTOR是静态的
-            // 在实际应用中，我们会在启动后通过命令来初始化
+        .setup(|app| {
+            // 设置日志收集器的 app handle，以便实时向前端 emit 事件
+            // 由于 LOG_COLLECTOR 为静态对象，这里采用受控的 unsafe 可变引用写入 app_handle
+            unsafe {
+                let ptr: *const services::log_bridge::LogCollector = &*LOG_COLLECTOR;
+                // 将不可变指针转换为可变引用（仅在初始化时调用，避免数据竞争）
+                let collector_mut = (ptr as *mut services::log_bridge::LogCollector)
+                    .as_mut()
+                    .expect("LOG_COLLECTOR pointer should be valid");
+                collector_mut.set_app_handle(app.handle().clone());
+            }
             Ok(())
         })
         .manage(Mutex::new(employee_service))
@@ -921,6 +1027,7 @@ fn main() {
             find_xml_ui_elements,    // 查找XML UI元素
             wait_for_ui_element,     // 等待元素出现
             check_device_page_state, // 检查页面状态
+            match_element_by_criteria, // 按匹配条件查找元素
             // 智能应用管理功能
             get_device_apps,         // 获取设备应用列表
             search_device_apps,      // 搜索设备应用

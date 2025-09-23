@@ -84,6 +84,7 @@ npm run tauri build
 - ✅ 数据持久化 (SQLite)
 - ✅ 响应式UI设计
 - ✅ 类型安全 (TypeScript)
+- ✅ ADB 页面元素查找支持“标准匹配”策略（跨设备、分辨率无关）
 
 ## 项目特点
 
@@ -92,6 +93,16 @@ npm run tauri build
 - **API层**: 封装Tauri命令调用，隔离前后端通信
 - **服务层**: Rust业务逻辑，处理数据操作
 - **数据层**: SQLite数据库
+
+### ADB 标准匹配（Standard Matching）
+- 目标：在不同品牌/分辨率/布局微调下稳定定位 UI 元素
+- 行为：仅使用语义字段（`resource-id/text/content-desc/class/package`），自动忽略位置相关字段（如 `bounds/index`）
+- 入口：
+	1) 页面分析器（网格视图 → 右侧节点详情 → 预设）点击“标准匹配”
+	2) 通过 `useAdb().matchElementByCriteria(deviceId, { strategy: 'standard', fields, values })` 调用
+	3) 步骤卡片上会显示匹配策略标签（`匹配: 标准`）
+
+后端实现：Tauri 命令 `match_element_by_criteria` 在 `standard` 策略下会忽略位置/分辨率差异，仅按语义字段匹配。
 
 ### 可维护性
 - 组件化设计，便于复用和维护

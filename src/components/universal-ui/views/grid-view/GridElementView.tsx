@@ -19,7 +19,7 @@ import type { VisualUIElement } from "../../types";
 import styles from './GridElementView.module.css';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
 import type { NodeLocator } from '../../../../domain/inspector/entities/NodeLocator';
-import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath } from './utils';
+import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath, parseBounds } from './utils';
 import { TreeRow } from './TreeRow';
 import { NodeDetail } from './NodeDetail';
 import { ScreenPreview } from './ScreenPreview';
@@ -44,6 +44,7 @@ import { XPathHelpPanel } from './panels/XPathHelpPanel';
 import { FieldDocPanel } from './panels/FieldDocPanel';
 import { XPathTemplatesPanel } from './panels/XPathTemplatesPanel';
 import { LocatorAdvisorPanel } from './panels/LocatorAdvisorPanel';
+import { PreferencesPanel } from './panels/PreferencesPanel';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -53,11 +54,11 @@ interface GridElementViewProps {
   elements?: VisualUIElement[];
   onElementSelect?: (element: VisualUIElement) => void;
   selectedElementId?: string;
-  // Inspector 集成：提供会话与步骤创建，以及外部定位能力
-  sessionId?: string;
-  onCreateStep?: (sessionId: string, node: UiNode) => void;
+  // Inspector 集成：提供外部定位能力（不含步骤卡片回写）
   locator?: NodeLocator;
   locatorResolve?: (root: UiNode | null, locator: NodeLocator) => UiNode | null;
+  // 新增：将节点详情选择的匹配策略回传给上层（例如步骤卡片“修改参数”模式）
+  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => void;
 }
 
 // =============== 工具函数（见 ./utils） ===============
@@ -76,10 +77,9 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   elements = [],
   onElementSelect,
   selectedElementId = "",
-  sessionId,
-  onCreateStep,
   locator,
   locatorResolve,
+  onApplyCriteria,
 }) => {
   // XML 文本与解析树
   const [xmlText, setXmlText] = useState<string>("");
@@ -93,9 +93,23 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [matchIndex, setMatchIndex] = useState<number>(-1);
   const [xPathInput, setXPathInput] = useState<string>("");
   const [showMatchedOnly, setShowMatchedOnly] = useState<boolean>(false);
-  const [advFilter, setAdvFilter] = useState<AdvancedFilter>({ enabled: false, mode: 'AND', resourceId: '', text: '', className: '', packageName: '', clickable: null, nodeEnabled: null });
+  // 首选项映射到本地 UI 状态（持久化）
   const [autoSelectOnParse, setAutoSelectOnParse] = useState<boolean>(false);
-  const [searchOptions, setSearchOptions] = useState<SearchOptions>({ caseSensitive: false, useRegex: false });
+  const [advFilter, setAdvFilter] = useState<AdvancedFilter>({
+    enabled: false,
+    mode: 'AND',
+    resourceId: '',
+    text: '',
+    className: '',
+    packageName: '',
+    clickable: null,
+    nodeEnabled: null,
+  });
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>({
+    caseSensitive: false,
+    useRegex: false,
+    fields: { id: true, text: true, desc: true, className: true, tag: true, pkg: false },
+  });
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [favSearch, setFavSearch] = useState<string[]>([]);
   const [xpathHistory, setXpathHistory] = useState<string[]>([]);
@@ -106,19 +120,25 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [panelHighlightNode, setPanelHighlightNode] = useState<UiNode | null>(null);
   const [panelActivateTab, setPanelActivateTab] = useState<'results' | 'xpath'>('results');
 
+  // 悬停联动处理：树/结果列表/测试列表悬停时预览高亮
+  const handleHoverNode = (n: UiNode | null) => {
+    setPanelHighlightNode(n);
+    setPanelActivateKey(k => k + 1);
+  };
+
   // 初始化首选项
   useEffect(() => {
     const p = loadPrefs();
     setAutoSelectOnParse(p.autoSelectOnParse);
     setShowMatchedOnly(p.showMatchedOnly);
     setExpandDepth(p.expandDepth);
-  // 兼容旧版本偏好，并带出字段选择
-  setSearchOptions({ caseSensitive: (p as any).caseSensitive ?? false, useRegex: (p as any).useRegex ?? false, fields: p.searchFields });
-  // 初始化历史与收藏
-  setSearchHistory(getSearchHistory());
-  setFavSearch(getFavoriteSearches());
-  setXpathHistory(getXPathHistory());
-  setFavXPath(getFavoriteXPaths());
+    // 兼容旧版本偏好，并带出字段选择
+    setSearchOptions({ caseSensitive: (p as any).caseSensitive ?? false, useRegex: (p as any).useRegex ?? false, fields: p.searchFields });
+    // 初始化历史与收藏
+    setSearchHistory(getSearchHistory());
+    setFavSearch(getFavoriteSearches());
+    setXpathHistory(getXPathHistory());
+    setFavXPath(getFavoriteXPaths());
   }, []);
 
   // 持久化首选项
@@ -139,8 +159,6 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
       },
     });
   }, [autoSelectOnParse, showMatchedOnly, expandDepth, searchOptions]);
-
-  // 参考输入框引用
   const fileRef = useRef<HTMLInputElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const xpathRef = useRef<HTMLInputElement | null>(null);
@@ -199,7 +217,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const locateFirstMatch = () => {
     const kw = filter.trim();
     const anyAdv = advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className);
-  const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
+    const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
     if (!kw && !anyAdv) return; // 无任何条件则不定位
     const dfs = (n?: UiNode | null): UiNode | null => {
       if (!n) return null;
@@ -215,7 +233,10 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
       setSelected(found);
       // 在“匹配结果”中高亮并滚动
       setPanelHighlightNode(found);
-      setPanelActivateTab('results');
+      const prefs = loadPrefs();
+      if (prefs.autoSwitchTab !== false) {
+        setPanelActivateTab('results');
+      }
       setPanelActivateKey(k => k + 1);
     }
   };
@@ -237,7 +258,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     }
     const result: UiNode[] = [];
     const stk: UiNode[] = [root];
-  const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
+    const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
     while (stk.length) {
       const n = stk.pop()!;
       if (combined(n)) result.push(n);
@@ -290,9 +311,47 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
       setXpathTestNodes(all);
       setPanelHighlightNode(all && all.length > 0 ? all[0] : null);
     }
-    // 切换到 XPath 工具页签并触发一次联动
-    setPanelActivateTab('xpath');
+    // 切换到 XPath 工具页签并触发一次联动（尊重偏好）
+    const prefs = loadPrefs();
+    if (prefs.autoSwitchTab !== false) {
+      setPanelActivateTab('xpath');
+    }
     setPanelActivateKey((k) => k + 1);
+  };
+
+  // 真机匹配回调：根据返回的 xpath 或 bounds 在当前树中选中并高亮
+  const handleMatchedFromDevice = (payload: { preview?: { xpath?: string; bounds?: string } | null }) => {
+    if (!root) return;
+    const xp = payload.preview?.xpath?.trim();
+    const bd = payload.preview?.bounds?.trim();
+    let target: UiNode | null = null;
+    if (xp) {
+      target = findByXPathRoot(root, xp) || findByPredicateXPath(root, xp);
+    }
+    if (!target && bd) {
+      const pb = parseBounds(bd);
+      if (pb) {
+        const stack: UiNode[] = [root];
+        while (stack.length && !target) {
+          const n = stack.pop()!;
+          const nb = parseBounds(n.attrs['bounds'] || '');
+          if (nb && nb.x1 === pb.x1 && nb.y1 === pb.y1 && nb.x2 === pb.x2 && nb.y2 === pb.y2) {
+            target = n;
+            break;
+          }
+          for (let i = n.children.length - 1; i >= 0; i--) stack.push(n.children[i]);
+        }
+      }
+    }
+    if (target) {
+      setSelected(target);
+      setPanelHighlightNode(target);
+      const prefs = loadPrefs();
+      if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
+      setPanelActivateKey(k => k + 1);
+    } else {
+      alert('匹配成功，但未能在当前XML树中定位对应节点（可能界面已变化或XPath不兼容）。');
+    }
   };
 
   const loadDemo = () => {
@@ -502,7 +561,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             <div className={styles.cardHeader}>节点树</div>
             <div className={`${styles.cardBody} ${styles.tree}`}>
               {root ? (
-                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} />
+                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} onHoverNode={handleHoverNode} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} />
               ) : (
                 <div className="p-3 text-sm text-neutral-500">解析 XML 后在此展示树结构…</div>
               )}
@@ -513,7 +572,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         <div onMouseDown={startDrag} style={{ cursor: 'col-resize', background: 'var(--g-border)', width: '8px', borderRadius: 4 }} />
         {/* 右侧 */}
         <div className="space-y-4">
-          <NodeDetailPanel node={selected} sessionId={sessionId} onCreateStep={onCreateStep} />
+          <PreferencesPanel />
+          <NodeDetailPanel node={selected} onMatched={handleMatchedFromDevice} onApplyToStep={onApplyCriteria as any} />
           <LocatorAdvisorPanel
             node={selected}
             onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
@@ -526,6 +586,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             matchedSet={matchedSet}
             highlightNode={panelHighlightNode}
             highlightKey={panelActivateKey}
+            enableFlashHighlight={loadPrefs().enableFlashHighlight !== false}
+            previewAutoCenter={loadPrefs().previewAutoCenter !== false}
           />
           <ResultsAndXPathPanel
             matches={matches}
@@ -535,6 +597,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             searchOptions={searchOptions}
             onJump={(idx, node) => { setMatchIndex(idx); setSelected(node); }}
             onInsertXPath={(xp) => setXPathInput(xp)}
+            onHoverNode={handleHoverNode}
             selected={selected}
             onApplyXPath={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
             onInsertOnly={(xp) => setXPathInput(xp)}

@@ -294,6 +294,14 @@ export const useAdb = () => {
     }
   }, [diagnosticResults]); // 只保留真正需要的依赖
 
+  // ===== UI 元素匹配 =====
+  const matchElementByCriteria = useCallback(async (
+    deviceId: string,
+    criteria: { strategy: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'; fields: string[]; values: Record<string, string>; }
+  ) => {
+    return await applicationService.matchElementByCriteria(deviceId, criteria);
+  }, []);
+
   // ===== 生命周期 =====
   
   /**
@@ -383,6 +391,9 @@ export const useAdb = () => {
     clearError,
     quickConnect,
     quickFix
+    ,
+    // 匹配
+    matchElementByCriteria
   };
 };
 

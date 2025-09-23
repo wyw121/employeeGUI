@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Space, Tag, Typography } from 'antd';
+import { Card, Space, Tag, Typography, Checkbox } from 'antd';
 import { UsbOutlined, DesktopOutlined } from '@ant-design/icons';
 import type { DeviceCardProps } from './types';
 
@@ -16,14 +16,23 @@ const statusTag = (status: string) => {
   return <Tag color={cfg.color}>{cfg.text}</Tag>;
 };
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onSelect, selected }) => {
+export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onSelect, selected, selectable, checked, onCheckedChange }) => {
   const icon = device.connection_type === 'emulator' ? <DesktopOutlined /> : <UsbOutlined />;
+  const borderStyle: React.CSSProperties | undefined =
+    selected ? { borderColor: '#ff6b8a' } : (device.status === 'unauthorized' ? { borderColor: '#faad14' } : undefined);
   return (
     <Card size="small" hoverable onClick={() => onSelect?.(device.id)}
-      style={selected ? { borderColor: '#ff6b8a' } : undefined}
+      style={borderStyle}
     >
       <Space direction="vertical" style={{ width: '100%' }}>
-        <Space>
+        <Space align="center">
+          {selectable && (
+            <Checkbox
+              checked={!!checked}
+              onChange={(e) => onCheckedChange?.(e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           {icon}
           <Text strong>{device.id}</Text>
           {statusTag(device.status)}

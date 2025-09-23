@@ -16,6 +16,7 @@ interface ResultsAndXPathPanelProps {
   searchOptions: SearchOptions;
   onJump: (idx: number, node: UiNode) => void;
   onInsertXPath: (xp: string) => void;
+  onHoverNode?: (n: UiNode | null) => void;
 
   // XPath tools
   selected: UiNode | null;
@@ -46,6 +47,7 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
   activateTab,
   activateKey,
   highlightNode,
+  onHoverNode,
 }) => {
   const [active, setActive] = useState<TabKey>('results');
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -81,10 +83,11 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
               onInsertXPath={onInsertXPath}
               searchOptions={searchOptions}
               highlightNode={highlightNode}
+              onHoverNode={onHoverNode}
             />
           ) : (
             <div className="space-y-4">
-              <XPathTestResultsPanel nodes={xpathTestNodes} onJump={onJumpToNode} highlightNode={highlightNode || null} />
+              <XPathTestResultsPanel nodes={xpathTestNodes} onJump={onJumpToNode} highlightNode={highlightNode || null} onHoverNode={onHoverNode} />
               <XPathBuilder
                 node={selected}
                 onApply={onApplyXPath}

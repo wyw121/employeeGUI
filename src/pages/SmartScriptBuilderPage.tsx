@@ -38,6 +38,7 @@ import {
   BulbOutlined,
   RobotOutlined,
   EyeOutlined,
+  WarningOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -48,8 +49,10 @@ import {
 } from '@ant-design/icons';
 import { LaunchAppSmartComponent } from '../components/smart/LaunchAppSmartComponent';
 import { SmartNavigationModal } from '../components';
+import { DistributedScriptQualityPanel } from '../modules/distributed-script-quality/DistributedScriptQualityPanel';
 import { SmartPageFinderModal } from '../components/smart-page-finder';
 import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
+import type { SnapshotInfo } from '../modules/snapshot-recovery/SnapshotRecoveryTypes';
 import SmartStepGenerator from '../modules/SmartStepGenerator';
 import { testSmartStepGenerator, testVariousCases } from '../test/SmartStepGeneratorTest';
 // import { runAllElementNameMapperTests } from '../test/ElementNameMapperTest';
@@ -58,6 +61,9 @@ import { PageAnalysisApplicationService } from '../application/page-analysis/Pag
 import { SmartActionType } from '../types/smartComponents';
 import type { LaunchAppComponentParams } from '../types/smartComponents';
 import type { SmartScriptStep } from '../types/smartScript';
+// 🆕 导入分布式脚本管理相关服务
+import { DistributedStepLookupService } from '../application/services/DistributedStepLookupService';
+import { DistributedScriptManager, DistributedStep } from '../domain/distributed-script';
 import StepTestButton from '../components/StepTestButton';
 import TestResultsDisplay from '../components/TestResultsDisplay';
 // 🆕 导入新的脚本管理模块
@@ -74,6 +80,18 @@ import { ContactWorkflowSelector, generateContactImportWorkflowSteps } from '../
 import { EnhancedUIElement, EnhancedStepParameters, EnhancedElementInfoService } from '../modules/enhanced-element-info';
 import { EnhancedStepCard } from '../modules/enhanced-step-card';
 import XmlCacheManager from '../services/XmlCacheManager';
+// 🧪 XML数据质量校验
+import { XmlDataValidator } from '../modules/distributed-script-quality/XmlDataValidator';
+// 🆕 自包含脚本支持
+import { 
+  XmlSnapshot, 
+  ElementLocator, 
+  SelfContainedStepParameters,
+  createXmlSnapshot,
+  validateXmlSnapshot,
+  migrateToSelfContainedParameters,
+  generateXmlHash
+} from '../types/selfContainedScript';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -358,6 +376,56 @@ const SmartScriptBuilderPage: React.FC = () => {
   }, []);
   
   const [steps, setSteps] = useState<ExtendedSmartScriptStep[]>([]);
+  
+  // 🆕 当步骤变化时，同步到分布式步骤查找服务
+  useEffect(() => {
+    // 转换当前步骤为分布式步骤格式（如果包含XML快照）
+    const distributedSteps: DistributedStep[] = steps
+      .filter(step => step.parameters?.xmlContent) // 只处理有XML快照的步骤
+      .map(step => ({
+        id: step.id,
+        name: step.name || `步骤_${step.id}`,
+        actionType: step.step_type || 'click',
+        params: step.parameters || {},
+        locator: step.parameters?.locator || {
+          absoluteXPath: step.parameters?.xpath || '',
+          attributes: {
+            resourceId: step.parameters?.resource_id,
+            text: step.parameters?.text,
+            contentDesc: step.parameters?.content_desc,
+            className: step.parameters?.class_name,
+          },
+        },
+        createdAt: Date.now(),
+        description: step.description,
+        xmlSnapshot: {
+          xmlContent: step.parameters.xmlContent,
+          xmlHash: `hash_${step.id}_${Date.now()}`,
+          timestamp: Date.now(),
+          deviceInfo: step.parameters.deviceInfo ? {
+            deviceId: step.parameters.deviceInfo.deviceId || 'unknown',
+            deviceName: step.parameters.deviceInfo.deviceName,
+          } : (step.parameters.deviceId || step.parameters.deviceName) ? {
+            deviceId: step.parameters.deviceId || 'unknown',
+            deviceName: step.parameters.deviceName || 'Unknown Device',
+          } : undefined,
+          pageInfo: step.parameters.pageInfo ? {
+            appPackage: step.parameters.pageInfo.appPackage || 'unknown',
+            activityName: step.parameters.pageInfo.activityName,
+            pageTitle: step.parameters.pageInfo.pageTitle,
+          } : undefined,
+        }
+      }));
+    
+    // 同步到分布式步骤查找服务
+    DistributedStepLookupService.setGlobalScriptSteps(distributedSteps);
+    
+    console.log("🔄 同步步骤到分布式查找服务:", {
+      totalSteps: steps.length,
+      distributedSteps: distributedSteps.length,
+      stepIds: distributedSteps.map(s => s.id)
+    });
+  }, [steps]);
   const [loopConfigs, setLoopConfigs] = useState<LoopConfig[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -366,6 +434,10 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
   const [showPageAnalyzer, setShowPageAnalyzer] = useState(false); // 显示智能页面分析器
+  const [snapshotFixMode, setSnapshotFixMode] = useState<{ enabled: boolean; forStepId?: string }>(
+    { enabled: false }
+  );
+  const [pendingAutoResave, setPendingAutoResave] = useState<boolean>(false);
   const [isQuickAnalyzer, setIsQuickAnalyzer] = useState(false); // 标记是否是快捷页面分析器
   const [editingStepForParams, setEditingStepForParams] = useState<ExtendedSmartScriptStep | null>(null); // 当前正在修改参数的步骤
   const [lastNavigationConfig, setLastNavigationConfig] = useState<{app_name?: string, navigation_type?: string} | null>(null); // 记录最后的导航配置
@@ -381,6 +453,13 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [form] = Form.useForm();
   // 🆕 通讯录工作流相关状态
   const [showContactWorkflowSelector, setShowContactWorkflowSelector] = useState(false);
+  // 🆕 脚本质量验证状态
+  const [isScriptValid, setIsScriptValid] = useState<boolean>(true);
+  const [showQualityPanel, setShowQualityPanel] = useState<boolean>(false);
+  // 🆕 当前XML内容状态（用于自包含脚本）
+  const [currentXmlContent, setCurrentXmlContent] = useState<string>('');
+  const [currentDeviceInfo, setCurrentDeviceInfo] = useState<Partial<XmlSnapshot['deviceInfo']>>({});
+  const [currentPageInfo, setCurrentPageInfo] = useState<Partial<XmlSnapshot['pageInfo']>>({});
 
   // 初始化设备选择
   useEffect(() => {
@@ -453,10 +532,50 @@ const SmartScriptBuilderPage: React.FC = () => {
       stepName: step.name,
       xmlCacheId: step.parameters?.xmlCacheId,
       hasXmlContent: !!step.parameters?.xmlContent,
+      xmlContentLength: step.parameters?.xmlContent?.length || 0,
       allParameterKeys: Object.keys(step.parameters || {})
     });
     
-    setEditingStepForParams(step); // 标记当前修改的步骤
+    // 🆕 确保步骤包含XML快照信息
+    let stepForEdit = step;
+    if (!step.parameters?.xmlContent) {
+      console.warn('⚠️ 步骤缺少XML快照，尝试根据 xmlCacheId 回填:', step.id, step.parameters?.xmlCacheId);
+      try {
+        if (step.parameters?.xmlCacheId) {
+          const xmlCacheManager = XmlCacheManager.getInstance();
+          const cacheEntry = xmlCacheManager.getCachedXml(step.parameters.xmlCacheId);
+          if (cacheEntry?.xmlContent) {
+            console.log('✅ 已从缓存回填步骤XML快照:', {
+              cacheId: step.parameters.xmlCacheId,
+              bytes: cacheEntry.xmlContent.length
+            });
+            // 回填到当前步骤并持久到状态
+            const updatedParameters = {
+              ...step.parameters,
+              xmlContent: cacheEntry.xmlContent,
+              xmlTimestamp: cacheEntry.timestamp,
+              deviceId: cacheEntry.deviceId,
+              deviceName: cacheEntry.deviceName,
+            };
+            const updatedStep: ExtendedSmartScriptStep = { ...step, parameters: updatedParameters };
+            setSteps(prev => prev.map(s => s.id === step.id ? updatedStep : s));
+            stepForEdit = updatedStep;
+          } else {
+            console.warn('⚠️ 未找到对应的XML缓存条目或内容为空:', step.parameters.xmlCacheId);
+            message.warning('该步骤缺少页面快照信息，可能无法正确显示原始页面');
+          }
+        } else {
+          message.warning('该步骤缺少页面快照信息，可能无法正确显示原始页面');
+        }
+      } catch (e) {
+        console.warn('回填XML快照失败:', e);
+        message.warning('该步骤缺少页面快照信息，可能无法正确显示原始页面');
+      }
+    } else {
+      console.log('✅ 步骤包含XML快照，将恢复原始页面环境');
+    }
+    
+    setEditingStepForParams(stepForEdit); // 标记当前修改的步骤（可能已回填）
     setIsQuickAnalyzer(false); // 清除快捷模式
     setShowPageAnalyzer(true);
   };
@@ -490,6 +609,63 @@ const SmartScriptBuilderPage: React.FC = () => {
       }
 
       const stepId = editingStep?.id || `step_${Date.now()}`;
+      
+  // ✅ 保存前的XML质量校验（阻断式）
+      if (parameters) {
+        // 构造最小 xmlSnapshot 视图
+        const xmlSnapshot = {
+          xmlContent: parameters.xmlContent,
+          deviceInfo: parameters.deviceInfo || (parameters.deviceId || parameters.deviceName ? {
+            deviceId: parameters.deviceId,
+            deviceName: parameters.deviceName
+          } : undefined),
+          pageInfo: parameters.pageInfo,
+          timestamp: parameters.xmlTimestamp
+        };
+
+        const validation = XmlDataValidator.validateXmlSnapshot(xmlSnapshot as any);
+        console.log('🧪 XML快照校验结果:', validation);
+
+        if (!validation.isValid && validation.severity === 'critical') {
+          // 关键问题：阻断保存，并提供一键修复入口
+          const tips = validation.issues.map(i => `• [${i.severity}] ${i.message}${i.suggestion ? `（建议：${i.suggestion}）` : ''}`).join('\n');
+          Modal.confirm({
+            title: '无法保存：XML 快照无效',
+            width: 640,
+            content: (
+              <div>
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, marginBottom: 8 }}>{tips}</pre>
+                <Alert type="info" showIcon message="可选择一键重新采集当前页面快照并自动回填（推荐）" />
+              </div>
+            ),
+            okText: '一键修复并重试保存',
+            cancelText: '返回修改',
+            onOk: () => {
+              // 进入仅采集快照模式，回填后自动再次保存
+              setSnapshotFixMode({ enabled: true, forStepId: stepId });
+              setPendingAutoResave(true);
+              setIsQuickAnalyzer(false);
+              setEditingStepForParams(null);
+              setShowPageAnalyzer(true);
+            }
+          });
+          return; // 阻断保存
+        }
+
+        if (!validation.isValid && (validation.severity === 'major' || validation.severity === 'minor')) {
+          // 重要/次要问题：提示并允许继续
+          const warnTips = validation.issues.map(i => `• [${i.severity}] ${i.message}`).join('\n');
+          message.warning({
+            content: (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>XML 快照存在问题，建议修复后再保存</div>
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{warnTips}</pre>
+              </div>
+            ),
+            duration: 3
+          });
+        }
+      }
       const newStep: ExtendedSmartScriptStep = {
         id: stepId,
         step_type,
@@ -505,6 +681,109 @@ const SmartScriptBuilderPage: React.FC = () => {
         pre_conditions: [],
         post_conditions: [],
       };
+
+      // 🆕 若参数缺少 xmlContent，但存在 xmlCacheId，则尝试从缓存回填
+      if (!newStep.parameters?.xmlContent && newStep.parameters?.xmlCacheId) {
+        try {
+          const xmlCacheManager = XmlCacheManager.getInstance();
+          const cacheEntry = xmlCacheManager.getCachedXml(newStep.parameters.xmlCacheId);
+          if (cacheEntry?.xmlContent) {
+            newStep.parameters = {
+              ...newStep.parameters,
+              xmlContent: cacheEntry.xmlContent,
+              xmlTimestamp: cacheEntry.timestamp,
+              deviceId: cacheEntry.deviceId,
+              deviceName: cacheEntry.deviceName,
+            };
+            console.log('🧩 已在保存前回填步骤XML快照:', {
+              stepId,
+              cacheId: newStep.parameters.xmlCacheId,
+              bytes: cacheEntry.xmlContent.length
+            });
+          }
+        } catch (e) {
+          console.warn('保存前回填XML快照失败（可忽略）:', e);
+        }
+      }
+
+      // 🆕 自包含脚本：创建完整的XML快照
+      if (newStep.parameters && (newStep.parameters.xmlContent || currentXmlContent)) {
+        console.log('📸 创建自包含XML快照...');
+        
+        try {
+          // 获取XML内容（优先使用步骤参数中的，其次使用当前页面的）
+          const xmlContent = newStep.parameters.xmlContent || currentXmlContent;
+          
+          if (xmlContent) {
+            // 创建完整的XML快照
+            const xmlSnapshot = createXmlSnapshot(
+              xmlContent,
+              {
+                deviceId: newStep.parameters.deviceId || currentDeviceInfo.deviceId || selectedDevice || 'unknown',
+                deviceName: newStep.parameters.deviceName || currentDeviceInfo.deviceName || devices.find(d => d.id === selectedDevice)?.name || 'unknown',
+                appPackage: currentDeviceInfo.appPackage || 'com.xingin.xhs',
+                activityName: currentDeviceInfo.activityName || 'unknown',
+              },
+              {
+                pageTitle: currentPageInfo.pageTitle || '小红书页面',
+                pageType: currentPageInfo.pageType || 'unknown',
+                elementCount: currentPageInfo.elementCount || 0,
+                appVersion: currentPageInfo.appVersion,
+              }
+            );
+
+            // 创建元素定位信息
+            const elementLocator: ElementLocator | undefined = newStep.parameters.bounds ? {
+              selectedBounds: newStep.parameters.bounds,
+              elementPath: newStep.parameters.xpath || newStep.parameters.element_path || '',
+              confidence: newStep.parameters.smartAnalysis?.confidence || 0.8,
+              additionalInfo: {
+                xpath: newStep.parameters.xpath,
+                resourceId: newStep.parameters.resource_id,
+                text: newStep.parameters.text,
+                contentDesc: newStep.parameters.content_desc,
+                className: newStep.parameters.class_name,
+              },
+            } : undefined;
+
+            // 使用迁移函数创建自包含参数
+            const selfContainedParams = migrateToSelfContainedParameters(
+              newStep.parameters,
+              xmlContent,
+              xmlSnapshot.deviceInfo,
+              xmlSnapshot.pageInfo
+            );
+
+            // 手动设置XML快照和定位器
+            selfContainedParams.xmlSnapshot = xmlSnapshot;
+            selfContainedParams.elementLocator = elementLocator;
+
+            // 更新步骤参数为自包含格式
+            newStep.parameters = selfContainedParams;
+
+            console.log('✅ 自包含XML快照创建成功:', {
+              stepId,
+              xmlHash: xmlSnapshot.xmlHash,
+              xmlSize: xmlSnapshot.xmlContent.length,
+              deviceInfo: xmlSnapshot.deviceInfo,
+              pageInfo: xmlSnapshot.pageInfo,
+              hasElementLocator: !!elementLocator,
+            });
+
+            // 验证XML快照完整性
+            if (!validateXmlSnapshot(xmlSnapshot)) {
+              console.warn('⚠️ XML快照完整性验证失败，但步骤仍会保存');
+              message.warning('XML快照可能不完整，建议重新分析页面');
+            }
+
+          } else {
+            console.warn('⚠️ 无可用XML内容创建快照');
+          }
+        } catch (error) {
+          console.error('创建自包含XML快照失败:', error);
+          message.warning('创建XML快照失败，步骤将以传统模式保存');
+        }
+      }
 
       // 🆕 建立步骤与XML源的关联
       if (parameters.xmlCacheId && parameters.xmlCacheId !== 'unknown') {
@@ -1388,6 +1667,19 @@ const SmartScriptBuilderPage: React.FC = () => {
                 >
                   测试智能步骤生成
                 </Button>
+                
+                {/* 🆕 分布式脚本质量检查按钮 */}
+                <Button
+                  size="small"
+                  type={isScriptValid ? "default" : "primary"}
+                  danger={!isScriptValid}
+                  block
+                  icon={isScriptValid ? <CheckCircleOutlined /> : <WarningOutlined />}
+                  onClick={() => setShowQualityPanel(true)}
+                  disabled={steps.length === 0}
+                >
+                  {isScriptValid ? '质量检查通过' : '需要质量修复'} ({steps.length} 步骤)
+                </Button>
               </Space>
             </Card>
           </Space>
@@ -1627,6 +1919,29 @@ const SmartScriptBuilderPage: React.FC = () => {
           <Form.Item name="xpath" hidden>
             <Input />
           </Form.Item>
+          
+          {/* 🆕 XML缓存和增强信息隐藏字段 */}
+          <Form.Item name="xmlCacheId" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="xmlContent" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="isEnhanced" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="xmlTimestamp" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="deviceId" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="deviceName" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="elementSummary" hidden>
+            <Input />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -1698,15 +2013,47 @@ const SmartScriptBuilderPage: React.FC = () => {
       <UniversalPageFinderModal
         visible={showPageAnalyzer}
         initialViewMode={editingStepForParams ? "grid" : "visual"} // 🆕 修改参数时使用网格检查器视图
-        // 🆕 从步骤XML源加载
+        snapshotOnlyMode={snapshotFixMode.enabled}
+        onSnapshotCaptured={(snapshot) => {
+          // 回填快照到表单（将作为 parameters 写入）
+          form.setFieldValue('xmlContent', snapshot.xmlContent);
+          form.setFieldValue('xmlCacheId', snapshot.xmlCacheId);
+          form.setFieldValue('xmlTimestamp', snapshot.timestamp);
+          if (snapshot.deviceId) form.setFieldValue('deviceId', snapshot.deviceId);
+          if (snapshot.deviceName) form.setFieldValue('deviceName', snapshot.deviceName);
+
+          message.success('已回填最新页面快照');
+
+          // 退出快照修复模式
+          setSnapshotFixMode({ enabled: false, forStepId: undefined });
+
+          // 若标记为自动重试保存，则再次调用保存
+          if (pendingAutoResave) {
+            setPendingAutoResave(false);
+            // 异步微任务以确保表单已更新
+            setTimeout(() => {
+              handleSaveStep();
+            }, 0);
+          }
+        }}
+        // 🆕 从步骤XML源加载 - 优先使用步骤保存的XML快照
         loadFromStepXml={editingStepForParams ? {
           stepId: editingStepForParams.id,
-          xmlCacheId: editingStepForParams.parameters?.xmlCacheId
+          xmlCacheId: editingStepForParams.parameters?.xmlCacheId,
+          // 🆕 直接传递步骤保存的XML内容，确保能恢复原始页面
+          xmlContent: editingStepForParams.parameters?.xmlContent,
+          deviceId: editingStepForParams.parameters?.deviceId,
+          deviceName: editingStepForParams.parameters?.deviceName
         } : undefined}
         onClose={() => {
           setShowPageAnalyzer(false);
           setIsQuickAnalyzer(false); // 重置快捷模式标记
           setEditingStepForParams(null); // 重置修改参数模式标记
+          // 若是快照修复模式被用户主动关闭，则复位标志避免意外重试
+          if (snapshotFixMode.enabled) {
+            setSnapshotFixMode({ enabled: false, forStepId: undefined });
+            setPendingAutoResave(false);
+          }
         }}
         onElementSelected={(element) => {
           // 当用户选择元素时，根据不同模式进行处理
@@ -1987,6 +2334,39 @@ const SmartScriptBuilderPage: React.FC = () => {
         onStepsGenerated={handleContactWorkflowStepsGenerated}
         deviceId={currentDeviceId}
       />
+
+      {/* 🆕 分布式脚本质量检查面板 */}
+      <Modal
+        title="分布式脚本质量检查"
+        open={showQualityPanel}
+        onCancel={() => setShowQualityPanel(false)}
+        footer={null}
+        width={900}
+        destroyOnClose
+      >
+        <DistributedScriptQualityPanel
+          script={{
+            name: '智能脚本',
+            version: '1.0.0',
+            steps: steps,
+            metadata: {
+              platform: 'Android',
+              createdAt: Date.now(),
+              deviceId: currentDeviceId
+            }
+          }}
+          onScriptUpdate={(updatedScript) => {
+            console.log('🔄 脚本已通过质量检查更新:', updatedScript);
+            if (updatedScript.steps) {
+              setSteps(updatedScript.steps);
+            }
+          }}
+          onValidationChange={(isValid) => {
+            setIsScriptValid(isValid);
+            console.log('🔍 脚本验证状态变更:', isValid ? '通过' : '需要修复');
+          }}
+        />
+      </Modal>
     </div>
   );
 };

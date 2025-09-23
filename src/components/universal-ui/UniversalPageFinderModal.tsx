@@ -60,6 +60,10 @@ import {
 } from "../../services/XmlPageCacheService";
 import XmlCacheManager from "../../services/XmlCacheManager";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { LocalStepRepository } from "../../infrastructure/inspector/LocalStepRepository";
+// 🆕 导入分布式检查器服务
+import { DistributedInspectorService } from "../../application/services/DistributedInspectorService";
+import { distributedStepLookupService } from "../../application/services/DistributedStepLookupService";
 
 // 🆕 使用新的模块化XML解析功能
 import {
@@ -97,10 +101,23 @@ interface UniversalPageFinderModalProps {
   visible: boolean;
   onClose: () => void;
   onElementSelected?: (element: UIElement) => void;
+  // 🆕 仅采集快照模式：打开后直接采集当前设备页面快照并通过回调返回，不进行元素选择
+  snapshotOnlyMode?: boolean;
+  onSnapshotCaptured?: (snapshot: {
+    xmlContent: string;
+    xmlCacheId: string;
+    deviceId?: string;
+    deviceName?: string;
+    timestamp: number;
+    elementCount?: number;
+  }) => void;
   initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
   loadFromStepXml?: { // 🆕 从步骤XML源加载
     stepId: string;
     xmlCacheId?: string;
+    xmlContent?: string; // 🆕 优先使用内嵌的XML数据（自包含脚本）
+    deviceId?: string;   // 🆕 设备信息（用于显示）
+    deviceName?: string; // 🆕 设备名称
   };
 }
 
@@ -108,6 +125,8 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   visible,
   onClose,
   onElementSelected,
+  snapshotOnlyMode,
+  onSnapshotCaptured,
   initialViewMode = "visual", // 🆕 默认为 visual 视图
   loadFromStepXml, // 🆕 从步骤XML源加载
 }) => {
@@ -153,11 +172,164 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
 
   // === 从步骤XML源加载处理 ===
   useEffect(() => {
-    if (visible && loadFromStepXml?.xmlCacheId) {
-      console.log("🔄 从步骤XML源加载数据:", loadFromStepXml);
-      handleLoadFromStepXml(loadFromStepXml.xmlCacheId);
+    if (visible && loadFromStepXml?.stepId) {
+      (async () => {
+        console.log("🔄 从步骤XML源加载数据:", loadFromStepXml);
+        let ok = false;
+        
+        // 🆕 优先级0: 直接从传递的XML内容加载（最高优先级）
+        if (loadFromStepXml.xmlContent) {
+          ok = await handleLoadFromDirectXmlContent({
+            stepId: loadFromStepXml.stepId,
+            xmlContent: loadFromStepXml.xmlContent,
+            deviceId: loadFromStepXml.deviceId,
+            deviceName: loadFromStepXml.deviceName
+          });
+        }
+        
+        // 优先级1: 尝试从分布式脚本的嵌入式XML快照加载
+        if (!ok) {
+          ok = await handleLoadFromDistributedStep(loadFromStepXml.stepId);
+        }
+        
+        // 优先级2: 从XML缓存加载
+        if (!ok && loadFromStepXml.xmlCacheId) {
+          ok = await handleLoadFromStepXml(loadFromStepXml.xmlCacheId);
+        }
+        
+        // 优先级3: 从本地步骤仓储加载
+        if (!ok) {
+          await handleLoadFromStepByStepId(loadFromStepXml.stepId);
+        }
+      })();
     }
   }, [visible, loadFromStepXml]);
+
+  // 🆕 直接从传递的XML内容加载数据（最高优先级）
+  const handleLoadFromDirectXmlContent = async (stepXmlInfo: {
+    stepId: string;
+    xmlContent: string;
+    deviceId?: string;
+    deviceName?: string;
+  }): Promise<boolean> => {
+    try {
+      console.log("✨ 从步骤直接传递的XML内容加载:", {
+        stepId: stepXmlInfo.stepId,
+        xmlLength: stepXmlInfo.xmlContent.length,
+        deviceId: stepXmlInfo.deviceId,
+        deviceName: stepXmlInfo.deviceName
+      });
+
+      // 设置XML内容和缓存ID
+      setCurrentXmlContent(stepXmlInfo.xmlContent);
+      setCurrentXmlCacheId(`direct_${stepXmlInfo.stepId}_${Date.now()}`);
+      
+      // 如果有设备信息，设置设备选择
+      if (stepXmlInfo.deviceId) {
+        setSelectedDevice(stepXmlInfo.deviceId);
+      }
+      
+      // 解析XML并提取UI元素
+      const elements = await UniversalUIAPI.extractPageElements(stepXmlInfo.xmlContent);
+      setUIElements(elements);
+
+      // 使用新的模块化XML解析功能
+      try {
+        const parseResult = parseXML(stepXmlInfo.xmlContent);
+        setElements(parseResult.elements);
+        setCategories(parseResult.categories);
+        console.log("✅ 步骤XML直接解析完成:", {
+          elementsCount: parseResult.elements.length,
+          categoriesCount: parseResult.categories.length,
+        });
+      } catch (parseError) {
+        console.error("❌ 步骤XML直接解析失败:", parseError);
+      }
+      
+      // 设置为网格视图，便于快速定位元素
+      setViewMode('grid');
+      
+      message.success(`已从步骤加载原始XML页面 (${elements.length} 个元素)`);
+      return true;
+    } catch (error) {
+      console.error("❌ 从步骤XML内容加载失败:", error);
+      message.error("从步骤XML内容加载失败");
+      return false;
+    }
+  };
+
+  // 🆕 处理从分布式脚本的嵌入式XML快照加载数据
+  const handleLoadFromDistributedStep = async (stepId: string): Promise<boolean> => {
+    try {
+      console.log("🔄 尝试从分布式脚本加载XML快照:", stepId);
+      
+      // 尝试获取分布式步骤
+      const distributedStep = await findDistributedStepById(stepId);
+      if (!distributedStep || !distributedStep.xmlSnapshot) {
+        console.warn("⚠️ 未找到分布式步骤或XML快照:", stepId);
+        return false;
+      }
+      
+      // 使用分布式检查器服务加载嵌入式XML快照
+      const distributedService = new DistributedInspectorService();
+      const tempSession = await distributedService.openStepXmlContext(distributedStep);
+      
+      if (!tempSession || !tempSession.xmlContent) {
+        console.warn("⚠️ 创建临时会话失败:", stepId);
+        return false;
+      }
+
+      const xmlSnapshot = distributedStep.xmlSnapshot;
+      console.log("✅ 从分布式脚本加载XML快照成功:", {
+        stepId,
+        hash: xmlSnapshot.xmlHash,
+        deviceInfo: xmlSnapshot.deviceInfo,
+        pageInfo: xmlSnapshot.pageInfo,
+        timestamp: new Date(xmlSnapshot.timestamp).toLocaleString()
+      });
+
+      // 设置XML内容和临时缓存ID
+      setCurrentXmlContent(xmlSnapshot.xmlContent);
+      setCurrentXmlCacheId(`distributed_${stepId}_${xmlSnapshot.xmlHash}`);
+      
+      // 如果有设备信息，设置设备选择
+      if (xmlSnapshot.deviceInfo?.deviceId) {
+        setSelectedDevice(xmlSnapshot.deviceInfo.deviceId);
+      }
+      
+      // 解析XML并提取UI元素
+      const elements = await UniversalUIAPI.extractPageElements(xmlSnapshot.xmlContent);
+      setUIElements(elements);
+
+      // 使用新的模块化XML解析功能
+      try {
+        const parseResult = parseXML(xmlSnapshot.xmlContent);
+        setElements(parseResult.elements);
+        setCategories(parseResult.categories);
+        console.log("✅ 分布式XML快照解析完成:", {
+          elementsCount: parseResult.elements.length,
+          categoriesCount: parseResult.categories.length,
+        });
+      } catch (parseError) {
+        console.error("❌ 分布式XML快照解析失败:", parseError);
+      }
+      
+      // 设置为网格视图，便于快速定位元素
+      setViewMode('grid');
+      
+      message.success(`已从分布式脚本加载XML快照 (${elements.length} 个元素)`);
+      return true;
+    } catch (error) {
+      console.error("❌ 从分布式脚本加载XML快照失败:", error);
+      message.error("从分布式脚本加载XML快照失败");
+      return false;
+    }
+  };
+
+  // 🆕 查找分布式步骤的辅助方法
+  const findDistributedStepById = async (stepId: string): Promise<any> => {
+    return await distributedStepLookupService.findDistributedStepById(stepId);
+  };
 
   // 处理从步骤关联的XML缓存加载数据
   const handleLoadFromStepXml = async (xmlCacheId: string) => {
@@ -167,8 +339,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       
       if (!cacheEntry) {
         console.warn("⚠️ 未找到XML缓存条目:", xmlCacheId);
-        message.warning("未找到步骤关联的页面数据");
-        return;
+        return false;
       }
 
       console.log("✅ 加载步骤关联的XML数据:", {
@@ -205,10 +376,46 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       }
       
       message.success(`已加载步骤关联的页面数据 (${elements.length} 个元素)`);
-      
+      return true;
     } catch (error) {
       console.error("❌ 加载步骤XML数据失败:", error);
       message.error("加载步骤关联的页面数据失败");
+      return false;
+    }
+  };
+
+  // 🆕 Fallback：根据 stepId 从本地步骤仓储载入 xmlSnapshot
+  const handleLoadFromStepByStepId = async (stepId: string) => {
+    try {
+      const repo = new LocalStepRepository();
+      const step = await repo.get(stepId);
+      if (!step || !step.xmlSnapshot) {
+        message.warning('未找到步骤的 XML 快照');
+        return false;
+      }
+      const xml = step.xmlSnapshot;
+      setCurrentXmlContent(xml);
+      const xmlCacheId = `step_${stepId}`;
+      setCurrentXmlCacheId(xmlCacheId);
+
+      const elements = await UniversalUIAPI.extractPageElements(xml);
+      setUIElements(elements);
+      if (xml) {
+        try {
+          const parseResult = parseXML(xml);
+          setElements(parseResult.elements);
+          setCategories(parseResult.categories);
+          console.log("✅ 从步骤快照解析完成", { count: parseResult.elements.length });
+        } catch (parseError) {
+          console.error("❌ 步骤快照解析失败:", parseError);
+        }
+      }
+      setViewMode('grid');
+      message.success(`已从步骤快照载入 XML`);
+      return true;
+    } catch (e) {
+      console.error('载入步骤快照失败', e);
+      return false;
     }
   };
 
@@ -252,7 +459,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       
       console.log("✅ XML页面已缓存:", uniqueCacheId);
 
-      // 然后提取元素
+  // 然后提取元素
       const elements = await UniversalUIAPI.extractPageElements(xmlContent);
       setUIElements(elements);
 
@@ -277,6 +484,25 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
         }
       }
 
+      // 若处于仅采集快照模式，则通过回调返回数据并自动关闭
+      if (snapshotOnlyMode && onSnapshotCaptured) {
+        try {
+          onSnapshotCaptured({
+            xmlContent,
+            xmlCacheId: uniqueCacheId,
+            deviceId: cacheEntry.deviceId,
+            deviceName: cacheEntry.deviceName,
+            timestamp: cacheEntry.timestamp,
+            elementCount: elements.length,
+          });
+          message.success('已采集并返回页面快照');
+          onClose();
+          return;
+        } catch (cbErr) {
+          console.warn('快照回调处理失败:', cbErr);
+        }
+      }
+
       // 切换到可视化视图（两列布局下不再使用外层Tabs）
       setViewMode("visual");
       message.success(`获取到 ${elements.length} 个UI元素`);
@@ -297,6 +523,30 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
         await XmlPageCacheService.loadPageContent(page);
 
       setCurrentXmlContent(pageContent.xmlContent);
+      
+      // 🆕 关键修复：基于缓存页面信息生成统一的XML缓存ID
+      const xmlCacheId = `cache_${page.deviceId}_${page.timestamp}`;
+      setCurrentXmlCacheId(xmlCacheId);
+      console.log("🔗 设置XML缓存ID:", xmlCacheId);
+      
+      // 🆕 将页面内容同步到XmlCacheManager中，确保两套缓存系统保持一致
+      const xmlCacheManager = XmlCacheManager.getInstance();
+      const cacheEntry = {
+        cacheId: xmlCacheId,
+        xmlContent: pageContent.xmlContent,
+        deviceId: page.deviceId,
+        deviceName: page.deviceId, // 暂时使用deviceId作为名称
+        timestamp: Date.now(),
+        pageInfo: {
+          appPackage: page.appPackage,
+          activityName: '未知Activity',
+          pageTitle: page.pageTitle,
+          pageType: page.pageType,
+          elementCount: page.elementCount
+        }
+      };
+      xmlCacheManager.cacheXmlPage(cacheEntry);
+      console.log("✅ 已同步到XmlCacheManager:", xmlCacheId);
 
       // 如果有UI元素数据，也设置它
       if (pageContent.elements && pageContent.elements.length > 0) {

@@ -39,15 +39,29 @@ export const useSingleStepTest = () => {
       }
 
       console.log(`🚀 调用后端单步测试API...`);
-      console.log(`📋 传递参数:`, { deviceId, stepType: step.step_type, stepName: step.name });
+      // 规范化下发给后端的 step，补齐后端要求的字段（如 order）
+      const payloadStep = {
+        id: step.id,
+        step_type: step.step_type,
+        name: step.name,
+        description: step.description ?? '',
+        parameters: step.parameters ?? {},
+        enabled: true,
+        order: typeof (step as any).order === 'number' ? (step as any).order : 0,
+        // 透传可选的扩展字段（若存在）
+        find_condition: (step as any).find_condition,
+        verification: (step as any).verification,
+        retry_config: (step as any).retry_config,
+        fallback_actions: (step as any).fallback_actions,
+        pre_conditions: (step as any).pre_conditions,
+        post_conditions: (step as any).post_conditions,
+      };
+
+      console.log(`📋 传递参数:`, { deviceId, stepType: payloadStep.step_type, stepName: payloadStep.name, order: payloadStep.order });
       // 调用Tauri后端单步测试API  
       const result = await invoke('execute_single_step_test', {
-        deviceId: deviceId,  // 尝试使用 camelCase
-        step: {
-          ...step,
-          // 确保步骤是启用状态
-          enabled: true
-        }
+        deviceId: deviceId,  // camelCase 兼容当前后端绑定
+        step: payloadStep,
       }) as SingleStepTestResult;
 
       console.log(`📊 后端测试结果:`, result);

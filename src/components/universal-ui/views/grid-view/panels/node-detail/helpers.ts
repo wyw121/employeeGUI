@@ -131,6 +131,23 @@ export function normalizeExcludes(
   return out;
 }
 
+export function normalizeIncludes(
+  includes: Record<string, string[]>,
+  selectedFields: string[]
+): Record<string, string[]> {
+  const allowed = new Set(selectedFields);
+  const out: Record<string, string[]> = {};
+  for (const key of Object.keys(includes || {})) {
+    if (!allowed.has(key)) continue;
+    const items = (includes[key] || [])
+      .map(s => String(s).trim())
+      .filter(s => s.length > 0);
+    const uniq = Array.from(new Set(items));
+    if (uniq.length > 0) out[key] = uniq;
+  }
+  return out;
+}
+
 /**
  * 将 UI 策略映射为后端兼容的策略（后端暂不识别 'custom'）。
  * - 对于 'custom'：依据是否存在“有效位置约束”映射为 absolute 或 standard

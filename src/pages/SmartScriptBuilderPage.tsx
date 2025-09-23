@@ -1469,6 +1469,32 @@ const SmartScriptBuilderPage: React.FC = () => {
     message.success("通讯录导入步骤创建成功！已添加3个步骤到脚本中");
   };
 
+  // 🆕 创建屏幕交互步骤（默认：智能滚动 向下）
+  const handleCreateScreenInteraction = () => {
+    const newStep: ExtendedSmartScriptStep = {
+      id: `step_${Date.now()}_scroll`,
+      step_type: 'smart_scroll',
+      name: '屏幕交互 - 智能滚动',
+      description: '向下滚动屏幕（可在卡片中调整方向/距离/速度）',
+      enabled: true,
+      order: steps.length + 1,
+      parameters: {
+        direction: 'down',
+        distance: 600,
+        speed_ms: 300,
+      },
+      find_condition: null,
+      verification: null,
+      retry_config: null,
+      fallback_actions: [],
+      pre_conditions: [],
+      post_conditions: [],
+    };
+
+    setSteps((prev) => [...prev, newStep]);
+    message.success('已添加屏幕交互步骤：智能滚动');
+  };
+
   // 删除循环
   const handleDeleteLoop = (loopId: string) => {
     Modal.confirm({
@@ -2078,6 +2104,7 @@ const SmartScriptBuilderPage: React.FC = () => {
               onCreateContactImport={handleCreateContactImport}
               onAddStep={handleAddStep}
               onBatchMatch={handleBatchMatch}
+              onCreateScreenInteraction={handleCreateScreenInteraction}
             />
           </div>
         </Col>

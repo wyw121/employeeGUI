@@ -6,6 +6,7 @@ export interface MatchCriteria {
   fields: string[]; // e.g. ['resource-id','text','content-desc','class','package','bounds','index']
   values: Record<string, string>; // 正向匹配值（从 UiNode.attrs 提取或用户编辑）
   excludes?: Record<string, string[]>; // 负向匹配：每字段一个字符串数组，含“不包含”的词
+  includes?: Record<string, string[]>; // 额外包含：每字段一个字符串数组，含“必须包含”的词
 }
 
 export interface MatchResultSummary {

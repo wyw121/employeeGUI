@@ -43,6 +43,8 @@ export interface EnhancedDraggableStepsContainerProps {
   onAddStep?: () => void;
   /** 批量匹配操作回调 */
   onBatchMatch?: (stepId: string) => void;
+  /** 创建屏幕交互步骤（如滚动/滑动等）回调 */
+  onCreateScreenInteraction?: () => void;
 }
 
 const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerProps> = ({
@@ -63,7 +65,8 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   onCreateLoop,
   onCreateContactImport,
   onAddStep,
-  onBatchMatch
+  onBatchMatch,
+  onCreateScreenInteraction,
 }) => {
   
   // 暂时使用基础的DraggableStepsContainer，后续可以扩展
@@ -207,6 +210,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         onCreateLoop={onCreateLoop}
         onCreateContactImport={onCreateContactImport}
         onBatchMatch={onBatchMatch}
+        onCreateScreenInteraction={onCreateScreenInteraction}
       />
     </Card>
   );

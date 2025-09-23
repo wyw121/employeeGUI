@@ -7,7 +7,7 @@ import type { MatchCriteria, MatchResultSummary } from './node-detail/types';
 import { useAdb } from '../../../../../application/hooks/useAdb';
 import { MatchingStrategySelector } from './node-detail/MatchingStrategySelector';
 import { SelectedFieldsChips, SelectedFieldsTable } from './node-detail/';
-import { PRESET_FIELDS, inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes } from './node-detail';
+import { PRESET_FIELDS, inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes } from './node-detail';
 
 interface NodeDetailPanelProps {
   node: UiNode | null;
@@ -28,6 +28,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
   const [strategy, setStrategy] = useState<MatchCriteria['strategy']>('standard');
   const [values, setValues] = useState<Record<string, string>>({});
   const [excludes, setExcludes] = useState<Record<string, string[]>>({});
+  const [includes, setIncludes] = useState<Record<string, string[]>>({});
 
   const toggleField = (f: string) => {
     setSelectedFields((prev) => {
@@ -56,6 +57,12 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
         delete nextEx[f];
         return nextEx;
       });
+      setIncludes((prevIn) => {
+        if (!prev.includes(f)) return prevIn; // 新增字段时不改 includes
+        const nextIn = { ...prevIn };
+        delete nextIn[f];
+        return nextIn;
+      });
       return next;
     });
   };
@@ -65,7 +72,8 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
     setLastCriteria(criteria);
     setStrategy(criteria.strategy);
     setValues(criteria.values || {});
-    if (criteria.excludes) setExcludes(criteria.excludes);
+  if (criteria.excludes) setExcludes(criteria.excludes);
+  if (criteria.includes) setIncludes(criteria.includes);
     onFieldsChanged?.(criteria.fields);
   };
 
@@ -172,6 +180,8 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
           onChangeValue={(field, value) => setValues((prev) => ({ ...prev, [field]: value }))}
           excludes={excludes}
           onChangeExcludes={(field, next) => setExcludes((prev) => ({ ...prev, [field]: next }))}
+          includes={includes}
+          onChangeIncludes={(field, next) => setIncludes((prev) => ({ ...prev, [field]: next }))}
         />
         {/* 真机匹配按钮 */}
         <div className="mb-2 flex items-center gap-2">
@@ -191,6 +201,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
                   fields: normalized.fields,
                   values: normalized.values,
                   excludes: normalizeExcludes(excludes, normalized.fields),
+                  includes: normalizeIncludes(includes, normalized.fields),
                 });
               }}
               title={canApply ? '' : '请选择匹配预设或至少一个字段'}

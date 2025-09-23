@@ -3,6 +3,7 @@ import styles from '../../GridElementView.module.css';
 import type { UiNode } from '../../types';
 import { PRESET_FIELDS } from './helpers';
 import { NegativeConditionsEditor } from './NegativeConditionsEditor';
+import { PositiveConditionsEditor } from './PositiveConditionsEditor';
 
 export interface SelectedFieldsTableProps {
   node: UiNode | null;
@@ -12,6 +13,8 @@ export interface SelectedFieldsTableProps {
   onChangeValue: (field: string, value: string) => void;
   excludes?: Record<string, string[]>;
   onChangeExcludes?: (field: string, next: string[]) => void;
+  includes?: Record<string, string[]>;
+  onChangeIncludes?: (field: string, next: string[]) => void;
 }
 
 const LABELS: Record<string, string> = {
@@ -26,7 +29,7 @@ const LABELS: Record<string, string> = {
 
 const ALL_FIELDS: string[] = PRESET_FIELDS.absolute;
 
-export const SelectedFieldsTable: React.FC<SelectedFieldsTableProps> = ({ node, selected, values, onToggle, onChangeValue, excludes, onChangeExcludes }) => {
+export const SelectedFieldsTable: React.FC<SelectedFieldsTableProps> = ({ node, selected, values, onToggle, onChangeValue, excludes, onChangeExcludes, includes, onChangeIncludes }) => {
   return (
     <div className="mb-2">
       <div className="text-xs text-neutral-500 mb-1">字段选择与编辑：</div>
@@ -56,11 +59,18 @@ export const SelectedFieldsTable: React.FC<SelectedFieldsTableProps> = ({ node, 
               </div>
               </div>
               {checked && (
-                <NegativeConditionsEditor
-                  field={f}
-                  excludes={excludes?.[f] || []}
-                  onChange={(next) => onChangeExcludes?.(f, next)}
-                />
+                <div className="flex flex-wrap items-start gap-3">
+                  <NegativeConditionsEditor
+                    field={f}
+                    excludes={excludes?.[f] || []}
+                    onChange={(next) => onChangeExcludes?.(f, next)}
+                  />
+                  <PositiveConditionsEditor
+                    field={f}
+                    includes={includes?.[f] || []}
+                    onChange={(next) => onChangeIncludes?.(f, next)}
+                  />
+                </div>
               )}
             </div>
           );

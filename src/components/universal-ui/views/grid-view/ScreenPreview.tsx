@@ -1,13 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { UiNode } from './types';
 import { parseBounds } from './utils';
 import styles from './GridElementView.module.css';
 
 type ScaleMode = 'fit' | 'actual' | 'custom';
 
-export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; matchedSet?: Set<UiNode>; }> = ({ root, selected, onSelect, matchedSet }) => {
+export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | null; onSelect?: (n: UiNode) => void; matchedSet?: Set<UiNode>; highlightNode?: UiNode | null; highlightKey?: number; }> = ({ root, selected, onSelect, matchedSet, highlightNode, highlightKey }) => {
   const [scaleMode, setScaleMode] = useState<ScaleMode>('fit');
   const [zoom, setZoom] = useState<number>(100); // percent for custom
+  const flashRef = useRef<number>(0);
   const screen = useMemo(() => {
     function findBounds(n?: UiNode | null): ReturnType<typeof parseBounds> {
       if (!n) return null as any;
@@ -42,6 +43,13 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
   const viewW = Math.round(screen.width * scale);
   const viewH = Math.max(100, Math.round(screen.height * scale));
 
+  // 触发闪烁：当 highlightKey 变化时，记录一次闪烁计数
+  useEffect(() => {
+    if (typeof highlightKey === 'number') {
+      flashRef.current = (flashRef.current || 0) + 1;
+    }
+  }, [highlightKey]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -69,10 +77,11 @@ export const ScreenPreview: React.FC<{ root: UiNode | null; selected: UiNode | n
         {boxes.map(({ n, b }, i) => {
           const sel = n === selected;
           const matched = matchedSet?.has(n);
+          const isHL = highlightNode === n;
           return (
             <div
               key={i}
-              className={`${styles.elementRect} ${matched ? styles.elementRectMatched : ''} ${sel ? styles.elementRectActive : ''}`}
+              className={`${styles.elementRect} ${matched ? styles.elementRectMatched : ''} ${sel ? styles.elementRectActive : ''} ${isHL ? styles.elementRectFlash : ''}`}
               style={{
                 left: Math.round(b.x1 * scale),
                 top: Math.round(b.y1 * scale),

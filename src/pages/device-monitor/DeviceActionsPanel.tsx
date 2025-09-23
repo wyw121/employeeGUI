@@ -5,7 +5,9 @@ import { useAdb } from '../../application/hooks/useAdb';
 
 const { Text } = Typography;
 
-export const DeviceActionsPanel: React.FC = () => {
+interface Props { onShowDetails?: () => void }
+
+export const DeviceActionsPanel: React.FC<Props> = ({ onShowDetails }) => {
   const { selectedDevice, refreshDevices, disconnectDevice, getDeviceInfo, runQuickDiagnostic, restartAdbServer } = useAdb();
   const [loading, setLoading] = useState(false);
 
@@ -72,7 +74,7 @@ export const DeviceActionsPanel: React.FC = () => {
 
           <Space wrap>
             <Tooltip title="设备详情">
-              <Button icon={<InfoCircleOutlined />} onClick={onDetails} loading={loading}>
+              <Button icon={<InfoCircleOutlined />} onClick={() => { onDetails(); onShowDetails?.(); }} loading={loading}>
                 详情
               </Button>
             </Tooltip>

@@ -80,7 +80,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
         </Col>
         <Col span={8}>
           <Space direction="vertical" style={{ width: '100%' }}>
-            <DeviceActionsPanel />
+            <DeviceActionsPanel onShowDetails={() => setDrawerOpen(true)} />
             <DeviceEventLog lastEvent={lastEvent} />
             <DeviceEventStream lastEvent={lastEvent} />
           </Space>

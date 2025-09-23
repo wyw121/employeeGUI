@@ -519,7 +519,14 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
             onInsert={(xp) => setXPathInput(xp)}
           />
-          <ScreenPreviewPanel root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
+          <ScreenPreviewPanel
+            root={root}
+            selected={selected}
+            onSelect={(n) => setSelected(n)}
+            matchedSet={matchedSet}
+            highlightNode={panelHighlightNode}
+            highlightKey={panelActivateKey}
+          />
           <ResultsAndXPathPanel
             matches={matches}
             matchIndex={matchIndex}

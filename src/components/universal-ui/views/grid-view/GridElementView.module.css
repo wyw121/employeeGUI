@@ -36,13 +36,41 @@
   border-radius: 8px;
   padding: 0 12px;
   border: 1px solid var(--g-border);
-  background: transparent;
+  background: var(--g-surface);
+  color: var(--g-fg);
+  /* 后备颜色确保可见性 */
+  color: #111827;
+  background-color: #ffffff;
   outline: none;
   transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.input::placeholder {
+  color: var(--g-muted);
+  /* 后备颜色 */
+  color: #6b7280;
 }
 .input:focus {
   border-color: var(--g-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--g-primary) 20%, transparent);
+}
+
+/* 深色主题下的输入框 */
+:global(.dark) .input {
+  color: #f5f5f5;
+  background-color: #0b0c0f;
+}
+:global(.dark) .input::placeholder {
+  color: #d1d5db;
+}
+
+/* select选项样式 */
+.input option {
+  color: #111827;
+  background-color: #ffffff;
+}
+:global(.dark) .input option {
+  color: #f5f5f5;
+  background-color: #0b0c0f;
 }
 
 .card {
@@ -177,8 +205,8 @@
 }
 .tree::-webkit-scrollbar-track { background: transparent; }
 
-/* 设计令牌（浅色） */
-:root {
+/* 设计令牌（浅色） - 使用global确保变量可访问 */
+:global(:root) {
   --g-fg: #111827;
   --g-muted: #6b7280;
   --g-primary: #3b82f6;

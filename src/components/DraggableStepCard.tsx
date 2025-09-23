@@ -1,7 +1,7 @@
 // 可拖拽的步骤卡片组件
 
 import React, { useState } from 'react';
-import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider, Popconfirm, message } from 'antd';
+import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider, Popconfirm, message, Popover } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -14,6 +14,10 @@ import {
   EyeOutlined
 } from '@ant-design/icons';
 import { MatchingStrategyTag } from './step-card';
+// 复用网格检查器里的策略选择器与预设字段映射
+import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
+import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
+import { PRESET_FIELDS } from './universal-ui/views/grid-view/panels/node-detail/helpers';
 
 const { Text } = Typography;
 
@@ -411,7 +415,55 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
             <span>{step.description}</span>
             {/* 显示匹配策略标签 */}
             { (step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && (
-              <MatchingStrategyTag strategy={step.parameters?.matching?.strategy} small />
+              <div className="flex items-center gap-1">
+                <MatchingStrategyTag strategy={step.parameters?.matching?.strategy} small />
+                {/* 策略快速切换（无需打开网格检查器） */}
+                <Popover
+                  trigger={["click"]}
+                  placement="bottomRight"
+                  overlayInnerStyle={{ padding: 8 }}
+                  content={
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <MatchingStrategySelector
+                        value={(step.parameters?.matching?.strategy as MatchStrategy) || 'standard'}
+                        onChange={(next: MatchStrategy) => {
+                          // 更新步骤的匹配策略与字段集，沿用已有 values
+                          const prevMatching = step.parameters?.matching || {};
+                          const preset = PRESET_FIELDS[next] || [];
+                          const values: Record<string, any> = prevMatching.values || {};
+                          // 若已有值，则优先选择有值的字段；若为空则回退为预设字段
+                          let nextFields = Array.isArray(preset)
+                            ? preset.filter((f) => values[f] != null)
+                            : [];
+                          if (!nextFields || nextFields.length === 0) {
+                            nextFields = preset;
+                          }
+
+                          const nextParams = {
+                            ...step.parameters,
+                            matching: {
+                              ...prevMatching,
+                              strategy: next,
+                              fields: nextFields,
+                            },
+                          };
+                          onUpdateStepParameters?.(step.id, nextParams);
+                          message.success(`已切换匹配策略为：${next}`);
+                        }}
+                      />
+                    </div>
+                  }
+                >
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<SettingOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                    title="更改匹配策略"
+                    style={{ height: 24 }}
+                  />
+                </Popover>
+              </div>
             ) }
             
             {/* 批量匹配切换按钮 - 支持双向切换 */}

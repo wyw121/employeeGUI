@@ -8,6 +8,9 @@ import { DeviceFilters } from './DeviceFilters';
 import { StatusIndicators } from './StatusIndicators';
 import { DeviceList } from './DeviceList';
 import { DeviceEventLog } from './DeviceEventLog';
+import { DeviceActionsPanel } from './DeviceActionsPanel';
+import { DeviceSortBar, DeviceSortKey } from './DeviceSortBar';
+import { DeviceEventStream } from './DeviceEventStream';
 import type { DeviceFiltersState } from './types';
 
 const { Title, Text } = Typography;
@@ -17,15 +20,33 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
   const { restartAdbServer, selectDevice } = useAdb();
 
   const [filters, setFilters] = useState<DeviceFiltersState>({ statuses: [], connections: [], keyword: '' });
+  const [sortKey, setSortKey] = useState<DeviceSortKey>('online-first');
 
   const filteredDevices = useMemo(() => {
-    return devices.filter((d) => {
+    const base = devices.filter((d) => {
       if (filters.statuses.length && !filters.statuses.includes(d.status as any)) return false;
       if (filters.connections.length && !filters.connections.includes(d.connection_type as any)) return false;
       if (filters.keyword && !d.id.toLowerCase().includes(filters.keyword.toLowerCase())) return false;
       return true;
     });
-  }, [devices, filters]);
+
+    const sorted = [...base];
+    switch (sortKey) {
+      case 'online-first':
+        sorted.sort((a, b) => (a.status === 'device' || a.status === 'online' ? -1 : 1) - (b.status === 'device' || b.status === 'online' ? -1 : 1));
+        break;
+      case 'connection':
+        sorted.sort((a, b) => String(a.connection_type).localeCompare(String(b.connection_type)));
+        break;
+      case 'id-asc':
+        sorted.sort((a, b) => a.id.localeCompare(b.id));
+        break;
+      case 'id-desc':
+        sorted.sort((a, b) => b.id.localeCompare(a.id));
+        break;
+    }
+    return sorted;
+  }, [devices, filters, sortKey]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -41,6 +62,7 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
             onRestartAdb={restartAdbServer}
           />
           <DeviceFilters value={filters} onChange={setFilters} />
+          <DeviceSortBar value={sortKey} onChange={setSortKey} />
         </Space>
       </Card>
 
@@ -53,7 +75,11 @@ export const RealTimeDeviceMonitorPage: React.FC = () => {
           </Card>
         </Col>
         <Col span={8}>
-          <DeviceEventLog lastEvent={lastEvent} />
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <DeviceActionsPanel />
+            <DeviceEventLog lastEvent={lastEvent} />
+            <DeviceEventStream lastEvent={lastEvent} />
+          </Space>
         </Col>
       </Row>
     </div>

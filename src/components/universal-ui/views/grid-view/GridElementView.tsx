@@ -43,6 +43,7 @@ import { ResultsAndXPathPanel } from './panels/ResultsAndXPathPanel';
 import { XPathHelpPanel } from './panels/XPathHelpPanel';
 import { FieldDocPanel } from './panels/FieldDocPanel';
 import { XPathTemplatesPanel } from './panels/XPathTemplatesPanel';
+import { LocatorAdvisorPanel } from './panels/LocatorAdvisorPanel';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -498,6 +499,11 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         {/* 右侧 */}
         <div className="space-y-4">
           <NodeDetailPanel node={selected} sessionId={sessionId} onCreateStep={onCreateStep} />
+          <LocatorAdvisorPanel
+            node={selected}
+            onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
+            onInsert={(xp) => setXPathInput(xp)}
+          />
           <ScreenPreviewPanel root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
           <ResultsAndXPathPanel
             matches={matches}

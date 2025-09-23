@@ -6,3 +6,4 @@ export * from './ResultsAndXPathPanel';
 export * from './XPathHelpPanel';
 export * from './FieldDocPanel';
 export * from './XPathTemplatesPanel';
+export * from './LocatorAdvisorPanel';

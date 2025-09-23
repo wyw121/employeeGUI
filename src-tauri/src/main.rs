@@ -10,7 +10,7 @@ mod xml_judgment_service;
 
 // Universal UI Finder 模块桥接
 // 注意：universal-ui-finder模块位于src/modules/，我们通过services层桥接
-use services::smart_element_finder_service::SmartElementFinderService;
+// use services::smart_element_finder_service::SmartElementFinderService; // 未直接使用类型
 use services::universal_ui_service::UniversalUIService;
 use services::page_analyzer_service::PageAnalyzerService; // 新增页面分析服务
 
@@ -616,10 +616,12 @@ async fn delete_file(path: String) -> Result<(), String> {
 // 清理本机 ADB 密钥，强制下次授权
 #[tauri::command]
 async fn clear_adb_keys() -> Result<(), String> {
-    use std::path::PathBuf;
+    // Windows: C:\\Users\\<User>\\.android\\adbkey*
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .map(std::path::PathBuf::from)
+        .map_err(|_| "无法获取用户主目录".to_string())?;
 
-    // Windows: C:\Users\<User>\.android\adbkey*
-    let home = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
     let android_dir = home.join(".android");
     let key = android_dir.join("adbkey");
     let key_pub = android_dir.join("adbkey.pub");
@@ -707,8 +709,8 @@ async fn execute_page_element_action(
 /// 获取页面分析历史记录
 #[tauri::command]
 async fn get_page_analysis_history(
-    device_id: String,
-    limit: Option<usize>,
+    _device_id: String,
+    _limit: Option<usize>,
 ) -> Result<Vec<PageAnalysisResult>, String> {
     // 这里可以从缓存或数据库中获取历史记录
     // 目前返回空列表

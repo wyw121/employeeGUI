@@ -264,6 +264,20 @@ export class ConnectionService {
   }
 
   /**
+   * 清理本机保存的 ADB 密钥
+   */
+  async clearAdbKeys(): Promise<void> {
+    return await this.adbRepository.clearAdbKeys();
+  }
+
+  /**
+   * 无线调试配对（Android 11+）
+   */
+  async pairWireless(hostPort: string, code: string): Promise<string> {
+    return await this.adbRepository.pairWireless(hostPort, code);
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck(): Promise<{

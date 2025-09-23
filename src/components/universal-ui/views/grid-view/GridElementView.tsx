@@ -35,6 +35,7 @@ import { SearchFieldToggles } from './SearchFieldToggles';
 import { getSearchHistory, addSearchHistory, clearSearchHistory, getFavoriteSearches, toggleFavoriteSearch, getXPathHistory, addXPathHistory, clearXPathHistory, getFavoriteXPaths, toggleFavoriteXPath } from './history';
 import { useGridHotkeys } from './useGridHotkeys';
 import { downloadText } from './exporters';
+import { XmlSourcePanel } from './panels/XmlSourcePanel';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -438,22 +439,11 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         </div>
       </div>
 
-      {/* 主体双栏布局 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* 左列：源码编辑 + 树视图 */}
-        <div className="md:col-span-2 space-y-4">
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>XML 源码</div>
-            <div className={styles.cardBody}>
-              <textarea
-                value={xmlText}
-                onChange={(e) => setXmlText(e.target.value)}
-                placeholder="粘贴 uiautomator dump 的 XML 内容…"
-                className={styles.inputArea}
-              />
-            </div>
-          </div>
-
+      {/* 主体双栏布局（左：树；右：详情） */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 左侧：XML 源码（精简） + 节点树 */}
+        <div className="space-y-4">
+          <XmlSourcePanel xmlText={xmlText} setXmlText={setXmlText} onParse={() => onParse()} />
           <div className={styles.card}>
             <div className={styles.cardHeader}>节点树</div>
             <div className={`${styles.cardBody} ${styles.tree}`}>
@@ -467,23 +457,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           </div>
         </div>
 
-        {/* 右列：匹配结果侧栏 + 详情 + 预览 */}
+        {/* 右侧：优先显示节点详情，然后是预览与结果面板 */}
         <div className="space-y-4">
-          <MatchResultsPanel
-            matches={matches}
-            matchIndex={matchIndex}
-            keyword={filter}
-            advFilter={advFilter}
-            onJump={(idx, node) => { setMatchIndex(idx); setSelected(node); }}
-            onInsertXPath={(xp) => setXPathInput(xp)}
-            searchOptions={searchOptions}
-          />
-          <XPathTestResultsPanel nodes={xpathTestNodes} onJump={(n) => setSelected(n)} />
-          <XPathBuilder
-            node={selected}
-            onApply={(xp) => { setXPathInput(xp); /* 先更新输入，再定位 */ setTimeout(() => locateXPath(), 0); }}
-            onInsert={(xp) => { setXPathInput(xp); }}
-          />
           <div className={styles.card}>
             <div className={styles.cardBody}>
               {sessionId && onCreateStep && selected && (
@@ -499,6 +474,21 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
               <ScreenPreview root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
             </div>
           </div>
+          <MatchResultsPanel
+            matches={matches}
+            matchIndex={matchIndex}
+            keyword={filter}
+            advFilter={advFilter}
+            onJump={(idx, node) => { setMatchIndex(idx); setSelected(node); }}
+            onInsertXPath={(xp) => setXPathInput(xp)}
+            searchOptions={searchOptions}
+          />
+          <XPathTestResultsPanel nodes={xpathTestNodes} onJump={(n) => setSelected(n)} />
+          <XPathBuilder
+            node={selected}
+            onApply={(xp) => { setXPathInput(xp); /* 先更新输入，再定位 */ setTimeout(() => locateXPath(), 0); }}
+            onInsert={(xp) => { setXPathInput(xp); }}
+          />
         </div>
       </div>
 

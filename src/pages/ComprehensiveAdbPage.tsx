@@ -3,6 +3,7 @@ import { Card, Tabs, Row, Col, Typography, Alert, Space } from 'antd';
 import { useAdb } from '../application/hooks/useAdb';
 import RealTimeDeviceMonitor from '../components/device/RealTimeDeviceMonitor';
 import AdbPathTestPage from './AdbPathTestPage';
+import AdbAuthorizationWizard from './AdbAuthorizationWizard';
 
 const { Title, Paragraph } = Typography;
 
@@ -26,6 +27,13 @@ export const ComprehensiveAdbPage: React.FC = () => {
           <p>在线设备: {devices.filter(d => d.isOnline()).length}</p>
           <p>状态: {isLoading ? '加载中' : '正常'}</p>
         </Card>
+      )
+    },
+    {
+      key: 'auth-wizard',
+      label: 'ADB 授权向导',
+      children: (
+        <AdbAuthorizationWizard />
       )
     },
     {

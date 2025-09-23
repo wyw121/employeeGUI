@@ -436,6 +436,44 @@ export class AdbApplicationService {
   }
 
   /**
+   * 清理本机已保存的 ADB 密钥（触发手机重新授权弹窗）
+   */
+  async clearAdbKeys(): Promise<void> {
+    const store = useAdbStore.getState();
+    try {
+      store.setLoading(true);
+      await this.connectionService.clearAdbKeys();
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      store.setError(err);
+      throw err;
+    } finally {
+      store.setLoading(false);
+    }
+  }
+
+  /**
+   * 无线调试配对
+   * @param hostPort 例如 "192.168.1.10:37123"
+   * @param code 6位配对码
+   * @returns adb 输出
+   */
+  async pairWireless(hostPort: string, code: string): Promise<string> {
+    const store = useAdbStore.getState();
+    try {
+      store.setLoading(true);
+      const output = await this.connectionService.pairWireless(hostPort, code);
+      return output;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      store.setError(err);
+      throw err;
+    } finally {
+      store.setLoading(false);
+    }
+  }
+
+  /**
    * 批量设备操作
    */
   async batchDeviceOperation(

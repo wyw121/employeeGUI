@@ -221,6 +221,24 @@ export const useAdb = () => {
     return applicationService.getDiagnosticReport();
   }, []);
 
+  // ===== 授权/无线调试辅助 =====
+
+  /** 清理本机 ADB 密钥（触发手机重新授权） */
+  const clearAdbKeys = useCallback(async () => {
+    return await applicationService.clearAdbKeys();
+  }, []);
+
+  /** 无线调试配对 */
+  const pairWireless = useCallback(async (hostPort: string, code: string) => {
+    return await applicationService.pairWireless(hostPort, code);
+  }, []);
+
+  /** 便捷：无线连接到设备（adb connect ip:port） */
+  const wirelessConnect = useCallback(async (ip: string, port: number) => {
+    const addr = `${ip}:${port}`;
+    return await applicationService.connectToDevice(addr);
+  }, []);
+
   // ===== 高级功能 =====
   
   /**
@@ -353,6 +371,9 @@ export const useAdb = () => {
     runQuickDiagnostic,
     executeAutoFix,
     getDiagnosticReport,
+  clearAdbKeys,
+  pairWireless,
+  wirelessConnect,
     
     // === 高级功能 ===
     getHealthStatus,

@@ -67,7 +67,7 @@
 
 .inputArea {
   width: 100%;
-  height: 16rem; /* 256px */
+  height: 12rem; /* default; panel may override */
   padding: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.875rem;
@@ -77,11 +77,11 @@
   color: var(--g-fg);
 }
 @media (min-width: 768px) {
-  .inputArea { height: 23.75rem; /* 380px */ }
+  .inputArea { height: 16rem; /* smaller on md+; panel may override */ }
 }
 
 .tree {
-  max-height: 420px;
+  max-height: 560px; /* give more room in two-column layout */
   overflow: auto;
   padding-right: 6px;
 }

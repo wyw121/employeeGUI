@@ -2,11 +2,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Card, Steps, Space, Button, Alert, Divider, Typography } from 'antd';
 import { SafetyOutlined, UsbOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useAdb } from '../application/hooks/useAdb';
-import { PhoneGuidance } from './AdbAuthorizationWizard/PhoneGuidance';
-import { PcFixes } from './AdbAuthorizationWizard/PcFixes';
-import { WirelessPairing } from './AdbAuthorizationWizard/WirelessPairing';
-import { DeviceStatusPanel } from './AdbAuthorizationWizard/DeviceStatusPanel';
-import { ActionLogPanel } from './AdbAuthorizationWizard/ActionLogPanel';
+import { PhoneGuidance } from './AdbAuthorizationWizard/PhoneGuidance.tsx';
+import { PcFixes } from './AdbAuthorizationWizard/PcFixes.tsx';
+import { WirelessPairing } from './AdbAuthorizationWizard/WirelessPairing.tsx';
+import { DeviceStatusPanel } from './AdbAuthorizationWizard/DeviceStatusPanel.tsx';
+import { ActionLogPanel } from './AdbAuthorizationWizard/ActionLogPanel.tsx';
 
 const { Paragraph, Text } = Typography;
 
@@ -63,7 +63,7 @@ const AdbAuthorizationWizard: React.FC = () => {
         <Divider />
 
         <Card size="small" title={<Space><UsbOutlined />已检测设备</Space>}>
-          <DeviceStatusPanel devices={devices as any} isLoading={isLoading} onRefresh={refreshDevices} />
+          <DeviceStatusPanel devices={devices as any} isLoading={isLoading} />
           <Space style={{ marginTop: 12 }}>
             <Button onClick={startAdbServer}>启动 ADB</Button>
             <Button onClick={restartAdbServer} loading={isLoading}>重启 ADB</Button>

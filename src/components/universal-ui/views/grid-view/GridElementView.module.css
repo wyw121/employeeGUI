@@ -86,6 +86,10 @@
   padding-right: 6px;
 }
 
+/* 可拖拽分栏（辅助类，当前主要通过内联样式控制列宽） */
+.splitContainer { display: grid; gap: 16px; }
+.splitDivider { cursor: col-resize; background: var(--g-border); width: 8px; border-radius: 4px; }
+
 .treeRow {
   display: flex;
   align-items: center;

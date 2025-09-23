@@ -1,10 +1,7 @@
 // 本模块的类型声明，避免使用 any，保持清晰边界
-import type { Device } from '@/domain/adb/entities/Device';
-
 export interface DeviceStatusPanelProps {
-  devices: Device[];
+  devices: Array<{ id: string }>;
   isLoading: boolean;
-  onRefresh: () => Promise<void> | void;
 }
 
 export interface PhoneGuidanceProps {

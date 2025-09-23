@@ -36,6 +36,10 @@ import { getSearchHistory, addSearchHistory, clearSearchHistory, getFavoriteSear
 import { useGridHotkeys } from './useGridHotkeys';
 import { downloadText } from './exporters';
 import { XmlSourcePanel } from './panels/XmlSourcePanel';
+import { BreadcrumbPanel } from './panels/BreadcrumbPanel';
+import { NodeDetailPanel } from './panels/NodeDetailPanel';
+import { ScreenPreviewPanel } from './panels/ScreenPreviewPanel';
+import { ResultsAndXPathPanel } from './panels/ResultsAndXPathPanel';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -301,6 +305,36 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     reader.readAsText(file);
   };
 
+  // 分栏宽度（可拖拽）
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('grid.leftWidth'));
+    return Number.isFinite(v) && v >= 20 && v <= 80 ? v : 36; // 百分比
+  });
+  const draggingRef = useRef<boolean>(false);
+  useEffect(() => {
+    localStorage.setItem('grid.leftWidth', String(leftWidth));
+  }, [leftWidth]);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const container = document.getElementById('grid-split');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const pct = Math.max(20, Math.min(80, (px / rect.width) * 100));
+      setLeftWidth(pct);
+      e.preventDefault();
+    };
+    const onUp = () => { draggingRef.current = false; document.body.style.cursor = ''; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+  const startDrag = (e: React.MouseEvent) => { draggingRef.current = true; document.body.style.cursor = 'col-resize'; e.preventDefault(); };
+
   return (
     <div className={`${styles.root} w-full h-full p-4 md:p-6`}>
       {/* 顶部工具栏 */}
@@ -439,15 +473,15 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         </div>
       </div>
 
-      {/* 主体双栏布局（左：树；右：详情） */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 左侧：XML 源码（精简） + 节点树 */}
+      {/* 主体双栏布局（左：树；右：详情） with resizable split */}
+      <div id="grid-split" className="w-full" style={{ display: 'grid', gridTemplateColumns: `${leftWidth}% 8px ${100 - leftWidth}%`, gap: '16px' }}>
+        {/* 左侧 */}
         <div className="space-y-4">
           <XmlSourcePanel xmlText={xmlText} setXmlText={setXmlText} onParse={() => onParse()} />
+          <BreadcrumbPanel selected={selected} onSelect={(n) => setSelected(n)} />
           <div className={styles.card}>
             <div className={styles.cardHeader}>节点树</div>
             <div className={`${styles.cardBody} ${styles.tree}`}>
-              <div className="mb-2"><Breadcrumbs selected={selected} onSelect={(n) => setSelected(n)} /></div>
               {root ? (
                 <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} />
               ) : (
@@ -456,38 +490,25 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* 右侧：优先显示节点详情，然后是预览与结果面板 */}
+        {/* 分隔线 */}
+        <div onMouseDown={startDrag} style={{ cursor: 'col-resize', background: 'var(--g-border)', width: '8px', borderRadius: 4 }} />
+        {/* 右侧 */}
         <div className="space-y-4">
-          <div className={styles.card}>
-            <div className={styles.cardBody}>
-              {sessionId && onCreateStep && selected && (
-                <div className="mb-2 flex justify-end">
-                  <button className={styles.btn} onClick={() => onCreateStep(sessionId, selected!)}>生成步骤卡片</button>
-                </div>
-              )}
-              <NodeDetail node={selected} />
-            </div>
-          </div>
-          <div className={styles.card}>
-            <div className={styles.cardBody}>
-              <ScreenPreview root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
-            </div>
-          </div>
-          <MatchResultsPanel
+          <NodeDetailPanel node={selected} sessionId={sessionId} onCreateStep={onCreateStep} />
+          <ScreenPreviewPanel root={root} selected={selected} onSelect={(n) => setSelected(n)} matchedSet={matchedSet} />
+          <ResultsAndXPathPanel
             matches={matches}
             matchIndex={matchIndex}
             keyword={filter}
             advFilter={advFilter}
+            searchOptions={searchOptions}
             onJump={(idx, node) => { setMatchIndex(idx); setSelected(node); }}
             onInsertXPath={(xp) => setXPathInput(xp)}
-            searchOptions={searchOptions}
-          />
-          <XPathTestResultsPanel nodes={xpathTestNodes} onJump={(n) => setSelected(n)} />
-          <XPathBuilder
-            node={selected}
-            onApply={(xp) => { setXPathInput(xp); /* 先更新输入，再定位 */ setTimeout(() => locateXPath(), 0); }}
-            onInsert={(xp) => { setXPathInput(xp); }}
+            selected={selected}
+            onApplyXPath={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}
+            onInsertOnly={(xp) => setXPathInput(xp)}
+            xpathTestNodes={xpathTestNodes}
+            onJumpToNode={(n) => setSelected(n)}
           />
         </div>
       </div>

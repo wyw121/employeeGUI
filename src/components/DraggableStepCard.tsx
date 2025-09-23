@@ -14,10 +14,10 @@ import {
   EyeOutlined
 } from '@ant-design/icons';
 import { MatchingStrategyTag } from './step-card';
-// 复用网格检查器里的策略选择器与预设字段映射
+// 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
 import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
-import { PRESET_FIELDS } from './universal-ui/views/grid-view/panels/node-detail/helpers';
+import { PRESET_FIELDS } from './universal-ui/views/grid-view/panels/node-detail';
 
 const { Text } = Typography;
 
@@ -219,6 +219,18 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
     category: '其他' 
   };
 
+  // 是否展示匹配策略控件：
+  // 1) 这些步骤天然依赖元素匹配；2) 或步骤已存在 matching 参数
+  const STRATEGY_ENABLED_TYPES = new Set<string>([
+    'smart_find_element',
+    'batch_match',
+    'smart_click',
+    'smart_input',
+    'smart_verify',
+    'smart_extract',
+  ]);
+  const showStrategyControls = STRATEGY_ENABLED_TYPES.has(step.step_type) || !!step.parameters?.matching;
+
   return (
     <div 
       ref={setNodeRef} 
@@ -344,7 +356,15 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
 
               {/* 测试按钮 */}
               {StepTestButton && (
-                <div onClick={(e) => e.stopPropagation()}>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerDownCapture={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseDownCapture={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchStartCapture={(e) => e.stopPropagation()}
+                >
                   <StepTestButton 
                     step={step} 
                     deviceId={currentDeviceId}
@@ -413,11 +433,10 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
         >
           <div className="flex items-center justify-between">
             <span>{step.description}</span>
-            {/* 显示匹配策略标签 */}
-            { (step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && (
+            {/* 显示匹配策略标签 + 快速切换按钮（增强：覆盖更多步骤类型或已有 matching 的步骤） */}
+            { showStrategyControls && (
               <div className="flex items-center gap-1">
                 <MatchingStrategyTag strategy={step.parameters?.matching?.strategy} small />
-                {/* 策略快速切换（无需打开网格检查器） */}
                 <Popover
                   trigger={["click"]}
                   placement="bottomRight"
@@ -427,24 +446,25 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                       <MatchingStrategySelector
                         value={(step.parameters?.matching?.strategy as MatchStrategy) || 'standard'}
                         onChange={(next: MatchStrategy) => {
-                          // 更新步骤的匹配策略与字段集，沿用已有 values
                           const prevMatching = step.parameters?.matching || {};
-                          const preset = PRESET_FIELDS[next] || [];
+                          const preset = PRESET_FIELDS[next as any] || [];
                           const values: Record<string, any> = prevMatching.values || {};
-                          // 若已有值，则优先选择有值的字段；若为空则回退为预设字段
                           let nextFields = Array.isArray(preset)
                             ? preset.filter((f) => values[f] != null)
                             : [];
                           if (!nextFields || nextFields.length === 0) {
-                            nextFields = preset;
+                            // 若选择 custom，保留原有字段；否则使用预设
+                            nextFields = next === 'custom' ? (prevMatching.fields || []) : preset;
                           }
 
+                          const baseParams = step.parameters || {};
                           const nextParams = {
-                            ...step.parameters,
+                            ...baseParams,
                             matching: {
                               ...prevMatching,
                               strategy: next,
                               fields: nextFields,
+                              values,
                             },
                           };
                           onUpdateStepParameters?.(step.id, nextParams);
@@ -456,18 +476,20 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 >
                   <Button
                     size="small"
-                    type="text"
+                    type="default"
                     icon={<SettingOutlined />}
                     onClick={(e) => e.stopPropagation()}
                     title="更改匹配策略"
-                    style={{ height: 24 }}
-                  />
+                    style={{ height: 24, padding: '0 8px' }}
+                  >
+                    策略
+                  </Button>
                 </Popover>
               </div>
             ) }
             
             {/* 批量匹配切换按钮 - 支持双向切换 */}
-            {(step.step_type === 'smart_find_element' || step.step_type === 'batch_match') && onBatchMatch && (
+            {showStrategyControls && onBatchMatch && (
               <Button 
                 size="small"
                 type={step.step_type === 'batch_match' ? 'default' : 'primary'}

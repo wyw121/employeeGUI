@@ -20,8 +20,18 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
   stepName,
   onClear
 }) => {
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <div style={{ maxWidth: 400 }}>
+    <div
+      style={{ maxWidth: 400 }}
+      onPointerDown={stop}
+      onPointerDownCapture={stop}
+      onMouseDown={stop}
+      onMouseDownCapture={stop}
+      onTouchStart={stop}
+      onTouchStartCapture={stop}
+      onClick={stop}
+    >
       {/* 结果标题与状态 */}
       <div className="mb-3">
         <Space align="center">
@@ -110,11 +120,21 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
 
       {/* 操作按钮 */}
       <div className="flex justify-between">
-        <TestResultCopyButton testResult={result} stepName={stepName} />
+        <div
+          onPointerDown={stop}
+          onPointerDownCapture={stop}
+          onMouseDown={stop}
+          onMouseDownCapture={stop}
+          onTouchStart={stop}
+          onTouchStartCapture={stop}
+          onClick={stop}
+        >
+          <TestResultCopyButton testResult={result} stepName={stepName} />
+        </div>
         <Button 
           size="small" 
           type="text" 
-          onClick={onClear}
+          onClick={(e) => { e.stopPropagation(); onClear(); }}
         >
           清除结果
         </Button>

@@ -34,6 +34,11 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
   const isTesting = isStepTesting(step.id);
   const testResult = getStepTestResult(step.id);
 
+  // 阻断拖拽相关的事件传播（适配 dnd-kit）
+  const stopDragPropagation = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
+
   // 处理测试执行
   const handleTest = async () => {
     if (!deviceId) {
@@ -98,46 +103,66 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
   // 如果有测试结果，显示弹出框
   if (testResult) {
     return (
-      <Popover
-        content={
-          <TestResultDetail
-            result={testResult}
-            stepName={step.name}
-            onClear={() => {
-              clearStepResult(step.id);
-              setShowResultPopover(false);
-            }}
-          />
-        }
-        title={<TestResultTitle stepName={step.name} />}
-        trigger="click"
-        placement="topLeft"
-        open={showResultPopover}
-        onOpenChange={setShowResultPopover}
+      <span
+        onPointerDown={stopDragPropagation}
+        onPointerDownCapture={stopDragPropagation}
+        onMouseDown={stopDragPropagation}
+        onMouseDownCapture={stopDragPropagation}
+        onTouchStart={stopDragPropagation}
+        onTouchStartCapture={stopDragPropagation}
+        onClick={stopDragPropagation}
       >
-        <Badge 
-          dot 
-          status={testResult.success ? 'success' : 'error'}
-          offset={[-2, 2]}
+        <Popover
+          content={
+            <TestResultDetail
+              result={testResult}
+              stepName={step.name}
+              onClear={() => {
+                clearStepResult(step.id);
+                setShowResultPopover(false);
+              }}
+            />
+          }
+          title={<TestResultTitle stepName={step.name} />}
+          trigger="click"
+          placement="topLeft"
+          open={showResultPopover}
+          onOpenChange={setShowResultPopover}
         >
-          {testButton}
-        </Badge>
-      </Popover>
+          <Badge 
+            dot 
+            status={testResult.success ? 'success' : 'error'}
+            offset={[-2, 2]}
+          >
+            {testButton}
+          </Badge>
+        </Popover>
+      </span>
     );
   }
 
   // 没有测试结果，显示提示
   return (
-    <Tooltip 
-      title={
-        !deviceId 
-          ? '请先选择设备' 
-          : `点击测试步骤: ${step.name}`
-      }
-      placement="top"
+    <span
+      onPointerDown={stopDragPropagation}
+      onPointerDownCapture={stopDragPropagation}
+      onMouseDown={stopDragPropagation}
+      onMouseDownCapture={stopDragPropagation}
+      onTouchStart={stopDragPropagation}
+      onTouchStartCapture={stopDragPropagation}
+      onClick={stopDragPropagation}
     >
-      {testButton}
-    </Tooltip>
+      <Tooltip 
+        title={
+          !deviceId 
+            ? '请先选择设备' 
+            : `点击测试步骤: ${step.name}`
+        }
+        placement="top"
+      >
+        {testButton}
+      </Tooltip>
+    </span>
   );
 };
 

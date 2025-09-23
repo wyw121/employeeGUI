@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from "../GridElementView.module.css";
 import { UiNode, AdvancedFilter, SearchOptions } from "../types";
+import type { MatchCriteria } from "./node-detail/types";
 import { MatchResultsPanel } from "../MatchResultsPanel";
 import { XPathTestResultsPanel } from "../XPathTestResultsPanel";
 import { XPathBuilder } from "../XPathBuilder";
@@ -17,6 +18,8 @@ interface ResultsAndXPathPanelProps {
   onJump: (idx: number, node: UiNode) => void;
   onInsertXPath: (xp: string) => void;
   onHoverNode?: (n: UiNode | null) => void;
+  // 修改参数模式回写
+  onSelectForStep?: (criteria: MatchCriteria) => void;
 
   // XPath tools
   selected: UiNode | null;
@@ -48,6 +51,7 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
   activateKey,
   highlightNode,
   onHoverNode,
+  onSelectForStep,
 }) => {
   const [active, setActive] = useState<TabKey>('results');
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -84,6 +88,7 @@ export const ResultsAndXPathPanel: React.FC<ResultsAndXPathPanelProps> = ({
               searchOptions={searchOptions}
               highlightNode={highlightNode}
               onHoverNode={onHoverNode}
+              onSelectForStep={onSelectForStep}
             />
           ) : (
             <div className="space-y-4">

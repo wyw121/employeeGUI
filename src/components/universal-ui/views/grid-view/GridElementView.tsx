@@ -606,6 +606,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             activateTab={panelActivateTab}
             activateKey={panelActivateKey}
             highlightNode={panelHighlightNode}
+            onSelectForStep={onApplyCriteria as any}
           />
           <XPathTemplatesPanel node={selected} onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }} onInsert={(xp) => setXPathInput(xp)} />
           <FieldDocPanel />

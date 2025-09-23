@@ -2697,13 +2697,17 @@ const SmartScriptBuilderPage: React.FC = () => {
         })()}
         // 🆕 XML内容更新回调
         onXmlContentUpdated={updateCurrentXmlContext}
-        // 🆕 从“节点详情→应用到步骤”回写匹配策略
+        // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略并更新标题
         onApplyCriteria={(criteria) => {
           try {
             if (!editingStepForParams) {
               // 非“修改参数”模式，忽略
               return;
             }
+            // 生成简短标题/描述（模块化 helper）
+            const { buildShortTitleFromCriteria, buildShortDescriptionFromCriteria } = require('../components/universal-ui/views/grid-view/panels/node-detail/titleHelpers');
+            const nextTitle: string = buildShortTitleFromCriteria(criteria);
+            const nextDesc: string = buildShortDescriptionFromCriteria(criteria);
             const stepId = editingStepForParams.id;
             setSteps((prev) => prev.map((s) => {
               if (s.id !== stepId) return s;
@@ -2731,7 +2735,11 @@ const SmartScriptBuilderPage: React.FC = () => {
               if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
               if (criteria.values['class']) p.class_name = criteria.values['class'];
               if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
-              return { ...s, parameters: p };
+              // 同步更新标题与描述（仅在“修改参数”模式下，由 UI 生成一份直观的可读标题/描述）
+              const patched = { ...s, parameters: p } as any;
+              patched.name = nextTitle || s.name;
+              patched.description = nextDesc || s.description;
+              return patched;
             }));
           } catch (e) {
             console.warn('应用匹配策略到步骤失败:', e);

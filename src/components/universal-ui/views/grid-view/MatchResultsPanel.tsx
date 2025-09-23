@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
+import type { MatchCriteria } from './panels/node-detail/types';
+import { buildCriteriaFromNode } from './panels/node-detail/helpers';
 import { nodeLabel, buildXPath } from './utils';
 import styles from './GridElementView.module.css';
 import { MatchBadges } from './MatchBadges';
@@ -16,6 +18,8 @@ export interface MatchResultsPanelProps {
   searchOptions?: Partial<SearchOptions>;
   highlightNode?: UiNode | null;
   onHoverNode?: (n: UiNode | null) => void;
+  // 当在“修改参数”模式下允许从匹配结果选择一个元素并回填到步骤参数
+  onSelectForStep?: (criteria: MatchCriteria) => void;
 }
 
 const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): React.ReactNode => {
@@ -40,7 +44,7 @@ const highlight = (text: string, kw: string, opts?: Partial<SearchOptions>): Rea
   }
 };
 
-export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions, highlightNode, onHoverNode }) => {
+export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, matchIndex, keyword, onJump, advFilter, onInsertXPath, searchOptions, highlightNode, onHoverNode, onSelectForStep }) => {
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!listRef.current || !highlightNode) return;
@@ -113,6 +117,18 @@ export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, m
                   <CopyChip text={buildXPath(n)} label="复制 XPath" />
                   {onInsertXPath && (
                     <button className={styles.btn} style={{ padding: '2px 6px' }} onClick={() => onInsertXPath(buildXPath(n))}>仅插入</button>
+                  )}
+                  {onSelectForStep && (
+                    <button
+                      className={styles.btn}
+                      title="将此元素作为步骤的目标（按当前标准策略构建）"
+                      style={{ padding: '2px 6px' }}
+                      onClick={() => {
+                        // 默认采用标准策略；由上层在写入步骤时可自由覆盖策略/字段
+                        const criteria = buildCriteriaFromNode(n, 'standard');
+                        onSelectForStep(criteria);
+                      }}
+                    >选择为步骤元素</button>
                   )}
                 </div>
               </li>

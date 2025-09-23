@@ -2,6 +2,7 @@ import React from 'react';
 import { UiNode } from '../../types';
 import styles from '../../GridElementView.module.css';
 import { MatchCriteria, MatchStrategy } from './types';
+import { PRESET_FIELDS, buildCriteriaFromNode } from './helpers';
 
 export interface MatchPresetsRowProps {
   node: UiNode | null;
@@ -9,24 +10,11 @@ export interface MatchPresetsRowProps {
   onPreviewFields?: (fields: string[]) => void; // 通知外层更新选中字段显示
 }
 
-// 预设到字段映射
-const PRESET_FIELDS: Record<MatchStrategy, string[]> = {
-  absolute: ['resource-id','text','content-desc','class','package','bounds','index'],
-  strict: ['resource-id','text','content-desc','class','package'],
-  relaxed: ['resource-id','text','content-desc','class'],
-  positionless: ['resource-id','text','content-desc','class','package'], // 与 strict 相同，但后端忽略位置
-  standard: ['resource-id','text','content-desc','class','package'], // 标准匹配：忽略位置与分辨率差异
-};
-
 export const MatchPresetsRow: React.FC<MatchPresetsRowProps> = ({ node, onApply, onPreviewFields }) => {
   const apply = (strategy: MatchStrategy) => {
     if (!node) return;
     const fields = PRESET_FIELDS[strategy];
-    const values: Record<string,string> = {};
-    for (const f of fields) {
-      const v = node.attrs[f];
-      if (v != null) values[f] = String(v);
-    }
+    const { values } = buildCriteriaFromNode(node, strategy, fields);
     onPreviewFields?.(fields);
     onApply({ strategy, fields, values });
   };

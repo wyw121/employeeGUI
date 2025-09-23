@@ -1099,7 +1099,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                     return null;
                   }
                 }}
-                onApplyCriteria={onApplyCriteria}
+                onApplyCriteria={handleApplyCriteria}
               />
             </ErrorBoundary>
           ) : (
@@ -1219,6 +1219,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       </Card>
     </div>
   );
+
+  // 🆕 统一封装：应用到步骤后自动关闭模态框
+  const handleApplyCriteria = (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => {
+    try {
+      onApplyCriteria?.(criteria);
+    } finally {
+      // 成功或失败都关闭，以便用户回到步骤卡查看/继续
+      onClose();
+    }
+  };
 
   // 树形视图Tab
   const renderTreeTab = () => (

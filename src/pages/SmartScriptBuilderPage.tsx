@@ -1024,7 +1024,8 @@ const SmartScriptBuilderPage: React.FC = () => {
                 deviceName: ce.deviceName || 'Unknown Device',
               };
               effectivePageInfo = effectivePageInfo || {
-                appName: ce.pageInfo?.appName || '小红书',
+                // XmlCacheEntry 没有 appName，这里用 appPackage 作为可读的应用标识
+                appName: ce.pageInfo?.appPackage || '小红书',
                 pageTitle: ce.pageInfo?.pageTitle || '未知页面',
               };
               xmlSource = 'xml-cache';
@@ -2535,6 +2536,10 @@ const SmartScriptBuilderPage: React.FC = () => {
           <Form.Item name="elementSummary" hidden>
             <Input />
           </Form.Item>
+          {/* 🆕 自包含：注册隐藏字段以承载对象类型的 xmlSnapshot，确保保存时可获取 */}
+          <Form.Item name="xmlSnapshot" hidden>
+            <Input />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -2754,30 +2759,69 @@ const SmartScriptBuilderPage: React.FC = () => {
               form.setFieldValue("elementLocator", builtLocator);
             }
 
-            // 🆕 构建并保存页面 XML 快照（基于当前分析器上下文）
-            if (currentXmlContent) {
-              const snap = createXmlSnapshot(
-                currentXmlContent,
-                {
-                  deviceId:
-                    currentDeviceInfo.deviceId ||
-                    currentDeviceId ||
-                    "unknown",
-                  deviceName:
-                    currentDeviceInfo.deviceName ||
-                    devices.find((d) => d.id === currentDeviceId)?.name ||
-                    "unknown",
-                  appPackage: currentDeviceInfo.appPackage || "com.xingin.xhs",
-                  activityName: currentDeviceInfo.activityName || "unknown",
-                },
-                {
-                  pageTitle: currentPageInfo.pageTitle || "小红书页面",
-                  pageType: currentPageInfo.pageType || "unknown",
-                  elementCount: currentPageInfo.elementCount || 0,
-                  appVersion: currentPageInfo.appVersion,
+            // 🆕 构建并保存页面 XML 快照（优先当前上下文；否则尝试从元素对象兜底）
+            try {
+              let xmlForSnapshot: string | undefined = currentXmlContent;
+              let deviceInfoForSnapshot: any = currentDeviceInfo;
+              let pageInfoForSnapshot: any = currentPageInfo;
+
+              // 兜底1：元素对象自身携带 xmlContent
+              if (!xmlForSnapshot && (element as any).xmlContent) {
+                xmlForSnapshot = (element as any).xmlContent;
+                console.log('🧩 使用元素自带 xmlContent 构建快照');
+              }
+
+              // 兜底2：通过 xmlCacheId 从缓存读取
+              if (!xmlForSnapshot && (element as any).xmlCacheId) {
+                try {
+                  const cm = XmlCacheManager.getInstance();
+                  const ce = cm.getCachedXml((element as any).xmlCacheId);
+                  if (ce?.xmlContent) {
+                    xmlForSnapshot = ce.xmlContent;
+                    deviceInfoForSnapshot = {
+                      deviceId: ce.deviceId,
+                      deviceName: ce.deviceName,
+                      appPackage: ce.pageInfo?.appPackage || 'com.xingin.xhs',
+                      activityName: ce.pageInfo?.activityName || 'unknown',
+                    };
+                    pageInfoForSnapshot = {
+                      pageTitle: ce.pageInfo?.pageTitle || '未知页面',
+                      pageType: ce.pageInfo?.pageType || 'unknown',
+                      elementCount: ce.pageInfo?.elementCount || 0,
+                    } as any;
+                    console.log('🧩 通过 xmlCacheId 回填 xmlSnapshot');
+                  }
+                } catch (e) {
+                  console.warn('通过 xmlCacheId 回填快照失败:', e);
                 }
-              );
-              form.setFieldValue("xmlSnapshot", snap);
+              }
+
+              if (xmlForSnapshot) {
+                const snap = createXmlSnapshot(
+                  xmlForSnapshot,
+                  {
+                    deviceId:
+                      deviceInfoForSnapshot?.deviceId || currentDeviceId || 'unknown',
+                    deviceName:
+                      deviceInfoForSnapshot?.deviceName ||
+                      devices.find((d) => d.id === currentDeviceId)?.name ||
+                      'unknown',
+                    appPackage:
+                      deviceInfoForSnapshot?.appPackage || 'com.xingin.xhs',
+                    activityName:
+                      deviceInfoForSnapshot?.activityName || 'unknown',
+                  },
+                  {
+                    pageTitle: pageInfoForSnapshot?.pageTitle || '小红书页面',
+                    pageType: pageInfoForSnapshot?.pageType || 'unknown',
+                    elementCount: pageInfoForSnapshot?.elementCount || 0,
+                    appVersion: pageInfoForSnapshot?.appVersion,
+                  }
+                );
+                form.setFieldValue('xmlSnapshot', snap);
+              }
+            } catch (e) {
+              console.warn('构建页面快照时出现问题（可忽略）:', e);
             }
 
             // 🆕 保存增强元素信息到表单参数中（不再写入 xmlContent/xmlCacheId 等旧字段）

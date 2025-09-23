@@ -18,25 +18,21 @@ export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (
 ) => {
   const { step } = props;
 
-  // 🔍 检查步骤是否包含增强元素信息（兼容多种格式）
+  // 🔍 检查步骤是否**明确要求**使用增强卡片样式
+  // 默认使用原有样式，只有明确设置 useEnhancedCard: true 时才使用增强样式
   const hasEnhancedInfo = !!(
-    (
-      step.parameters?.isEnhanced || // 简化标识
-      step.parameters?.xmlCacheId || // XML缓存ID
-      step.parameters?.xmlContent || // XML内容
-      step.parameters?.enhancedElement || // 完整增强信息
-      step.parameters?.elementSummary
-    ) // 元素摘要
+    step.parameters?.useEnhancedCard // 明确标识要使用增强卡片
   );
 
   console.log("🔍 SmartStepCardWrapper 检查步骤:", {
     stepId: step.id,
     stepName: step.name,
     hasEnhancedInfo,
+    useEnhancedCard: !!step.parameters?.useEnhancedCard,
     hasIsEnhanced: !!step.parameters?.isEnhanced,
     hasXmlCacheId: !!step.parameters?.xmlCacheId,
     hasElementSummary: !!step.parameters?.elementSummary,
-    stepParameters: step.parameters,
+    willUseOriginalStyle: !hasEnhancedInfo,
   });
 
   // 如果有增强信息，使用增强步骤卡片

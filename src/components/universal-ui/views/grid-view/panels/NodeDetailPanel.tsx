@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import styles from "../GridElementView.module.css";
 import { UiNode } from "../types";
 import { NodeDetail } from "../NodeDetail";
@@ -8,6 +8,7 @@ import type { MatchCriteria, MatchResultSummary } from './node-detail/types';
 import { inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes, PRESET_FIELDS } from './node-detail';
 import { loadLatestMatching } from '../../grid-view/matchingCache';
 import { useAdb } from '../../../../../application/hooks/useAdb';
+import { buildDefaultMatchingFromElement } from '../../../../../modules/grid-inspector/DefaultMatchingBuilder';
 
 interface NodeDetailPanelProps {
   node: UiNode | null;
@@ -16,6 +17,8 @@ interface NodeDetailPanelProps {
   onApplyToStepComplete?: (criteria: CompleteStepCriteria) => void;
   onStrategyChanged?: (s: MatchCriteria['strategy']) => void;
   onFieldsChanged?: (fields: string[]) => void;
+  // 🆕 初始匹配预设：用于“修改参数”时优先以步骤自身为准
+  initialMatching?: MatchCriteria;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
@@ -25,6 +28,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   onApplyToStepComplete,
   onStrategyChanged,
   onFieldsChanged,
+  initialMatching,
 }) => {
   const { selectedDevice, matchElementByCriteria } = useAdb();
 
@@ -37,25 +41,64 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   useEffect(() => { onStrategyChanged?.(strategy); }, [strategy]);
   useEffect(() => { onFieldsChanged?.(selectedFields); }, [selectedFields]);
 
+  // 仅首次应用 initialMatching（若提供），避免用户操作被覆盖
+  const appliedInitialRef = useRef<boolean>(false);
+
   // 当节点（来自节点树或屏幕预览）变化时，自动将“已选字段”的值回填为该节点的默认值
   useEffect(() => {
     if (!node) return;
     if (selectedFields.length === 0) {
-      // 首次选择（或无字段已选）时：优先恢复缓存的策略/字段；否则默认使用 standard 预设
-      const cached = loadLatestMatching();
-      if (cached && Array.isArray(cached.fields) && cached.fields.length > 0) {
-        setStrategy(cached.strategy as any);
-        setSelectedFields(cached.fields);
-        setValues(buildDefaultValues(node, cached.fields));
-        onStrategyChanged?.(cached.strategy as any);
-        onFieldsChanged?.(cached.fields);
+      // 首次选择（或无字段已选）时：优先使用步骤传入的 initialMatching；否则恢复最近缓存；再否则使用 standard 预设
+      if (!appliedInitialRef.current && initialMatching && Array.isArray(initialMatching.fields) && initialMatching.fields.length > 0) {
+        appliedInitialRef.current = true;
+        setStrategy(initialMatching.strategy);
+        setSelectedFields(initialMatching.fields);
+        setIncludes(initialMatching.includes || {});
+        setExcludes(initialMatching.excludes || {});
+        // 合并初始值与节点默认值：优先保留 initialMatching 中的非空值，
+        // 仅当节点提供了非空值时才覆盖，以避免被“空节点属性”清空有效的初始匹配值
+        const nodeDefaults = buildDefaultValues(node, initialMatching.fields);
+        const merged: Record<string, string> = {};
+        for (const f of initialMatching.fields) {
+          const initVal = (initialMatching.values || {})[f];
+          const nodeVal = nodeDefaults[f];
+          const trimmedInit = (initVal ?? '').toString().trim();
+          const trimmedNode = (nodeVal ?? '').toString().trim();
+          merged[f] = trimmedNode !== '' ? trimmedNode : trimmedInit;
+        }
+        setValues(merged);
+        onStrategyChanged?.(initialMatching.strategy);
+        onFieldsChanged?.(initialMatching.fields);
       } else {
-        const fields = PRESET_FIELDS.standard;
-        setStrategy('standard');
-        setSelectedFields(fields);
-        setValues(buildDefaultValues(node, fields));
-        onStrategyChanged?.('standard');
-        onFieldsChanged?.(fields);
+        const cached = loadLatestMatching();
+        if (cached && Array.isArray(cached.fields) && cached.fields.length > 0) {
+          setStrategy(cached.strategy as any);
+          setSelectedFields(cached.fields);
+          setValues(buildDefaultValues(node, cached.fields));
+          onStrategyChanged?.(cached.strategy as any);
+          onFieldsChanged?.(cached.fields);
+        } else {
+          // 使用统一构建器从节点属性推断默认匹配字段与值
+          const built = buildDefaultMatchingFromElement({
+            resource_id: node.attrs?.['resource-id'],
+            text: node.attrs?.['text'],
+            content_desc: node.attrs?.['content-desc'],
+            class_name: node.attrs?.['class'],
+            bounds: node.attrs?.['bounds'],
+          });
+          const effFields = (built.fields && built.fields.length > 0) ? built.fields : PRESET_FIELDS.standard;
+          const effStrategy = (built.fields && built.fields.length > 0) ? (built.strategy as any) : 'standard';
+          setStrategy(effStrategy);
+          setSelectedFields(effFields);
+          // 若构建器给出具体值，优先使用；否则按节点默认值回填
+          if (built.fields && built.fields.length > 0) {
+            setValues(built.values);
+          } else {
+            setValues(buildDefaultValues(node, effFields));
+          }
+          onStrategyChanged?.(effStrategy);
+          onFieldsChanged?.(effFields);
+        }
       }
       return;
     }

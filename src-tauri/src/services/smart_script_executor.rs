@@ -178,8 +178,20 @@ impl SmartScriptExecutor {
             SmartActionType::Wait => self.test_wait(&step, &mut logs).await,
             SmartActionType::Input => self.test_input(&step, &mut logs).await,
             SmartActionType::Swipe => {
-                logs.push("🔄 滑动操作".to_string());
-                Ok("滑动操作模拟".to_string())
+                // 使用增强滑动执行器执行真实滑动（包含安全注入器、ADB回退与UI变化校验）
+                logs.push("🔄 滑动操作（增强执行器）".to_string());
+                match self.execute_basic_swipe(&step).await {
+                    Ok((_found_elements, _data)) => {
+                        logs.push("✅ 滑动执行完成".to_string());
+                        Ok("滑动成功".to_string())
+                    }
+                    Err(e) => {
+                        let msg = format!("❌ 滑动执行失败: {}", e);
+                        error!("{}", msg);
+                        logs.push(msg);
+                        Err(e)
+                    }
+                }
             },
             // 智能操作类型
             SmartActionType::SmartTap => self.test_smart_tap(&step, &mut logs).await,

@@ -2846,6 +2846,21 @@ const SmartScriptBuilderPage: React.FC = () => {
               Object.values(locator.attributes).some(Boolean));
           return hasAny ? locator : undefined;
         })()}
+        // 🆕 首选匹配预设：若为“修改参数”，优先以步骤参数.matching 为准
+        initialMatching={useMemo(() => {
+          if (!editingStepForParams) return undefined;
+          const m: any = editingStepForParams.parameters?.matching;
+          if (m && Array.isArray(m.fields) && m.fields.length > 0) {
+            return {
+              strategy: String(m.strategy || 'standard'),
+              fields: m.fields as string[],
+              values: (m.values || {}) as Record<string, string>,
+              includes: m.includes as Record<string, string[]>,
+              excludes: m.excludes as Record<string, string[]>,
+            } as any;
+          }
+          return undefined;
+        }, [editingStepForParams?.id])}
         // 🆕 XML内容更新回调
         onXmlContentUpdated={updateCurrentXmlContext}
         // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略：

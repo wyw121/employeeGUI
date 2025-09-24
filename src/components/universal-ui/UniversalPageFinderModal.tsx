@@ -105,6 +105,7 @@ import {
   GridElementView,
 } from "./views";
 import { saveLatestMatching } from "./views/grid-view/matchingCache";
+import type { MatchCriteria as UIMatchCriteria } from "./views/grid-view/panels/node-detail/types";
 import {
   useElementSelectionManager,
   ElementSelectionPopover,
@@ -143,6 +144,8 @@ interface UniversalPageFinderModalProps {
   preselectLocator?: NodeLocator;
   // 新增：当在“网格检查器/节点详情”里选择了匹配策略并点击“应用到步骤”时回调
   onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
+  // 🆕 初始匹配预设（来自步骤参数.matching），用于覆盖“最近缓存”
+  initialMatching?: UIMatchCriteria;
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
@@ -157,6 +160,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   loadFromStepXml, // 🆕 从步骤XML源加载
   preselectLocator,
   onApplyCriteria,
+  initialMatching,
 }) => {
   // === 状态管理 ===
   const [selectedDevice, setSelectedDevice] = useState<string>("");
@@ -1246,6 +1250,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 }}
                 onApplyCriteria={handleApplyCriteria}
                 onLatestMatchingChange={(m) => { saveLatestMatching(m); }}
+                initialMatching={initialMatching as any}
               />
             </ErrorBoundary>
           ) : (

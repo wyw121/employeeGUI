@@ -63,6 +63,8 @@ interface GridElementViewProps {
   onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
   // 🆕 上抛“最新匹配配置”（仅策略与字段），便于外层在离开时自动回填
   onLatestMatchingChange?: (m: { strategy: string; fields: string[] }) => void;
+  // 🆕 初始匹配预设：用于“修改参数”时优先以步骤自身为准
+  initialMatching?: { strategy: string; fields: string[]; values: Record<string, string>; includes?: Record<string, string[]>; excludes?: Record<string, string[]> };
 }
 
 // =============== 工具函数（见 ./utils） ===============
@@ -85,6 +87,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   locatorResolve,
   onApplyCriteria,
   onLatestMatchingChange,
+  initialMatching,
 }) => {
   // XML 文本与解析树
   const [xmlText, setXmlText] = useState<string>("");
@@ -620,6 +623,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
               onLatestMatchingChange?.(payload);
               saveLatestMatching(payload);
             }}
+            initialMatching={initialMatching as any}
           />
           <LocatorAdvisorPanel
             node={selected}

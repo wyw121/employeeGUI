@@ -20,6 +20,7 @@ import {
   normalizeExcludes, 
   normalizeIncludes 
 } from './helpers';
+import { buildDefaultMatchingFromElement } from '../../../../../../modules/grid-inspector/DefaultMatchingBuilder';
 
 /**
  * 元素回填选项配置
@@ -120,12 +121,44 @@ export function buildCompleteStepCriteria(
       }
     }
 
-    // 4. 规范化字段和值（移除空值字段）
-    const normalized = normalizeFieldsAndValues(fields, values);
+  // 4. 规范化字段和值（移除空值字段）
+  let normalized = normalizeFieldsAndValues(fields, values);
+
+    // 4.1 兜底：若规范化后仍无任何有效字段，则按优先级从节点补充一个最小可用字段，避免空条件
+    if (!normalized.fields || normalized.fields.length === 0) {
+      const candidates: Array<{ key: string; val?: string }> = [
+        { key: 'resource-id', val: node.attrs?.['resource-id'] },
+        { key: 'text', val: node.attrs?.['text'] },
+        { key: 'content-desc', val: node.attrs?.['content-desc'] },
+        { key: 'class', val: node.attrs?.['class'] },
+        { key: 'bounds', val: node.attrs?.['bounds'] },
+      ];
+      const picked = candidates.find(c => (c.val ?? '').toString().trim() !== '');
+      if (picked) {
+        normalized = normalizeFieldsAndValues([picked.key], { [picked.key]: String(picked.val) });
+        // 若选择了 bounds，则策略至少应为 absolute
+        if (picked.key === 'bounds' && strategy !== 'absolute') {
+          strategy = 'absolute';
+        }
+      } else {
+        // 进一步兜底：尝试通过统一构建器从节点常见语义字段合成默认匹配
+        const built = buildDefaultMatchingFromElement({
+          resource_id: node.attrs?.['resource-id'],
+          text: node.attrs?.['text'],
+          content_desc: node.attrs?.['content-desc'],
+          class_name: node.attrs?.['class'],
+          bounds: node.attrs?.['bounds'],
+        });
+        if (built.fields.length > 0) {
+          normalized = normalizeFieldsAndValues(built.fields, built.values);
+          strategy = built.strategy as MatchStrategy;
+        }
+      }
+    }
 
     // 5. 处理包含/不包含条件
-    const includes = normalizeIncludes(currentIncludes || {}, normalized.fields);
-    const excludes = normalizeExcludes(currentExcludes || {}, normalized.fields);
+  const includes = normalizeIncludes(currentIncludes || {}, normalized.fields);
+  const excludes = normalizeExcludes(currentExcludes || {}, normalized.fields);
 
     // 6. 构建预览信息
     const preview = {

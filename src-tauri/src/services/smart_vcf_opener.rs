@@ -259,26 +259,15 @@ async fn click_element_by_resource_id(device_id: &str, resource_id: &str) -> Res
 /// 点击指定坐标
 async fn click_coordinates(device_id: &str, x: i32, y: i32) -> Result<(), String> {
     println!("👆 点击坐标: ({}, {})", x, y);
-    
-    let mut tap_cmd = AsyncCommand::new("adb");
-    tap_cmd.args(&["-s", device_id, "shell", "input", "tap", &x.to_string(), &y.to_string()]);
-    
-    #[cfg(windows)]
-    {
-        tap_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    // 走注入器优先助手，失败信息按旧风格返回
+    let adb_path = crate::utils::adb_utils::get_adb_path();
+    match crate::infra::adb::input_helper::tap_injector_first(&adb_path, device_id, x, y, None).await {
+        Ok(()) => {
+            println!("✅ 点击成功");
+            Ok(())
+        }
+        Err(e) => Err(format!("点击失败: {}", e))
     }
-    
-    let result = tap_cmd.output()
-        .await
-        .map_err(|e| format!("执行点击命令失败: {}", e))?;
-    
-    if !result.status.success() {
-        let error = String::from_utf8_lossy(&result.stderr);
-        return Err(format!("点击失败: {}", error));
-    }
-    
-    println!("✅ 点击成功");
-    Ok(())
 }
 
 /// 从XML中查找文本的坐标

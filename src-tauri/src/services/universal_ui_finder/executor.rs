@@ -4,6 +4,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 use crate::services::universal_ui_finder::{FindRequest, ClickResult, UniversalUIElement, FindError};
 use crate::services::universal_ui_finder::logger::{InteractiveLogger, ClickExecutionStep};
+use crate::infra::adb::input_helper::{tap_injector_first, swipe_injector_first};
 
 pub struct ActionExecutor {
     adb_path: String,
@@ -76,24 +77,16 @@ impl ActionExecutor {
     
     /// 执行点击命令
     fn perform_click(&self, x: i32, y: i32) -> Result<(), FindError> {
-        let mut cmd = Command::new(&self.adb_path);
-        if let Some(device) = &self.device_id {
-            cmd.arg("-s").arg(device);
-        }
-        cmd.args(&["shell", "input", "tap", &x.to_string(), &y.to_string()]);
-        
-        let output = cmd.output().map_err(|e| {
-            FindError::ExecutionFailed(format!("点击命令创建失败: {}", e))
-        })?;
-        
-        if !output.status.success() {
-            return Err(FindError::ExecutionFailed(format!(
-                "点击执行失败: {}", 
-                String::from_utf8_lossy(&output.stderr)
-            )));
-        }
-        
-        Ok(())
+        // 统一走注入器优先 + 回退
+        let adb_path = self.adb_path.clone();
+        let device_opt = self.device_id.clone();
+        let device = device_opt.as_deref().unwrap_or("");
+        // 使用 block_in_place 执行异步 helper
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async move {
+                tap_injector_first(&adb_path, device, x, y, None).await
+            })
+        }).map_err(|e| FindError::ExecutionFailed(format!("点击执行失败: {}", e)))
     }
     
     /// 验证点击结果
@@ -247,19 +240,18 @@ impl ActionExecutor {
             },
         };
         
-        let mut cmd = Command::new(&self.adb_path);
-        if let Some(device) = &self.device_id {
-            cmd.arg("-s").arg(device);
+        let adb_path = self.adb_path.clone();
+        let device_opt = self.device_id.clone();
+        let device = device_opt.as_deref().unwrap_or("");
+        let res = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async move {
+                swipe_injector_first(&adb_path, device, start_x, start_y, end_x, end_y, 300).await
+            })
+        });
+        match res {
+            Ok(()) => Ok(true),
+            Err(e) => Err(FindError::ExecutionFailed(format!("滑动命令执行失败: {}", e)))
         }
-        cmd.args(&["shell", "input", "swipe", 
-                  &start_x.to_string(), &start_y.to_string(),
-                  &end_x.to_string(), &end_y.to_string(), "300"]);
-        
-        let output = cmd.output().map_err(|e| {
-            FindError::ExecutionFailed(format!("滑动命令执行失败: {}", e))
-        })?;
-        
-        Ok(output.status.success())
     }
 }
 

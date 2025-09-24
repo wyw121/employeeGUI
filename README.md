@@ -75,6 +75,44 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## 新后端灰度开关（后端替换不改前端）
+
+为平滑替换旧脚本执行器，已提供环境变量灰度开关，默认关闭：
+
+- 开关名：`USE_NEW_BACKEND`
+- 取值：`1` 表示启用新后端管线（仅批量执行入口），其他或未设置走旧路径
+
+在 Windows PowerShell 中启用并运行开发模式：
+
+```pwsh
+$env:USE_NEW_BACKEND = "1"
+npm run tauri dev
+```
+
+验证方法：
+- 通过 UI 触发“智能脚本批量执行”；
+- 在后端日志中应看到如下字样：
+	- `🧪 开启新后端灰度 (USE_NEW_BACKEND=1)，进入 v2 管线...`
+	- `📐 real-metrics(v2): width=... height=... density=...`
+- 若发生错误会自动回退到旧执行器（日志会包含回退信息）。
+
+回退方法：
+```pwsh
+Remove-Item Env:\USE_NEW_BACKEND
+npm run tauri dev
+```
+
+注意：前端无需任何改动。本开关仅影响 Tauri 后端批量执行路径；单步测试与其它功能保持不变。
+
+补充说明（输入注入与设备指标）：
+- 自 v2 管线灰度同时，旧执行器（传统与智能两条路径）已将 `swipe/tap/text` 优先走统一的 AdbShell 注入器（injector-first），失败再自动回退到原始 `adb shell input` 命令；行为保持兼容，仅增强稳定性与未来可扩展性（重试/超时/IME 策略）。
+- 现已扩展：清空输入时涉及的按键事件也走注入器优先（`keyevent KEYCODE_CTRL_A` 与 `KEYCODE_DEL`），注入器失败时同样自动回退到原始命令，确保兼容性与稳定性。
+- 设备分辨率/密度获取使用了进程级内存缓存，减少重复 `adb shell wm` 查询；首次获取失败时自动回退到默认值（1080x1920）。
+ - 新增安全注入器包装（SafeInputInjector）：为注入器操作提供轻量重试（默认重试 2 次，间隔 120ms）。可通过环境变量调节：
+	 - `INJECTOR_RETRIES`：整数，重试次数（默认 2）
+	 - `INJECTOR_DELAY_MS`：整数，重试间隔毫秒（默认 120）
+	 - 应用位置：v2 管线和所有旧执行器均已统一启用。
+
 ## 功能特性
 
 - ✅ 员工列表展示

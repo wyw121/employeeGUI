@@ -4,6 +4,8 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info, warn};
+use crate::infra::adb::keyevent_helper::keyevent_symbolic_injector_first;
+use crate::infra::adb::input_helper::tap_injector_first;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VcfOpenResult {
@@ -170,7 +172,7 @@ impl LDPlayerVcfOpener {
     /// 验证VCF文件是否存在于设备上
     async fn verify_file_exists(&self, file_path: &str) -> Result<()> {
         info!("🔍 验证文件存在: {}", file_path);
-        
+
         let output = self
             .execute_adb_command(vec!["shell", "ls", "-la", file_path])
             .await?;
@@ -189,7 +191,14 @@ impl LDPlayerVcfOpener {
 
         // 检查屏幕状态
         let output = self
-            .execute_adb_command(vec!["shell", "dumpsys", "window", "|", "grep", "mScreenOnEarly"])
+            .execute_adb_command(vec![
+                "shell",
+                "dumpsys",
+                "window",
+                "|",
+                "grep",
+                "mScreenOnEarly",
+            ])
             .await
             .unwrap_or_default();
 
@@ -198,14 +207,12 @@ impl LDPlayerVcfOpener {
         } else {
             warn!("📱 设备屏幕可能未开启，尝试唤醒");
             // 发送电源键唤醒设备
-            self.execute_adb_command(vec!["shell", "input", "keyevent", "KEYCODE_POWER"])
-                .await?;
+            keyevent_symbolic_injector_first(&self.adb_path, &self.device_id, "KEYCODE_POWER").await?;
             sleep(Duration::from_secs(1)).await;
         }
 
-        // 发送菜单键确保回到主屏幕
-        self.execute_adb_command(vec!["shell", "input", "keyevent", "KEYCODE_HOME"])
-            .await?;
+        // 回到主屏幕（注入器优先 + 回退）
+        keyevent_symbolic_injector_first(&self.adb_path, &self.device_id, "KEYCODE_HOME").await?;
 
         Ok(())
     }
@@ -217,18 +224,44 @@ impl LDPlayerVcfOpener {
         // 尝试多种文件管理器启动方式
         let file_managers = vec![
             // 雷电模拟器默认文件管理器
-            vec!["shell", "am", "start", "-n", "com.android.documentsui/.files.FilesActivity"],
+            vec![
+                "shell",
+                "am",
+                "start",
+                "-n",
+                "com.android.documentsui/.files.FilesActivity",
+            ],
             // ES文件浏览器
-            vec!["shell", "am", "start", "-n", "com.estrongs.android.pop/.view.FileExplorerActivity"],
+            vec![
+                "shell",
+                "am",
+                "start",
+                "-n",
+                "com.estrongs.android.pop/.view.FileExplorerActivity",
+            ],
             // 通用文件管理器Intent
-            vec!["shell", "am", "start", "-a", "android.intent.action.VIEW", "-t", "resource/folder"],
+            vec![
+                "shell",
+                "am",
+                "start",
+                "-a",
+                "android.intent.action.VIEW",
+                "-t",
+                "resource/folder",
+            ],
             // 系统文件管理器
-            vec!["shell", "am", "start", "-n", "com.android.documentsui/.DocumentsActivity"],
+            vec![
+                "shell",
+                "am",
+                "start",
+                "-n",
+                "com.android.documentsui/.DocumentsActivity",
+            ],
         ];
 
         for (i, fm_command) in file_managers.iter().enumerate() {
             info!("📂 尝试启动文件管理器 ({}/{})", i + 1, file_managers.len());
-            
+
             match self.execute_adb_command(fm_command.clone()).await {
                 Ok(_) => {
                     info!("✅ 文件管理器启动成功");
@@ -250,9 +283,13 @@ impl LDPlayerVcfOpener {
 
         // 方法1: 直接使用Intent打开下载目录
         let download_intent = vec![
-            "shell", "am", "start", 
-            "-a", "android.intent.action.VIEW",
-            "-d", "file:///sdcard/Download"
+            "shell",
+            "am",
+            "start",
+            "-a",
+            "android.intent.action.VIEW",
+            "-d",
+            "file:///sdcard/Download",
         ];
 
         match self.execute_adb_command(download_intent).await {
@@ -267,7 +304,7 @@ impl LDPlayerVcfOpener {
 
         // 方法2: 通过UI自动化导航
         sleep(Duration::from_secs(1)).await;
-        
+
         // 尝试点击Download文件夹（假设在主界面可见）
         // 这里需要根据实际的UI布局来调整坐标
         let tap_commands = vec![
@@ -277,7 +314,12 @@ impl LDPlayerVcfOpener {
         ];
 
         for tap_cmd in tap_commands {
-            self.execute_adb_command(tap_cmd).await.ok();
+            // 仅替换为注入器优先的点击，保持坐标与时序一致
+            if let [_, _, _, x, y] = &tap_cmd[..] {
+                let _ = tap_injector_first(&self.adb_path, &self.device_id, x.parse().unwrap_or(0), y.parse().unwrap_or(0), None).await;
+            } else {
+                self.execute_adb_command(tap_cmd).await.ok();
+            }
             sleep(Duration::from_millis(500)).await;
         }
 
@@ -290,17 +332,13 @@ impl LDPlayerVcfOpener {
 
         // 获取当前屏幕内容
         let ui_dump = self.dump_ui_hierarchy().await?;
-        
+
         // 查找包含.vcf的文件名
         if let Some(vcf_position) = self.find_vcf_file_position(&ui_dump) {
             info!("📄 找到VCF文件，位置: {:?}", vcf_position);
-            
+
             // 点击VCF文件
-            self.execute_adb_command(vec![
-                "shell", "input", "tap", 
-                &vcf_position.0.to_string(), 
-                &vcf_position.1.to_string()
-            ]).await?;
+            tap_injector_first(&self.adb_path, &self.device_id, vcf_position.0, vcf_position.1, None).await?;
 
             info!("✅ 成功点击VCF文件");
             return Ok(());
@@ -308,25 +346,43 @@ impl LDPlayerVcfOpener {
 
         // 如果没有找到具体位置，尝试通过文件名搜索
         warn!("⚠️ 未找到VCF文件位置，尝试备选方案");
-        
+
         // 备选方案：模拟点击可能的VCF文件位置
         let possible_positions = vec![
-            (400, 300), (400, 400), (400, 500), (400, 600),
-            (300, 300), (300, 400), (300, 500), (300, 600),
-            (500, 300), (500, 400), (500, 500), (500, 600),
+            (400, 300),
+            (400, 400),
+            (400, 500),
+            (400, 600),
+            (300, 300),
+            (300, 400),
+            (300, 500),
+            (300, 600),
+            (500, 300),
+            (500, 400),
+            (500, 500),
+            (500, 600),
         ];
 
         for (x, y) in possible_positions {
             self.execute_adb_command(vec![
-                "shell", "input", "tap", &x.to_string(), &y.to_string()
-            ]).await.ok();
-            
+                "shell",
+                "input",
+                "tap",
+                &x.to_string(),
+                &y.to_string(),
+            ])
+            .await
+            .ok();
+
             sleep(Duration::from_millis(800)).await;
-            
+
             // 检查是否弹出了应用选择对话框或联系人导入界面
             let ui_after_tap = self.dump_ui_hierarchy().await.unwrap_or_default();
-            if ui_after_tap.contains("联系人") || ui_after_tap.contains("contact") || 
-               ui_after_tap.contains("导入") || ui_after_tap.contains("import") {
+            if ui_after_tap.contains("联系人")
+                || ui_after_tap.contains("contact")
+                || ui_after_tap.contains("导入")
+                || ui_after_tap.contains("import")
+            {
                 info!("✅ 成功点击VCF文件（通过位置尝试）");
                 return Ok(());
             }
@@ -343,24 +399,27 @@ impl LDPlayerVcfOpener {
 
         // 查找联系人相关的应用选项
         let contact_keywords = vec!["联系人", "contact", "通讯录", "电话", "phone"];
-        
+
         for keyword in contact_keywords {
             if ui_dump.to_lowercase().contains(&keyword.to_lowercase()) {
                 // 找到联系人应用，尝试点击
                 if let Some(position) = self.find_text_position(&ui_dump, keyword) {
                     info!("📞 找到联系人应用: {}", keyword);
-                    
+
                     self.execute_adb_command(vec![
-                        "shell", "input", "tap",
+                        "shell",
+                        "input",
+                        "tap",
                         &position.0.to_string(),
-                        &position.1.to_string()
-                    ]).await?;
+                        &position.1.to_string(),
+                    ])
+                    .await?;
 
                     sleep(Duration::from_secs(1)).await;
 
                     // 点击"始终"或"仅此一次"
                     self.click_always_or_once().await?;
-                    
+
                     return Ok(());
                 }
             }
@@ -368,7 +427,8 @@ impl LDPlayerVcfOpener {
 
         // 如果没有找到特定应用，尝试点击第一个选项
         warn!("⚠️ 未找到联系人应用，尝试点击默认选项");
-        self.execute_adb_command(vec!["shell", "input", "tap", "400", "400"]).await?;
+        self.execute_adb_command(vec!["shell", "input", "tap", "400", "400"])
+            .await?;
         sleep(Duration::from_secs(1)).await;
         self.click_always_or_once().await?;
 
@@ -378,17 +438,20 @@ impl LDPlayerVcfOpener {
     /// 点击"始终"或"仅此一次"按钮
     async fn click_always_or_once(&self) -> Result<()> {
         let ui_dump = self.dump_ui_hierarchy().await?;
-        
+
         let choice_keywords = vec!["始终", "always", "仅此一次", "just once", "确定", "ok"];
-        
+
         for keyword in choice_keywords {
             if let Some(position) = self.find_text_position(&ui_dump, keyword) {
                 info!("✅ 点击选择: {}", keyword);
                 self.execute_adb_command(vec![
-                    "shell", "input", "tap",
+                    "shell",
+                    "input",
+                    "tap",
                     &position.0.to_string(),
-                    &position.1.to_string()
-                ]).await?;
+                    &position.1.to_string(),
+                ])
+                .await?;
                 return Ok(());
             }
         }
@@ -397,8 +460,14 @@ impl LDPlayerVcfOpener {
         let common_positions = vec![(600, 500), (400, 600), (500, 550)];
         for (x, y) in common_positions {
             self.execute_adb_command(vec![
-                "shell", "input", "tap", &x.to_string(), &y.to_string()
-            ]).await.ok();
+                "shell",
+                "input",
+                "tap",
+                &x.to_string(),
+                &y.to_string(),
+            ])
+            .await
+            .ok();
             sleep(Duration::from_millis(500)).await;
         }
 
@@ -410,20 +479,23 @@ impl LDPlayerVcfOpener {
         info!("✅ 确认导入联系人");
 
         sleep(Duration::from_secs(2)).await;
-        
+
         let ui_dump = self.dump_ui_hierarchy().await?;
-        
+
         // 查找导入相关按钮
         let import_keywords = vec!["导入", "import", "确定", "ok", "完成", "done"];
-        
+
         for keyword in import_keywords {
             if let Some(position) = self.find_text_position(&ui_dump, keyword) {
                 info!("📥 点击导入按钮: {}", keyword);
                 self.execute_adb_command(vec![
-                    "shell", "input", "tap",
+                    "shell",
+                    "input",
+                    "tap",
                     &position.0.to_string(),
-                    &position.1.to_string()
-                ]).await?;
+                    &position.1.to_string(),
+                ])
+                .await?;
                 return Ok(());
             }
         }
@@ -432,8 +504,14 @@ impl LDPlayerVcfOpener {
         let confirm_positions = vec![(500, 600), (400, 650), (600, 600)];
         for (x, y) in confirm_positions {
             self.execute_adb_command(vec![
-                "shell", "input", "tap", &x.to_string(), &y.to_string()
-            ]).await.ok();
+                "shell",
+                "input",
+                "tap",
+                &x.to_string(),
+                &y.to_string(),
+            ])
+            .await
+            .ok();
             sleep(Duration::from_millis(800)).await;
         }
 
@@ -447,12 +525,15 @@ impl LDPlayerVcfOpener {
         // 等待最多30秒
         for i in 1..=30 {
             sleep(Duration::from_secs(1)).await;
-            
+
             let ui_dump = self.dump_ui_hierarchy().await.unwrap_or_default();
-            
+
             // 检查是否出现完成信息
-            if ui_dump.contains("成功") || ui_dump.contains("完成") || 
-               ui_dump.contains("success") || ui_dump.contains("complete") {
+            if ui_dump.contains("成功")
+                || ui_dump.contains("完成")
+                || ui_dump.contains("success")
+                || ui_dump.contains("complete")
+            {
                 info!("🎉 检测到导入完成信号");
                 return Ok(());
             }
@@ -504,16 +585,13 @@ impl LDPlayerVcfOpener {
 
         let mut cmd = Command::new(&self.adb_path);
         cmd.args(&full_args);
-        
+
         #[cfg(windows)]
         {
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
 
-        let output = timeout(
-            self.timeout_duration,
-            cmd.output()
-        ).await??;
+        let output = timeout(self.timeout_duration, cmd.output()).await??;
 
         if output.status.success() {
             let result = String::from_utf8_lossy(&output.stdout).to_string();

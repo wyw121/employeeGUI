@@ -6,6 +6,7 @@ use tauri::command;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
 use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
+use crate::infra::adb::safe_input_injector::SafeInputInjector;
 
 // 操作类型枚举
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -192,19 +193,25 @@ impl ScriptExecutor {
             .unwrap_or(1000);
 
         info!("👆 点击坐标: ({}, {})", x, y);
+        // 优先通过统一注入器执行（injector-v1.0），失败则回退到原始命令
+    let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+        if let Err(e) = injector.tap(&self.device_id, x as u32, y as u32, None).await {
+            warn!("🪄 injector-v1.0: 注入器点击失败，将回退旧命令。错误: {}", e);
+            let output = Command::new(&self.adb_path)
+                .args(&[
+                    "-s", &self.device_id,
+                    "shell", "input", "tap",
+                    &x.to_string(), &y.to_string()
+                ])
+                .output()
+                .context("执行点击命令失败")?;
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
-                "-s", &self.device_id,
-                "shell", "input", "tap",
-                &x.to_string(), &y.to_string()
-            ])
-            .output()
-            .context("执行点击命令失败")?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("点击命令执行失败: {}", error_msg));
+            if !output.status.success() {
+                let error_msg = String::from_utf8_lossy(&output.stderr);
+                return Err(anyhow::anyhow!("点击命令执行失败: {}", error_msg));
+            }
+        } else {
+            info!("🪄 injector-v1.0: tap 已通过统一注入器执行");
         }
 
         // 等待指定时间
@@ -230,7 +237,7 @@ impl ScriptExecutor {
         info!("👋 滑动: ({}, {}) -> ({}, {}), 时长: {}ms", start_x, start_y, end_x, end_y, duration);
 
         // 优先通过统一注入器执行（injector-v1.0），失败则回退到原始命令
-        let injector = AdbShellInputInjector::new(self.adb_path.clone());
+    let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
         if let Err(e) = injector.swipe(
             &self.device_id,
             start_x as u32,
@@ -278,40 +285,53 @@ impl ScriptExecutor {
         // 如果需要先清空
         if clear_first {
             info!("🧹 先清空当前输入");
+            let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+            // 先尝试注入器发送全选
+            let ctrl_a_ok = match injector.keyevent_symbolic(&self.device_id, "KEYCODE_CTRL_A").await {
+                Ok(()) => { info!("🪄 injector-v1.0: KEYCODE_CTRL_A 已通过统一注入器执行"); true },
+                Err(e) => {
+                    warn!("🪄 injector-v1.0: 注入器 KEYCODE_CTRL_A 失败，将回退旧命令。错误: {}", e);
+                    let out = Command::new(&self.adb_path)
+                        .args(&["-s", &self.device_id, "shell", "input", "keyevent", "KEYCODE_CTRL_A"])
+                        .output()
+                        .context("清空输入失败")?;
+                    out.status.success()
+                }
+            };
+            if ctrl_a_ok { sleep(Duration::from_millis(200)).await; }
+
+            // 再尝试删除
+            let _ = match injector.keyevent_symbolic(&self.device_id, "KEYCODE_DEL").await {
+                Ok(()) => { info!("🪄 injector-v1.0: KEYCODE_DEL 已通过统一注入器执行"); Ok(()) },
+                Err(e) => {
+                    warn!("🪄 injector-v1.0: 注入器 KEYCODE_DEL 失败，将回退旧命令。错误: {}", e);
+                    Command::new(&self.adb_path)
+                        .args(&["-s", &self.device_id, "shell", "input", "keyevent", "KEYCODE_DEL"])
+                        .output()
+                        .context("删除文本失败").map(|_| ())
+                }
+            };
+        }
+
+        // 输入文本：优先统一注入器，失败则回退
+    let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+        if let Err(e) = injector.input_text(&self.device_id, text).await {
+            warn!("🪄 injector-v1.0: 注入器输入失败，将回退旧命令。错误: {}", e);
             let output = Command::new(&self.adb_path)
                 .args(&[
                     "-s", &self.device_id,
-                    "shell", "input", "keyevent", "KEYCODE_CTRL_A"
+                    "shell", "input", "text",
+                    text
                 ])
                 .output()
-                .context("清空输入失败")?;
+                .context("执行输入命令失败")?;
 
-            if output.status.success() {
-                sleep(Duration::from_millis(200)).await;
-                
-                Command::new(&self.adb_path)
-                    .args(&[
-                        "-s", &self.device_id,
-                        "shell", "input", "keyevent", "KEYCODE_DEL"
-                    ])
-                    .output()
-                    .context("删除文本失败")?;
+            if !output.status.success() {
+                let error_msg = String::from_utf8_lossy(&output.stderr);
+                return Err(anyhow::anyhow!("输入命令执行失败: {}", error_msg));
             }
-        }
-
-        // 输入文本
-        let output = Command::new(&self.adb_path)
-            .args(&[
-                "-s", &self.device_id,
-                "shell", "input", "text",
-                text
-            ])
-            .output()
-            .context("执行输入命令失败")?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("输入命令执行失败: {}", error_msg));
+        } else {
+            info!("🪄 injector-v1.0: text 已通过统一注入器执行");
         }
 
         Ok(())

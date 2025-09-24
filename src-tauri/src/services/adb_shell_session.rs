@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 use tracing::{debug, error, info, warn};
+use crate::infra::adb::input_helper::{input_text_injector_first};
 
 /// ADB Shell长连接会话管理器
 /// 维护到指定设备的持久shell连接，减少命令执行开销
@@ -189,26 +190,23 @@ impl AdbShellSession {
 
     // === 常用操作封装 ===
 
-    /// 点击屏幕坐标
+    /// 点击屏幕坐标（安全夹紧 + 注入器优先，失败回退原始命令）
     pub async fn tap(&self, x: i32, y: i32) -> Result<()> {
-        let command = format!("input tap {} {}", x, y);
-        self.execute_command(&command).await?;
+        super::super::infra::adb::input_helper::tap_safe_injector_first(&self.adb_path, &self.device_id, x, y, None).await?;
         info!("👆 点击坐标: ({}, {})", x, y);
         Ok(())
     }
 
-    /// 滑动操作
+    /// 滑动操作（安全夹紧 + 注入器优先，失败回退原始命令）
     pub async fn swipe(&self, x1: i32, y1: i32, x2: i32, y2: i32, duration_ms: u32) -> Result<()> {
-        let command = format!("input swipe {} {} {} {} {}", x1, y1, x2, y2, duration_ms);
-        self.execute_command(&command).await?;
+        super::super::infra::adb::input_helper::swipe_safe_injector_first(&self.adb_path, &self.device_id, x1, y1, x2, y2, duration_ms).await?;
         info!("👆 滑动: ({}, {}) -> ({}, {}), 持续: {}ms", x1, y1, x2, y2, duration_ms);
         Ok(())
     }
 
-    /// 输入文本
+    /// 输入文本（注入器优先，失败回退原始命令）
     pub async fn input_text(&self, text: &str) -> Result<()> {
-        let command = format!("input text '{}'", text);
-        self.execute_command(&command).await?;
+        input_text_injector_first(&self.adb_path, &self.device_id, text).await?;
         info!("⌨️ 输入文本: {}", text);
         Ok(())
     }

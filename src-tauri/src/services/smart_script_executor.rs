@@ -305,10 +305,10 @@ impl SmartScriptExecutor {
         let text = params["text"].as_str().unwrap_or("");
         logs.push(format!("输入文本: {}", text));
         
-        // 使用ADB Shell长连接会话执行命令
-        let session = get_device_session(&self.device_id).await?;
-        let command = format!("input text '{}'", text);
-        let output = session.execute_command(&command).await?;
+    // 使用ADB Shell长连接会话执行统一输入（注入器优先）
+    let session = get_device_session(&self.device_id).await?;
+    session.input_text(text).await?;
+    let output = "OK".to_string();
         
         logs.push(format!("命令输出: {}", output));
         Ok("输入成功".to_string())
@@ -346,8 +346,8 @@ impl SmartScriptExecutor {
             ));
             
             let session = get_device_session(&self.device_id).await?;
-            let command = format!("input tap {} {}", x, y);
-            let output = session.execute_command(&command).await?;
+            session.tap(x, y).await?;
+            let output = "OK".to_string();
             
             logs.push(format!("命令输出: {}", output));
             Ok("智能点击成功".to_string())
@@ -369,6 +369,7 @@ impl SmartScriptExecutor {
         // 先尝试不同的查找方式，但无论哪种方式，最终都要执行点击
         let mut element_found = false;
         let mut find_method = String::new();
+        let mut click_coords: Option<(i32, i32)> = None;
         
         if let Some(element_text) = params.get("element_text").and_then(|v| v.as_str()) {
             if !element_text.is_empty() {
@@ -398,50 +399,64 @@ impl SmartScriptExecutor {
             }
         }
         
-        // 无论是否找到元素，如果有坐标信息，都执行点击操作
+        // 1) 优先使用外部传入的bounds
         if let Some(bounds) = params.get("bounds") {
             logs.push(format!("  📍 元素边界: {}", bounds));
-            
-            // 计算点击坐标（边界中心点）
             if let Some(bounds_obj) = bounds.as_object() {
                 let left = bounds_obj.get("left").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let top = bounds_obj.get("top").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let right = bounds_obj.get("right").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let bottom = bounds_obj.get("bottom").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                
                 let center_x = (left + right) / 2;
                 let center_y = (top + bottom) / 2;
-                
+                click_coords = Some((center_x, center_y));
                 logs.push(format!("🎯 计算中心点坐标: ({}, {})", center_x, center_y));
                 logs.push(format!("📊 原始边界: left={}, top={}, right={}, bottom={}", left, top, right, bottom));
-                
-                // 使用错误处理执行点击操作
-                let click_result = self.execute_click_with_retry(center_x, center_y, logs).await;
-                
-                match click_result {
-                    Ok(output) => {
-                        logs.push(format!("� 点击命令输出: {}", output));
-                        
-                        let result_msg = if element_found {
-                            format!("✅ 成功找到并点击元素: {} -> 坐标({}, {})", find_method, center_x, center_y)
-                        } else {
-                            format!("✅ 基于坐标点击元素: ({}, {}) (未在UI中确认元素存在)", center_x, center_y)
-                        };
-                        
-                        Ok(result_msg)
-                    }
-                    Err(e) => {
-                        logs.push(format!("❌ 点击操作失败: {}", e));
-                        Err(e)
-                    }
-                }
             } else {
                 logs.push("❌ 边界数据格式错误".to_string());
-                Err(anyhow::anyhow!("边界数据格式错误"))
+                return Err(anyhow::anyhow!("边界数据格式错误"));
             }
         } else {
+            // 2) 未提供bounds时，尝试从UI dump中解析坐标
+            let query_text = params.get("element_text").and_then(|v| v.as_str()).unwrap_or("");
+            let query_desc = params.get("content_desc").and_then(|v| v.as_str()).unwrap_or("");
+
+            if !query_text.is_empty() || !query_desc.is_empty() {
+                let needle = if !query_text.is_empty() { query_text } else { query_desc };
+                logs.push(format!("🔎 未提供bounds，尝试基于UI dump按'{}'解析坐标", needle));
+                if let Some((cx, cy)) = self.find_element_in_ui(&ui_dump, needle, logs).await? {
+                    logs.push(format!("✅ 解析到元素中心坐标: ({}, {})", cx, cy));
+                    click_coords = Some((cx, cy));
+                } else {
+                    logs.push("⚠️  在UI dump中找到元素文本但未能解析到有效坐标".to_string());
+                }
+            } else {
+                logs.push("ℹ️ 未提供bounds且未提供文本/描述用于解析坐标".to_string());
+            }
+        }
+
+        // 3) 若已获得坐标，则执行点击（带重试）
+        if let Some((center_x, center_y)) = click_coords {
+            let click_result = self.execute_click_with_retry(center_x, center_y, logs).await;
+            match click_result {
+                Ok(output) => {
+                    logs.push(format!("✅ 点击命令输出: {}", output));
+                    let result_msg = if element_found {
+                        format!("✅ 成功找到并点击元素: {} -> 坐标({}, {})", find_method, center_x, center_y)
+                    } else {
+                        format!("✅ 基于坐标点击元素: ({}, {}) (未在UI中确认元素存在)", center_x, center_y)
+                    };
+                    Ok(result_msg)
+                }
+                Err(e) => {
+                    logs.push(format!("❌ 点击操作失败: {}", e));
+                    Err(e)
+                }
+            }
+        } else {
+            // 未能取得坐标
             if element_found {
-                Ok(format!("✅ 找到元素但无坐标信息: {}", find_method))
+                Ok(format!("✅ 找到元素但无法定位坐标: {}", find_method))
             } else {
                 logs.push("⚠️  未提供有效的查找参数".to_string());
                 Ok("元素查找测试完成 (无查找条件)".to_string())
@@ -783,7 +798,6 @@ impl SmartScriptExecutor {
     async fn execute_click_with_retry(&self, x: i32, y: i32, logs: &mut Vec<String>) -> Result<String> {
         logs.push("👆 开始执行点击操作（带重试机制）...".to_string());
         
-        let command = format!("input tap {} {}", x, y);
         let max_retries = 2;
         let mut last_error: Option<anyhow::Error> = None;
         
@@ -793,7 +807,7 @@ impl SmartScriptExecutor {
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
             }
             
-            match self.try_click(&command).await {
+            match self.try_click_xy(x, y).await {
                 Ok(output) => {
                     // 短暂延迟确保点击生效
                     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -812,9 +826,10 @@ impl SmartScriptExecutor {
     }
 
     /// 尝试执行点击
-    async fn try_click(&self, command: &str) -> Result<String> {
+    async fn try_click_xy(&self, x: i32, y: i32) -> Result<String> {
         let session = get_device_session(&self.device_id).await?;
-        session.execute_command(command).await
+        session.tap(x, y).await?;
+        Ok("OK".to_string())
     }
 
     /// 获取错误处理统计信息
@@ -1272,7 +1287,32 @@ pub async fn execute_smart_automation_script(
     config: Option<SmartExecutorConfig>,
 ) -> Result<SmartExecutionResult, String> {
     info!("🚀 收到智能脚本批量执行请求: 设备 {}, {} 个步骤", device_id, steps.len());
-    
+    // 特性开关：当 USE_NEW_BACKEND=1 时，走新后端管线（灰度切换）
+    if std::env::var("USE_NEW_BACKEND").ok().as_deref() == Some("1") {
+        info!("🧪 开启新后端灰度 (USE_NEW_BACKEND=1)，进入 v2 管线...");
+        let adb_path = crate::utils::adb_utils::get_adb_path();
+        match crate::new_backend::pipeline::run_v2_compat(&steps, &device_id, &adb_path).await {
+            Ok(()) => {
+                let result = SmartExecutionResult {
+                    success: true,
+                    total_steps: steps.len() as u32,
+                    executed_steps: steps.len() as u32,
+                    failed_steps: 0,
+                    skipped_steps: 0,
+                    duration_ms: 0,
+                    logs: vec!["v2 pipeline 执行完成".to_string()],
+                    final_page_state: None,
+                    extracted_data: HashMap::new(),
+                    message: "v2 pipeline 执行成功".to_string(),
+                };
+                return Ok(result);
+            }
+            Err(e) => {
+                error!("❌ v2 pipeline 执行失败：{}，回退到旧执行器", e);
+            }
+        }
+    }
+
     let executor = SmartScriptExecutor::new(device_id.clone());
     
     match executor.execute_smart_script(steps, config).await {

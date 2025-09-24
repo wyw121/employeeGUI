@@ -2,16 +2,17 @@ import type { MatchCriteria } from './types';
 
 /**
  * 根据匹配条件生成简短的步骤标题
- * 优先级：text > resource-id(末段) > class(末段) > package(末段)
+ * 优先级：text > content-desc > resource-id(末段) > class(末段) > package(末段)
  * 前缀：默认使用“点击”语义，便于与常见交互一致；具体动作仍以步骤类型为准
  */
 export function buildShortTitleFromCriteria(criteria: MatchCriteria): string {
   const v = criteria.values || {};
   const text = v['text']?.trim();
+  const desc = v['content-desc']?.trim();
   const rid = v['resource-id']?.split('/').pop()?.trim();
   const cls = v['class']?.split('.').pop()?.trim();
   const pkg = v['package']?.split('.').pop()?.trim();
-  const main = text || rid || cls || pkg;
+  const main = text || desc || rid || cls || pkg;
   if (!main) return '查找元素';
   // 对文字较长时截断，避免卡片过长
   const trimmed = main.length > 24 ? main.slice(0, 24) + '…' : main;

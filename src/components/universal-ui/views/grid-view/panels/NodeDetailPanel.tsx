@@ -3,10 +3,10 @@ import styles from "../GridElementView.module.css";
 import { UiNode } from "../types";
 import { NodeDetail } from "../NodeDetail";
 import { MatchPresetsRow } from './node-detail/MatchPresetsRow';
-import { MatchingStrategySelector } from './node-detail/MatchingStrategySelector';
 import { SelectedFieldsChips, SelectedFieldsTable, NodeDetailSetElementButton, type CompleteStepCriteria } from './node-detail';
 import type { MatchCriteria, MatchResultSummary } from './node-detail/types';
-import { inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes } from './node-detail';
+import { inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes, PRESET_FIELDS } from './node-detail';
+import { loadLatestMatching } from '../../grid-view/matchingCache';
 import { useAdb } from '../../../../../application/hooks/useAdb';
 
 interface NodeDetailPanelProps {
@@ -37,6 +37,31 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   useEffect(() => { onStrategyChanged?.(strategy); }, [strategy]);
   useEffect(() => { onFieldsChanged?.(selectedFields); }, [selectedFields]);
 
+  // 当节点（来自节点树或屏幕预览）变化时，自动将“已选字段”的值回填为该节点的默认值
+  useEffect(() => {
+    if (!node) return;
+    if (selectedFields.length === 0) {
+      // 首次选择（或无字段已选）时：优先恢复缓存的策略/字段；否则默认使用 standard 预设
+      const cached = loadLatestMatching();
+      if (cached && Array.isArray(cached.fields) && cached.fields.length > 0) {
+        setStrategy(cached.strategy as any);
+        setSelectedFields(cached.fields);
+        setValues(buildDefaultValues(node, cached.fields));
+        onStrategyChanged?.(cached.strategy as any);
+        onFieldsChanged?.(cached.fields);
+      } else {
+        const fields = PRESET_FIELDS.standard;
+        setStrategy('standard');
+        setSelectedFields(fields);
+        setValues(buildDefaultValues(node, fields));
+        onStrategyChanged?.('standard');
+        onFieldsChanged?.(fields);
+      }
+      return;
+    }
+    setValues(buildDefaultValues(node, selectedFields));
+  }, [node]);
+
   const canSend = useMemo(() => !!(node && selectedDevice && selectedFields.length > 0), [node, selectedDevice, selectedFields]);
 
   const toggleField = (f: string) => {
@@ -44,7 +69,10 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
     setSelectedFields(prev => {
       const next = removing ? prev.filter(x => x !== f) : [...prev, f];
       const inferred = inferStrategyFromFields(next);
-      setStrategy(inferred);
+      // 当存在包含/排除条件时，无论字段集合是否与预设一致，都应视为自定义
+      const hasTweaks = Object.keys(includes).some(k => (includes[k] || []).length > 0) ||
+                        Object.keys(excludes).some(k => (excludes[k] || []).length > 0);
+      setStrategy(hasTweaks ? 'custom' : inferred);
       return next;
     });
     setValues(prevVals => {
@@ -142,8 +170,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
           </div>
         </div>
 
-  <MatchPresetsRow node={node} onApply={applyPreset} />
-  <MatchingStrategySelector value={strategy} onChange={setStrategy} />
+  <MatchPresetsRow node={node} onApply={applyPreset} activeStrategy={strategy} />
 
         <div className={styles.section}>
           <SelectedFieldsChips
@@ -155,11 +182,23 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
             selected={selectedFields}
             values={values}
             onToggle={toggleField}
-            onChangeValue={(field, v) => setValues(prev => ({ ...prev, [field]: v }))}
+            onChangeValue={(field, v) => {
+              setValues(prev => ({ ...prev, [field]: v }));
+              // 任意值编辑都视为自定义
+              setStrategy('custom');
+            }}
             includes={includes}
-            onChangeIncludes={(field, next) => setIncludes(prev => ({ ...prev, [field]: next }))}
+            onChangeIncludes={(field, next) => {
+              setIncludes(prev => ({ ...prev, [field]: next }));
+              // 任意包含条件变化都意味着偏离预设，切换为自定义
+              setStrategy('custom');
+            }}
             excludes={excludes}
-            onChangeExcludes={(field, next) => setExcludes(prev => ({ ...prev, [field]: next }))}
+            onChangeExcludes={(field, next) => {
+              setExcludes(prev => ({ ...prev, [field]: next }));
+              // 任意排除条件变化都意味着偏离预设，切换为自定义
+              setStrategy('custom');
+            }}
           />
         </div>
 

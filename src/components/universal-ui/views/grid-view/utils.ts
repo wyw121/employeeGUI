@@ -270,3 +270,57 @@ export function findNearestClickableAncestor(n: UiNode | null | undefined): UiNo
   }
   return null;
 }
+
+// 🆕 根据 NodeLocator 的属性从候选集中挑选最匹配的节点
+import type { NodeLocator } from '../../../../domain/inspector/entities/NodeLocator';
+export function pickByAttributes(candidates: UiNode[] | null | undefined, locator?: NodeLocator | null): UiNode | null {
+  if (!candidates || candidates.length === 0 || !locator) return null;
+  const attrs = locator.attributes || {} as any;
+  const wantedBounds = locator.bounds;
+  const scoreNode = (n: UiNode): number => {
+    let s = 0;
+    // resource-id 严格优先：完全匹配加高分；后缀匹配次之
+    const rid = attrs.resourceId?.trim();
+    const nid = (n.attrs['resource-id'] || '').trim();
+    if (rid) {
+      if (nid === rid) s += 100;
+      else if (nid.endsWith(rid) || nid.split('/').pop() === rid) s += 70;
+    }
+    // text
+    const t = attrs.text?.trim();
+    const nt = (n.attrs['text'] || '').trim();
+    if (t) {
+      if (nt === t) s += 40;
+      else if (nt.includes(t)) s += 20;
+    }
+    // content-desc
+    const cd = attrs.contentDesc?.trim();
+    const ncd = (n.attrs['content-desc'] || '').trim();
+    if (cd) {
+      if (ncd === cd) s += 30;
+      else if (ncd.includes(cd)) s += 15;
+    }
+    // className
+    const cls = attrs.className?.trim();
+    const ncls = (n.attrs['class'] || '').trim();
+    if (cls) {
+      if (ncls === cls) s += 25;
+      else if (ncls.endsWith(cls) || ncls.split('.').pop() === cls) s += 10;
+    }
+    // bounds 精确匹配
+    if (wantedBounds) {
+      if ((n.attrs['bounds'] || '') === wantedBounds) s += 60;
+    }
+    return s;
+  };
+  let best: UiNode | null = null;
+  let bestScore = -1;
+  for (const n of candidates) {
+    const sc = scoreNode(n);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = n;
+    }
+  }
+  return bestScore > 0 ? best : null;
+}

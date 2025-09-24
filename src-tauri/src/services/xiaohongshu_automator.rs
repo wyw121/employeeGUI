@@ -4,6 +4,8 @@ use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
 use crate::utils::adb_utils::get_adb_path;
+use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
+use crate::infra::adb::safe_input_injector::SafeInputInjector;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -1785,8 +1787,8 @@ impl XiaohongshuAutomator {
             .join("\n");
         
         // 计算简单hash
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
         
         let mut hasher = DefaultHasher::new();
         key_content.hash(&mut hasher);
@@ -1798,16 +1800,25 @@ impl XiaohongshuAutomator {
 
     /// 返回主页
     async fn return_to_home(&self) -> Result<()> {
-        // 点击返回按钮或按Home键
-        let _output = self.execute_adb_command(&[
-                "-s",
-                &self.device_id,
-                "shell",
-                "input",
-                "keyevent",
-                "KEYCODE_HOME",
-            ])
-            .context("返回主页失败")?;
+        // 优先通过统一注入器发送 HOME，失败回退旧命令
+        let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+        match injector.keyevent_symbolic(&self.device_id, "KEYCODE_HOME").await {
+            Ok(()) => {
+                info!("🪄 injector-v1.0: KEYCODE_HOME 已通过统一注入器执行");
+            }
+            Err(e) => {
+                warn!("🪄 injector-v1.0: 注入器 KEYCODE_HOME 失败，将回退旧命令。错误: {}", e);
+                let _output = self.execute_adb_command(&[
+                    "-s",
+                    &self.device_id,
+                    "shell",
+                    "input",
+                    "keyevent",
+                    "KEYCODE_HOME",
+                ])
+                .context("返回主页失败")?;
+            }
+        }
 
         Ok(())
     }

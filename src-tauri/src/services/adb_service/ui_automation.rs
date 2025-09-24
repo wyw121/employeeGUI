@@ -1,4 +1,6 @@
 use super::core::AdbService;
+use crate::infra::adb::input_helper::{tap_safe_injector_first, swipe_safe_injector_first, input_text_injector_first};
+use crate::utils::adb_utils::get_adb_path;
 
 impl AdbService {
     /// 获取设备UI层次结构（XML格式）
@@ -25,20 +27,23 @@ impl AdbService {
 
     /// 点击屏幕坐标
     pub async fn tap_screen(&self, device_id: &str, x: i32, y: i32) -> Result<String, Box<dyn std::error::Error>> {
-        let command = format!("shell input tap {} {}", x, y);
-        self.execute_adb_command(device_id, &command).await
+        let adb_path = get_adb_path();
+        tap_safe_injector_first(&adb_path, device_id, x, y, None).await?;
+        Ok("OK".to_string())
     }
 
     /// 长按屏幕坐标
     pub async fn long_press(&self, device_id: &str, x: i32, y: i32, duration_ms: u32) -> Result<String, Box<dyn std::error::Error>> {
-        let command = format!("shell input swipe {} {} {} {} {}", x, y, x, y, duration_ms);
-        self.execute_adb_command(device_id, &command).await
+        let adb_path = get_adb_path();
+        swipe_safe_injector_first(&adb_path, device_id, x, y, x, y, duration_ms).await?;
+        Ok("OK".to_string())
     }
 
     /// 输入文本
     pub async fn input_text(&self, device_id: &str, text: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let command = format!("shell input text \"{}\"", text);
-        self.execute_adb_command(device_id, &command).await
+        let adb_path = get_adb_path();
+        input_text_injector_first(&adb_path, device_id, text).await?;
+        Ok("OK".to_string())
     }
 
     /// 按键事件
@@ -49,7 +54,8 @@ impl AdbService {
 
     /// 滑动屏幕
     pub async fn swipe_screen(&self, device_id: &str, x1: i32, y1: i32, x2: i32, y2: i32, duration_ms: u32) -> Result<String, Box<dyn std::error::Error>> {
-        let command = format!("shell input swipe {} {} {} {} {}", x1, y1, x2, y2, duration_ms);
-        self.execute_adb_command(device_id, &command).await
+        let adb_path = get_adb_path();
+        swipe_safe_injector_first(&adb_path, device_id, x1, y1, x2, y2, duration_ms).await?;
+        Ok("OK".to_string())
     }
 }

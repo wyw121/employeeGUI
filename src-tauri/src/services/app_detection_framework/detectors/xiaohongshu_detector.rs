@@ -156,10 +156,7 @@ impl XiaohongshuDetector {
             ];
             
             for (x, y) in allow_coordinates {
-                if let Ok(_) = self.base.shell_session
-                    .execute_command(&format!("input tap {} {}", x, y))
-                    .await 
-                {
+                if let Ok(_) = self.base.shell_session.tap(x, y).await {
                     info!("✅ 已点击允许按钮坐标: ({}, {})", x, y);
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     return Ok(true);

@@ -343,22 +343,34 @@ impl VcfImporterOptimized {
                 "am start -n com.android.contacts/.activities.PeopleActivity",
                 "启动联系人应用",
             ),
-            ("input tap 49 98", "点击抽屉菜单"),
-            ("input tap 280 210", "点击设置"),
-            ("input tap 960 817", "点击导入"),
-            ("input tap 959 509", "点击VCF文件选项"),
+            ("TAP 49 98", "点击抽屉菜单"),
+            ("TAP 280 210", "点击设置"),
+            ("TAP 960 817", "点击导入"),
+            ("TAP 959 509", "点击VCF文件选项"),
         ];
 
         for (i, (cmd, desc)) in navigation_steps.iter().enumerate() {
             info!("   {}. {}", i + 1, desc);
-            let args: Vec<&str> = cmd.split_whitespace().collect();
-            let mut full_args = vec!["-s", &self.device_id, "shell"];
-            full_args.extend(args.iter());
-            let output = self.execute_adb_command(&full_args)
-                .context("ADB命令执行失败")?;
+            if cmd.starts_with("TAP ") {
+                let parts: Vec<&str> = cmd.split_whitespace().collect();
+                if parts.len() == 3 {
+                    let x: i32 = parts[1].parse().unwrap_or(0);
+                    let y: i32 = parts[2].parse().unwrap_or(0);
+                    let adb_path = crate::utils::adb_utils::get_adb_path();
+                    if let Err(e) = crate::infra::adb::input_helper::tap_injector_first(&adb_path, &self.device_id, x, y, None).await {
+                        warn!("步骤执行可能失败: {} (tap 失败: {})", desc, e);
+                    }
+                }
+            } else {
+                let args: Vec<&str> = cmd.split_whitespace().collect();
+                let mut full_args = vec!["-s", &self.device_id, "shell"];
+                full_args.extend(args.iter());
+                let output = self.execute_adb_command(&full_args)
+                    .context("ADB命令执行失败")?;
 
-            if !output.status.success() {
-                warn!("步骤执行可能失败: {}", desc);
+                if !output.status.success() {
+                    warn!("步骤执行可能失败: {}", desc);
+                }
             }
 
             let delay = if i < navigation_steps.len() - 1 { 2 } else { 3 };

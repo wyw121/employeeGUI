@@ -7,6 +7,7 @@ mod domain;      // expose domain DSL (actions, coords, direction)
 mod infra;       // expose infra (adb injector, device metrics provider)
 mod screenshot_service;
 mod services;
+mod new_backend; // 新后端（可灰度切换）
 mod types;
 mod utils;
 mod xml_judgment_service;

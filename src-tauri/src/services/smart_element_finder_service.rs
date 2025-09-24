@@ -410,24 +410,29 @@ impl SmartElementFinderService {
 
     /// 点击检测到的元素
     pub async fn click_detected_element(&self, device_id: &str, element: DetectedElement, click_type: &str) -> Result<ClickResult, String> {
+        use crate::infra::adb::input_helper::tap_injector_first;
+        use crate::utils::adb_utils::get_adb_path;
         let (x, y) = element.position;
-        
-        let command = match click_type {
-            "single_tap" => format!("shell input tap {} {}", x, y),
-            "double_tap" => format!("shell input tap {} {} && sleep 0.1 && input tap {} {}", x, y, x, y),
-            "long_press" => format!("shell input swipe {} {} {} {} 1000", x, y, x, y), // 长按1秒
-            _ => format!("shell input tap {} {}", x, y),
+        let adb_path = get_adb_path();
+
+        let res = match click_type {
+            "single_tap" => tap_injector_first(&adb_path, device_id, x as i32, y as i32, None).await,
+            "double_tap" => {
+                // 简单实现：两次单击，间隔 120ms
+                if let Err(e) = tap_injector_first(&adb_path, device_id, x as i32, y as i32, None).await {
+                    Err(e)
+                } else {
+                    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+                    tap_injector_first(&adb_path, device_id, x as i32, y as i32, None).await
+                }
+            }
+            "long_press" => tap_injector_first(&adb_path, device_id, x as i32, y as i32, Some(1000)).await,
+            _ => tap_injector_first(&adb_path, device_id, x as i32, y as i32, None).await,
         };
 
-        match self.adb_service.execute_adb_command(device_id, &command).await {
-            Ok(_) => Ok(ClickResult {
-                success: true,
-                message: format!("成功点击元素 '{}' 在位置 ({}, {})", element.text, x, y),
-            }),
-            Err(e) => Ok(ClickResult {
-                success: false,
-                message: format!("点击失败: {}", e),
-            }),
+        match res {
+            Ok(_) => Ok(ClickResult { success: true, message: format!("成功点击元素 '{}' 在位置 ({}, {})", element.text, x, y) }),
+            Err(e) => Ok(ClickResult { success: false, message: format!("点击失败: {}", e) }),
         }
     }
 }

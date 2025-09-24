@@ -46,6 +46,7 @@ import { XPathTemplatesPanel } from './panels/XPathTemplatesPanel';
 import { LocatorAdvisorPanel } from './panels/LocatorAdvisorPanel';
 import { PreferencesPanel } from './panels/PreferencesPanel';
 import { ScreenPreviewSetElementButton } from './panels/node-detail';
+import { loadLatestMatching, saveLatestMatching } from './matchingCache';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -147,6 +148,20 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     setFavSearch(getFavoriteSearches());
     setXpathHistory(getXPathHistory());
     setFavXPath(getFavoriteXPaths());
+  }, []);
+
+  // 恢复最近一次匹配选择（策略/字段）的缓存，避免刷新后丢失（不写回步骤，仅用于继续编辑）
+  useEffect(() => {
+    try {
+      const cached = loadLatestMatching();
+      if (cached) {
+        (window as any).__latestMatching__ = cached;
+        setCurrentStrategy(cached.strategy);
+        setCurrentFields(Array.isArray(cached.fields) ? cached.fields : []);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   // 持久化首选项
@@ -595,11 +610,15 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             onApplyToStep={onApplyCriteria as any}
             onStrategyChanged={(s) => {
               setCurrentStrategy(s);
-              onLatestMatchingChange?.({ strategy: s, fields: currentFields });
+              const payload = { strategy: s, fields: currentFields };
+              onLatestMatchingChange?.(payload);
+              saveLatestMatching(payload);
             }}
             onFieldsChanged={(fs) => {
               setCurrentFields(fs);
-              onLatestMatchingChange?.({ strategy: currentStrategy, fields: fs });
+              const payload = { strategy: currentStrategy, fields: fs };
+              onLatestMatchingChange?.(payload);
+              saveLatestMatching(payload);
             }}
           />
           <LocatorAdvisorPanel

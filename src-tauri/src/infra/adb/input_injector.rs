@@ -6,6 +6,7 @@ pub trait InputInjector: Send + Sync {
     async fn tap(&self, serial: &str, x: u32, y: u32, duration_ms: Option<u32>) -> Result<()>;
     async fn swipe(&self, serial: &str, x1: u32, y1: u32, x2: u32, y2: u32, duration_ms: u32) -> Result<()>;
     async fn keyevent(&self, serial: &str, code: i32) -> Result<()>;
+    async fn keyevent_symbolic(&self, serial: &str, code: &str) -> Result<()>;
     async fn input_text(&self, serial: &str, text: &str) -> Result<()>;
 }
 
@@ -51,6 +52,16 @@ impl InputInjector for AdbShellInputInjector {
     async fn keyevent(&self, serial: &str, code: i32) -> Result<()> {
         let mut cmd = std::process::Command::new(&self.adb_path);
         cmd.arg("-s").arg(serial).arg("shell").arg("input").arg("keyevent").arg(code.to_string());
+        #[cfg(windows)]
+        { use std::os::windows::process::CommandExt; cmd.creation_flags(0x08000000); }
+        let out = tokio::task::spawn_blocking(move || cmd.output()).await??;
+        if !out.status.success() { anyhow::bail!(String::from_utf8_lossy(&out.stderr).to_string()); }
+        Ok(())
+    }
+
+    async fn keyevent_symbolic(&self, serial: &str, code: &str) -> Result<()> {
+        let mut cmd = std::process::Command::new(&self.adb_path);
+        cmd.arg("-s").arg(serial).arg("shell").arg("input").arg("keyevent").arg(code);
         #[cfg(windows)]
         { use std::os::windows::process::CommandExt; cmd.creation_flags(0x08000000); }
         let out = tokio::task::spawn_blocking(move || cmd.output()).await??;

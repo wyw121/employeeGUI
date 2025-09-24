@@ -1,6 +1,7 @@
 // smart_script_executor_actions.rs - 智能脚本执行器的具体操作实现
 use super::*;
 use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
+use crate::infra::adb::safe_input_injector::SafeInputInjector;
 
 impl SmartScriptExecutor {
     
@@ -349,7 +350,7 @@ impl SmartScriptExecutor {
 
         info!("👋 基础滑动: ({}, {}) -> ({}, {}), 时长: {}ms", start_x, start_y, end_x, end_y, duration);
         // 灰度切换到统一注入器（injector-v1.0），失败则回退旧实现
-        let injector = AdbShellInputInjector::new(self.adb_path.clone());
+    let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
         match injector.swipe(&self.device_id, start_x as u32, start_y as u32, end_x as u32, end_y as u32, duration as u32).await {
             Ok(()) => {
                 info!("🪄 injector-v1.0: swipe 已通过统一注入器执行");
@@ -388,20 +389,10 @@ impl SmartScriptExecutor {
 
     // ==================== ADB操作辅助方法 ====================
 
-    /// ADB点击
+    /// ADB点击（安全夹紧 + 注入器优先）
     async fn adb_tap(&self, x: i32, y: i32) -> Result<()> {
-        let output = self.execute_adb_command(&[
-            "-s", &self.device_id,
-            "shell", "input", "tap",
-            &x.to_string(), &y.to_string()
-        ]).await?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("点击命令执行失败: {}", error_msg));
-        }
-
-        Ok(())
+        use crate::infra::adb::input_helper::tap_safe_injector_first;
+        tap_safe_injector_first(&self.adb_path, &self.device_id, x, y, None).await
     }
 
     /// ADB滑动
@@ -425,32 +416,53 @@ impl SmartScriptExecutor {
     /// ADB输入
     async fn adb_input(&self, text: &str, clear_first: bool) -> Result<()> {
         if clear_first {
-            // 清空当前输入
-            let _ = self.execute_adb_command(&[
-                "-s", &self.device_id,
-                "shell", "input", "keyevent", "KEYCODE_CTRL_A"
-            ]).await;
+            // 清空当前输入（注入器优先）
+            let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+            match injector.keyevent_symbolic(&self.device_id, "KEYCODE_CTRL_A").await {
+                Ok(()) => info!("🪄 injector-v1.0: KEYCODE_CTRL_A 已通过统一注入器执行"),
+                Err(e) => {
+                    warn!("🪄 injector-v1.0: 注入器 KEYCODE_CTRL_A 失败，将回退旧命令。错误: {}", e);
+                    let _ = self.execute_adb_command(&[
+                        "-s", &self.device_id,
+                        "shell", "input", "keyevent", "KEYCODE_CTRL_A"
+                    ]).await;
+                }
+            }
             sleep(Duration::from_millis(200)).await;
-            
-            let _ = self.execute_adb_command(&[
-                "-s", &self.device_id,
-                "shell", "input", "keyevent", "KEYCODE_DEL"
-            ]).await;
+            match injector.keyevent_symbolic(&self.device_id, "KEYCODE_DEL").await {
+                Ok(()) => info!("🪄 injector-v1.0: KEYCODE_DEL 已通过统一注入器执行"),
+                Err(e) => {
+                    warn!("🪄 injector-v1.0: 注入器 KEYCODE_DEL 失败，将回退旧命令。错误: {}", e);
+                    let _ = self.execute_adb_command(&[
+                        "-s", &self.device_id,
+                        "shell", "input", "keyevent", "KEYCODE_DEL"
+                    ]).await;
+                }
+            }
             sleep(Duration::from_millis(200)).await;
         }
+        // 优先统一注入器，失败回退旧命令
+    let injector = SafeInputInjector::from_env(AdbShellInputInjector::new(self.adb_path.clone()));
+        match injector.input_text(&self.device_id, text).await {
+            Ok(()) => {
+                info!("🪄 injector-v1.0: text 已通过统一注入器执行");
+                Ok(())
+            }
+            Err(e) => {
+                warn!("🪄 injector-v1.0: 注入器输入失败，将回退旧命令。错误: {}", e);
+                let output = self.execute_adb_command(&[
+                    "-s", &self.device_id,
+                    "shell", "input", "text",
+                    text
+                ]).await?;
 
-        let output = self.execute_adb_command(&[
-            "-s", &self.device_id,
-            "shell", "input", "text",
-            text
-        ]).await?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("输入命令执行失败: {}", error_msg));
+                if !output.status.success() {
+                    let error_msg = String::from_utf8_lossy(&output.stderr);
+                    return Err(anyhow::anyhow!("输入命令执行失败: {}", error_msg));
+                }
+                Ok(())
+            }
         }
-
-        Ok(())
     }
 
     // ==================== 验证系统 ====================

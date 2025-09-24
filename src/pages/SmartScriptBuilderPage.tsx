@@ -50,6 +50,8 @@ import {
 import { LaunchAppSmartComponent } from "../components/smart/LaunchAppSmartComponent";
 import { SmartNavigationModal } from "../components";
 import { DistributedScriptQualityPanel } from "../modules/distributed-script-quality/DistributedScriptQualityPanel";
+import { buildDefaultMatchingFromElement } from "../modules/grid-inspector/DefaultMatchingBuilder";
+import { saveLatestMatching } from "../components/universal-ui/views/grid-view/matchingCache";
 import { SmartPageFinderModal } from "../components/smart-page-finder";
 import { UniversalPageFinderModal } from "../components/universal-ui/UniversalPageFinderModal";
 import type { NodeLocator } from "../domain/inspector/entities/NodeLocator";
@@ -3128,6 +3130,30 @@ const SmartScriptBuilderPage: React.FC = () => {
 
             console.log("💾 已保存基础步骤参数:", basicParams);
 
+            // 🆕 基于所选元素构建默认匹配配置（前端态），以便稍后打开网格检查器能恢复预设
+            try {
+              const built = buildDefaultMatchingFromElement({
+                resource_id: (element as any).resource_id,
+                text: (element as any).text,
+                content_desc: (element as any).content_desc,
+                class_name: (element as any).class_name,
+                bounds: (element as any).bounds,
+              });
+              if (built.fields.length > 0) {
+                // 写入到表单参数（标准字段 matching）
+                form.setFieldValue('matching', {
+                  strategy: built.strategy,
+                  fields: built.fields,
+                  values: built.values,
+                  updatedAt: Date.now(),
+                });
+                // 同步到最近匹配缓存（用于 Grid Inspector 自动恢复）
+                saveLatestMatching({ strategy: built.strategy, fields: built.fields });
+              }
+            } catch (e) {
+              console.warn('构建/保存默认匹配配置失败（可忽略）:', e);
+            }
+
             // 关闭页面分析器并重置状态
             setShowPageAnalyzer(false);
             setIsQuickAnalyzer(false);
@@ -3155,6 +3181,28 @@ const SmartScriptBuilderPage: React.FC = () => {
                     // 统一写入定位器
                     ...(builtLocator ? { elementLocator: builtLocator } : {}),
                   };
+
+                  // 将匹配配置也写入步骤参数，使后续“修改参数→网格检查器”可恢复预设
+                  try {
+                    const built = buildDefaultMatchingFromElement({
+                      resource_id: (element as any).resource_id,
+                      text: (element as any).text,
+                      content_desc: (element as any).content_desc,
+                      class_name: (element as any).class_name,
+                      bounds: (element as any).bounds,
+                    });
+                    if (built.fields.length > 0) {
+                      updatedParameters.matching = {
+                        strategy: built.strategy,
+                        fields: built.fields,
+                        values: built.values,
+                        updatedAt: Date.now(),
+                      };
+                      saveLatestMatching({ strategy: built.strategy, fields: built.fields });
+                    }
+                  } catch (e) {
+                    console.warn('保存步骤匹配配置失败（可忽略）:', e);
+                  }
 
                   // 同步写入页面快照（若可用）
                   if (currentXmlContent) {

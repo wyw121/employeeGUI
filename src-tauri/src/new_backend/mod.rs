@@ -2,3 +2,4 @@
 pub mod executor;
 pub mod mapping;
 pub mod adapter;
+pub mod pipeline;

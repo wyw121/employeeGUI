@@ -3325,13 +3325,28 @@ const SmartScriptBuilderPage: React.FC = () => {
             // 🆕 保存基础元素信息到表单参数中
             console.log("✅ 保存基础元素信息");
 
+                      // 工具：清洗 content_desc，避免友好描述污染
+                      const sanitizeContentDesc = (val: any): string => {
+                        if (val == null) return '';
+                        const s = String(val).trim();
+                        if (!s) return '';
+                        // 过滤典型友好描述模式，如“未知元素（可点击）”、“按钮（可点击）”等
+                        const friendlyPatterns = [
+                          /^未知元素(（可点击）|（可滚动）|（可编辑）)?$/,
+                          /^按钮（可点击）$/,
+                          /^文本（.*）$/,
+                        ];
+                        if (friendlyPatterns.some((re) => re.test(s))) return '';
+                        return s;
+                      };
+
             // 构建基础步骤参数
             const basicParams = {
               text: element.text,
               element_text: element.text,
               element_type: element.element_type,
               resource_id: element.resource_id,
-              content_desc: element.content_desc,
+              content_desc: sanitizeContentDesc((element as any).content_desc),
               bounds: (element as any).bounds
                 ? `[${(element as any).bounds.left},${
                     (element as any).bounds.top
@@ -3339,6 +3354,7 @@ const SmartScriptBuilderPage: React.FC = () => {
                     (element as any).bounds.bottom
                   }]`
                 : undefined,
+              // 如 content_desc 被清洗为空，保留友好描述在 smartDescription
               smartDescription: (element as any).smartDescription,
               smartAnalysis: (element as any).smartAnalysis,
             };
@@ -3397,7 +3413,7 @@ const SmartScriptBuilderPage: React.FC = () => {
                     element_text: element.text,
                     element_type: element.element_type,
                     resource_id: element.resource_id,
-                    content_desc: element.content_desc,
+                    content_desc: sanitizeContentDesc((element as any).content_desc),
                     bounds: (element as any).bounds
                       ? `[${(element as any).bounds.left},${
                           (element as any).bounds.top
@@ -3550,7 +3566,19 @@ const SmartScriptBuilderPage: React.FC = () => {
             form.setFieldValue("element_text", element.text);
             form.setFieldValue("element_type", element.element_type);
             form.setFieldValue("resource_id", element.resource_id);
-            form.setFieldValue("content_desc", element.content_desc);
+            // 清洗 content_desc，避免将可视化友好描述写入真实字段
+            const sanitizeDesc = (val: any): string => {
+              if (val == null) return '';
+              const s = String(val).trim();
+              if (!s) return '';
+              const friendlyPatterns = [
+                /^未知元素(（可点击）|（可滚动）|（可编辑）)?$/,
+                /^按钮（可点击）$/,
+                /^文本（.*）$/,
+              ];
+              return friendlyPatterns.some((re) => re.test(s)) ? '' : s;
+            };
+            form.setFieldValue("content_desc", sanitizeDesc(element.content_desc));
             form.setFieldValue("bounds", element.bounds);
             form.setFieldValue(
               "smartDescription",

@@ -54,6 +54,8 @@ export interface ElementLocator {
     text?: string;
     contentDesc?: string;
     className?: string;
+    // 元素 bounds 的标准字符串表示，如 "[l,t][r,b]"
+    bounds?: string;
   };
 }
 

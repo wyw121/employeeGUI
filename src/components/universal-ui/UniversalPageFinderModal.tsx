@@ -1217,6 +1217,29 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 locatorResolve={(root, locator) => {
                   try {
                     if (!root || !locator) return null;
+                    // 0) 基于 bounds 的快速预选（如果提供）
+                    try {
+                      const anyLoc: any = locator;
+                      const boundsStr: string | undefined =
+                        (anyLoc.additionalInfo && anyLoc.additionalInfo.bounds) ||
+                        undefined;
+                      const boundsFromSelected = (anyLoc.selectedBounds &&
+                        `[${anyLoc.selectedBounds.left},${anyLoc.selectedBounds.top}][${anyLoc.selectedBounds.right},${anyLoc.selectedBounds.bottom}]`) as
+                        | string
+                        | undefined;
+                      const wantBounds = boundsFromSelected || boundsStr;
+                      if (wantBounds) {
+                        // 在整棵树中按 bounds 匹配（一次 DFS）
+                        const stk: any[] = root ? [root] : [];
+                        while (stk.length) {
+                          const n = stk.pop();
+                          if (n?.attrs?.['bounds'] === wantBounds) {
+                            return n;
+                          }
+                          for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
+                        }
+                      }
+                    } catch { /* ignore bounds preselect failure */ }
                     // 1) 绝对 XPath 优先
                     if (locator.absoluteXPath) {
                       const n = findByXPathRoot(root, locator.absoluteXPath);

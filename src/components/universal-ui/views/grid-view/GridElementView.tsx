@@ -228,7 +228,17 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         setTimeout(() => {
           try {
             const n = locatorResolve(tree, locator);
-            if (n) setSelected(n);
+            if (n) {
+              // 选中定位到的节点
+              setSelected(n);
+              // 确保右侧联动高亮与可见性（自动切换到“匹配结果”便于用户确认）
+              setPanelHighlightNode(n);
+              const prefs = loadPrefs();
+              if (prefs.autoSwitchTab !== false) {
+                setPanelActivateTab('results');
+              }
+              setPanelActivateKey((k) => k + 1);
+            }
           } catch {
             // ignore
           }

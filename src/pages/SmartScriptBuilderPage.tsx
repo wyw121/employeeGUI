@@ -65,8 +65,14 @@ import {
 import { PageAnalysisProvider } from "../application/page-analysis/PageAnalysisProvider";
 import { PageAnalysisApplicationService } from "../application/page-analysis/PageAnalysisApplicationService";
 import { PageAnalysisRepositoryFactory } from "../infrastructure/repositories/PageAnalysisRepositoryFactory";
-import { buildShortTitleFromCriteria, buildShortDescriptionFromCriteria } from "../components/universal-ui/views/grid-view/panels/node-detail/titleHelpers";
-import type { MatchCriteria as UIMatchCriteria, MatchStrategy as UIMatchStrategy } from "../components/universal-ui/views/grid-view/panels/node-detail/types";
+import {
+  buildShortTitleFromCriteria,
+  buildShortDescriptionFromCriteria,
+} from "../components/universal-ui/views/grid-view/panels/node-detail/titleHelpers";
+import type {
+  MatchCriteria as UIMatchCriteria,
+  MatchStrategy as UIMatchStrategy,
+} from "../components/universal-ui/views/grid-view/panels/node-detail/types";
 import { SmartActionType } from "../types/smartComponents";
 import type { LaunchAppComponentParams } from "../types/smartComponents";
 import type { SmartScriptStep } from "../types/smartScript";
@@ -635,7 +641,8 @@ const SmartScriptBuilderPage: React.FC = () => {
       .map((step) => {
         const p: any = step.parameters || {};
         const embedded: XmlSnapshot | undefined = p.xmlSnapshot;
-        const xmlContent: string | undefined = embedded?.xmlContent || p.xmlContent;
+        const xmlContent: string | undefined =
+          embedded?.xmlContent || p.xmlContent;
         if (!xmlContent) return null; // 没有任何可用 XML，跳过
 
         // 构建分布式需要的 StepXmlSnapshot（与自包含结构不同，这里做字段映射）
@@ -643,24 +650,31 @@ const SmartScriptBuilderPage: React.FC = () => {
           xmlContent,
           xmlHash: embedded?.xmlHash || generateXmlHash(xmlContent),
           timestamp: embedded?.timestamp || Date.now(),
-          deviceInfo: (embedded?.deviceInfo || p.deviceInfo || p.deviceId)
-            ? {
-                deviceId:
-                  embedded?.deviceInfo?.deviceId || p.deviceId || "unknown",
-                deviceName:
-                  embedded?.deviceInfo?.deviceName || p.deviceName || "Unknown Device",
-              }
-            : undefined,
-          pageInfo: (embedded?.deviceInfo || p.pageInfo)
-            ? {
-                appPackage:
-                  embedded?.deviceInfo?.appPackage || p.pageInfo?.appPackage || "com.xingin.xhs",
-                activityName:
-                  embedded?.deviceInfo?.activityName || p.pageInfo?.activityName,
-                pageTitle:
-                  embedded?.pageInfo?.pageTitle || p.pageInfo?.pageTitle,
-              }
-            : undefined,
+          deviceInfo:
+            embedded?.deviceInfo || p.deviceInfo || p.deviceId
+              ? {
+                  deviceId:
+                    embedded?.deviceInfo?.deviceId || p.deviceId || "unknown",
+                  deviceName:
+                    embedded?.deviceInfo?.deviceName ||
+                    p.deviceName ||
+                    "Unknown Device",
+                }
+              : undefined,
+          pageInfo:
+            embedded?.deviceInfo || p.pageInfo
+              ? {
+                  appPackage:
+                    embedded?.deviceInfo?.appPackage ||
+                    p.pageInfo?.appPackage ||
+                    "com.xingin.xhs",
+                  activityName:
+                    embedded?.deviceInfo?.activityName ||
+                    p.pageInfo?.activityName,
+                  pageTitle:
+                    embedded?.pageInfo?.pageTitle || p.pageInfo?.pageTitle,
+                }
+              : undefined,
         } as any;
 
         const locator = p.locator || {
@@ -823,35 +837,39 @@ const SmartScriptBuilderPage: React.FC = () => {
   };
 
   // 🆕 更新当前XML内容状态（用于自包含脚本）
-  const updateCurrentXmlContext = useCallback((
-    xmlContent: string,
-    deviceInfo?: Partial<XmlSnapshot["deviceInfo"]>,
-    pageInfo?: Partial<XmlSnapshot["pageInfo"]>
-  ) => {
-    // 🔧 防重复处理：检查内容是否真的发生了变化
-    if (currentXmlContent === xmlContent) {
-      console.log("⏸️ XML内容相同，跳过状态更新:", {
-        xmlLength: xmlContent.length
-      });
-      return;
-    }
+  const updateCurrentXmlContext = useCallback(
+    (
+      xmlContent: string,
+      deviceInfo?: Partial<XmlSnapshot["deviceInfo"]>,
+      pageInfo?: Partial<XmlSnapshot["pageInfo"]>
+    ) => {
+      // 🔧 防重复处理：检查内容是否真的发生了变化
+      if (currentXmlContent === xmlContent) {
+        console.log("⏸️ XML内容相同，跳过状态更新:", {
+          xmlLength: xmlContent.length,
+        });
+        return;
+      }
 
-    setCurrentXmlContent(xmlContent);
-    if (deviceInfo) {
-      setCurrentDeviceInfo((prev) => ({ ...prev, ...deviceInfo }));
-    }
-    if (pageInfo) {
-      setCurrentPageInfo((prev) => ({ ...prev, ...pageInfo }));
-    }
-    console.log("🔄 已更新当前XML上下文:", {
-      xmlLength: xmlContent.length,
-      deviceInfo,
-      pageInfo,
-    });
-  }, [currentXmlContent]); // 🔧 添加依赖项检查
+      setCurrentXmlContent(xmlContent);
+      if (deviceInfo) {
+        setCurrentDeviceInfo((prev) => ({ ...prev, ...deviceInfo }));
+      }
+      if (pageInfo) {
+        setCurrentPageInfo((prev) => ({ ...prev, ...pageInfo }));
+      }
+      console.log("🔄 已更新当前XML上下文:", {
+        xmlLength: xmlContent.length,
+        deviceInfo,
+        pageInfo,
+      });
+    },
+    [currentXmlContent]
+  ); // 🔧 添加依赖项检查
 
   // 🆕 当从“页面分析”预填创建新步骤时，若缺少XML但已具备匹配/定位信息，允许本次保存继续（仅一次）
-  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] = useState<boolean>(false);
+  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] =
+    useState<boolean>(false);
 
   // 🆕 从页面分析器获取当前XML内容
   const getCurrentXmlFromAnalyzer = (): string => {
@@ -867,9 +885,12 @@ const SmartScriptBuilderPage: React.FC = () => {
     if (p.xmlSnapshot && validateXmlSnapshot(p.xmlSnapshot)) return; // 已是自包含
 
     // 迁移优先级：已有 xmlSnapshot -> 参数 xmlContent -> XmlCacheManager(xmlCacheId) -> 当前上下文
-    let xmlContent: string | undefined = p.xmlSnapshot?.xmlContent || p.xmlContent;
-    let deviceInfo: Partial<XmlSnapshot['deviceInfo']> | undefined = p.xmlSnapshot?.deviceInfo;
-    let pageInfo: Partial<XmlSnapshot['pageInfo']> | undefined = p.xmlSnapshot?.pageInfo as any;
+    let xmlContent: string | undefined =
+      p.xmlSnapshot?.xmlContent || p.xmlContent;
+    let deviceInfo: Partial<XmlSnapshot["deviceInfo"]> | undefined =
+      p.xmlSnapshot?.deviceInfo;
+    let pageInfo: Partial<XmlSnapshot["pageInfo"]> | undefined = p.xmlSnapshot
+      ?.pageInfo as any;
 
     if (!xmlContent && p.xmlCacheId) {
       try {
@@ -880,17 +901,17 @@ const SmartScriptBuilderPage: React.FC = () => {
           deviceInfo = {
             deviceId: ce.deviceId,
             deviceName: ce.deviceName,
-            appPackage: ce.pageInfo?.appPackage || 'com.xingin.xhs',
-            activityName: ce.pageInfo?.activityName || 'unknown',
+            appPackage: ce.pageInfo?.appPackage || "com.xingin.xhs",
+            activityName: ce.pageInfo?.activityName || "unknown",
           };
           pageInfo = {
-            pageTitle: ce.pageInfo?.pageTitle || '未知页面',
-            pageType: ce.pageInfo?.pageType || 'unknown',
+            pageTitle: ce.pageInfo?.pageTitle || "未知页面",
+            pageType: ce.pageInfo?.pageType || "unknown",
             elementCount: ce.pageInfo?.elementCount || 0,
           };
         }
       } catch (e) {
-        console.warn('XML缓存读取失败:', e);
+        console.warn("XML缓存读取失败:", e);
       }
     }
 
@@ -905,14 +926,14 @@ const SmartScriptBuilderPage: React.FC = () => {
     const migratedSnapshot = createXmlSnapshot(
       xmlContent,
       {
-        deviceId: deviceInfo?.deviceId || p.deviceId || 'unknown',
-        deviceName: deviceInfo?.deviceName || p.deviceName || 'Unknown Device',
-        appPackage: deviceInfo?.appPackage || 'com.xingin.xhs',
-        activityName: deviceInfo?.activityName || 'unknown',
+        deviceId: deviceInfo?.deviceId || p.deviceId || "unknown",
+        deviceName: deviceInfo?.deviceName || p.deviceName || "Unknown Device",
+        appPackage: deviceInfo?.appPackage || "com.xingin.xhs",
+        activityName: deviceInfo?.activityName || "unknown",
       },
       {
-        pageTitle: pageInfo?.pageTitle || '未知页面',
-        pageType: pageInfo?.pageType || 'unknown',
+        pageTitle: pageInfo?.pageTitle || "未知页面",
+        pageType: pageInfo?.pageType || "unknown",
         elementCount: pageInfo?.elementCount || 0,
         appVersion: (pageInfo as any)?.appVersion,
       }
@@ -922,7 +943,7 @@ const SmartScriptBuilderPage: React.FC = () => {
     const builtLocator: ElementLocator | undefined = p.bounds
       ? {
           selectedBounds: p.bounds,
-          elementPath: p.xpath || p.element_path || '',
+          elementPath: p.xpath || p.element_path || "",
           confidence: p.smartAnalysis?.confidence || 0.8,
           additionalInfo: {
             xpath: p.xpath,
@@ -944,8 +965,13 @@ const SmartScriptBuilderPage: React.FC = () => {
     };
     setSteps((prev) => prev.map((s) => (s.id === step.id ? updated : s)));
     setEditingStepForParams(updated); // 同步编辑态
-    console.log('🧭 已自动迁移为自包含步骤（打开即迁移）:', step.id);
-  }, [editingStepForParams, currentXmlContent, currentDeviceInfo, currentPageInfo]);
+    console.log("🧭 已自动迁移为自包含步骤（打开即迁移）:", step.id);
+  }, [
+    editingStepForParams,
+    currentXmlContent,
+    currentDeviceInfo,
+    currentPageInfo,
+  ]);
 
   // 🆕 处理修改步骤参数
   const handleEditStepParams = (step: ExtendedSmartScriptStep) => {
@@ -998,29 +1024,47 @@ const SmartScriptBuilderPage: React.FC = () => {
       if (parameters) {
         // 优先使用自包含 xmlSnapshot；否则从当前上下文或旧字段构造最小快照
         const existing: any = (parameters as any).xmlSnapshot;
-        let effectiveXmlContent: string = existing?.xmlContent || (parameters as any).xmlContent || currentXmlContent || "";
-        let effectiveDeviceInfo: any = existing?.deviceInfo
-          || (parameters as any).deviceInfo
-          || ((parameters as any).deviceId || (parameters as any).deviceName
-                ? { deviceId: (parameters as any).deviceId, deviceName: (parameters as any).deviceName }
-                : undefined)
-          || (currentDeviceInfo?.deviceId || currentDeviceInfo?.deviceName
-                ? { deviceId: currentDeviceInfo.deviceId as string, deviceName: currentDeviceInfo.deviceName as string }
-                : undefined);
+        let effectiveXmlContent: string =
+          existing?.xmlContent ||
+          (parameters as any).xmlContent ||
+          currentXmlContent ||
+          "";
+        let effectiveDeviceInfo: any =
+          existing?.deviceInfo ||
+          (parameters as any).deviceInfo ||
+          ((parameters as any).deviceId || (parameters as any).deviceName
+            ? {
+                deviceId: (parameters as any).deviceId,
+                deviceName: (parameters as any).deviceName,
+              }
+            : undefined) ||
+          (currentDeviceInfo?.deviceId || currentDeviceInfo?.deviceName
+            ? {
+                deviceId: currentDeviceInfo.deviceId as string,
+                deviceName: currentDeviceInfo.deviceName as string,
+              }
+            : undefined);
         // 校验器仅要求存在 appName 字段，这里补齐最小信息
-        let effectivePageInfo: any = existing?.pageInfo
-          || (parameters as any).pageInfo
-          || ({
-                appName: (currentPageInfo as any)?.appName || "小红书",
-                pageTitle: currentPageInfo?.pageTitle || "未知页面",
-              } as any);
-        const effectiveTimestamp = existing?.timestamp || (parameters as any).xmlTimestamp || Date.now();
+        let effectivePageInfo: any =
+          existing?.pageInfo ||
+          (parameters as any).pageInfo ||
+          ({
+            appName: (currentPageInfo as any)?.appName || "小红书",
+            pageTitle: currentPageInfo?.pageTitle || "未知页面",
+          } as any);
+        const effectiveTimestamp =
+          existing?.timestamp || (parameters as any).xmlTimestamp || Date.now();
 
         // 🩹 兜底：如仍无 XML，则根据 xmlCacheId 从缓存加载一次
-        let xmlSource: 'existing-snapshot' | 'form-xmlContent' | 'current-context' | 'xml-cache' | 'empty' = 'empty';
-        if (existing?.xmlContent) xmlSource = 'existing-snapshot';
-        else if ((parameters as any).xmlContent) xmlSource = 'form-xmlContent';
-        else if (currentXmlContent) xmlSource = 'current-context';
+        let xmlSource:
+          | "existing-snapshot"
+          | "form-xmlContent"
+          | "current-context"
+          | "xml-cache"
+          | "empty" = "empty";
+        if (existing?.xmlContent) xmlSource = "existing-snapshot";
+        else if ((parameters as any).xmlContent) xmlSource = "form-xmlContent";
+        else if (currentXmlContent) xmlSource = "current-context";
         if (!effectiveXmlContent && (parameters as any).xmlCacheId) {
           try {
             const cm = XmlCacheManager.getInstance();
@@ -1028,23 +1072,23 @@ const SmartScriptBuilderPage: React.FC = () => {
             if (ce?.xmlContent) {
               effectiveXmlContent = ce.xmlContent;
               effectiveDeviceInfo = effectiveDeviceInfo || {
-                deviceId: ce.deviceId || 'unknown',
-                deviceName: ce.deviceName || 'Unknown Device',
+                deviceId: ce.deviceId || "unknown",
+                deviceName: ce.deviceName || "Unknown Device",
               };
               effectivePageInfo = effectivePageInfo || {
                 // XmlCacheEntry 没有 appName，这里用 appPackage 作为可读的应用标识
-                appName: ce.pageInfo?.appPackage || '小红书',
-                pageTitle: ce.pageInfo?.pageTitle || '未知页面',
+                appName: ce.pageInfo?.appPackage || "小红书",
+                pageTitle: ce.pageInfo?.pageTitle || "未知页面",
               };
-              xmlSource = 'xml-cache';
+              xmlSource = "xml-cache";
             }
           } catch (e) {
-            console.warn('XML缓存兜底加载失败:', e);
+            console.warn("XML缓存兜底加载失败:", e);
           }
         }
 
         // 结构化日志便于排查
-        console.log('🧩 XML预校验上下文:', {
+        console.log("🧩 XML预校验上下文:", {
           stepId,
           xmlSource,
           hasExistingSnapshot: !!existing,
@@ -1069,7 +1113,8 @@ const SmartScriptBuilderPage: React.FC = () => {
 
         if (!validation.isValid && validation.severity === "critical") {
           // 关键问题：优先判断是否完全缺少 XML 内容；若缺失则直接自动进入修复流程，避免多余确认弹窗
-          const missingXml = !effectiveXmlContent || effectiveXmlContent.length < 100;
+          const missingXml =
+            !effectiveXmlContent || effectiveXmlContent.length < 100;
           const tips = validation.issues
             .map(
               (i) =>
@@ -1080,7 +1125,11 @@ const SmartScriptBuilderPage: React.FC = () => {
             .join("\n");
 
           const triggerAutoFix = () => {
-            console.log('🛠️ 触发自动修复：打开快照采集器', { stepId, xmlSource, missingXml });
+            console.log("🛠️ 触发自动修复：打开快照采集器", {
+              stepId,
+              xmlSource,
+              missingXml,
+            });
             setSnapshotFixMode({ enabled: true, forStepId: stepId });
             setPendingAutoResave(true);
             setIsQuickAnalyzer(false);
@@ -1093,13 +1142,17 @@ const SmartScriptBuilderPage: React.FC = () => {
             // 完全缺失 XML：若来自“页面分析”预填路径并且具备匹配/定位信息，则放行一次保存以满足“先建卡片再修快照”的期望
             const hasLocatorOrMatching = Boolean(
               (parameters as any)?.elementLocator ||
-              (parameters as any)?.matching ||
-              (parameters as any)?.bounds ||
-              (parameters as any)?.xpath
+                (parameters as any)?.matching ||
+                (parameters as any)?.bounds ||
+                (parameters as any)?.xpath
             );
             if (allowSaveWithoutXmlOnce && hasLocatorOrMatching) {
-              console.warn("⚠️ 缺少XML，但已启用一次性放行保存；建议随后通过‘页面分析’补采快照");
-              message.warning("本次未包含页面快照，建议稍后在分析器中采集并回填");
+              console.warn(
+                "⚠️ 缺少XML，但已启用一次性放行保存；建议随后通过‘页面分析’补采快照"
+              );
+              message.warning(
+                "本次未包含页面快照，建议稍后在分析器中采集并回填"
+              );
               // 仅放行一次
               setAllowSaveWithoutXmlOnce(false);
               // 继续执行保存流程（不触发自动修复）
@@ -1116,11 +1169,19 @@ const SmartScriptBuilderPage: React.FC = () => {
               content: (
                 <div>
                   <pre
-                    style={{ whiteSpace: "pre-wrap", fontSize: 12, marginBottom: 8 }}
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      fontSize: 12,
+                      marginBottom: 8,
+                    }}
                   >
                     {tips}
                   </pre>
-                  <Alert type="info" showIcon message="可选择一键重新采集当前页面快照并自动回填（推荐）" />
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="可选择一键重新采集当前页面快照并自动回填（推荐）"
+                  />
                 </div>
               ),
               okText: "一键修复并重试保存",
@@ -1183,14 +1244,15 @@ const SmartScriptBuilderPage: React.FC = () => {
               xmlSnapshot: createXmlSnapshot(
                 cacheEntry.xmlContent,
                 {
-                  deviceId: cacheEntry.deviceId || 'unknown',
-                  deviceName: cacheEntry.deviceName || 'unknown',
-                  appPackage: cacheEntry.pageInfo?.appPackage || 'com.xingin.xhs',
-                  activityName: cacheEntry.pageInfo?.activityName || 'unknown',
+                  deviceId: cacheEntry.deviceId || "unknown",
+                  deviceName: cacheEntry.deviceName || "unknown",
+                  appPackage:
+                    cacheEntry.pageInfo?.appPackage || "com.xingin.xhs",
+                  activityName: cacheEntry.pageInfo?.activityName || "unknown",
                 },
                 {
-                  pageTitle: cacheEntry.pageInfo?.pageTitle || '未知页面',
-                  pageType: cacheEntry.pageInfo?.pageType || 'unknown',
+                  pageTitle: cacheEntry.pageInfo?.pageTitle || "未知页面",
+                  pageType: cacheEntry.pageInfo?.pageType || "unknown",
                   elementCount: cacheEntry.pageInfo?.elementCount || 0,
                 }
               ),
@@ -1212,17 +1274,27 @@ const SmartScriptBuilderPage: React.FC = () => {
 
         try {
           // 若已有自包含快照则直接复用
-          let xmlSnapshot: XmlSnapshot | undefined = (newStep.parameters as any).xmlSnapshot as XmlSnapshot | undefined;
+          let xmlSnapshot: XmlSnapshot | undefined = (newStep.parameters as any)
+            .xmlSnapshot as XmlSnapshot | undefined;
 
           // 否则从现有上下文或旧字段创建
           if (!xmlSnapshot) {
-            const xmlContent = (newStep.parameters as any).xmlContent || currentXmlContent;
+            const xmlContent =
+              (newStep.parameters as any).xmlContent || currentXmlContent;
             if (xmlContent) {
               xmlSnapshot = createXmlSnapshot(
                 xmlContent,
                 {
-                  deviceId: (newStep.parameters as any).deviceId || currentDeviceInfo.deviceId || currentDeviceId || "unknown",
-                  deviceName: (newStep.parameters as any).deviceName || currentDeviceInfo.deviceName || devices.find((d) => d.id === currentDeviceId)?.name || "unknown",
+                  deviceId:
+                    (newStep.parameters as any).deviceId ||
+                    currentDeviceInfo.deviceId ||
+                    currentDeviceId ||
+                    "unknown",
+                  deviceName:
+                    (newStep.parameters as any).deviceName ||
+                    currentDeviceInfo.deviceName ||
+                    devices.find((d) => d.id === currentDeviceId)?.name ||
+                    "unknown",
                   appPackage: currentDeviceInfo.appPackage || "com.xingin.xhs",
                   activityName: currentDeviceInfo.activityName || "unknown",
                 },
@@ -1708,32 +1780,40 @@ const SmartScriptBuilderPage: React.FC = () => {
 
     const enabledSteps = steps.filter((s) => s.enabled);
     // 后端不识别 smart_scroll，这里统一映射为 swipe；并为 tap 缺省坐标兜底
-    const normalizeStepForBackend = (step: ExtendedSmartScriptStep): ExtendedSmartScriptStep => {
+    const normalizeStepForBackend = (
+      step: ExtendedSmartScriptStep
+    ): ExtendedSmartScriptStep => {
       try {
-        if (String(step.step_type) === 'smart_scroll') {
+        if (String(step.step_type) === "smart_scroll") {
           const p: any = step.parameters || {};
-          const direction = p.direction || 'down';
+          const direction = p.direction || "down";
           const distance = Number(p.distance ?? 600);
           const speed = Number(p.speed_ms ?? 300);
           const screen = { width: 1080, height: 1920 };
           const cx = Math.floor(screen.width / 2);
           const cy = Math.floor(screen.height / 2);
-          const delta = Math.max(100, Math.min(distance, Math.floor(screen.height * 0.8)));
-          let start_x = cx, start_y = cy, end_x = cx, end_y = cy;
+          const delta = Math.max(
+            100,
+            Math.min(distance, Math.floor(screen.height * 0.8))
+          );
+          let start_x = cx,
+            start_y = cy,
+            end_x = cx,
+            end_y = cy;
           switch (direction) {
-            case 'up':
+            case "up":
               start_y = cy - Math.floor(delta / 2);
               end_y = cy + Math.floor(delta / 2);
               break;
-            case 'down':
+            case "down":
               start_y = cy + Math.floor(delta / 2);
               end_y = cy - Math.floor(delta / 2);
               break;
-            case 'left':
+            case "left":
               start_x = cx - Math.floor(delta / 2);
               end_x = cx + Math.floor(delta / 2);
               break;
-            case 'right':
+            case "right":
               start_x = cx + Math.floor(delta / 2);
               end_x = cx - Math.floor(delta / 2);
               break;
@@ -1744,20 +1824,24 @@ const SmartScriptBuilderPage: React.FC = () => {
 
           return {
             ...step,
-            step_type: 'swipe' as any,
-            name: step.name || '滑动',
-            description: step.description || `标准化滚动映射为滑动(${direction})`,
+            step_type: "swipe" as any,
+            name: step.name || "滑动",
+            description:
+              step.description || `标准化滚动映射为滑动(${direction})`,
             parameters: {
               ...p,
-              start_x, start_y, end_x, end_y,
+              start_x,
+              start_y,
+              end_x,
+              end_y,
               duration: speed > 0 ? speed : 300,
             },
           } as ExtendedSmartScriptStep;
         }
 
-        if (String(step.step_type) === 'tap') {
+        if (String(step.step_type) === "tap") {
           const p: any = step.parameters || {};
-          if ((p.x === undefined || p.y === undefined)) {
+          if (p.x === undefined || p.y === undefined) {
             const screen = { width: 1080, height: 1920 };
             return {
               ...step,
@@ -1771,7 +1855,7 @@ const SmartScriptBuilderPage: React.FC = () => {
           }
         }
       } catch (e) {
-        console.warn('标准化步骤失败（执行前）：', e);
+        console.warn("标准化步骤失败（执行前）：", e);
       }
       return step;
     };
@@ -2173,42 +2257,55 @@ const SmartScriptBuilderPage: React.FC = () => {
                 const ensureStep = (s: any, idx: number) => {
                   const step = { ...(s || {}) } as ExtendedSmartScriptStep;
                   if (!step.id) step.id = `step_${now + idx}_scroll`;
-                  if (!step.step_type) step.step_type = 'smart_scroll';
-                  if (!step.parameters) step.parameters = { direction: 'down', distance: 600, speed_ms: 300 } as any;
+                  if (!step.step_type) step.step_type = "smart_scroll";
+                  if (!step.parameters)
+                    step.parameters = {
+                      direction: "down",
+                      distance: 600,
+                      speed_ms: 300,
+                    } as any;
                   step.order = baseOrder + idx + 1;
                   return step;
                 };
-                const list = Array.isArray(tpl) ? tpl.map(ensureStep) : [ensureStep(tpl, 0)];
+                const list = Array.isArray(tpl)
+                  ? tpl.map(ensureStep)
+                  : [ensureStep(tpl, 0)];
                 setSteps((prev) => [...prev, ...list]);
                 if (list.length === 1) {
-                  const dir = (list[0].parameters as any)?.direction || 'down';
+                  const dir = (list[0].parameters as any)?.direction || "down";
                   message.success(`已添加屏幕交互步骤：智能滚动（${dir}）`);
                 } else {
                   message.success(`已添加屏幕交互步骤 ${list.length} 个`);
                 }
               }}
-                onCreateTapAction={(tpl: any | any[]) => {
-                  const baseOrder = steps.length;
-                  const now = Date.now();
-                  const ensureStep = (s: any, idx: number) => {
-                    const step = { ...(s || {}) } as ExtendedSmartScriptStep;
-                    if (!step.id) step.id = `step_${now + idx}_tap`;
-                    if (!step.step_type) step.step_type = 'tap';
-                    if (!step.parameters) step.parameters = { position: 'center' } as any;
-                    step.order = baseOrder + idx + 1;
-                    return step;
-                  };
-                  const list = Array.isArray(tpl) ? tpl.map(ensureStep) : [ensureStep(tpl, 0)];
-                  setSteps((prev) => [...prev, ...list]);
-                  if (list.length === 1) {
-                    const p: any = list[0].parameters || {};
-                    const label = p.duration_ms ? `长按` : `轻点`;
-                    const pos = p.position === 'absolute' && p.x !== undefined ? `(${p.x}, ${p.y})` : '中心';
-                    message.success(`已添加屏幕交互步骤：${label} ${pos}`);
-                  } else {
-                    message.success(`已添加轻点步骤 ${list.length} 个`);
-                  }
-                }}
+              onCreateTapAction={(tpl: any | any[]) => {
+                const baseOrder = steps.length;
+                const now = Date.now();
+                const ensureStep = (s: any, idx: number) => {
+                  const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+                  if (!step.id) step.id = `step_${now + idx}_tap`;
+                  if (!step.step_type) step.step_type = "tap";
+                  if (!step.parameters)
+                    step.parameters = { position: "center" } as any;
+                  step.order = baseOrder + idx + 1;
+                  return step;
+                };
+                const list = Array.isArray(tpl)
+                  ? tpl.map(ensureStep)
+                  : [ensureStep(tpl, 0)];
+                setSteps((prev) => [...prev, ...list]);
+                if (list.length === 1) {
+                  const p: any = list[0].parameters || {};
+                  const label = p.duration_ms ? `长按` : `轻点`;
+                  const pos =
+                    p.position === "absolute" && p.x !== undefined
+                      ? `(${p.x}, ${p.y})`
+                      : "中心";
+                  message.success(`已添加屏幕交互步骤：${label} ${pos}`);
+                } else {
+                  message.success(`已添加轻点步骤 ${list.length} 个`);
+                }
+              }}
             />
           </div>
         </Col>
@@ -2777,7 +2874,7 @@ const SmartScriptBuilderPage: React.FC = () => {
         onSnapshotUpdated={(snapshot) => {
           try {
             // 表单即时回填（无需等待用户点击“应用到步骤”）
-            form.setFieldValue('xmlSnapshot', snapshot);
+            form.setFieldValue("xmlSnapshot", snapshot);
             // 同步当前上下文（便于后续定位器/策略生成）
             updateCurrentXmlContext(
               snapshot.xmlContent,
@@ -2789,39 +2886,48 @@ const SmartScriptBuilderPage: React.FC = () => {
               // 不立即触发保存，这里仅确保数据到位；真正触发在 onSnapshotCaptured 或用户保存
             }
           } catch (e) {
-            console.warn('onSnapshotUpdated 处理失败（可忽略）:', e);
+            console.warn("onSnapshotUpdated 处理失败（可忽略）:", e);
           }
         }}
         // 🆕 从步骤XML源加载 - 优先使用步骤保存的XML快照
-        loadFromStepXml={useMemo(() => 
-          editingStepForParams
-            ? {
-                stepId: editingStepForParams.id,
-                xmlCacheId: editingStepForParams.parameters?.xmlCacheId,
-                // 🆕 优先使用新的自包含XML快照
-                xmlContent:
-                  editingStepForParams.parameters?.xmlSnapshot?.xmlContent ||
-                  editingStepForParams.parameters?.xmlContent,
-                deviceId:
-                  editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
-                    ?.deviceId || editingStepForParams.parameters?.deviceId,
-                deviceName:
-                  editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
-                    ?.deviceName || editingStepForParams.parameters?.deviceName,
-              }
-            : undefined,
-          [editingStepForParams?.id, 
-           editingStepForParams?.parameters?.xmlSnapshot?.xmlContent,
-           editingStepForParams?.parameters?.xmlContent,
-           editingStepForParams?.parameters?.xmlCacheId]
+        loadFromStepXml={useMemo(
+          () =>
+            editingStepForParams
+              ? {
+                  stepId: editingStepForParams.id,
+                  xmlCacheId: editingStepForParams.parameters?.xmlCacheId,
+                  // 🆕 优先使用新的自包含XML快照
+                  xmlContent:
+                    editingStepForParams.parameters?.xmlSnapshot?.xmlContent ||
+                    editingStepForParams.parameters?.xmlContent,
+                  deviceId:
+                    editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
+                      ?.deviceId || editingStepForParams.parameters?.deviceId,
+                  deviceName:
+                    editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
+                      ?.deviceName ||
+                    editingStepForParams.parameters?.deviceName,
+                }
+              : undefined,
+          [
+            editingStepForParams?.id,
+            editingStepForParams?.parameters?.xmlSnapshot?.xmlContent,
+            editingStepForParams?.parameters?.xmlContent,
+            editingStepForParams?.parameters?.xmlCacheId,
+          ]
         )}
         // 🆕 预选定位器：根据步骤参数构建，支持 bounds/resource_id/text/class/xpath
         preselectLocator={(() => {
           const p: any = editingStepForParams?.parameters || {};
           const locator: NodeLocator = {} as any;
           // XPath 优先：优先从 elementLocator.additionalInfo.xpath 取（最新来源更可靠）
-          const preferXPath: string | undefined = p.elementLocator?.additionalInfo?.xpath || p.xpath;
-          if (preferXPath && typeof preferXPath === "string" && preferXPath.trim()) {
+          const preferXPath: string | undefined =
+            p.elementLocator?.additionalInfo?.xpath || p.xpath;
+          if (
+            preferXPath &&
+            typeof preferXPath === "string" &&
+            preferXPath.trim()
+          ) {
             // 简单判断：以 / 开头认为是绝对 XPath，否则当作谓词
             if (/^\s*\//.test(preferXPath))
               locator.absoluteXPath = String(preferXPath).trim();
@@ -2835,8 +2941,25 @@ const SmartScriptBuilderPage: React.FC = () => {
             contentDesc: p.content_desc || undefined,
             packageName: p.package_name || undefined,
           };
-          if (p.bounds && typeof p.bounds === "string")
+          // 优先使用步骤参数中的标准 bounds 字符串
+          if (p.bounds && typeof p.bounds === "string") {
             locator.bounds = p.bounds;
+          } else {
+            // 其次尝试从 elementLocator.selectedBounds 推导
+            const sb = p.elementLocator?.selectedBounds;
+            if (
+              sb &&
+              typeof sb.left === "number" &&
+              typeof sb.top === "number" &&
+              typeof sb.right === "number" &&
+              typeof sb.bottom === "number"
+            ) {
+              locator.bounds = `[${sb.left},${sb.top}][${sb.right},${sb.bottom}]`;
+            } else if (p.elementLocator?.additionalInfo?.bounds) {
+              // 再次兜底：若 additionalInfo 已存有 bounds 字符串
+              locator.bounds = p.elementLocator.additionalInfo.bounds;
+            }
+          }
           // 如果完全没有可用信息，则不传定位器
           const hasAny =
             locator.absoluteXPath ||
@@ -2852,7 +2975,7 @@ const SmartScriptBuilderPage: React.FC = () => {
           const m: any = editingStepForParams.parameters?.matching;
           if (m && Array.isArray(m.fields) && m.fields.length > 0) {
             return {
-              strategy: String(m.strategy || 'standard'),
+              strategy: String(m.strategy || "standard"),
               fields: m.fields as string[],
               values: (m.values || {}) as Record<string, string>,
               includes: m.includes as Record<string, string[]>,
@@ -2866,7 +2989,7 @@ const SmartScriptBuilderPage: React.FC = () => {
         // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略：
         // - 若处于“修改参数”模式：更新当前步骤参数并关闭分析器
         // - 否则（页面分析模式）：填充表单并打开新建步骤模态
-  onApplyCriteria={(criteria) => {
+        onApplyCriteria={(criteria) => {
           try {
             // 构建强类型的 MatchCriteria 以满足辅助函数的类型要求
             const matchCriteria: UIMatchCriteria = {
@@ -2877,48 +3000,75 @@ const SmartScriptBuilderPage: React.FC = () => {
               excludes: (criteria as any).excludes,
             };
             // 生成简短标题/描述（模块化 helper，ESM 顶层导入）
-            const nextTitle: string = buildShortTitleFromCriteria(matchCriteria);
-            const nextDesc: string = buildShortDescriptionFromCriteria(matchCriteria);
+            const nextTitle: string =
+              buildShortTitleFromCriteria(matchCriteria);
+            const nextDesc: string =
+              buildShortDescriptionFromCriteria(matchCriteria);
             if (editingStepForParams) {
               // === 修改参数模式：更新当前步骤 ===
               const stepId = editingStepForParams.id;
-              setSteps((prev) => prev.map((s) => {
-                if (s.id !== stepId) return s;
-                const p: any = { ...(s.parameters || {}) };
-                // 将匹配策略写入标准化字段 parameters.matching
-                p.matching = {
-                  strategy: criteria.strategy,
-                  fields: criteria.fields,
-                  values: criteria.values,
-                  includes: (criteria as any).includes,
-                  excludes: (criteria as any).excludes,
-                  updatedAt: Date.now(),
-                };
-                // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
-                p.elementLocator = p.elementLocator || {};
-                p.elementLocator.additionalInfo = {
-                  ...(p.elementLocator.additionalInfo || {}),
-                  // 若本次回填携带了预览的 xpath，则优先记录下来
-                  xpath: (criteria as any).preview?.xpath || p.elementLocator.additionalInfo?.xpath || undefined,
-                  resourceId: p.elementLocator.additionalInfo?.resourceId || criteria.values['resource-id'],
-                  text: p.elementLocator.additionalInfo?.text || criteria.values['text'],
-                  contentDesc: p.elementLocator.additionalInfo?.contentDesc || criteria.values['content-desc'],
-                  className: p.elementLocator.additionalInfo?.className || criteria.values['class'],
-                };
-                // 兼容后端现有执行器参数命名（尽量回写常用字段）
-                if (criteria.values['resource-id']) p.resource_id = criteria.values['resource-id'];
-                if (criteria.values['text']) p.text = criteria.values['text'];
-                if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
-                if (criteria.values['class']) p.class_name = criteria.values['class'];
-                // bounds 优先使用 preview.bounds（来自当前 XML 选中节点），否则用 values 中的
-                if ((criteria as any).preview?.bounds) p.bounds = (criteria as any).preview.bounds;
-                else if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
-                // 同步更新标题与描述
-                const patched = { ...s, parameters: p } as any;
-                patched.name = nextTitle || s.name;
-                patched.description = nextDesc || s.description;
-                return patched;
-              }));
+              setSteps((prev) =>
+                prev.map((s) => {
+                  if (s.id !== stepId) return s;
+                  const p: any = { ...(s.parameters || {}) };
+                  // 将匹配策略写入标准化字段 parameters.matching
+                  p.matching = {
+                    strategy: criteria.strategy,
+                    fields: criteria.fields,
+                    values: criteria.values,
+                    includes: (criteria as any).includes,
+                    excludes: (criteria as any).excludes,
+                    updatedAt: Date.now(),
+                  };
+                  // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
+                  p.elementLocator = p.elementLocator || {};
+                  p.elementLocator.additionalInfo = {
+                    ...(p.elementLocator.additionalInfo || {}),
+                    // 若本次回填携带了预览的 xpath，则优先记录下来
+                    xpath:
+                      (criteria as any).preview?.xpath ||
+                      p.elementLocator.additionalInfo?.xpath ||
+                      undefined,
+                    resourceId:
+                      p.elementLocator.additionalInfo?.resourceId ||
+                      criteria.values["resource-id"],
+                    text:
+                      p.elementLocator.additionalInfo?.text ||
+                      criteria.values["text"],
+                    contentDesc:
+                      p.elementLocator.additionalInfo?.contentDesc ||
+                      criteria.values["content-desc"],
+                    className:
+                      p.elementLocator.additionalInfo?.className ||
+                      criteria.values["class"],
+                    // 记录 bounds 字符串，便于下次预选
+                    bounds:
+                      (criteria as any).preview?.bounds ||
+                      p.elementLocator.additionalInfo?.bounds ||
+                      p.bounds,
+                  };
+                  // 同步 bounds 字符串到步骤参数，给 Grid 侧作为预选依据
+                  if ((criteria as any).preview?.bounds) {
+                    p.bounds = (criteria as any).preview.bounds;
+                  } else if (criteria.values["bounds"]) {
+                    p.bounds = criteria.values["bounds"];
+                  }
+                  // 兼容后端现有执行器参数命名（尽量回写常用字段）
+                  if (criteria.values["resource-id"])
+                    p.resource_id = criteria.values["resource-id"];
+                  if (criteria.values["text"]) p.text = criteria.values["text"];
+                  if (criteria.values["content-desc"])
+                    p.content_desc = criteria.values["content-desc"];
+                  if (criteria.values["class"])
+                    p.class_name = criteria.values["class"];
+                  // 注：上方已同步 p.bounds
+                  // 同步更新标题与描述
+                  const patched = { ...s, parameters: p } as any;
+                  patched.name = nextTitle || s.name;
+                  patched.description = nextDesc || s.description;
+                  return patched;
+                })
+              );
 
               // ✅ 应用后自动关闭分析器
               setShowPageAnalyzer(false);
@@ -2927,11 +3077,17 @@ const SmartScriptBuilderPage: React.FC = () => {
             } else {
               // === 页面分析模式：创建新步骤（预填并打开创建模态） ===
               // 统一写入到表单字段，后续保存逻辑会将其组装为新步骤
-              form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT);
-              form.setFieldValue('name', nextTitle || '查找元素');
-              form.setFieldValue('description', nextDesc || '根据匹配条件查找元素');
+              form.setFieldValue(
+                "step_type",
+                SmartActionType.SMART_FIND_ELEMENT
+              );
+              form.setFieldValue("name", nextTitle || "查找元素");
+              form.setFieldValue(
+                "description",
+                nextDesc || "根据匹配条件查找元素"
+              );
               // 写入匹配策略到参数
-              form.setFieldValue('matching', {
+              form.setFieldValue("matching", {
                 strategy: criteria.strategy,
                 fields: criteria.fields,
                 values: criteria.values,
@@ -2942,21 +3098,23 @@ const SmartScriptBuilderPage: React.FC = () => {
               // 同步定位器（便于执行器与预览）
               const additionalInfo = {
                 xpath: (criteria as any).preview?.xpath,
-                resourceId: criteria.values['resource-id'],
-                text: criteria.values['text'],
-                contentDesc: criteria.values['content-desc'],
-                className: criteria.values['class'],
+                resourceId: criteria.values["resource-id"],
+                text: criteria.values["text"],
+                contentDesc: criteria.values["content-desc"],
+                className: criteria.values["class"],
+                bounds: (criteria as any).preview?.bounds,
               };
-              const builtLocator: ElementLocator | undefined = (additionalInfo.xpath || (criteria as any).preview?.bounds)
-                ? {
-                    selectedBounds: (criteria as any).preview?.bounds,
-                    elementPath: (criteria as any).preview?.xpath || '',
-                    confidence: 0.8,
-                    additionalInfo,
-                  }
-                : undefined;
+              const builtLocator: ElementLocator | undefined =
+                additionalInfo.xpath || (criteria as any).preview?.bounds
+                  ? {
+                      selectedBounds: (criteria as any).preview?.bounds,
+                      elementPath: (criteria as any).preview?.xpath || "",
+                      confidence: 0.8,
+                      additionalInfo,
+                    }
+                  : undefined;
               if (builtLocator) {
-                form.setFieldValue('elementLocator', builtLocator);
+                form.setFieldValue("elementLocator", builtLocator);
               }
               // 若有当前 XML 上下文，构建自包含快照
               try {
@@ -2964,22 +3122,29 @@ const SmartScriptBuilderPage: React.FC = () => {
                   const snap = createXmlSnapshot(
                     currentXmlContent,
                     {
-                      deviceId: currentDeviceInfo.deviceId || currentDeviceId || 'unknown',
-                      deviceName: currentDeviceInfo.deviceName || (devices.find(d => d.id === currentDeviceId)?.name) || 'unknown',
-                      appPackage: currentDeviceInfo.appPackage || 'com.xingin.xhs',
-                      activityName: currentDeviceInfo.activityName || 'unknown',
+                      deviceId:
+                        currentDeviceInfo.deviceId ||
+                        currentDeviceId ||
+                        "unknown",
+                      deviceName:
+                        currentDeviceInfo.deviceName ||
+                        devices.find((d) => d.id === currentDeviceId)?.name ||
+                        "unknown",
+                      appPackage:
+                        currentDeviceInfo.appPackage || "com.xingin.xhs",
+                      activityName: currentDeviceInfo.activityName || "unknown",
                     },
                     {
-                      pageTitle: currentPageInfo.pageTitle || '小红书页面',
-                      pageType: currentPageInfo.pageType || 'unknown',
+                      pageTitle: currentPageInfo.pageTitle || "小红书页面",
+                      pageType: currentPageInfo.pageType || "unknown",
                       elementCount: currentPageInfo.elementCount || 0,
                       appVersion: currentPageInfo.appVersion,
                     }
                   );
-                  form.setFieldValue('xmlSnapshot', snap);
+                  form.setFieldValue("xmlSnapshot", snap);
                 }
               } catch (e) {
-                console.warn('构建XML快照失败（可忽略）:', e);
+                console.warn("构建XML快照失败（可忽略）:", e);
               }
 
               // 关闭分析器并打开新建步骤模态
@@ -2994,15 +3159,19 @@ const SmartScriptBuilderPage: React.FC = () => {
               message.success({
                 content: (
                   <div>
-                    <div style={{ fontWeight: 'bold', marginBottom: 4 }}>🚀 已根据匹配条件预填新步骤</div>
-                    <div style={{ fontSize: 12, color: '#666' }}>{nextTitle}</div>
+                    <div style={{ fontWeight: "bold", marginBottom: 4 }}>
+                      🚀 已根据匹配条件预填新步骤
+                    </div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      {nextTitle}
+                    </div>
                   </div>
                 ),
                 duration: 3,
               });
             }
           } catch (e) {
-            console.warn('应用匹配策略到步骤失败:', e);
+            console.warn("应用匹配策略到步骤失败:", e);
           }
         }}
         onClose={() => {
@@ -3042,15 +3211,24 @@ const SmartScriptBuilderPage: React.FC = () => {
               ? {
                   selectedBounds: element.bounds,
                   elementPath:
-                    (element as any).xpath || (element as any).element_path || "",
-                  confidence:
-                    (element as any).smartAnalysis?.confidence || 0.8,
+                    (element as any).xpath ||
+                    (element as any).element_path ||
+                    "",
+                  confidence: (element as any).smartAnalysis?.confidence || 0.8,
                   additionalInfo: {
                     xpath: (element as any).xpath,
                     resourceId: (element as any).resource_id,
                     text: (element as any).text,
                     contentDesc: (element as any).content_desc,
                     className: (element as any).class_name,
+                    // 额外：传递 bounds 字符串以用于 Grid 预选
+                    bounds: (element as any).bounds
+                      ? `[${(element as any).bounds.left},${
+                          (element as any).bounds.top
+                        }][${(element as any).bounds.right},${
+                          (element as any).bounds.bottom
+                        }]`
+                      : undefined,
                   },
                 }
               : undefined;
@@ -3067,7 +3245,7 @@ const SmartScriptBuilderPage: React.FC = () => {
               // 兜底1：元素对象自身携带 xmlContent
               if (!xmlForSnapshot && (element as any).xmlContent) {
                 xmlForSnapshot = (element as any).xmlContent;
-                console.log('🧩 使用元素自带 xmlContent 构建快照');
+                console.log("🧩 使用元素自带 xmlContent 构建快照");
               }
 
               // 兜底2：通过 xmlCacheId 从缓存读取
@@ -3080,18 +3258,18 @@ const SmartScriptBuilderPage: React.FC = () => {
                     deviceInfoForSnapshot = {
                       deviceId: ce.deviceId,
                       deviceName: ce.deviceName,
-                      appPackage: ce.pageInfo?.appPackage || 'com.xingin.xhs',
-                      activityName: ce.pageInfo?.activityName || 'unknown',
+                      appPackage: ce.pageInfo?.appPackage || "com.xingin.xhs",
+                      activityName: ce.pageInfo?.activityName || "unknown",
                     };
                     pageInfoForSnapshot = {
-                      pageTitle: ce.pageInfo?.pageTitle || '未知页面',
-                      pageType: ce.pageInfo?.pageType || 'unknown',
+                      pageTitle: ce.pageInfo?.pageTitle || "未知页面",
+                      pageType: ce.pageInfo?.pageType || "unknown",
                       elementCount: ce.pageInfo?.elementCount || 0,
                     } as any;
-                    console.log('🧩 通过 xmlCacheId 回填 xmlSnapshot');
+                    console.log("🧩 通过 xmlCacheId 回填 xmlSnapshot");
                   }
                 } catch (e) {
-                  console.warn('通过 xmlCacheId 回填快照失败:', e);
+                  console.warn("通过 xmlCacheId 回填快照失败:", e);
                 }
               }
 
@@ -3100,27 +3278,29 @@ const SmartScriptBuilderPage: React.FC = () => {
                   xmlForSnapshot,
                   {
                     deviceId:
-                      deviceInfoForSnapshot?.deviceId || currentDeviceId || 'unknown',
+                      deviceInfoForSnapshot?.deviceId ||
+                      currentDeviceId ||
+                      "unknown",
                     deviceName:
                       deviceInfoForSnapshot?.deviceName ||
                       devices.find((d) => d.id === currentDeviceId)?.name ||
-                      'unknown',
+                      "unknown",
                     appPackage:
-                      deviceInfoForSnapshot?.appPackage || 'com.xingin.xhs',
+                      deviceInfoForSnapshot?.appPackage || "com.xingin.xhs",
                     activityName:
-                      deviceInfoForSnapshot?.activityName || 'unknown',
+                      deviceInfoForSnapshot?.activityName || "unknown",
                   },
                   {
-                    pageTitle: pageInfoForSnapshot?.pageTitle || '小红书页面',
-                    pageType: pageInfoForSnapshot?.pageType || 'unknown',
+                    pageTitle: pageInfoForSnapshot?.pageTitle || "小红书页面",
+                    pageType: pageInfoForSnapshot?.pageType || "unknown",
                     elementCount: pageInfoForSnapshot?.elementCount || 0,
                     appVersion: pageInfoForSnapshot?.appVersion,
                   }
                 );
-                form.setFieldValue('xmlSnapshot', snap);
+                form.setFieldValue("xmlSnapshot", snap);
               }
             } catch (e) {
-              console.warn('构建页面快照时出现问题（可忽略）:', e);
+              console.warn("构建页面快照时出现问题（可忽略）:", e);
             }
 
             // 🆕 保存基础元素信息到表单参数中
@@ -3133,7 +3313,13 @@ const SmartScriptBuilderPage: React.FC = () => {
               element_type: element.element_type,
               resource_id: element.resource_id,
               content_desc: element.content_desc,
-              bounds: element.bounds,
+              bounds: (element as any).bounds
+                ? `[${(element as any).bounds.left},${
+                    (element as any).bounds.top
+                  }][${(element as any).bounds.right},${
+                    (element as any).bounds.bottom
+                  }]`
+                : undefined,
               smartDescription: (element as any).smartDescription,
               smartAnalysis: (element as any).smartAnalysis,
             };
@@ -3156,17 +3342,20 @@ const SmartScriptBuilderPage: React.FC = () => {
               });
               if (built.fields.length > 0) {
                 // 写入到表单参数（标准字段 matching）
-                form.setFieldValue('matching', {
+                form.setFieldValue("matching", {
                   strategy: built.strategy,
                   fields: built.fields,
                   values: built.values,
                   updatedAt: Date.now(),
                 });
                 // 同步到最近匹配缓存（用于 Grid Inspector 自动恢复）
-                saveLatestMatching({ strategy: built.strategy, fields: built.fields });
+                saveLatestMatching({
+                  strategy: built.strategy,
+                  fields: built.fields,
+                });
               }
             } catch (e) {
-              console.warn('构建/保存默认匹配配置失败（可忽略）:', e);
+              console.warn("构建/保存默认匹配配置失败（可忽略）:", e);
             }
 
             // 关闭页面分析器并重置状态
@@ -3190,7 +3379,13 @@ const SmartScriptBuilderPage: React.FC = () => {
                     element_type: element.element_type,
                     resource_id: element.resource_id,
                     content_desc: element.content_desc,
-                    bounds: element.bounds,
+                    bounds: (element as any).bounds
+                      ? `[${(element as any).bounds.left},${
+                          (element as any).bounds.top
+                        }][${(element as any).bounds.right},${
+                          (element as any).bounds.bottom
+                        }]`
+                      : existingStep.parameters?.bounds,
                     smartDescription: (element as any).smartDescription,
                     smartAnalysis: (element as any).smartAnalysis,
                     // 统一写入定位器
@@ -3213,10 +3408,13 @@ const SmartScriptBuilderPage: React.FC = () => {
                         values: built.values,
                         updatedAt: Date.now(),
                       };
-                      saveLatestMatching({ strategy: built.strategy, fields: built.fields });
+                      saveLatestMatching({
+                        strategy: built.strategy,
+                        fields: built.fields,
+                      });
                     }
                   } catch (e) {
-                    console.warn('保存步骤匹配配置失败（可忽略）:', e);
+                    console.warn("保存步骤匹配配置失败（可忽略）:", e);
                   }
 
                   // 同步写入页面快照（若可用）

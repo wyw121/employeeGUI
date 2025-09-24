@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import { SmartScriptStep } from '../../types/smartScript';
 import { EnhancedUIElement } from '../enhanced-element-info/types';
+import { parseBounds } from '../../components/universal-ui/views/grid-view/utils';
 import { XmlInspectorModal } from '../xml-inspector/XmlInspectorModal';
 
 const { Text, Paragraph } = Typography;
@@ -143,10 +144,18 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
           {(step.parameters?.bounds || elementSummary?.position) && (
             <Descriptions.Item label="位置" span={2}>
               <Text code style={{ fontSize: '11px' }}>
-                {step.parameters?.bounds ? 
-                  `(${step.parameters.bounds.left}, ${step.parameters.bounds.top}) ${step.parameters.bounds.right - step.parameters.bounds.left}×${step.parameters.bounds.bottom - step.parameters.bounds.top}` :
-                  `(${elementSummary?.position?.x || 0}, ${elementSummary?.position?.y || 0}) ${elementSummary?.position?.width}×${elementSummary?.position?.height}`
-                }
+                {(() => {
+                  const b = step.parameters?.bounds as any;
+                  if (typeof b === 'string') {
+                    const pb = parseBounds(b);
+                    if (pb) return `(${pb.x1}, ${pb.y1}) ${pb.w}×${pb.h}`;
+                  } else if (b && typeof b === 'object') {
+                    const w = b.right - b.left;
+                    const h = b.bottom - b.top;
+                    return `(${b.left}, ${b.top}) ${w}×${h}`;
+                  }
+                  return `(${elementSummary?.position?.x || 0}, ${elementSummary?.position?.y || 0}) ${elementSummary?.position?.width}×${elementSummary?.position?.height}`;
+                })()}
               </Text>
             </Descriptions.Item>
           )}

@@ -17,6 +17,10 @@ export function buildElementLocatorFromElement(element: any): ElementLocator | u
   const contentDesc: string | undefined = element.content_desc || undefined;
   const className: string | undefined = element.class_name || undefined;
   const confidence: number = (element.smartAnalysis?.confidence) ?? 0.8;
+  // 规范化 bounds 字符串，便于下游 Grid 侧预选
+  const boundsString = selectedBounds
+    ? `[${selectedBounds.left},${selectedBounds.top}][${selectedBounds.right},${selectedBounds.bottom}]`
+    : undefined;
 
   const locator: ElementLocator = {
     selectedBounds: selectedBounds || { left: 0, top: 0, right: 0, bottom: 0 },
@@ -28,6 +32,7 @@ export function buildElementLocatorFromElement(element: any): ElementLocator | u
       text,
       contentDesc,
       className,
+      bounds: boundsString,
     },
   };
   return locator;

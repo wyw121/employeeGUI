@@ -74,6 +74,9 @@ import {
 // 🆕 自包含快照类型
 import type { XmlSnapshot } from "../../types/selfContainedScript";
 import { createXmlSnapshot } from "../../types/selfContainedScript";
+// 🆕 自动构建自包含快照（容错）
+import { buildSnapshotIfPossible } from "../../modules/self-contained/XmlSnapshotAutoBuilder";
+import { assessSnapshotHealth, hashXmlContent } from "../../modules/self-contained/XmlSnapshotHealth";
 
 // 🆕 使用新的模块化XML解析功能
 import {
@@ -101,6 +104,7 @@ import {
   UIElementTree,
   GridElementView,
 } from "./views";
+import { saveLatestMatching } from "./views/grid-view/matchingCache";
 import {
   useElementSelectionManager,
   ElementSelectionPopover,
@@ -124,6 +128,8 @@ interface UniversalPageFinderModalProps {
     deviceInfo?: any,
     pageInfo?: any
   ) => void; // 🆕 XML内容更新回调
+  // 🆕 当任意来源加载XML后，统一回调已构建的 XmlSnapshot（保证父级随时可用）
+  onSnapshotUpdated?: (snapshot: XmlSnapshot) => void;
   initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
   loadFromStepXml?: {
     // 🆕 从步骤XML源加载
@@ -146,6 +152,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   snapshotOnlyMode,
   onSnapshotCaptured,
   onXmlContentUpdated, // 🆕 XML内容更新回调
+  onSnapshotUpdated, // 🆕 XML快照更新回调
   initialViewMode = "visual", // 🆕 默认为 visual 视图
   loadFromStepXml, // 🆕 从步骤XML源加载
   preselectLocator,
@@ -237,6 +244,52 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
   }, [visible, loadFromStepXml?.stepId, loadFromStepXml?.xmlContent?.length]); // 🔧 使用更稳定的依赖项
 
+  // 🆕 统一的快照上报封装：健康检查 + 去重告警（按 xmlHash）
+  const shownHealthWarnsRef = React.useRef<Set<string>>(new Set());
+  const emitSnapshotUpdated = (snapshot: XmlSnapshot) => {
+    try {
+      // 健康检查
+      const health = assessSnapshotHealth(snapshot);
+      const xmlHash = hashXmlContent(snapshot.xmlContent || '');
+      if (health.level === 'error') {
+        if (!shownHealthWarnsRef.current.has(xmlHash)) {
+          message.error({
+            content: (
+              <div>
+                <div style={{ fontWeight: 600 }}>XML 内容损坏，功能可能受限</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c' }}>{health.messages[0]}</div>
+              </div>
+            ),
+            duration: 4,
+          });
+          shownHealthWarnsRef.current.add(xmlHash);
+        }
+      } else if (health.level === 'warn') {
+        if (!shownHealthWarnsRef.current.has(xmlHash)) {
+          message.warning({
+            content: (
+              <div>
+                <div style={{ fontWeight: 600 }}>XML 可能不完整</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {health.messages.slice(0, 2).map((m, i) => (
+                    <li key={i} style={{ fontSize: 12, color: '#8c8c8c' }}>{m}</li>
+                  ))}
+                </ul>
+              </div>
+            ),
+            duration: 4,
+          });
+          shownHealthWarnsRef.current.add(xmlHash);
+        }
+      }
+
+      onSnapshotUpdated?.(snapshot);
+    } catch (e) {
+      // 健康检查失败不影响主流程
+      onSnapshotUpdated?.(snapshot);
+    }
+  };
+
   // 🆕 直接从传递的XML内容加载数据（最高优先级）
   const handleLoadFromDirectXmlContent = async (stepXmlInfo: {
     stepId: string;
@@ -279,6 +332,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           appName: "小红书",
           pageTitle: "步骤内置XML",
         } as any);
+
+        // 🆕 构建并上报快照（若可用）
+        {
+          const snap = buildSnapshotIfPossible(
+            stepXmlInfo.xmlContent,
+            deviceInfo,
+            { pageTitle: "步骤内置XML" } as any
+          );
+          if (snap) emitSnapshotUpdated(snap);
+        }
       }
 
       // 如果有设备信息，设置设备选择
@@ -361,6 +424,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
         const pageInfo = { ...xmlSnapshot.pageInfo } as any;
         if (!pageInfo.appName) pageInfo.appName = "小红书";
         onXmlContentUpdated(xmlSnapshot.xmlContent, deviceInfo, pageInfo);
+
+        // 🆕 同步上报快照（转换/校验后）
+        {
+          const snap = buildSnapshotIfPossible(
+            xmlSnapshot.xmlContent,
+            xmlSnapshot.deviceInfo,
+            xmlSnapshot.pageInfo as any
+          );
+          if (snap) emitSnapshotUpdated(snap);
+        }
       }
 
       // 如果有设备信息，设置设备选择
@@ -435,6 +508,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
         const pageInfo = { ...cacheEntry.pageInfo } as any;
         if (!pageInfo.appName) pageInfo.appName = "小红书";
         onXmlContentUpdated(cacheEntry.xmlContent, deviceInfo, pageInfo);
+
+        // 🆕 构建并上报快照
+        {
+          const snap = buildSnapshotIfPossible(
+            cacheEntry.xmlContent,
+            deviceInfo,
+            pageInfo
+          );
+          if (snap) emitSnapshotUpdated(snap);
+        }
       }
 
       // 设置设备信息
@@ -488,6 +571,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           appName: "小红书",
           pageTitle: "步骤快照",
         } as any);
+
+        // 🆕 构建并上报快照（设备信息缺失时也可构建）
+        {
+          const snap = buildSnapshotIfPossible(
+            xml,
+            undefined,
+            { pageTitle: "步骤快照" } as any
+          );
+          if (snap) emitSnapshotUpdated(snap);
+        }
       }
 
       const elements = await UniversalUIAPI.extractPageElements(xml);
@@ -540,6 +633,12 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           elementCount: 0, // 会在解析后更新
         };
         onXmlContentUpdated(xmlContent, deviceInfo, pageInfo);
+
+        // 🆕 预先构建一次快照（元素数量稍后更新，不影响核心）
+        {
+          const snap = buildSnapshotIfPossible(xmlContent, deviceInfo, pageInfo as any);
+          if (snap) emitSnapshotUpdated(snap);
+        }
       }
 
       // 生成唯一的XML缓存ID并保存
@@ -587,6 +686,23 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
             categoriesCount: parseResult.categories.length,
             appInfo: parseResult.appInfo,
           });
+
+          // 🆕 元素数量明确后，再次上报一次包含正确 elementCount 的快照
+          {
+            const deviceInfo = {
+              deviceId: device,
+              deviceName: devices.find((d) => d.id === device)?.name || device,
+              appPackage: "com.xingin.xhs",
+              activityName: "unknown",
+            };
+            const pageInfo = {
+              pageTitle: "当前页面",
+              pageType: "分析页面",
+              elementCount: parseResult.elements.length,
+            } as any;
+            const snap = buildSnapshotIfPossible(xmlContent, deviceInfo, pageInfo);
+            if (snap) emitSnapshotUpdated(snap);
+          }
         } catch (parseError) {
           console.error("🚨 XML解析失败:", parseError);
           setElements([]);
@@ -645,6 +761,35 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       const xmlCacheId = `cache_${page.deviceId}_${page.timestamp}`;
       setCurrentXmlCacheId(xmlCacheId);
       console.log("🔗 设置XML缓存ID:", xmlCacheId);
+
+      // 🆕 通知父组件 XML 内容已更新（用于父级构建 xmlSnapshot）
+      if (onXmlContentUpdated) {
+        const deviceInfo = {
+          deviceId: page.deviceId,
+          deviceName: page.deviceId,
+          appPackage: page.appPackage || "com.xingin.xhs",
+          activityName: "unknown",
+        } as any;
+        const pageInfo = {
+          pageTitle: page.pageTitle || "缓存页面",
+          pageType: page.pageType || "cached",
+          elementCount: page.elementCount || 0,
+          appName: "小红书",
+        } as any;
+        onXmlContentUpdated(pageContent.xmlContent, deviceInfo, pageInfo);
+
+        // 🆕 构建并上报快照
+        {
+          const snap = buildSnapshotIfPossible(
+            pageContent.xmlContent,
+            deviceInfo,
+            pageInfo
+          );
+          if (snap) emitSnapshotUpdated(snap);
+        }
+      }
+      // 同步选择设备，便于后续生成定位器时引用
+      if (page.deviceId) setSelectedDevice(page.deviceId);
 
       // 🆕 将页面内容同步到XmlCacheManager中，确保两套缓存系统保持一致
       const xmlCacheManager = XmlCacheManager.getInstance();
@@ -1100,7 +1245,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                   }
                 }}
                 onApplyCriteria={handleApplyCriteria}
-                onLatestMatchingChange={(m) => { (window as any).__latestMatching__ = m; }}
+                onLatestMatchingChange={(m) => { saveLatestMatching(m); }}
               />
             </ErrorBoundary>
           ) : (
@@ -1264,14 +1409,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       title="Universal UI 智能页面查找器"
       open={visible}
       onCancel={() => {
-        try {
-          const m = (window as any).__latestMatching__ as { strategy: string; fields: string[] } | undefined;
-          if (m && m.strategy && Array.isArray(m.fields) && m.fields.length > 0) {
-            onApplyCriteria?.({ strategy: m.strategy, fields: m.fields, values: {} });
-          }
-        } catch (e) {
-          console.warn('关闭时自动回填匹配策略失败:', e);
-        }
+        // 关闭 = 取消回填。仅关闭模态，不写回步骤，不应用缓存的匹配策略/字段。
         onClose();
       }}
       width="98vw" // 几乎全屏，确保四列不换行

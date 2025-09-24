@@ -848,6 +848,9 @@ const SmartScriptBuilderPage: React.FC = () => {
     });
   }, [currentXmlContent]); // 🔧 添加依赖项检查
 
+  // 🆕 当从“页面分析”预填创建新步骤时，若缺少XML但已具备匹配/定位信息，允许本次保存继续（仅一次）
+  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] = useState<boolean>(false);
+
   // 🆕 从页面分析器获取当前XML内容
   const getCurrentXmlFromAnalyzer = (): string => {
     // 这里可以从UniversalPageFinderModal获取当前分析的XML
@@ -1085,8 +1088,24 @@ const SmartScriptBuilderPage: React.FC = () => {
           };
 
           if (missingXml) {
-            // 完全缺失 XML：自动打开快照修复模式
-            triggerAutoFix();
+            // 完全缺失 XML：若来自“页面分析”预填路径并且具备匹配/定位信息，则放行一次保存以满足“先建卡片再修快照”的期望
+            const hasLocatorOrMatching = Boolean(
+              (parameters as any)?.elementLocator ||
+              (parameters as any)?.matching ||
+              (parameters as any)?.bounds ||
+              (parameters as any)?.xpath
+            );
+            if (allowSaveWithoutXmlOnce && hasLocatorOrMatching) {
+              console.warn("⚠️ 缺少XML，但已启用一次性放行保存；建议随后通过‘页面分析’补采快照");
+              message.warning("本次未包含页面快照，建议稍后在分析器中采集并回填");
+              // 仅放行一次
+              setAllowSaveWithoutXmlOnce(false);
+              // 继续执行保存流程（不触发自动修复）
+            } else {
+              // 完全缺失 XML：自动打开快照修复模式
+              triggerAutoFix();
+              return; // 阻断保存
+            }
           } else {
             // 其他关键问题：提示并提供一键修复
             Modal.confirm({
@@ -1106,8 +1125,8 @@ const SmartScriptBuilderPage: React.FC = () => {
               cancelText: "返回修改",
               onOk: triggerAutoFix,
             });
+            return; // 阻断保存
           }
-          return; // 阻断保存
         }
 
         if (
@@ -1302,6 +1321,9 @@ const SmartScriptBuilderPage: React.FC = () => {
           `步骤添加成功${parameters.xmlCacheId ? "（已关联XML源）" : ""}`
         );
       }
+
+      // 成功保存后，清理一次性放行标记
+      if (allowSaveWithoutXmlOnce) setAllowSaveWithoutXmlOnce(false);
 
       setIsModalVisible(false);
       form.resetFields();
@@ -2749,6 +2771,25 @@ const SmartScriptBuilderPage: React.FC = () => {
             }, 0);
           }
         }}
+        // 🆕 统一快照更新回调：任意 XML 载入后立即回填自包含快照并同步上下文
+        onSnapshotUpdated={(snapshot) => {
+          try {
+            // 表单即时回填（无需等待用户点击“应用到步骤”）
+            form.setFieldValue('xmlSnapshot', snapshot);
+            // 同步当前上下文（便于后续定位器/策略生成）
+            updateCurrentXmlContext(
+              snapshot.xmlContent,
+              snapshot.deviceInfo,
+              snapshot.pageInfo
+            );
+            // 若处于“修复快照后自动重试保存”模式，确保 pending 标志生效
+            if (snapshotFixMode.enabled && pendingAutoResave) {
+              // 不立即触发保存，这里仅确保数据到位；真正触发在 onSnapshotCaptured 或用户保存
+            }
+          } catch (e) {
+            console.warn('onSnapshotUpdated 处理失败（可忽略）:', e);
+          }
+        }}
         // 🆕 从步骤XML源加载 - 优先使用步骤保存的XML快照
         loadFromStepXml={useMemo(() => 
           editingStepForParams
@@ -2929,6 +2970,8 @@ const SmartScriptBuilderPage: React.FC = () => {
               setIsQuickAnalyzer(false);
               setEditingStepForParams(null);
               setEditingStep(null);
+              // 允许本次在缺少XML情况下继续保存一次（已具备匹配/定位信息）
+              setAllowSaveWithoutXmlOnce(true);
               setIsModalVisible(true);
 
               message.success({

@@ -229,7 +229,8 @@ const VisualPageAnalyzer: React.FC<VisualPageAnalyzerProps> = ({
       text: element.text,
       element_type: element.type,
       resource_id: '', // 这里需要从原始XML节点获取
-      content_desc: element.description,
+      // 避免用可视化描述污染真实 content-desc，此处保持为空
+      content_desc: '',
       bounds: {
         left: element.position.x,
         top: element.position.y,

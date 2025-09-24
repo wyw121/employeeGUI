@@ -31,17 +31,13 @@ import React, { useCallback, useEffect, useState, useRef } from "react";
 import { XiaohongshuService } from "../../services/xiaohongshuService";
 import { useAdb } from "../../application/hooks/useAdb";
 import { Device, DeviceStatus } from "../../domain/adb/entities/Device";
+import type { VcfImportResult } from "../../types/Contact";
 
 const { Text, Title } = Typography;
 const { Step } = Steps;
 const { Option } = Select;
 
-interface VcfImportResult {
-  name: string;
-  phone: string;
-  isValid: boolean;
-  errorMessage?: string;
-}
+// 使用共享的 VcfImportResult 类型
 
 interface XiaohongshuFollowResult {
   totalAttempts: number;

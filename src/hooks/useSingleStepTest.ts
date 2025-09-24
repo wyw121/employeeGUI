@@ -115,13 +115,95 @@ export const useSingleStepTest = () => {
         return step;
       })();
 
+      // --- 边界参数标准化工具 ---
+      const ensureBoundsNormalized = (paramsIn: Record<string, any>) => {
+        const params = { ...(paramsIn || {}) } as Record<string, any>;
+
+        // 如果已存在标准对象，补充 boundsRect 并尽量保留原始字符串
+        const parseBoundsString = (s: string) => {
+          // 支持 "[l,t][r,b]" 或 "l,t,r,b"
+          const bracket = /\[(\d+)\s*,\s*(\d+)\]\[(\d+)\s*,\s*(\d+)\]/;
+          const plain = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/;
+          let m = s.match(bracket);
+          if (!m) m = s.match(plain);
+          if (m) {
+            const left = Number(m[1]);
+            const top = Number(m[2]);
+            const right = Number(m[3]);
+            const bottom = Number(m[4]);
+            return { left, top, right, bottom };
+          }
+          return null;
+        };
+
+        const fromAnyObject = (obj: any) => {
+          if (!obj || typeof obj !== 'object') return null;
+          const pick = (k: string[]) => k.find((key) => obj[key] !== undefined);
+          const lk = pick(['left', 'l', 'x1']);
+          const tk = pick(['top', 't', 'y1']);
+          const rk = pick(['right', 'r', 'x2']);
+          const bk = pick(['bottom', 'b', 'y2']);
+          if (lk && tk && rk && bk) {
+            const left = Number(obj[lk]);
+            const top = Number(obj[tk]);
+            const right = Number(obj[rk]);
+            const bottom = Number(obj[bk]);
+            if ([left, top, right, bottom].every((v) => Number.isFinite(v))) {
+              return { left, top, right, bottom };
+            }
+          }
+          return null;
+        };
+
+        const fromArray = (arr: any) => {
+          if (Array.isArray(arr) && arr.length === 4 && arr.every((v) => Number.isFinite(Number(v)))) {
+            const [left, top, right, bottom] = arr.map((v) => Number(v));
+            return { left, top, right, bottom };
+          }
+          return null;
+        };
+
+        const candidates = [
+          params.bounds,
+          params.boundsRect,
+          params.element_bounds,
+          params.elementBounds,
+          params.element_locator?.selectedBounds,
+          params.elementLocator?.selectedBounds,
+        ];
+
+        let rect: { left: number; top: number; right: number; bottom: number } | null = null;
+        for (const c of candidates) {
+          if (!c) continue;
+          if (typeof c === 'string') {
+            rect = parseBoundsString(c);
+          } else if (Array.isArray(c)) {
+            rect = fromArray(c);
+          } else if (typeof c === 'object') {
+            rect = fromAnyObject(c);
+          }
+          if (rect) break;
+        }
+
+        // 写回标准结构
+        if (rect) {
+          // 保留原始 bounds 字段（若是字符串则继续保留）；补充一个对象形式 boundsRect
+          if (!params.bounds || typeof params.bounds !== 'string') {
+            params.bounds = `[${rect.left},${rect.top}][${rect.right},${rect.bottom}]`;
+          }
+          params.boundsRect = rect;
+        }
+
+        return params;
+      };
+
       // 规范化下发给后端的 step，补齐后端要求的字段（如 order）
       const payloadStep = {
         id: normalizedStep.id,
         step_type: normalizedStep.step_type,
         name: normalizedStep.name,
         description: normalizedStep.description ?? '',
-        parameters: normalizedStep.parameters ?? {},
+        parameters: ensureBoundsNormalized(normalizedStep.parameters ?? {}),
         enabled: true,
         order: typeof (normalizedStep as any).order === 'number' ? (normalizedStep as any).order : 0,
         // 透传可选的扩展字段（若存在）

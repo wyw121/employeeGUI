@@ -112,7 +112,8 @@ export const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps>
       checked: false,
       selected: false,
       password: false,
-      content_desc: element.description,
+      // 不将友好描述写入 content_desc，保持其为真实 XML 值（此处未知则置空）
+      content_desc: "",
     };
 
     // 执行智能分析
@@ -214,7 +215,8 @@ export const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps>
       checked: false,
       selected: false,
       password: false,
-      content_desc: visualElement.description,
+      // 不写入友好描述
+      content_desc: "",
     };
   };
 

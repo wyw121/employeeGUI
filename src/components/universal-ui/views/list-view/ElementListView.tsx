@@ -23,7 +23,8 @@ const convertVisualToUIElement = (element: VisualUIElement): UIElement => {
   return {
     id: element.id,
     text: element.text,
-    content_desc: element.description,
+    // 保持 content_desc 仅承载真实 XML 的 content-desc；此处来自可视化友好描述，禁止回填
+    content_desc: '',
     element_type: element.type,
     bounds: {
       left: element.position.x,

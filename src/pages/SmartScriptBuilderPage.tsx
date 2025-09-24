@@ -116,6 +116,7 @@ import {
   migrateToSelfContainedParameters,
   generateXmlHash,
 } from "../types/selfContainedScript";
+import { parseBoundsString, rectToBoundsString, toBoundsRect } from "../components/universal-ui/utils/bounds";
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -942,7 +943,7 @@ const SmartScriptBuilderPage: React.FC = () => {
     // 构建 elementLocator（尽量利用已有指纹）
     const builtLocator: ElementLocator | undefined = p.bounds
       ? {
-          selectedBounds: p.bounds,
+          selectedBounds: (typeof p.bounds === 'string' ? (parseBoundsString(p.bounds) || { left: 0, top: 0, right: 0, bottom: 0 }) : p.bounds),
           elementPath: p.xpath || p.element_path || "",
           confidence: p.smartAnalysis?.confidence || 0.8,
           additionalInfo: {
@@ -951,6 +952,7 @@ const SmartScriptBuilderPage: React.FC = () => {
             text: p.text || p.element_text,
             contentDesc: p.content_desc,
             className: p.class_name,
+            bounds: typeof p.bounds === 'string' ? p.bounds : (p.bounds ? rectToBoundsString(p.bounds) : undefined),
           },
         }
       : undefined;
@@ -1215,6 +1217,13 @@ const SmartScriptBuilderPage: React.FC = () => {
           });
         }
       }
+      // 写入双格式 bounds（若存在 elementLocator）
+      if ((parameters as any)?.elementLocator?.selectedBounds) {
+        const sb = (parameters as any).elementLocator.selectedBounds as { left: number; top: number; right: number; bottom: number };
+        (parameters as any).boundsRect = sb;
+        (parameters as any).bounds = `[${sb.left},${sb.top}][${sb.right},${sb.bottom}]`;
+      }
+
       const newStep: ExtendedSmartScriptStep = {
         id: stepId,
         step_type,
@@ -1313,7 +1322,7 @@ const SmartScriptBuilderPage: React.FC = () => {
             const p: any = newStep.parameters;
             const elementLocator: ElementLocator | undefined = p.bounds
               ? {
-                  selectedBounds: p.bounds,
+                  selectedBounds: (typeof p.bounds === 'string' ? (parseBoundsString(p.bounds) || { left: 0, top: 0, right: 0, bottom: 0 }) : p.bounds),
                   elementPath: p.xpath || p.element_path || "",
                   confidence: p.smartAnalysis?.confidence || 0.8,
                   additionalInfo: {
@@ -1322,6 +1331,7 @@ const SmartScriptBuilderPage: React.FC = () => {
                     text: p.text,
                     contentDesc: p.content_desc,
                     className: p.class_name,
+                    bounds: typeof p.bounds === 'string' ? p.bounds : (p.bounds ? rectToBoundsString(p.bounds) : undefined),
                   },
                 }
               : (p.elementLocator as ElementLocator | undefined);
@@ -1367,7 +1377,7 @@ const SmartScriptBuilderPage: React.FC = () => {
       // 🆕 建立步骤与XML源的关联
       if (parameters.xmlCacheId && parameters.xmlCacheId !== "unknown") {
         const xmlCacheManager = XmlCacheManager.getInstance();
-        xmlCacheManager.linkStepToXml(stepId, parameters.xmlCacheId, {
+          xmlCacheManager.linkStepToXml(stepId, parameters.xmlCacheId, {
           elementPath: parameters.element_path,
           selectionContext: {
             selectedBounds: parameters.bounds,
@@ -3107,10 +3117,17 @@ const SmartScriptBuilderPage: React.FC = () => {
               const builtLocator: ElementLocator | undefined =
                 additionalInfo.xpath || (criteria as any).preview?.bounds
                   ? {
-                      selectedBounds: (criteria as any).preview?.bounds,
+                      selectedBounds: ((): any => {
+                        const b = (criteria as any).preview?.bounds;
+                        if (!b) return { left: 0, top: 0, right: 0, bottom: 0 };
+                        if (typeof b === 'string') {
+                          return parseBoundsString(b) || { left: 0, top: 0, right: 0, bottom: 0 };
+                        }
+                        return b; // 对象
+                      })(),
                       elementPath: (criteria as any).preview?.xpath || "",
                       confidence: 0.8,
-                      additionalInfo,
+                      additionalInfo: { ...additionalInfo, bounds: typeof (criteria as any).preview?.bounds === 'string' ? (criteria as any).preview?.bounds : ((criteria as any).preview?.bounds ? rectToBoundsString((criteria as any).preview?.bounds) : undefined) },
                     }
                   : undefined;
               if (builtLocator) {
@@ -3209,7 +3226,7 @@ const SmartScriptBuilderPage: React.FC = () => {
             // 🆕 统一构建并保存元素定位器
             const builtLocator: ElementLocator | undefined = element.bounds
               ? {
-                  selectedBounds: element.bounds,
+                  selectedBounds: (typeof (element as any).bounds === 'string' ? (parseBoundsString((element as any).bounds) || { left: 0, top: 0, right: 0, bottom: 0 }) : (element as any).bounds),
                   elementPath:
                     (element as any).xpath ||
                     (element as any).element_path ||
@@ -3222,18 +3239,20 @@ const SmartScriptBuilderPage: React.FC = () => {
                     contentDesc: (element as any).content_desc,
                     className: (element as any).class_name,
                     // 额外：传递 bounds 字符串以用于 Grid 预选
-                    bounds: (element as any).bounds
-                      ? `[${(element as any).bounds.left},${
-                          (element as any).bounds.top
-                        }][${(element as any).bounds.right},${
-                          (element as any).bounds.bottom
-                        }]`
-                      : undefined,
+                    bounds: ((): string | undefined => {
+                      const b = (element as any).bounds;
+                      if (!b) return undefined;
+                      if (typeof b === 'string') return b;
+                      return rectToBoundsString(b);
+                    })(),
                   },
                 }
               : undefined;
             if (builtLocator) {
               form.setFieldValue("elementLocator", builtLocator);
+              const sb = builtLocator.selectedBounds;
+              form.setFieldValue("boundsRect", sb);
+              form.setFieldValue("bounds", rectToBoundsString(sb));
             }
 
             // 🆕 构建并保存页面 XML 快照（优先当前上下文；否则尝试从元素对象兜底）

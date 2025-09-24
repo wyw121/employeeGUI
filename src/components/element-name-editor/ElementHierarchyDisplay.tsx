@@ -75,10 +75,13 @@ export const ElementHierarchyDisplay: React.FC<ElementHierarchyDisplayProps> = (
   const getElementXMLFields = (el: HierarchicalUIElement): string[] => {
     const fields: string[] = [];
     
-    if (el.text) fields.push(`text: "${el.text}"`);
-    if (el.resourceId) fields.push(`resource_id: "${el.resourceId}"`);
-    if (el.className) fields.push(`class_name: "${el.className}"`);
-    if (el.description) fields.push(`content_desc: "${el.description}"`);
+  if (el.text) fields.push(`text: "${el.text}"`);
+  if (el.resourceId) fields.push(`resource_id: "${el.resourceId}"`);
+  if (el.className) fields.push(`class_name: "${el.className}"`);
+  // 仅当真实 XML 提供 content_desc 时展示；避免用友好描述混淆
+  if ((el as any).content_desc) fields.push(`content_desc: "${(el as any).content_desc}"`);
+  // 将友好描述以独立字段展示，避免污染 content_desc 语义
+  if (el.description) fields.push(`description: "${el.description}"`);
     if (el.elementType) fields.push(`element_type: "${el.elementType}"`);
     if (el.bounds) {
       const { left, top, right, bottom } = el.bounds;

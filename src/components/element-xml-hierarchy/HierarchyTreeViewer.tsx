@@ -198,172 +198,126 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
 
   // 生成树形数据结构
   const treeData = useMemo(() => {
-    if (!viewData?.treeViewData?.hierarchyMap) return [];
+    if (!viewData?.treeViewData) return [];
 
-    const buildTreeNodes = (elementMap: Map<string, EnhancedUIElement>, parentId?: string): TreeNodeData[] => {
-      const children: TreeNodeData[] = [];
-      
-      for (const [id, element] of elementMap.entries()) {
-        // 改进父级关系判断逻辑
-        const elementParentId = element.parentId || (element.depth === 0 ? undefined : 'root');
-        
-        if (elementParentId === parentId || (!parentId && !element.parentId)) {
-          const matchScore = calculateMatchScore(element, targetElement);
-          const isHighMatch = matchScore > 70;
-        const isTarget = targetElement && (
+    const toAntdNode = (node: any): TreeNodeData => {
+      const element: EnhancedUIElement = node.element;
+      const matchScore = calculateMatchScore(element, targetElement);
+      const isHighMatch = matchScore > 70;
+      const isTarget = Boolean(
+        targetElement && (
           element.id === targetElement.id ||
-          (element.resource_id && 
-           element.resource_id === targetElement.resource_id) ||
+          (element.resource_id && element.resource_id === targetElement.resource_id) ||
           (element.text && targetElement.text && element.text === targetElement.text)
-        );          // 构建节点标题
-          const nodeTitle = (
-            <div className="flex items-center justify-between group w-full">
-              <Space size={4} className="flex-1">
-                {/* 层级深度指示器 */}
-                <Tag color="cyan" style={{ fontSize: '8px', margin: 0, minWidth: '20px' }}>
-                  L{element.depth || 0}
-                </Tag>
-                
-                {/* 元素类型图标 */}
-                <Tag 
-                  color={isTarget ? 'red' : isHighMatch ? 'green' : 'blue'} 
-                  style={{ fontSize: '10px', margin: 0 }}
-                >
-                  {element.element_type?.split('.').pop() || 'Unknown'}
-                </Tag>
-                
-                {/* 元素文本 */}
-                <Text 
-                  style={{ 
-                    fontSize: '12px',
-                    fontWeight: isTarget ? 'bold' : isHighMatch ? '500' : 'normal',
-                    color: isTarget ? '#f5222d' : isHighMatch ? '#52c41a' : '#333',
-                    maxWidth: '200px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={element.text || element.content_desc || '无文本'}
-                >
-                  {element.text || element.content_desc || '无文本'}
-                </Text>
+        )
+      );
 
-                {/* resource-id 显示 */}
-                {element.resource_id && (
-                  <Text 
-                    type="secondary" 
-                    style={{ fontSize: '10px' }}
-                    code
-                  >
-                    #{element.resource_id.split('/').pop()}
-                  </Text>
-                )}
+      const nodeTitle = (
+        <div className="flex items-center justify-between group w-full">
+          <Space size={4} className="flex-1">
+            <Tag color="cyan" style={{ fontSize: '8px', margin: 0, minWidth: '20px' }}>
+              L{element.depth || 0}
+            </Tag>
 
-                {/* 匹配分数显示 */}
-                {matchScore > 0 && (
-                  <Tag 
-                    color={matchScore > 70 ? 'green' : matchScore > 40 ? 'orange' : 'default'}
-                    style={{ fontSize: '9px', margin: 0 }}
-                  >
-                    {matchScore}%
-                  </Tag>
-                )}
-              </Space>
+            <Tag
+              color={isTarget ? 'red' : isHighMatch ? 'green' : 'blue'}
+              style={{ fontSize: '10px', margin: 0 }}
+            >
+              {element.element_type?.split('.').pop() || 'Unknown'}
+            </Tag>
 
-              {/* 操作按钮（悬停显示） */}
-              <Space size={2} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                {element.is_clickable && (
-                  <Tooltip title="可点击元素">
-                    <AimOutlined style={{ color: '#1890ff', fontSize: '12px' }} />
-                  </Tooltip>
-                )}
-                
-                <Tooltip title="查看详情">
-                  <Button 
-                    type="text" 
-                    size="small"
-                    icon={<EyeOutlined style={{ fontSize: '10px' }} />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onElementHighlight?.(element);
-                    }}
-                    style={{ padding: '2px 4px', height: 'auto' }}
-                  />
-                </Tooltip>
-              </Space>
-            </div>
-          );
+            <Text
+              style={{
+                fontSize: '12px',
+                fontWeight: isTarget ? 'bold' : isHighMatch ? '500' : 'normal',
+                color: isTarget ? '#f5222d' : isHighMatch ? '#52c41a' : '#333',
+                maxWidth: '200px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+              title={element.text || element.content_desc || '无文本'}
+            >
+              {element.text || element.content_desc || '无文本'}
+            </Text>
 
-          const childNodes = buildTreeNodes(elementMap, id);
-          
-          const treeNode: TreeNodeData = {
-            key: id,
-            title: nodeTitle,
-            element: element,
-            matchScore,
-            isTarget,
-            children: childNodes.length > 0 ? childNodes : undefined,
-            isLeaf: childNodes.length === 0
-          };
+            {element.resource_id && (
+              <Text type="secondary" style={{ fontSize: '10px' }} code>
+                #{element.resource_id.split('/').pop()}
+              </Text>
+            )}
 
-          children.push(treeNode);
-        }
-      }
+            {matchScore > 0 && (
+              <Tag
+                color={matchScore > 70 ? 'green' : matchScore > 40 ? 'orange' : 'default'}
+                style={{ fontSize: '9px', margin: 0 }}
+              >
+                {matchScore}%
+              </Tag>
+            )}
+          </Space>
 
-      // 按层级深度和匹配度排序
-      return children.sort((a, b) => {
-        // 首先按匹配度排序（高匹配度优先）
-        const scoreDiff = (b.matchScore || 0) - (a.matchScore || 0);
-        if (scoreDiff !== 0) return scoreDiff;
-        
-        // 然后按层级深度排序
-        const depthA = a.element.depth || 0;
-        const depthB = b.element.depth || 0;
-        return depthA - depthB;
-      });
+          <Space size={2} className="opacity-0 group-hover:opacity-100 transition-opacity">
+            {element.is_clickable && (
+              <Tooltip title="可点击元素">
+                <AimOutlined style={{ color: '#1890ff', fontSize: '12px' }} />
+              </Tooltip>
+            )}
+
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                size="small"
+                icon={<EyeOutlined style={{ fontSize: '10px' }} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onElementHighlight?.(element);
+                }}
+                style={{ padding: '2px 4px', height: 'auto' }}
+              />
+            </Tooltip>
+          </Space>
+        </div>
+      );
+
+      const children = Array.isArray(node.children)
+        ? (node.children as any[]).map(toAntdNode)
+        : undefined;
+
+      return {
+        key: node.id,
+        title: nodeTitle,
+        element,
+        matchScore,
+        isTarget,
+        children,
+        isLeaf: !children || children.length === 0,
+      };
     };
 
-    // 先尝试从根节点开始构建
-    const rootNodes = buildTreeNodes(viewData.treeView.hierarchyMap, undefined);
-    
-    // 如果没有找到根节点，尝试其他方式构建树
-    if (rootNodes.length === 0) {
-      console.log('⚠️ 没有找到根节点，尝试按深度构建树结构...');
-      
-      const allElements = Array.from(viewData.treeView.hierarchyMap.values());
-      const elementsByDepth = new Map<number, EnhancedUIElement[]>();
-      
-      // 按深度分组
-      allElements.forEach(element => {
-        const depth = element.depth || 0;
-        if (!elementsByDepth.has(depth)) {
-          elementsByDepth.set(depth, []);
-        }
-        elementsByDepth.get(depth)!.push(element);
-      });
-      
-      // 构建平铺的树结构（如果无法构建层级关系）
+    const roots = Array.isArray(viewData.treeViewData.rootNodes)
+      ? (viewData.treeViewData.rootNodes as any[]).map(toAntdNode)
+      : [];
+
+    if (roots.length === 0 && viewData.treeViewData.hierarchyMap?.size) {
       const flatNodes: TreeNodeData[] = [];
-      elementsByDepth.forEach((elements, depth) => {
-        elements.forEach(element => {
-          const matchScore = calculateMatchScore(element, targetElement);
-          const isTarget = targetElement && element.id === targetElement.id;
-          
-          flatNodes.push({
-            key: element.id,
-            title: `[深度${depth}] ${element.text || element.attributes?.['content-desc'] || 'Unknown'}`,
-            element,
-            matchScore,
-            isTarget,
-            isLeaf: true
-          });
+      (Array.from(viewData.treeViewData.hierarchyMap.values()) as any[]).forEach((n: any) => {
+        const el: EnhancedUIElement = n.element;
+        const matchScore = calculateMatchScore(el, targetElement);
+        const isTarget = Boolean(targetElement && el.id === targetElement.id);
+        flatNodes.push({
+          key: el.id,
+          title: `[深度${el.depth || 0}] ${el.text || el.content_desc || 'Unknown'}`,
+          element: el,
+          matchScore,
+          isTarget,
+          isLeaf: true,
         });
       });
-      
       return flatNodes.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
     }
-    
-    return rootNodes;
+
+    return roots;
   }, [viewData, targetElement]);
 
   // 自动展开高匹配度的节点
@@ -399,8 +353,8 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
       return nodes.reduce((acc, node) => {
         const matchesSearch = 
           node.element.text?.toLowerCase().includes(searchValue.toLowerCase()) ||
-          node.element.attributes?.['resource-id']?.toLowerCase().includes(searchValue.toLowerCase()) ||
-          node.element.elementType?.toLowerCase().includes(searchValue.toLowerCase());
+          node.element.resource_id?.toLowerCase().includes(searchValue.toLowerCase()) ||
+          node.element.element_type?.toLowerCase().includes(searchValue.toLowerCase());
 
         const filteredChildren = node.children ? filterTree(node.children as TreeNodeData[]) : [];
 
@@ -454,7 +408,7 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
     );
   }
 
-  if (!viewData.treeView?.hierarchyMap || viewData.treeView.hierarchyMap.size === 0) {
+  if (!viewData.treeViewData?.hierarchyMap || viewData.treeViewData.hierarchyMap.size === 0) {
     return (
       <Alert
         message="无层级数据"
@@ -527,21 +481,19 @@ export const HierarchyTreeViewer: React.FC<HierarchyTreeViewerProps> = ({
             <Col span={6}>
               <Text type="secondary">总元素数</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
-                {viewData.treeView.hierarchyMap.size}
+                {viewData.treeViewData.hierarchyMap.size}
               </div>
             </Col>
             <Col span={6}>
               <Text type="secondary">可点击元素</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#52c41a' }}>
-                {Array.from(viewData.treeView.hierarchyMap.values())
-                  .filter(el => el.attributes?.clickable === 'true').length}
+                {viewData.enhancedElements.filter(el => el.is_clickable).length}
               </div>
             </Col>
             <Col span={6}>
               <Text type="secondary">有文本元素</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fa8c16' }}>
-                {Array.from(viewData.treeView.hierarchyMap.values())
-                  .filter(el => el.text && el.text.trim()).length}
+                {viewData.enhancedElements.filter(el => Boolean(el.text && el.text.trim())).length}
               </div>
             </Col>
             <Col span={6}>

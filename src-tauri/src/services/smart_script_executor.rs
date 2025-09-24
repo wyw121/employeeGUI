@@ -411,24 +411,23 @@ impl SmartScriptExecutor {
             }
         }
         
-        // 1) 优先使用外部传入的bounds
-        if let Some(bounds) = params.get("bounds") {
-            logs.push(format!("  📍 元素边界: {}", bounds));
-            if let Some(bounds_obj) = bounds.as_object() {
-                let left = bounds_obj.get("left").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let top = bounds_obj.get("top").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let right = bounds_obj.get("right").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let bottom = bounds_obj.get("bottom").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let center_x = (left + right) / 2;
-                let center_y = (top + bottom) / 2;
-                click_coords = Some((center_x, center_y));
-                logs.push(format!("🎯 计算中心点坐标: ({}, {})", center_x, center_y));
-                logs.push(format!("📊 原始边界: left={}, top={}, right={}, bottom={}", left, top, right, bottom));
-            } else {
-                logs.push("❌ 边界数据格式错误".to_string());
-                return Err(anyhow::anyhow!("边界数据格式错误"));
+        // 1) 优先使用外部传入的bounds / boundsRect（兼容字符串与对象）
+        if let Some(bounds_val) = params.get("bounds").or_else(|| params.get("boundsRect")) {
+            logs.push(format!("  📍 元素边界(原始): {}", bounds_val));
+            match crate::utils::bounds::parse_bounds_value(bounds_val) {
+                Ok(rect) => {
+                    let (center_x, center_y) = rect.center();
+                    click_coords = Some((center_x, center_y));
+                    logs.push(format!("🎯 计算中心点坐标: ({}, {})", center_x, center_y));
+                    logs.push(format!("📊 归一化边界: left={}, top={}, right={}, bottom={}", rect.left, rect.top, rect.right, rect.bottom));
+                }
+                Err(e) => {
+                    logs.push(format!("⚠️  边界解析失败，将尝试基于 UI dump 查找。错误: {}", e));
+                }
             }
-        } else {
+        }
+
+        if click_coords.is_none() {
             // 2) 未提供bounds时，尝试从UI dump中解析坐标
             let query_text = params.get("element_text").and_then(|v| v.as_str()).unwrap_or("");
             let query_desc = params.get("content_desc").and_then(|v| v.as_str()).unwrap_or("");

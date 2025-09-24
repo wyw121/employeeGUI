@@ -29,24 +29,13 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAdb } from '../../application/hooks/useAdb';
 import { Device } from '../../domain/adb/entities/Device';
+import type { Contact, VcfImportResult } from '../../types/Contact';
 
 const { Text } = Typography;
 const { Step } = Steps;
 const { Option } = Select;
 
-interface Contact {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-}
-
-interface VcfImportResult {
-  name: string;
-  phone: string;
-  isValid: boolean;
-  errorMessage?: string;
-}
+// 统一使用全局类型：Contact、VcfImportResult（来自 src/types/Contact）
 
 interface ContactImportManagerProps {
   contacts: Contact[];
@@ -184,17 +173,20 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
       console.log(`设备 ${group.deviceName} 导入结果:`, result);
 
       return {
-        name: group.deviceName,
-        phone: group.deviceId,
-        isValid: true
+        success: true,
+        totalContacts: group.contacts.length,
+        importedContacts: group.contacts.length,
+        failedContacts: 0,
+        message: `设备 ${group.deviceName} 导入成功`
       };
     } catch (error) {
       console.error(`设备 ${group.deviceName} 导入失败:`, error);
       return {
-        name: group.deviceName,
-        phone: group.deviceId,
-        isValid: false,
-        errorMessage: `导入失败: ${error}`
+        success: false,
+        totalContacts: group.contacts.length,
+        importedContacts: 0,
+        failedContacts: group.contacts.length,
+        message: `导入失败: ${error}`
       };
     }
   }, [createVcfContent]);
@@ -229,21 +221,22 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
           // 更新状态：导入完成
           setDeviceGroups(prev => prev.map(g => 
             g.deviceId === group.deviceId 
-              ? { ...g, status: result.isValid ? 'completed' : 'failed', result }
+              ? { ...g, status: result.success ? 'completed' : 'failed', result }
               : g
           ));
 
-          if (result.isValid) {
+          if (result.success) {
             message.success(`设备 ${group.deviceName} 导入成功`);
           } else {
-            message.error(`设备 ${group.deviceName} 导入失败: ${result.errorMessage}`);
+            message.error(`设备 ${group.deviceName} 导入失败: ${result.message}`);
           }
         } catch (error) {
           const failedResult: VcfImportResult = {
-            name: group.deviceName,
-            phone: group.deviceId,
-            isValid: false,
-            errorMessage: `导入异常: ${error}`
+            success: false,
+            totalContacts: group.contacts.length,
+            importedContacts: 0,
+            failedContacts: group.contacts.length,
+            message: `导入异常: ${error}`
           };
           results.push(failedResult);
 
@@ -259,7 +252,7 @@ export const ContactImportManager: React.FC<ContactImportManagerProps> = ({
       }
 
       // 导入完成
-      const successCount = results.filter(r => r.isValid).length;
+  const successCount = results.filter(r => r.success).length;
       message.success(`导入完成！成功: ${successCount}/${totalGroups} 个设备`);
       
       onImportComplete?.(results);

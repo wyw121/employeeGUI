@@ -59,7 +59,8 @@ export class VisualToUIElementConverter {
       checked: false, // 默认未选中
       selected: false, // 默认未选择
       password: this.inferPassword(visualElement),
-      content_desc: visualElement.description || ''
+      // 避免把友好描述（如“未知元素（可点击）”）写入 content_desc
+      content_desc: ''
     };
     
     // 构建转换结果
@@ -190,7 +191,8 @@ export class VisualToUIElementConverter {
   private static inferPassword(visualElement: VisualUIElement): boolean {
     const type = visualElement.type?.toLowerCase() || '';
     const text = visualElement.text?.toLowerCase() || '';
-    const desc = visualElement.description?.toLowerCase() || '';
+  // 不使用 description 作为密码推断依据，避免友好描述干扰
+  const desc = '';
     
     const passwordKeywords = ['password', '密码', 'pwd'];
     

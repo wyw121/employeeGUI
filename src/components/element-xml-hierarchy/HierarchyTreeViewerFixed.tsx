@@ -232,8 +232,8 @@ export const HierarchyTreeViewerFixed: React.FC<HierarchyTreeViewerProps> = ({
             {element.text && <Text strong>{element.text}</Text>}
             {element.content_desc && !element.text && <Text type="secondary">{element.content_desc}</Text>}
             {!element.text && !element.content_desc && <Text type="secondary">{element.element_type}</Text>}
-            {element.is_clickable && <Tag color="orange" size="small">可点击</Tag>}
-            {element.resource_id && <Tag color="cyan" size="small">ID:{element.resource_id.split('/').pop()}</Tag>}
+            {element.is_clickable && <Tag color="orange">可点击</Tag>}
+            {element.resource_id && <Tag color="cyan">ID:{element.resource_id.split('/').pop()}</Tag>}
             {isTarget && <Tag color="red">目标元素</Tag>}
             {matchScore > 0 && <Tag color="purple">匹配:{matchScore}%</Tag>}
           </Space>

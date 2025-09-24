@@ -68,7 +68,8 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
       checked: false,
       selected: element.id === selectedElementId,
       password: false,
-      content_desc: element.description || "",
+      // 不写入友好描述，保持真实 XML 才能填入（此处置空）
+      content_desc: "",
     };
   };
 

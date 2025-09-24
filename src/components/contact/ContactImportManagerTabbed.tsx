@@ -34,7 +34,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { useAdb } from '../../application/hooks/useAdb';
-import type { Contact } from '../../types/Contact';
+import type { Contact, VcfImportResult } from '../../types/Contact';
 
 const { TabPane } = Tabs;
 const { Title, Text, Paragraph } = Typography;
@@ -49,18 +49,6 @@ interface DeviceContactGroup {
   progress?: number;
 }
 
-// VCF导入结果类型
-export interface VcfImportResult {
-  name: string;
-  phone: string;
-  isValid: boolean;
-  errorMessage?: string;
-  importedContacts?: number;
-  totalContacts?: number;
-  success?: boolean;
-  failedContacts?: number;
-  message?: string;
-}
 
 interface ContactImportManagerTabbedProps {
   /** 预选的联系人列表 */
@@ -191,21 +179,20 @@ const ContactImportManagerTabbed: React.FC<ContactImportManagerTabbedProps> = ({
       console.log(`设备 ${group.deviceName} 导入结果:`, result);
 
       return {
-        name: group.deviceName,
-        phone: group.deviceId,
-        isValid: true,
+        success: true,
         importedContacts: group.contacts.length,
-        totalContacts: group.contacts.length
+        totalContacts: group.contacts.length,
+        failedContacts: 0,
+        message: `设备 ${group.deviceName} 导入成功`
       };
     } catch (error) {
       console.error(`设备 ${group.deviceName} 导入失败:`, error);
       return {
-        name: group.deviceName,
-        phone: group.deviceId,
-        isValid: false,
-        errorMessage: `导入失败: ${error}`,
+        success: false,
+        message: `导入失败: ${error}`,
         importedContacts: 0,
-        totalContacts: group.contacts.length
+        totalContacts: group.contacts.length,
+        failedContacts: group.contacts.length
       };
     }
   }, [createVcfContent]);
@@ -239,23 +226,22 @@ const ContactImportManagerTabbed: React.FC<ContactImportManagerTabbedProps> = ({
           // 更新状态：导入完成
           setDeviceGroups(prev => prev.map(g => 
             g.deviceId === group.deviceId 
-              ? { ...g, status: result.isValid ? 'completed' : 'failed', result, progress: 100 }
+              ? { ...g, status: result.success ? 'completed' : 'failed', result, progress: 100 }
               : g
           ));
 
-          if (result.isValid) {
+          if (result.success) {
             message.success(`设备 ${group.deviceName} 导入成功`);
           } else {
-            message.error(`设备 ${group.deviceName} 导入失败: ${result.errorMessage}`);
+            message.error(`设备 ${group.deviceName} 导入失败: ${result.message}`);
           }
         } catch (error) {
           const failedResult: VcfImportResult = {
-            name: group.deviceName,
-            phone: group.deviceId,
-            isValid: false,
-            errorMessage: `导入异常: ${error}`,
+            success: false,
+            message: `导入异常: ${error}`,
             importedContacts: 0,
-            totalContacts: group.contacts.length
+            totalContacts: group.contacts.length,
+            failedContacts: group.contacts.length
           };
           results.push(failedResult);
 
@@ -275,7 +261,7 @@ const ContactImportManagerTabbed: React.FC<ContactImportManagerTabbedProps> = ({
       onImportComplete?.(results);
 
       // 统计结果
-      const successCount = results.filter(r => r.isValid).length;
+  const successCount = results.filter(r => r.success).length;
       const totalImported = results.reduce((sum, r) => sum + (r.importedContacts || 0), 0);
 
       if (successCount === results.length) {
@@ -791,12 +777,12 @@ const ContactImportManagerTabbed: React.FC<ContactImportManagerTabbedProps> = ({
                       key: 'result',
                       render: (_, record: DeviceContactGroup) => {
                         if (record.result) {
-                          return record.result.isValid ? (
+                          return record.result.success ? (
                             <Text type="success">
                               成功导入 {record.result.importedContacts} 个
                             </Text>
                           ) : (
-                            <Text type="danger" title={record.result.errorMessage}>
+                            <Text type="danger" title={record.result.message}>
                               导入失败
                             </Text>
                           );

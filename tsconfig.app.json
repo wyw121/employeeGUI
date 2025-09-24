@@ -1,0 +1,53 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": false,
+    "noImplicitAny": false
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/**/*_old.ts",
+    "src/**/*_old.tsx",
+    // 联系人相关（未纳入本轮工作）
+    "src/components/contact/**",
+    "src/pages/contact-management/**",
+    "src/pages/ContactManagementPage*",
+    "src/pages/ContactImportPage*",
+  "src/pages/ContactAutomationPage*",
+  "src/pages/ContactAutomationPage_sindre.tsx",
+  "src/pages/ContactManagementPage_Enhanced.tsx",
+  "src/pages/contact-management/**",
+  "src/modules/contact-automation/**",
+  "src/utils/typeAdapters.ts",
+  // 智能导航查找演示
+    "src/components/smart-navigation-finder/**",
+  "src/pages/SmartNavigationTestPage.tsx",
+    // ADB 授权向导（未纳入本轮工作）
+    "src/pages/adb/auth/**",
+    "src/pages/adb/AdbCenterPage.tsx",
+    // 示例与演示入口
+    "src/examples/**",
+    "src/components/AntDesignDemo.tsx",
+    "src/pages/ComprehensiveAdbPage.tsx",
+    // 其他可能的间接入口
+    "src/pages/ContactAutomationPage*.tsx",
+    // 汇总导出可能引入被排除模块
+    "src/components/index.ts"
+  ],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

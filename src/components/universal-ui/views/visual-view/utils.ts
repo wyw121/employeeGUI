@@ -12,6 +12,8 @@ export const convertUIElementToVisual = (element: UIElement): VisualUIElement =>
   return {
     id: element.id,
     text: element.text || '',
+    // 从 UIElement 回到 Visual 仅用于展示，描述取真实 content_desc；
+    // 注意：反向转换（Visual -> UI）时不要再把友好描述写回 content_desc
     description: element.content_desc || '',
     type: element.element_type || element.class_name || '',
     category: categorizeElement(element),
@@ -41,7 +43,10 @@ export const convertVisualToUIElement = (element: VisualUIElement): UIElement =>
   return {
     id: element.id,
     text: element.text,
-    content_desc: element.description,
+    // 严格保持 content_desc 的“设备XML真实值”语义：
+    // VisualUIElement.description 可能是“未知元素（可点击）”等友好占位，不能回填到 content_desc。
+    // 这里统一置空，由上游在有真实 content-desc 时再赋值。
+    content_desc: '',
     element_type: element.type,
     bounds: {
       left: element.position.x,

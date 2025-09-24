@@ -68,6 +68,8 @@ export interface SelfContainedStepParameters {
   resource_id?: string;
   content_desc?: string;
   bounds?: any;
+  // 🆕 双格式：对象化的 bounds
+  boundsRect?: { left: number; top: number; right: number; bottom: number };
   xpath?: string;
   
   // 🆕 自包含XML快照 - 核心功能
@@ -158,10 +160,28 @@ export const migrateToSelfContainedParameters = (
         }
       );
       
-      // 如果有边界信息，创建定位器
+      // 如果有边界信息，创建定位器（兼容字符串与对象）
       if (oldParams.bounds) {
+        let rect = oldParams.bounds as { left: number; top: number; right: number; bottom: number };
+        if (typeof oldParams.bounds === 'string') {
+          // 简单解析 "[l,t][r,b]" 或 "l,t,r,b"
+          const s = (oldParams.bounds as string).trim().replace(/［/g, '[').replace(/］/g, ']');
+          const bracket = s.match(/\[(\s*[-\d]+\s*),(\s*[-\d]+\s*)\]\[(\s*[-\d]+\s*),(\s*[-\d]+\s*)\]/);
+          if (bracket) {
+            const [_, l, t, r, b] = bracket;
+            rect = { left: parseInt(l), top: parseInt(t), right: parseInt(r), bottom: parseInt(b) } as any;
+          } else {
+            const parts = s.split(',').map((p) => p.trim());
+            if (parts.length === 4) {
+              rect = { left: parseInt(parts[0]), top: parseInt(parts[1]), right: parseInt(parts[2]), bottom: parseInt(parts[3]) } as any;
+            }
+          }
+        }
+
+        // 写回对象化与字符串化两种格式
+        (newParams as any).boundsRect = rect;
         newParams.elementLocator = {
-          selectedBounds: oldParams.bounds,
+          selectedBounds: rect || oldParams.bounds,
           elementPath: oldParams.xpath || oldParams.element_path || '',
           confidence: oldParams.smartAnalysis?.confidence || 0.8,
           additionalInfo: {
@@ -170,6 +190,11 @@ export const migrateToSelfContainedParameters = (
             text: oldParams.text,
             contentDesc: oldParams.content_desc,
             className: oldParams.class_name,
+            bounds: typeof oldParams.bounds === 'string'
+              ? oldParams.bounds
+              : rect
+                ? `[${rect.left},${rect.top}][${rect.right},${rect.bottom}]`
+                : undefined,
           },
         };
       }

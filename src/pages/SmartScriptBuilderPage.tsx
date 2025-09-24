@@ -117,6 +117,7 @@ import {
   generateXmlHash,
 } from "../types/selfContainedScript";
 import { parseBoundsString, rectToBoundsString, toBoundsRect } from "../components/universal-ui/utils/bounds";
+import sanitizeContentDesc from './SmartScriptBuilderPage/helpers/contentDescSanitizer';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
@@ -3324,21 +3325,6 @@ const SmartScriptBuilderPage: React.FC = () => {
 
             // 🆕 保存基础元素信息到表单参数中
             console.log("✅ 保存基础元素信息");
-
-                      // 工具：清洗 content_desc，避免友好描述污染
-                      const sanitizeContentDesc = (val: any): string => {
-                        if (val == null) return '';
-                        const s = String(val).trim();
-                        if (!s) return '';
-                        // 过滤典型友好描述模式，如“未知元素（可点击）”、“按钮（可点击）”等
-                        const friendlyPatterns = [
-                          /^未知元素(（可点击）|（可滚动）|（可编辑）)?$/,
-                          /^按钮（可点击）$/,
-                          /^文本（.*）$/,
-                        ];
-                        if (friendlyPatterns.some((re) => re.test(s))) return '';
-                        return s;
-                      };
 
             // 构建基础步骤参数
             const basicParams = {

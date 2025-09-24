@@ -2,10 +2,131 @@ import { useState, useCallback } from 'react';
 import { message } from 'antd';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import type { SmartScriptStep, SingleStepTestResult } from '../types/smartScript';
+import { useAdb } from '../application/hooks/useAdb';
+import type { MatchCriteriaDTO, MatchResultDTO } from '../domain/page-analysis/repositories/IUiMatcherRepository';
+
+interface StrategyTestResult {
+  success: boolean;
+  output: string;
+  matchResult?: MatchResultDTO;
+  criteria?: MatchCriteriaDTO;
+  error?: string;
+}
 
 export const useSingleStepTest = () => {
   const [testingSteps, setTestingSteps] = useState<Set<string>>(new Set());
   const [testResults, setTestResults] = useState<Record<string, SingleStepTestResult>>({});
+  const { matchElementByCriteria } = useAdb();
+
+  /**
+   * 将步骤参数转换为匹配条件
+   */
+  const convertStepToMatchCriteria = useCallback((step: SmartScriptStep): MatchCriteriaDTO | null => {
+    const params = step.parameters as any;
+    
+    // 优先使用现有的matching参数
+    if (params.matching) {
+      return {
+        strategy: params.matching.strategy || 'standard',
+        fields: params.matching.fields || [],
+        values: params.matching.values || {},
+        includes: params.matching.includes || {},
+        excludes: params.matching.excludes || {}
+      };
+    }
+
+    // 从传统参数转换为匹配条件
+    const fields: string[] = [];
+    const values: Record<string, string> = {};
+
+    // 提取各种字段
+    if (params.element_text) {
+      fields.push('text');
+      values.text = params.element_text;
+    }
+    if (params.content_desc) {
+      fields.push('content-desc');
+      values['content-desc'] = params.content_desc;
+    }
+    if (params.resource_id) {
+      fields.push('resource-id');
+      values['resource-id'] = params.resource_id;
+    }
+    if (params.class_name) {
+      fields.push('class');
+      values.class = params.class_name;
+    }
+    if (params.package_name) {
+      fields.push('package');
+      values.package = params.package_name;
+    }
+
+    // SmartFindElement 类型步骤才转换，并且需要有字段
+    if (step.step_type === 'SmartFindElement' && fields.length > 0) {
+      return {
+        strategy: 'standard', // 默认使用标准匹配策略
+        fields,
+        values,
+        includes: {},
+        excludes: {}
+      };
+    }
+
+    return null;
+  }, []);
+
+  /**
+   * 使用策略匹配测试步骤
+   */
+  const executeStrategyTest = useCallback(async (
+    step: SmartScriptStep,
+    deviceId: string
+  ): Promise<StrategyTestResult> => {
+    const criteria = convertStepToMatchCriteria(step);
+    
+    if (!criteria) {
+      return {
+        success: false,
+        output: '❌ 无法从步骤参数构建匹配条件，步骤类型不支持或缺少必要参数',
+        error: '不支持的步骤类型或参数不足'
+      };
+    }
+
+    try {
+      console.log('🎯 使用策略匹配测试:', criteria);
+      const matchResult = await matchElementByCriteria(deviceId, criteria);
+      
+      const success = matchResult.ok;
+      const output = success 
+        ? `✅ 策略匹配成功: ${matchResult.message}\n` +
+          `📋 匹配策略: ${criteria.strategy}\n` +
+          `🔍 匹配字段: ${criteria.fields.join(', ')}\n` +
+          `📊 总元素数: ${matchResult.total || 0}\n` +
+          `🎯 匹配索引: ${matchResult.matchedIndex !== undefined ? matchResult.matchedIndex : '无'}\n` +
+          (matchResult.preview ? 
+            `📝 预览: ${JSON.stringify(matchResult.preview, null, 2)}` : 
+            '无预览数据')
+        : `❌ 策略匹配失败: ${matchResult.message}\n` +
+          `📋 匹配策略: ${criteria.strategy}\n` +
+          `🔍 匹配字段: ${criteria.fields.join(', ')}\n` +
+          `📊 总元素数: ${matchResult.total || 0}`;
+
+      return {
+        success,
+        output,
+        matchResult,
+        criteria
+      };
+    } catch (error) {
+      console.error('策略匹配测试失败:', error);
+      return {
+        success: false,
+        output: `❌ 策略匹配测试出错: ${error}`,
+        criteria,
+        error: String(error)
+      };
+    }
+  }, [matchElementByCriteria, convertStepToMatchCriteria]);
 
   // 执行单个步骤测试
   const executeSingleStep = useCallback(async (
@@ -22,6 +143,30 @@ export const useSingleStepTest = () => {
     setTestingSteps(prev => new Set(prev).add(stepId));
 
     try {
+      // 🎯 优先使用策略匹配测试 SmartFindElement 步骤
+      if (step.step_type === 'SmartFindElement') {
+        console.log('🎯 使用策略匹配模式测试元素查找');
+        const strategyResult = await executeStrategyTest(step, deviceId);
+        
+        const result: SingleStepTestResult = {
+          success: strategyResult.success,
+          step_id: stepId,
+          step_name: step.name,
+          message: strategyResult.output,
+          duration_ms: 0, // 策略匹配测试不计时
+          timestamp: Date.now(),
+          ui_elements: strategyResult.matchResult?.preview ? [strategyResult.matchResult.preview] : [],
+          logs: [`策略匹配测试: ${strategyResult.success ? '成功' : '失败'}`],
+          error_details: strategyResult.error,
+          extracted_data: strategyResult.criteria ? { matchCriteria: strategyResult.criteria } : {}
+        };
+
+        // 保存测试结果
+        setTestResults(prev => ({ ...prev, [stepId]: result }));
+        
+        return result;
+      }
+
       // 检查是否在Tauri环境中
       const isInTauri = await isTauri();
       console.log('🔧 Tauri环境检测', { isInTauri, windowExists: typeof window !== 'undefined' });
@@ -331,6 +476,8 @@ export const useSingleStepTest = () => {
 
   return {
     executeSingleStep,
+    executeStrategyTest, // 新增：策略匹配测试方法
+    convertStepToMatchCriteria, // 新增：参数转换器
     getStepTestResult,
     isStepTesting,
     clearStepResult,

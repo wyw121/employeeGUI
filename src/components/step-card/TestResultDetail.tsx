@@ -69,11 +69,39 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
           </div>
         )}
 
+        {/* 策略匹配信息 */}
+        {result.extracted_data?.matchCriteria && (
+          <div>
+            <Text type="secondary" className="text-xs">匹配策略:</Text>
+            <div className="space-y-1">
+              <Tag color="cyan">{result.extracted_data.matchCriteria.strategy}</Tag>
+              {result.extracted_data.matchCriteria.fields.length > 0 && (
+                <div className="text-xs">
+                  <Text type="secondary">匹配字段: </Text>
+                  {result.extracted_data.matchCriteria.fields.map((field: string) => (
+                    <Tag key={field} color="blue" style={{ fontSize: '11px' }}>{field}</Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 找到元素 */}
         {result.ui_elements && result.ui_elements.length > 0 && (
           <div>
             <Text type="secondary" className="text-xs">找到元素:</Text>
             <Badge count={result.ui_elements.length} size="small" />
+            {/* 显示匹配预览 */}
+            {result.ui_elements[0] && typeof result.ui_elements[0] === 'object' && (
+              <div className="mt-1 bg-gray-50 dark:bg-gray-800 p-2 rounded text-xs">
+                {Object.entries(result.ui_elements[0]).map(([key, value]) => (
+                  value && <div key={key} className="text-gray-600 dark:text-gray-300">
+                    <span className="font-medium">{key}:</span> {String(value)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,8 +1,11 @@
 import type { UiNode } from "../../types";
 import type { MatchCriteria, MatchStrategy } from "./types";
 
+// 🆕 导入增强字段选择器模块
+import { getRecommendedGroupsForStrategy, ALL_FIELD_GROUPS } from './enhanced-field-selector';
+
 // 统一维护各策略对应的字段集合，避免重复定义
-// 预设字段：'custom' 作为占位，默认空数组；实际由用户勾选决定
+// 🆕 扩展支持增强字段的预设策略
 export const PRESET_FIELDS: Record<Exclude<MatchStrategy, 'custom'> | 'custom', string[]> = {
   absolute: [
     "resource-id",
@@ -12,13 +15,55 @@ export const PRESET_FIELDS: Record<Exclude<MatchStrategy, 'custom'> | 'custom', 
     "package",
     "bounds",
     "index",
+    // 🆕 绝对定位策略增加交互状态字段
+    "clickable",
+    "enabled"
   ],
-  strict: ["resource-id", "text", "content-desc", "class", "package"],
-  relaxed: ["resource-id", "text", "content-desc", "class"],
+  strict: [
+    "resource-id", 
+    "text", 
+    "content-desc", 
+    "class", 
+    "package",
+    // 🆕 严格匹配策略增加父节点字段
+    "parent_resource_id",
+    "parent_class"
+  ],
+  relaxed: [
+    "resource-id", 
+    "text", 
+    "content-desc", 
+    "class",
+    // 🆕 宽松匹配策略增加父节点和子节点字段
+    "parent_class",
+    "first_child_text"
+  ],
   // 与 strict 字段相同，但后端按策略忽略位置相关字段
-  positionless: ["resource-id", "text", "content-desc", "class", "package"],
-  // 标准匹配：跨设备稳定，仅用语义字段
-  standard: ["resource-id", "text", "content-desc", "class", "package"],
+  positionless: [
+    "resource-id", 
+    "text", 
+    "content-desc", 
+    "class", 
+    "package",
+    // 🆕 无位置策略增加父节点字段，提高跨设备兼容性
+    "parent_resource_id",
+    "parent_class",
+    "parent_text"
+  ],
+  // 🆕 标准匹配：跨设备稳定，重点支持子节点增强
+  standard: [
+    "resource-id", 
+    "text", 
+    "content-desc", 
+    "class", 
+    "package",
+    // 子节点增强字段：解决按钮文字在子元素的问题
+    "first_child_text",
+    "first_child_content_desc",
+    "first_child_resource_id",
+    // 父节点增强字段：提供上下文信息
+    "parent_class"
+  ],
   // 自定义：不预置任何字段，由用户勾选
   custom: [],
 };
@@ -159,4 +204,149 @@ export function toBackendStrategy(
 ): Exclude<MatchStrategy, 'custom'> {
   if (strategy !== 'custom') return strategy;
   return hasPositionConstraint(fields, values) ? 'absolute' : 'standard';
+}
+
+// 🆕 增强字段支持函数
+
+/**
+ * 获取所有可用字段（包括增强字段）
+ */
+export function getAllAvailableFields(): string[] {
+  return ALL_FIELD_GROUPS.flatMap(group => group.fields.map(field => field.key));
+}
+
+/**
+ * 根据策略获取推荐的增强字段
+ */
+export function getEnhancedFieldsForStrategy(strategy: MatchStrategy): string[] {
+  const baseFields = PRESET_FIELDS[strategy] || [];
+  const recommendedGroups = getRecommendedGroupsForStrategy(strategy);
+  
+  const enhancedFields = ALL_FIELD_GROUPS
+    .filter(group => recommendedGroups.includes(group.id))
+    .flatMap(group => group.fields.map(field => field.key))
+    .filter(field => !baseFields.includes(field));
+  
+  return [...baseFields, ...enhancedFields];
+}
+
+/**
+ * 检查字段是否为增强字段（非基础字段）
+ */
+export function isEnhancedField(fieldKey: string): boolean {
+  const basicFields = ['resource-id', 'text', 'content-desc', 'class', 'package', 'bounds', 'index'];
+  return !basicFields.includes(fieldKey);
+}
+
+/**
+ * 按字段类型分组
+ */
+export function groupFieldsByType(fields: string[]): Record<string, string[]> {
+  const groups: Record<string, string[]> = {
+    basic: [],
+    parent: [],
+    child: [],
+    interaction: [],
+    clickable_ancestor: []
+  };
+  
+  fields.forEach(field => {
+    if (field.startsWith('parent_')) {
+      groups.parent.push(field);
+    } else if (field.startsWith('first_child_') || field === 'descendant_texts') {
+      groups.child.push(field);
+    } else if (field.startsWith('clickable_ancestor_')) {
+      groups.clickable_ancestor.push(field);
+    } else if (['clickable', 'checkable', 'checked', 'scrollable', 'enabled', 'password'].includes(field)) {
+      groups.interaction.push(field);
+    } else {
+      groups.basic.push(field);
+    }
+  });
+  
+  return groups;
+}
+
+/**
+ * 智能推荐字段：基于节点属性和策略
+ */
+export function suggestFieldsForNode(node: UiNode | null, strategy: MatchStrategy): {
+  recommended: string[];
+  optional: string[];
+  reasons: Record<string, string>;
+} {
+  if (!node) {
+    return { recommended: PRESET_FIELDS[strategy] || [], optional: [], reasons: {} };
+  }
+  
+  const attrs = node.attrs || {};
+  const recommended: string[] = [];
+  const optional: string[] = [];
+  const reasons: Record<string, string> = {};
+  
+  // 基础字段推荐逻辑
+  if (attrs['resource-id']) {
+    recommended.push('resource-id');
+    reasons['resource-id'] = '检测到资源ID，推荐使用（稳定性高）';
+  }
+  
+  if (attrs['text'] && String(attrs['text']).trim()) {
+    recommended.push('text');
+    reasons['text'] = '检测到文本内容，适合文本匹配';
+  }
+  
+  if (attrs['content-desc']) {
+    recommended.push('content-desc');
+    reasons['content-desc'] = '检测到内容描述，语义化程度高';
+  }
+  
+  // 类名推荐
+  if (attrs['class']) {
+    const className = String(attrs['class']);
+    if (className.includes('Button') || className.includes('Click')) {
+      recommended.push('class');
+      reasons['class'] = '检测到按钮类控件，推荐使用类名';
+    } else {
+      optional.push('class');
+      reasons['class'] = '常规控件类名，可选使用';
+    }
+  }
+  
+  // 🆕 增强字段智能推荐
+  
+  // 父节点字段推荐
+  if (strategy === 'standard' || strategy === 'positionless') {
+    if (!attrs['resource-id'] || !attrs['text']) {
+      optional.push('parent_resource_id');
+      optional.push('parent_class');
+      reasons['parent_resource_id'] = '当前元素信息不足，建议使用父节点资源ID增强';
+      reasons['parent_class'] = '父节点类名可提供容器上下文信息';
+    }
+  }
+  
+  // 子节点字段推荐
+  if (strategy === 'standard') {
+    const className = String(attrs['class'] || '');
+    if (className.includes('Layout') || className.includes('Container') || !attrs['text']) {
+      optional.push('first_child_text');
+      optional.push('first_child_resource_id');
+      reasons['first_child_text'] = '检测到容器控件，子节点文本可能更具体';
+      reasons['first_child_resource_id'] = '子节点可能有更准确的资源ID';
+    }
+  }
+  
+  // 交互状态推荐
+  if (attrs['clickable'] === 'true') {
+    optional.push('clickable');
+    reasons['clickable'] = '元素可点击，添加此字段可提高匹配精确度';
+  }
+  
+  if (attrs['checkable'] === 'true') {
+    optional.push('checkable');
+    optional.push('checked');
+    reasons['checkable'] = '检测到可选中控件，建议添加选中状态字段';
+    reasons['checked'] = '选中状态可用于状态验证';
+  }
+  
+  return { recommended, optional, reasons };
 }

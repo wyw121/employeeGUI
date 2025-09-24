@@ -37,6 +37,10 @@
   // 智能导航查找演示
     "src/components/smart-navigation-finder/**",
   "src/pages/SmartNavigationTestPage.tsx",
+  // 循环拖拽实验模块（当前未纳入主流程）
+  "src/modules/loop-drag-integration/**",
+  // 统一视图演示（示例数据，不参与本轮验证）
+  "src/components/unified-view/**",
     // ADB 授权向导（未纳入本轮工作）
     "src/pages/adb/auth/**",
     "src/pages/adb/AdbCenterPage.tsx",

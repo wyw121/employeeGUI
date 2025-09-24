@@ -8,6 +8,25 @@ export { SelectedFieldsTable } from './SelectedFieldsTable';
 export { NegativeConditionsEditor } from './NegativeConditionsEditor';
 export { PositiveConditionsEditor } from './PositiveConditionsEditor';
 
+// 🆕 增强字段选择器模块
+export { 
+  AdvancedFieldSelector,
+  FieldDescriptionPanel,
+  EnhancedFieldSelector,
+  FieldHelp,
+  ALL_FIELD_GROUPS,
+  BASIC_FIELDS_GROUP,
+  PARENT_FIELDS_GROUP,
+  CHILD_FIELDS_GROUP,
+  INTERACTION_FIELDS_GROUP,
+  CLICKABLE_ANCESTOR_FIELDS_GROUP,
+  getRecommendedGroupsForStrategy,
+  getFieldInfo,
+  analyzeFieldUsage,
+  type FieldInfo,
+  type FieldGroup
+} from './enhanced-field-selector';
+
 // 🆕 统一回填组件和工具
 export { 
   SetAsStepElementButton,

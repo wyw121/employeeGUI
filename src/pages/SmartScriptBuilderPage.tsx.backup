@@ -54,7 +54,6 @@ import { buildAndCacheDefaultMatchingFromElement } from "./SmartScriptBuilderPag
 import { SMART_ACTION_CONFIGS } from "./SmartScriptBuilderPage/helpers/constants";
 import { SmartPageFinderModal } from "../components/smart-page-finder";
 import { UniversalPageFinderModal } from "../components/universal-ui/UniversalPageFinderModal";
-import StepListPanel from "./SmartScriptBuilderPage/components/StepListPanel";
 import type { NodeLocator } from "../domain/inspector/entities/NodeLocator";
 import type { SnapshotInfo } from "../modules/snapshot-recovery/SnapshotRecoveryTypes";
 import SmartStepGenerator from "../modules/SmartStepGenerator";
@@ -129,13 +128,472 @@ import {
   buildLocatorFromCriteriaLike,
 } from "./SmartScriptBuilderPage/helpers/elementLocatorBuilder";
 import buildXmlSnapshotFromContext from "./SmartScriptBuilderPage/helpers/xmlSnapshotHelper";
-import StepListPanel from "./SmartScriptBuilderPage/components/StepListPanel";
-import { usePageFinder } from "./SmartScriptBuilderPage/hooks/usePageFinder";
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
 const { Panel } = Collapse;
 const { TextArea } = Input;
+
+// ==================== 接口定义 ====================
+  // 通讯录自动化操作 - 置顶优先显示
+  [SmartActionType.CONTACT_IMPORT_WORKFLOW]: {
+    name: "通讯录导入",
+    description: "完整的通讯录导入工作流程",
+    icon: "📱",
+    color: "green",
+    category: "contact",
+    parameters: [],
+    advanced: [
+      {
+        key: "confidence_threshold",
+        label: "置信度阈值",
+        type: "slider",
+        min: 0.1,
+        max: 1.0,
+        default: 0.8,
+      },
+      { key: "retry_count", label: "重试次数", type: "number", default: 3 },
+      {
+        key: "timeout_ms",
+        label: "超时时间(ms)",
+        type: "number",
+        default: 10000,
+      },
+    ],
+  },
+
+  [SmartActionType.SMART_FIND_ELEMENT]: {
+    name: "智能元素查找",
+    description: "动态查找并定位UI元素",
+    icon: "🔍",
+    color: "purple",
+    category: "smart",
+    parameters: [
+      {
+        key: "search_criteria",
+        label: "搜索条件",
+        type: "textarea",
+        required: true,
+      },
+      {
+        key: "click_if_found",
+        label: "找到后点击",
+        type: "boolean",
+        default: false,
+      },
+      {
+        key: "extract_attributes",
+        label: "提取属性",
+        type: "multiselect",
+        options: ["text", "bounds", "resource_id", "class_name"],
+        default: ["text", "bounds"],
+      },
+    ],
+    advanced: [
+      { key: "bounds_filter", label: "坐标范围过滤", type: "bounds" },
+      {
+        key: "element_type_filter",
+        label: "元素类型过滤",
+        type: "select",
+        options: ["Button", "TextView", "EditText", "ImageView", "Any"],
+        default: "Any",
+      },
+    ],
+  },
+
+  [SmartActionType.RECOGNIZE_PAGE]: {
+    name: "页面识别",
+    description: "智能识别当前页面状态",
+    icon: "📱",
+    color: "orange",
+    category: "smart",
+    parameters: [
+      {
+        key: "expected_state",
+        label: "期望页面状态",
+        type: "select",
+        required: false,
+        options: [
+          "Unknown",
+          "Home",
+          "AppMainPage",
+          "Loading",
+          "Dialog",
+          "Settings",
+          "ListPage",
+          "DetailPage",
+        ],
+      },
+      {
+        key: "confidence_threshold",
+        label: "置信度阈值",
+        type: "slider",
+        min: 0.1,
+        max: 1.0,
+        default: 0.7,
+      },
+    ],
+    advanced: [
+      {
+        key: "save_recognition_result",
+        label: "保存识别结果",
+        type: "boolean",
+        default: true,
+      },
+      {
+        key: "screenshot_on_fail",
+        label: "失败时截图",
+        type: "boolean",
+        default: true,
+      },
+    ],
+  },
+
+  [SmartActionType.VERIFY_ACTION]: {
+    name: "操作验证",
+    description: "验证操作是否成功执行",
+    icon: "✅",
+    color: "red",
+    category: "verification",
+    parameters: [
+      {
+        key: "verify_type",
+        label: "验证类型",
+        type: "select",
+        required: true,
+        options: [
+          "text_change",
+          "page_state_change",
+          "element_exists",
+          "element_disappears",
+        ],
+        default: "text_change",
+      },
+      {
+        key: "expected_result",
+        label: "期望结果",
+        type: "text",
+        required: true,
+      },
+      {
+        key: "timeout_ms",
+        label: "验证超时(ms)",
+        type: "number",
+        default: 5000,
+      },
+    ],
+    advanced: [
+      {
+        key: "retry_interval_ms",
+        label: "重试间隔(ms)",
+        type: "number",
+        default: 1000,
+      },
+      { key: "max_retries", label: "最大重试次数", type: "number", default: 3 },
+    ],
+  },
+
+  [SmartActionType.WAIT_FOR_PAGE_STATE]: {
+    name: "等待页面状态",
+    description: "等待页面切换到指定状态",
+    icon: "⏳",
+    color: "cyan",
+    category: "smart",
+    parameters: [
+      {
+        key: "expected_state",
+        label: "期望页面状态",
+        type: "select",
+        required: true,
+        options: [
+          "Home",
+          "AppMainPage",
+          "Loading",
+          "Dialog",
+          "Settings",
+          "ListPage",
+          "DetailPage",
+        ],
+      },
+      {
+        key: "timeout_ms",
+        label: "超时时间(ms)",
+        type: "number",
+        default: 10000,
+      },
+      {
+        key: "check_interval_ms",
+        label: "检查间隔(ms)",
+        type: "number",
+        default: 1000,
+      },
+    ],
+  },
+
+  [SmartActionType.EXTRACT_ELEMENT]: {
+    name: "提取元素信息",
+    description: "提取UI元素的详细信息",
+    icon: "📊",
+    color: "magenta",
+    category: "data",
+    parameters: [
+      {
+        key: "target_elements",
+        label: "目标元素",
+        type: "textarea",
+        required: true,
+      },
+      {
+        key: "extract_fields",
+        label: "提取字段",
+        type: "multiselect",
+        required: true,
+        options: [
+          "text",
+          "bounds",
+          "center",
+          "clickable",
+          "resource_id",
+          "class_name",
+        ],
+        default: ["text", "bounds", "clickable"],
+      },
+    ],
+    advanced: [
+      { key: "save_to_variable", label: "保存到变量", type: "text" },
+      {
+        key: "format_output",
+        label: "输出格式",
+        type: "select",
+        options: ["json", "csv", "plain"],
+        default: "json",
+      },
+    ],
+  },
+
+  [SmartActionType.SMART_NAVIGATION]: {
+    name: "智能导航",
+    description: "智能识别并点击导航栏按钮（底部、顶部、侧边、悬浮导航栏）",
+    icon: "🧭",
+    color: "geekblue",
+    category: "smart",
+    parameters: [
+      {
+        key: "navigation_type",
+        label: "导航栏类型",
+        type: "select",
+        required: true,
+        options: ["bottom", "top", "side", "floating"],
+        default: "bottom",
+      },
+      { key: "app_name", label: "应用名称", type: "text", required: true },
+      { key: "button_name", label: "按钮名称", type: "text", required: true },
+      {
+        key: "click_action",
+        label: "点击方式",
+        type: "select",
+        options: ["single_tap", "double_tap", "long_press"],
+        default: "single_tap",
+      },
+    ],
+    advanced: [
+      { key: "position_ratio", label: "位置范围", type: "bounds" },
+      {
+        key: "button_patterns",
+        label: "按钮模式",
+        type: "multiselect",
+        options: [
+          "首页",
+          "市集",
+          "发布",
+          "消息",
+          "我",
+          "微信",
+          "通讯录",
+          "发现",
+        ],
+      },
+      { key: "retry_count", label: "重试次数", type: "number", default: 3 },
+      {
+        key: "timeout_ms",
+        label: "超时时间(ms)",
+        type: "number",
+        default: 10000,
+      },
+    ],
+  },
+
+  // 应用操作 - 新增
+  [SmartActionType.LAUNCH_APP]: {
+    name: "打开应用",
+    description: "智能选择并启动设备上的应用程序",
+    icon: "🚀",
+    color: "cyan",
+    category: "app",
+    parameters: [
+      {
+        key: "app_selection_method",
+        label: "应用选择方式",
+        type: "select",
+        required: true,
+        options: ["manual", "auto_detect", "popular"],
+        default: "manual",
+      },
+      {
+        key: "wait_after_launch",
+        label: "启动后等待时间(ms)",
+        type: "number",
+        default: 3000,
+      },
+      {
+        key: "verify_launch",
+        label: "验证启动成功",
+        type: "boolean",
+        default: true,
+      },
+    ],
+    advanced: [
+      {
+        key: "fallback_method",
+        label: "失败后操作",
+        type: "select",
+        options: ["retry", "ignore", "error"],
+        default: "retry",
+      },
+      {
+        key: "max_retry_count",
+        label: "最大重试次数",
+        type: "number",
+        default: 3,
+      },
+    ],
+  },
+
+  [SmartActionType.COMPLETE_WORKFLOW]: {
+    name: "完整工作流程",
+    description: "执行完整的自动化工作流程",
+    icon: "🚀",
+    color: "gold",
+    category: "workflow",
+    parameters: [
+      {
+        key: "workflow_type",
+        label: "工作流程类型",
+        type: "select",
+        required: true,
+        options: [
+          "xiaohongshu_follow",
+          "contact_import",
+          "app_automation",
+          "custom",
+        ],
+      },
+      {
+        key: "workflow_config",
+        label: "工作流程配置",
+        type: "textarea",
+        required: true,
+      },
+    ],
+    advanced: [
+      {
+        key: "enable_smart_recovery",
+        label: "启用智能恢复",
+        type: "boolean",
+        default: true,
+      },
+      {
+        key: "detailed_logging",
+        label: "详细日志记录",
+        type: "boolean",
+        default: true,
+      },
+      {
+        key: "screenshot_on_error",
+        label: "出错时截图",
+        type: "boolean",
+        default: true,
+      },
+    ],
+  },
+
+  // 循环控制操作
+  [SmartActionType.LOOP_START]: {
+    name: "循环开始",
+    description: "标记循环体的开始",
+    icon: "🔄",
+    color: "blue",
+    category: "loop",
+    parameters: [
+      {
+        key: "loop_name",
+        label: "循环名称",
+        type: "text",
+        required: true,
+        default: "新循环",
+      },
+      {
+        key: "loop_count",
+        label: "循环次数",
+        type: "number",
+        required: true,
+        default: 3,
+      },
+      {
+        key: "break_condition",
+        label: "跳出条件",
+        type: "select",
+        options: ["none", "page_change", "element_found", "element_not_found"],
+        default: "none",
+      },
+      {
+        key: "break_condition_value",
+        label: "跳出条件值",
+        type: "text",
+        required: false,
+      },
+    ],
+    advanced: [
+      {
+        key: "max_iterations",
+        label: "最大迭代次数",
+        type: "number",
+        default: 100,
+      },
+      {
+        key: "delay_between_loops",
+        label: "循环间延迟(ms)",
+        type: "number",
+        default: 500,
+      },
+      {
+        key: "enable_debug_logging",
+        label: "启用调试日志",
+        type: "boolean",
+        default: false,
+      },
+    ],
+  },
+
+  [SmartActionType.LOOP_END]: {
+    name: "循环结束",
+    description: "标记循环体的结束",
+    icon: "🏁",
+    color: "blue",
+    category: "loop",
+    parameters: [
+      { key: "loop_id", label: "对应循环ID", type: "text", required: true },
+    ],
+    advanced: [
+      {
+        key: "log_iteration_results",
+        label: "记录迭代结果",
+        type: "boolean",
+        default: true,
+      },
+    ],
+  },
+};
 
 // ==================== 接口定义 ====================
 
@@ -270,7 +728,15 @@ const SmartScriptBuilderPage: React.FC = () => {
   const [currentDeviceId, setCurrentDeviceId] = useState<string>(""); // 当前选择的设备ID
   const [showAppComponent, setShowAppComponent] = useState(false); // 显示应用组件
   const [showNavigationModal, setShowNavigationModal] = useState(false); // 显示导航模态框
-  
+  const [showPageAnalyzer, setShowPageAnalyzer] = useState(false); // 显示智能页面分析器
+  const [snapshotFixMode, setSnapshotFixMode] = useState<{
+    enabled: boolean;
+    forStepId?: string;
+  }>({ enabled: false });
+  const [pendingAutoResave, setPendingAutoResave] = useState<boolean>(false);
+  const [isQuickAnalyzer, setIsQuickAnalyzer] = useState(false); // 标记是否是快捷页面分析器
+  const [editingStepForParams, setEditingStepForParams] =
+    useState<ExtendedSmartScriptStep | null>(null); // 当前正在修改参数的步骤
   const [lastNavigationConfig, setLastNavigationConfig] = useState<{
     app_name?: string;
     navigation_type?: string;
@@ -292,36 +758,14 @@ const SmartScriptBuilderPage: React.FC = () => {
   // 🆕 脚本质量验证状态
   const [isScriptValid, setIsScriptValid] = useState<boolean>(true);
   const [showQualityPanel, setShowQualityPanel] = useState<boolean>(false);
-  
-  // 🆕 当从“页面分析”预填创建新步骤时，若缺少XML但已具备匹配/定位信息，允许本次保存继续（仅一次）
-  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] =
-    useState<boolean>(false);
-
-  // 🆕 使用 usePageFinder Hook
-  const {
-    pageFinderProps,
-    openPageFinderForStep,
-    openQuickPageFinder,
-    openSnapshotFixer,
-    currentXmlContent,
-    currentDeviceInfo,
-    currentPageInfo,
-    updateCurrentXmlContext,
-    editingStepForParams, // Keep this for useEffect dependency
-    setEditingStepForParams, // Keep this for useEffect dependency
-  } = usePageFinder({
-    form,
-    steps,
-    setSteps,
-    currentDeviceId,
-    devices,
-    showAddModal: () => setIsModalVisible(true),
-    setEditingStep,
-    allowSaveWithoutXmlOnce,
-    setAllowSaveWithoutXmlOnce,
-    handleSaveStep, // Pass handleSaveStep
-  });
-
+  // 🆕 当前XML内容状态（用于自包含脚本）
+  const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
+  const [currentDeviceInfo, setCurrentDeviceInfo] = useState<
+    Partial<XmlSnapshot["deviceInfo"]>
+  >({});
+  const [currentPageInfo, setCurrentPageInfo] = useState<
+    Partial<XmlSnapshot["pageInfo"]>
+  >({});
 
   // 初始化设备选择
   useEffect(() => {
@@ -395,8 +839,51 @@ const SmartScriptBuilderPage: React.FC = () => {
     setIsModalVisible(true);
   };
 
+  // 🆕 处理快捷页面分析器
+  const handleQuickPageAnalyzer = () => {
+    setIsQuickAnalyzer(true); // 标记为快捷模式
+    setEditingStepForParams(null); // 清空修改参数模式
+    setShowPageAnalyzer(true);
+  };
+
+  // 🆕 更新当前XML内容状态（用于自包含脚本）
+  const updateCurrentXmlContext = useCallback(
+    (
+      xmlContent: string,
+      deviceInfo?: Partial<XmlSnapshot["deviceInfo"]>,
+      pageInfo?: Partial<XmlSnapshot["pageInfo"]>
+    ) => {
+      // 🔧 防重复处理：检查内容是否真的发生了变化
+      if (currentXmlContent === xmlContent) {
+        console.log("⏸️ XML内容相同，跳过状态更新:", {
+          xmlLength: xmlContent.length,
+        });
+        return;
+      }
+
+      setCurrentXmlContent(xmlContent);
+      if (deviceInfo) {
+        setCurrentDeviceInfo((prev) => ({ ...prev, ...deviceInfo }));
+      }
+      if (pageInfo) {
+        setCurrentPageInfo((prev) => ({ ...prev, ...pageInfo }));
+      }
+      console.log("🔄 已更新当前XML上下文:", {
+        xmlLength: xmlContent.length,
+        deviceInfo,
+        pageInfo,
+      });
+    },
+    [currentXmlContent]
+  ); // 🔧 添加依赖项检查
+
+  // 🆕 当从“页面分析”预填创建新步骤时，若缺少XML但已具备匹配/定位信息，允许本次保存继续（仅一次）
+  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] =
+    useState<boolean>(false);
+
   // 🆕 从页面分析器获取当前XML内容
   const getCurrentXmlFromAnalyzer = (): string => {
+    // 这里可以从UniversalPageFinderModal获取当前分析的XML
     return currentXmlContent;
   };
 
@@ -520,7 +1007,11 @@ const SmartScriptBuilderPage: React.FC = () => {
       xmlContentLength: step.parameters?.xmlContent?.length || 0,
       allParameterKeys: Object.keys(step.parameters || {}),
     });
-    openPageFinderForStep(step);
+
+    // 🆕 自包含迁移在 useEffect 中自动完成；这里不再写入旧字段，仅设置编辑态
+    setEditingStepForParams(step); // 标记当前修改的步骤
+    setIsQuickAnalyzer(false); // 清除快捷模式
+    setShowPageAnalyzer(true);
   };
 
   // 编辑步骤
@@ -536,7 +1027,7 @@ const SmartScriptBuilderPage: React.FC = () => {
   };
 
   // 保存步骤
-  async function handleSaveStep() { // Changed to function declaration to allow passing to hook
+  const handleSaveStep = async () => {
     try {
       const values = await form.validateFields();
       console.log("🔍 表单验证后的所有值:", values);
@@ -663,7 +1154,12 @@ const SmartScriptBuilderPage: React.FC = () => {
               xmlSource,
               missingXml,
             });
-            openSnapshotFixer(stepId); // Use function from hook
+            setSnapshotFixMode({ enabled: true, forStepId: stepId });
+            setPendingAutoResave(true);
+            setIsQuickAnalyzer(false);
+            setEditingStepForParams(null);
+            setShowPageAnalyzer(true);
+            message.info("正在采集页面快照以修复当前步骤，请稍候…");
           };
 
           if (missingXml) {
@@ -962,45 +1458,69 @@ const SmartScriptBuilderPage: React.FC = () => {
     }
   };
 
-  // 更新循环配置
-  const handleUpdateLoopConfig = (
-    loopId: string,
-    updates: Partial<LoopConfig>
-  ) => {
-    setLoopConfigs((prev) =>
-      prev.map((config) =>
-        config.loopId === loopId ? { ...config, ...updates } : config
-      )
-    );
+  // 删除步骤（由组件级 Popconfirm 调用）
+  const handleDeleteStep = (stepId: string) => {
+    setSteps((prev) => prev.filter((s) => s.id !== stepId));
+    message.success("步骤删除成功");
+  };
 
-    // 同步更新相关步骤的参数
+  // 切换步骤启用状态
+  const handleToggleStep = (stepId: string) => {
+    setSteps((prev) =>
+      prev.map((s) => (s.id === stepId ? { ...s, enabled: !s.enabled } : s))
+    );
+  };
+
+  // 处理批量匹配操作 - 支持双向转换：smart_find_element ⇄ batch_match
+  const handleBatchMatch = (stepId: string) => {
     setSteps((prev) =>
       prev.map((step) => {
-        if (
-          (step.step_type === SmartActionType.LOOP_START ||
-            step.step_type === SmartActionType.LOOP_END) &&
-          step.parameters?.loop_id === loopId
-        ) {
-          return {
-            ...step,
-            name:
-              step.step_type === SmartActionType.LOOP_START
-                ? `循环开始 - ${updates.name || step.name}`
-                : step.name,
-            description:
-              step.step_type === SmartActionType.LOOP_START
-                ? `开始执行 ${updates.name || "循环"}`
-                : step.description,
-            parameters: {
-              ...step.parameters,
-              loop_name: updates.name || step.parameters?.loop_name,
-              loop_count: updates.iterations || step.parameters?.loop_count,
-            },
-          };
+        if (step.id === stepId) {
+          // 情况1: smart_find_element -> batch_match
+          if (step.step_type === "smart_find_element") {
+            return {
+              ...step,
+              step_type: "batch_match",
+              name: step.name.replace("智能元素查找", "批量匹配"),
+              description: `${step.description} (批量匹配模式 - 动态查找)`,
+              parameters: {
+                ...step.parameters,
+                is_batch_match: true,
+                original_step_type: "smart_find_element", // 保留原始类型
+              },
+            };
+          }
+
+          // 情况2: batch_match -> smart_find_element
+          if (step.step_type === "batch_match") {
+            const cleanedParameters = { ...step.parameters };
+            // 清理批量匹配相关的参数
+            delete cleanedParameters.is_batch_match;
+            delete cleanedParameters.original_step_type;
+
+            return {
+              ...step,
+              step_type: "smart_find_element",
+              name: step.name.replace("批量匹配", "智能元素查找"),
+              description: step.description.replace(
+                /\s*\(批量匹配模式 - 动态查找\)$/,
+                ""
+              ),
+              parameters: cleanedParameters,
+            };
+          }
         }
         return step;
       })
     );
+
+    // 根据当前步骤类型显示相应的成功消息
+    const currentStep = steps.find((s) => s.id === stepId);
+    if (currentStep?.step_type === "smart_find_element") {
+      message.success("已转换为批量匹配模式，将使用动态元素查找");
+    } else if (currentStep?.step_type === "batch_match") {
+      message.success("已切换回智能元素查找模式，将使用预设坐标");
+    }
   };
 
   // ==================== 循环管理函数 ====================
@@ -1137,6 +1657,60 @@ const SmartScriptBuilderPage: React.FC = () => {
         message.success("循环删除成功");
       },
     });
+  };
+
+  // 更新循环配置
+  const handleUpdateLoopConfig = (
+    loopId: string,
+    updates: Partial<LoopConfig>
+  ) => {
+    setLoopConfigs((prev) =>
+      prev.map((config) =>
+        config.loopId === loopId ? { ...config, ...updates } : config
+      )
+    );
+
+    // 同步更新相关步骤的参数
+    setSteps((prev) =>
+      prev.map((step) => {
+        if (
+          (step.step_type === SmartActionType.LOOP_START ||
+            step.step_type === SmartActionType.LOOP_END) &&
+          step.parameters?.loop_id === loopId
+        ) {
+          return {
+            ...step,
+            name:
+              step.step_type === SmartActionType.LOOP_START
+                ? `循环开始 - ${updates.name || step.name}`
+                : step.name,
+            description:
+              step.step_type === SmartActionType.LOOP_START
+                ? `开始执行 ${updates.name || "循环"}`
+                : step.description,
+            parameters: {
+              ...step.parameters,
+              loop_name: updates.name || step.parameters?.loop_name,
+              loop_count: updates.iterations || step.parameters?.loop_count,
+            },
+          };
+        }
+        return step;
+      })
+    );
+  };
+
+  // 🆕 处理通讯录工作流步骤生成
+  const handleContactWorkflowStepsGenerated = (
+    generatedSteps: ExtendedSmartScriptStep[]
+  ) => {
+    console.log("📱 生成的通讯录工作流步骤:", generatedSteps);
+
+    // 添加生成的步骤到步骤列表
+    setSteps((prev) => [...prev, ...generatedSteps]);
+
+    message.success(`已生成 ${generatedSteps.length} 个通讯录导入步骤`);
+    setShowContactWorkflowSelector(false);
   };
 
   // 保存智能脚本
@@ -1710,18 +2284,82 @@ const SmartScriptBuilderPage: React.FC = () => {
       <Row gutter={16} className="h-full">
         {/* 左侧：可拖拽的步骤列表 */}
         <Col span={16}>
-          <StepListPanel
-            steps={steps}
-            setSteps={setSteps}
-            loopConfigs={loopConfigs}
-            setLoopConfigs={setLoopConfigs}
-            currentDeviceId={currentDeviceId}
-            devices={devices}
-            handleEditStep={handleEditStep}
-            openQuickPageFinder={openQuickPageFinder}
-            handleEditStepParams={handleEditStepParams}
-            handleAddStep={handleAddStep}
-          />
+          <div style={{ height: "100%" }}>
+            <EnhancedDraggableStepsContainer
+              steps={steps}
+              loopConfigs={loopConfigs}
+              onStepsChange={setSteps}
+              onLoopConfigsChange={setLoopConfigs}
+              currentDeviceId={currentDeviceId}
+              devices={devices}
+              onEditStep={handleEditStep}
+              onDeleteStep={handleDeleteStep}
+              onDeleteLoop={handleDeleteLoop}
+              onToggleStep={handleToggleStep}
+              onOpenPageAnalyzer={handleQuickPageAnalyzer}
+              onEditStepParams={handleEditStepParams}
+              StepTestButton={StepTestButton}
+              onCreateLoop={handleCreateLoop}
+              onCreateContactImport={handleCreateContactImport}
+              onAddStep={handleAddStep}
+              onBatchMatch={handleBatchMatch}
+              onCreateScreenInteraction={(tpl: any | any[]) => {
+                const baseOrder = steps.length;
+                const now = Date.now();
+                const ensureStep = (s: any, idx: number) => {
+                  const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+                  if (!step.id) step.id = `step_${now + idx}_scroll`;
+                  if (!step.step_type) step.step_type = "smart_scroll";
+                  if (!step.parameters)
+                    step.parameters = {
+                      direction: "down",
+                      distance: 600,
+                      speed_ms: 300,
+                    } as any;
+                  step.order = baseOrder + idx + 1;
+                  return step;
+                };
+                const list = Array.isArray(tpl)
+                  ? tpl.map(ensureStep)
+                  : [ensureStep(tpl, 0)];
+                setSteps((prev) => [...prev, ...list]);
+                if (list.length === 1) {
+                  const dir = (list[0].parameters as any)?.direction || "down";
+                  message.success(`已添加屏幕交互步骤：智能滚动（${dir}）`);
+                } else {
+                  message.success(`已添加屏幕交互步骤 ${list.length} 个`);
+                }
+              }}
+              onCreateTapAction={(tpl: any | any[]) => {
+                const baseOrder = steps.length;
+                const now = Date.now();
+                const ensureStep = (s: any, idx: number) => {
+                  const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+                  if (!step.id) step.id = `step_${now + idx}_tap`;
+                  if (!step.step_type) step.step_type = "tap";
+                  if (!step.parameters)
+                    step.parameters = { position: "center" } as any;
+                  step.order = baseOrder + idx + 1;
+                  return step;
+                };
+                const list = Array.isArray(tpl)
+                  ? tpl.map(ensureStep)
+                  : [ensureStep(tpl, 0)];
+                setSteps((prev) => [...prev, ...list]);
+                if (list.length === 1) {
+                  const p: any = list[0].parameters || {};
+                  const label = p.duration_ms ? `长按` : `轻点`;
+                  const pos =
+                    p.position === "absolute" && p.x !== undefined
+                      ? `(${p.x}, ${p.y})`
+                      : "中心";
+                  message.success(`已添加屏幕交互步骤：${label} ${pos}`);
+                } else {
+                  message.success(`已添加轻点步骤 ${list.length} 个`);
+                }
+              }}
+            />
+          </div>
         </Col>
 
         {/* 右侧：控制面板 */}
@@ -2054,480 +2692,7 @@ const SmartScriptBuilderPage: React.FC = () => {
                         type="primary"
                         size="large"
                         icon={<EyeOutlined />}
-                        onClick={openQuickPageFinder} // Use from hook
-                      >
-                        打开智能页面分析器
-                      </Button>
-                      <br />
-                      <Text
-                        type="secondary"
-                        style={{ marginTop: 8, display: "block" }}
-                      >
-                        配置设备连接并分析页面，智能识别可操作元素
-                      </Text>
-                    </Card>
-                  </div>
-                );
-              }
-
-              return (
-                <div>
-                  <Divider orientation="left">参数配置</Divider>
-                  <Alert
-                    message={config.description}
-                    type="info"
-                    showIcon
-                    className="mb-4"
-                  />
-
-                  {config.parameters?.map((param) => (
-                    <Form.Item
-                      key={param.key}
-                      name={param.key}
-                      label={param.label}
-                      rules={
-                        param.required
-                          ? [
-                              {
-                                required: true,
-                                message: `请输入${param.label}`,
-                              },
-                            ]
-                          : []
-                      }
-                      initialValue={param.default}
-                    >
-                      {renderParameterInput(param, undefined, () => {})}
-                    </Form.Item>
-                  ))}
-
-                  {config.advanced && config.advanced.length > 0 && (
-                    <Collapse size="small" className="mt-4">
-                      <Panel header="高级配置" key="advanced">
-                        {config.advanced.map((param) => (
-                          <Form.Item
-                            key={param.key}
-                            name={param.key}
-                            label={param.label}
-                            initialValue={param.default}
-                          >
-                            {renderParameterInput(param, undefined, () => {})}
-                          </Form.Item>
-                        ))}
-                      </Panel>
-                    </Collapse>
-                  )}
-                </div>
-              );
-            }}
-          </Form.Item>
-
-          {/* 🆕 隐藏字段：保存元素属性用于指纹匹配 */}
-          <Form.Item name="text" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="element_text" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="element_type" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="resource_id" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="content_desc" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="bounds" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="smartDescription" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="smartAnalysis" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="class_name" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="clickable" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="parent" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="siblings" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="xpath" hidden>
-            <Input />
-          </Form.Item>
-
-          {/* 🆕 XML缓存和增强信息隐藏字段 */}
-          <Form.Item name="xmlCacheId" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="xmlContent" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="xmlTimestamp" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="deviceId" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="deviceName" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="elementSummary" hidden>
-            <Input />
-          </Form.Item>
-          {/* 🆕 自包含：注册隐藏字段以承载对象类型的 xmlSnapshot，确保保存时可获取 */}
-          <Form.Item name="xmlSnapshot" hidden>
-            <Input />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 快速应用选择Modal */}
-      <Modal
-        title="快速添加应用启动步骤"
-        open={showAppComponent}
-        onCancel={() => setShowAppComponent(false)}
-        footer={null}
-        width={900}
-      >
-        <Alert
-          message="快速创建应用启动步骤"
-          description="选择一个应用并配置启动参数，将自动创建一个智能应用启动步骤"
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-
-        <LaunchAppSmartComponent
-          deviceId={currentDeviceId}
-          onChange={(params) => {
-            // 临时存储参数，等待用户确认添加
-          }}
-          onExecute={async (params) => {
-            // 创建新的智能步骤
-            if (params.selected_app) {
-              const newStep: SmartScriptStep = {
-                id: `step_${Date.now()}`,
-                step_type: SmartActionType.LAUNCH_APP,
-                name: `启动${params.selected_app.app_name}`,
-                description: `智能启动应用: ${params.selected_app.app_name}`,
-                parameters: params,
-                enabled: true,
-                order: steps.length,
-              };
-
-              setSteps((prev) => [...prev, newStep]);
-              setShowAppComponent(false);
-              message.success(
-                `已添加应用启动步骤: ${params.selected_app.app_name}`
-              );
-              return true;
-            }
-                <Row gutter={8}>
-                  <Col span={12}>
-                    <Button
-                      block
-                      icon={<SaveOutlined />}
-                      disabled={steps.length === 0}
-                      onClick={handleSaveScript}
-                    >
-                      快速保存 (旧版)
-                    </Button>
-                  </Col>
-                  <Col span={12}>
-                    <Button block icon={<EyeOutlined />}>
-                      预览脚本
-                    </Button>
-                  </Col>
-                </Row>
-
-                {executionResult && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded">
-                    <div className="text-sm font-medium mb-2">执行结果</div>
-                    <div className="space-y-1 text-xs">
-                      <div>
-                        状态:{" "}
-                        <Tag color={executionResult.success ? "green" : "red"}>
-                          {executionResult.success ? "成功" : "失败"}
-                        </Tag>
-                      </div>
-                      <div>总步骤: {executionResult.total_steps}</div>
-                      <div>执行成功: {executionResult.executed_steps}</div>
-                      <div>执行失败: {executionResult.failed_steps}</div>
-                      <div>耗时: {executionResult.duration_ms}ms</div>
-                    </div>
-                  </div>
-                )}
-              </Space>
-            </Card>
-
-            {/* 单步测试结果 */}
-            <TestResultsDisplay />
-
-            {/* 智能功能说明 */}
-            <Card
-              title={
-                <>
-                  <BulbOutlined className="mr-2" />
-                  智能功能特性
-                </>
-              }
-            >
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center space-x-2">
-                  <CheckCircleOutlined className="text-green-500" />
-                  <span>页面状态智能识别</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircleOutlined className="text-green-500" />
-                  <span>UI元素动态定位</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircleOutlined className="text-green-500" />
-                  <span>操作结果自动验证</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircleOutlined className="text-green-500" />
-                  <span>智能重试和恢复</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircleOutlined className="text-green-500" />
-                  <span>复杂工作流程支持</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* 操作类型说明 */}
-            <Card title="🏷️ 操作类型分类">
-              <Collapse size="small">
-                <Panel header="基础操作" key="basic">
-                  <div className="text-xs space-y-1">
-                    <div>• 基础点击 - 固定坐标点击</div>
-                    <div>• 滑动操作 - 屏幕滑动</div>
-                    <div>• 文本输入 - 键盘输入</div>
-                    <div>• 等待操作 - 时间延迟</div>
-                  </div>
-                </Panel>
-                <Panel header="智能操作" key="smart">
-                  <div className="text-xs space-y-1">
-                    <div>• 智能点击 - AI识别元素</div>
-                    <div>• 智能查找 - 动态元素定位</div>
-                    <div>• 页面识别 - 状态智能判断</div>
-                    <div>• 智能导航 - 复杂路径规划</div>
-                  </div>
-                </Panel>
-                <Panel header="验证操作" key="verification">
-                  <div className="text-xs space-y-1">
-                    <div>• 操作验证 - 结果确认</div>
-                    <div>• 状态等待 - 页面切换等待</div>
-                    <div>• 数据提取 - 信息采集</div>
-                  </div>
-                </Panel>
-              </Collapse>
-            </Card>
-
-            {/* 🆕 调试和测试区域 */}
-            <Card title="🧪 调试测试">
-              <Space direction="vertical" className="w-full">
-                <Button
-                  size="small"
-                  type="default"
-                  block
-                  icon={<BulbOutlined />}
-                  onClick={() => {
-                    console.log("🧪 运行元素名称映射测试...");
-                    // runAllElementNameMapperTests(); // 暂时注释掉，函数未导入
-                    message.info("元素名称映射测试功能暂时禁用");
-                  }}
-                >
-                  测试元素名称映射
-                </Button>
-                <Button
-                  size="small"
-                  type="default"
-                  block
-                  icon={<RobotOutlined />}
-                  onClick={() => {
-                    console.log("🧪 运行智能步骤生成器测试...");
-                    testSmartStepGenerator();
-                    testVariousCases();
-                  }}
-                >
-                  测试智能步骤生成
-                </Button>
-
-                {/* 🆕 分布式脚本质量检查按钮 */}
-                <Button
-                  size="small"
-                  type={isScriptValid ? "default" : "primary"}
-                  danger={!isScriptValid}
-                  block
-                  icon={
-                    isScriptValid ? (
-                      <CheckCircleOutlined />
-                    ) : (
-                      <WarningOutlined />
-                    )
-                  }
-                  onClick={() => setShowQualityPanel(true)}
-                  disabled={steps.length === 0}
-                >
-                  {isScriptValid ? "质量检查通过" : "需要质量修复"} (
-                  {steps.length} 步骤)
-                </Button>
-              </Space>
-            </Card>
-          </Space>
-        </Col>
-      </Row>
-
-      {/* 步骤编辑模态框 */}
-      <Modal
-        title={editingStep ? "编辑智能步骤" : "添加智能步骤"}
-        open={isModalVisible}
-        onOk={handleSaveStep}
-        onCancel={() => setIsModalVisible(false)}
-        width={600}
-        maskClosable={false}
-        zIndex={1000} // 设置基础z-index，确保子模态框可以显示在其上方
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            step_type: SmartActionType.CONTACT_IMPORT_WORKFLOW, // 默认选择通讯录导入
-            name: "通讯录导入", // 默认步骤名称
-            wait_after: 1000,
-          }}
-        >
-          <Form.Item
-            name="step_type"
-            label="操作类型"
-            rules={[{ required: true, message: "请选择操作类型" }]}
-          >
-            <Select placeholder="请选择智能操作类型">
-              {Object.entries(SMART_ACTION_CONFIGS).map(([key, config]) => (
-                <Option key={key} value={key}>
-                  <Space>
-                    <span>{config.icon}</span>
-                    <span>{config.name}</span>
-                    <Tag color={config.color}>{config.category}</Tag>
-                  </Space>
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="name"
-                label="步骤名称 (可选)"
-                help="默认为对应操作类型名称"
-              >
-                <Input placeholder="步骤名称将自动设置为操作类型名称" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="description" label="步骤描述">
-                <Input placeholder="请输入步骤描述" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item dependencies={["step_type"]} noStyle>
-            {({ getFieldValue }) => {
-              const stepType = getFieldValue("step_type");
-              const config = SMART_ACTION_CONFIGS[stepType];
-
-              if (!config) return null;
-
-              // 特殊处理：如果是LAUNCH_APP类型，使用专门的智能组件
-              if (stepType === SmartActionType.LAUNCH_APP) {
-                return (
-                  <div>
-                    <Divider orientation="left">智能应用启动配置</Divider>
-                    <Alert
-                      message="使用智能应用启动组件，提供完整的应用选择和启动功能"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <LaunchAppSmartComponent
-                      deviceId={currentDeviceId}
-                      value={
-                        editingStep?.parameters as LaunchAppComponentParams
-                      }
-                      onChange={(params) => {
-                        // 同步更新表单数据
-                        form.setFieldsValue(params);
-                      }}
-                      onExecute={async (params) => {
-                        // 这里可以添加执行逻辑
-                        message.success("应用启动测试完成");
-                        return true;
-                      }}
-                    />
-                  </div>
-                );
-              }
-
-              // 特殊处理：如果是SMART_NAVIGATION类型，显示配置按钮
-              if (stepType === SmartActionType.SMART_NAVIGATION) {
-                return (
-                  <div>
-                    <Divider orientation="left">智能导航配置</Divider>
-                    <Alert
-                      message="智能导航支持自动识别导航栏并点击指定按钮，适用于底部导航栏、顶部导航栏等场景"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Card className="text-center" style={{ marginBottom: 16 }}>
-                      <Button
-                        type="primary"
-                        size="large"
-                        icon={<SettingOutlined />}
-                        onClick={() => setShowNavigationModal(true)}
-                      >
-                        打开智能导航配置器
-                      </Button>
-                      <br />
-                      <Text
-                        type="secondary"
-                        style={{ marginTop: 8, display: "block" }}
-                      >
-                        包含向导模式（推荐新手）和专业模式（支持自定义配置）
-                      </Text>
-                    </Card>
-                  </div>
-                );
-              }
-
-              // 特殊处理：如果是SMART_FIND_ELEMENT类型，显示智能页面分析器
-              if (stepType === SmartActionType.SMART_FIND_ELEMENT) {
-                return (
-                  <div>
-                    <Divider orientation="left">智能元素查找配置</Divider>
-                    <Alert
-                      message="智能元素查找通过分析当前页面UI结构，自动识别可操作元素并支持智能去重和分类，提供精确的元素定位能力"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Card className="text-center" style={{ marginBottom: 16 }}>
-                      <Button
-                        type="primary"
-                        size="large"
-                        icon={<EyeOutlined />}
-                        onClick={openQuickPageFinder} // Use from hook
+                        onClick={() => setShowPageAnalyzer(true)}
                       >
                         打开智能页面分析器
                       </Button>
@@ -2729,7 +2894,709 @@ const SmartScriptBuilderPage: React.FC = () => {
       />
 
       {/* Universal UI智能页面查找模态框 */}
-      <UniversalPageFinderModal {...pageFinderProps} />
+      <UniversalPageFinderModal
+        visible={showPageAnalyzer}
+        initialViewMode={editingStepForParams ? "grid" : "visual"} // 🆕 修改参数时使用网格检查器视图
+        snapshotOnlyMode={snapshotFixMode.enabled}
+        onSnapshotCaptured={(snapshot) => {
+          // 仅写入自包含快照，不再写旧字段
+          form.setFieldValue("xmlSnapshot", snapshot);
+          // 同步更新当前上下文，便于后续基于当前页面生成元素定位器
+          updateCurrentXmlContext(
+            snapshot.xmlContent,
+            snapshot.deviceInfo,
+            snapshot.pageInfo
+          );
+
+          message.success("已回填最新页面快照");
+
+          // 退出快照修复模式
+          setSnapshotFixMode({ enabled: false, forStepId: undefined });
+
+          // 若标记为自动重试保存，则再次调用保存
+          if (pendingAutoResave) {
+            setPendingAutoResave(false);
+            // 异步微任务以确保表单已更新
+            setTimeout(() => {
+              handleSaveStep();
+            }, 0);
+          }
+        }}
+        // 🆕 统一快照更新回调：任意 XML 载入后立即回填自包含快照并同步上下文
+        onSnapshotUpdated={(snapshot) => {
+          try {
+            // 表单即时回填（无需等待用户点击“应用到步骤”）
+            form.setFieldValue("xmlSnapshot", snapshot);
+            // 同步当前上下文（便于后续定位器/策略生成）
+            updateCurrentXmlContext(
+              snapshot.xmlContent,
+              snapshot.deviceInfo,
+              snapshot.pageInfo
+            );
+            // 若处于“修复快照后自动重试保存”模式，确保 pending 标志生效
+            if (snapshotFixMode.enabled && pendingAutoResave) {
+              // 不立即触发保存，这里仅确保数据到位；真正触发在 onSnapshotCaptured 或用户保存
+            }
+          } catch (e) {
+            console.warn("onSnapshotUpdated 处理失败（可忽略）:", e);
+          }
+        }}
+        // 🆕 从步骤XML源加载 - 优先使用步骤保存的XML快照
+        loadFromStepXml={useMemo(
+          () =>
+            editingStepForParams
+              ? {
+                  stepId: editingStepForParams.id,
+                  xmlCacheId: editingStepForParams.parameters?.xmlCacheId,
+                  // 🆕 优先使用新的自包含XML快照
+                  xmlContent:
+                    editingStepForParams.parameters?.xmlSnapshot?.xmlContent ||
+                    editingStepForParams.parameters?.xmlContent,
+                  deviceId:
+                    editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
+                      ?.deviceId || editingStepForParams.parameters?.deviceId,
+                  deviceName:
+                    editingStepForParams.parameters?.xmlSnapshot?.deviceInfo
+                      ?.deviceName ||
+                    editingStepForParams.parameters?.deviceName,
+                }
+              : undefined,
+          [
+            editingStepForParams?.id,
+            editingStepForParams?.parameters?.xmlSnapshot?.xmlContent,
+            editingStepForParams?.parameters?.xmlContent,
+            editingStepForParams?.parameters?.xmlCacheId,
+          ]
+        )}
+        // 🆕 预选定位器：根据步骤参数构建，支持 bounds/resource_id/text/class/xpath
+        preselectLocator={(() => {
+          const p: any = editingStepForParams?.parameters || {};
+          const locator: NodeLocator = {} as any;
+          // XPath 优先：优先从 elementLocator.additionalInfo.xpath 取（最新来源更可靠）
+          const preferXPath: string | undefined =
+            p.elementLocator?.additionalInfo?.xpath || p.xpath;
+          if (
+            preferXPath &&
+            typeof preferXPath === "string" &&
+            preferXPath.trim()
+          ) {
+            // 简单判断：以 / 开头认为是绝对 XPath，否则当作谓词
+            if (/^\s*\//.test(preferXPath))
+              locator.absoluteXPath = String(preferXPath).trim();
+            else locator.predicateXPath = String(preferXPath).trim();
+          }
+          // 属性与 bounds
+          locator.attributes = {
+            resourceId: p.resource_id || p.element_resource_id || undefined,
+            text: p.element_text || p.text || undefined,
+            className: p.class_name || undefined,
+            contentDesc: p.content_desc || undefined,
+            packageName: p.package_name || undefined,
+          };
+          // 优先使用步骤参数中的标准 bounds 字符串
+          if (p.bounds && typeof p.bounds === "string") {
+            locator.bounds = p.bounds;
+          } else {
+            // 其次尝试从 elementLocator.selectedBounds 推导
+            const sb = p.elementLocator?.selectedBounds;
+            if (
+              sb &&
+              typeof sb.left === "number" &&
+              typeof sb.top === "number" &&
+              typeof sb.right === "number" &&
+              typeof sb.bottom === "number"
+            ) {
+              locator.bounds = `[${sb.left},${sb.top}][${sb.right},${sb.bottom}]`;
+            } else if (p.elementLocator?.additionalInfo?.bounds) {
+              // 再次兜底：若 additionalInfo 已存有 bounds 字符串
+              locator.bounds = p.elementLocator.additionalInfo.bounds;
+            }
+          }
+          // 如果完全没有可用信息，则不传定位器
+          const hasAny =
+            locator.absoluteXPath ||
+            locator.predicateXPath ||
+            locator.bounds ||
+            (locator.attributes &&
+              Object.values(locator.attributes).some(Boolean));
+          return hasAny ? locator : undefined;
+        })()}
+        // 🆕 首选匹配预设：若为“修改参数”，优先以步骤参数.matching 为准
+        initialMatching={useMemo(() => {
+          if (!editingStepForParams) return undefined;
+          const m: any = editingStepForParams.parameters?.matching;
+          if (m && Array.isArray(m.fields) && m.fields.length > 0) {
+            return {
+              strategy: String(m.strategy || "standard"),
+              fields: m.fields as string[],
+              values: (m.values || {}) as Record<string, string>,
+              includes: m.includes as Record<string, string[]>,
+              excludes: m.excludes as Record<string, string[]>,
+            } as any;
+          }
+          return undefined;
+        }, [editingStepForParams?.id])}
+        // 🆕 XML内容更新回调
+        onXmlContentUpdated={updateCurrentXmlContext}
+        // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略：
+        // - 若处于“修改参数”模式：更新当前步骤参数并关闭分析器
+        // - 否则（页面分析模式）：填充表单并打开新建步骤模态
+        onApplyCriteria={(criteria) => {
+          try {
+            // 构建强类型的 MatchCriteria 以满足辅助函数的类型要求
+            const matchCriteria: UIMatchCriteria = {
+              strategy: criteria.strategy as UIMatchStrategy,
+              fields: criteria.fields,
+              values: criteria.values,
+              includes: (criteria as any).includes,
+              excludes: (criteria as any).excludes,
+            };
+            // 生成简短标题/描述（模块化 helper，ESM 顶层导入）
+            const nextTitle: string =
+              buildShortTitleFromCriteria(matchCriteria);
+            const nextDesc: string =
+              buildShortDescriptionFromCriteria(matchCriteria);
+            if (editingStepForParams) {
+              // === 修改参数模式：更新当前步骤 ===
+              const stepId = editingStepForParams.id;
+              setSteps((prev) =>
+                prev.map((s) => {
+                  if (s.id !== stepId) return s;
+                  const p: any = { ...(s.parameters || {}) };
+                  // 将匹配策略写入标准化字段 parameters.matching
+                  p.matching = {
+                    strategy: criteria.strategy,
+                    fields: criteria.fields,
+                    values: criteria.values,
+                    includes: (criteria as any).includes,
+                    excludes: (criteria as any).excludes,
+                    updatedAt: Date.now(),
+                  };
+                  // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
+                  p.elementLocator = p.elementLocator || {};
+                  p.elementLocator.additionalInfo = {
+                    ...(p.elementLocator.additionalInfo || {}),
+                    // 若本次回填携带了预览的 xpath，则优先记录下来
+                    xpath:
+                      (criteria as any).preview?.xpath ||
+                      p.elementLocator.additionalInfo?.xpath ||
+                      undefined,
+                    resourceId:
+                      p.elementLocator.additionalInfo?.resourceId ||
+                      criteria.values["resource-id"],
+                    text:
+                      p.elementLocator.additionalInfo?.text ||
+                      criteria.values["text"],
+                    contentDesc:
+                      p.elementLocator.additionalInfo?.contentDesc ||
+                      criteria.values["content-desc"],
+                    className:
+                      p.elementLocator.additionalInfo?.className ||
+                      criteria.values["class"],
+                    // 记录 bounds 字符串，便于下次预选
+                    bounds:
+                      (criteria as any).preview?.bounds ||
+                      p.elementLocator.additionalInfo?.bounds ||
+                      p.bounds,
+                  };
+                  // 同步 bounds 字符串到步骤参数，给 Grid 侧作为预选依据
+                  if ((criteria as any).preview?.bounds) {
+                    p.bounds = (criteria as any).preview.bounds;
+                  } else if (criteria.values["bounds"]) {
+                    p.bounds = criteria.values["bounds"];
+                  }
+                  // 兼容后端现有执行器参数命名（尽量回写常用字段）
+                  if (criteria.values["resource-id"])
+                    p.resource_id = criteria.values["resource-id"];
+                  if (criteria.values["text"]) p.text = criteria.values["text"];
+                  if (criteria.values["content-desc"])
+                    p.content_desc = criteria.values["content-desc"];
+                  if (criteria.values["class"])
+                    p.class_name = criteria.values["class"];
+                  // 注：上方已同步 p.bounds
+                  // 同步更新标题与描述
+                  const patched = { ...s, parameters: p } as any;
+                  patched.name = nextTitle || s.name;
+                  patched.description = nextDesc || s.description;
+                  return patched;
+                })
+              );
+
+              // ✅ 应用后自动关闭分析器
+              setShowPageAnalyzer(false);
+              setIsQuickAnalyzer(false);
+              setEditingStepForParams(null);
+            } else {
+              // === 页面分析模式：创建新步骤（预填并打开创建模态） ===
+              // 统一写入到表单字段，后续保存逻辑会将其组装为新步骤
+              form.setFieldValue(
+                "step_type",
+                SmartActionType.SMART_FIND_ELEMENT
+              );
+              form.setFieldValue("name", nextTitle || "查找元素");
+              form.setFieldValue(
+                "description",
+                nextDesc || "根据匹配条件查找元素"
+              );
+              // 写入匹配策略到参数
+              form.setFieldValue("matching", {
+                strategy: criteria.strategy,
+                fields: criteria.fields,
+                values: criteria.values,
+                includes: (criteria as any).includes,
+                excludes: (criteria as any).excludes,
+                updatedAt: Date.now(),
+              });
+              // 同步定位器（便于执行器与预览）
+              const additionalInfo = {
+                xpath: (criteria as any).preview?.xpath,
+                resourceId: criteria.values["resource-id"],
+                text: criteria.values["text"],
+                contentDesc: criteria.values["content-desc"],
+                className: criteria.values["class"],
+                bounds: (criteria as any).preview?.bounds,
+              };
+              const builtLocator: ElementLocator | undefined =
+                additionalInfo.xpath || (criteria as any).preview?.bounds
+                  ? {
+                      selectedBounds: ((): any => {
+                        const b = (criteria as any).preview?.bounds;
+                        if (!b) return { left: 0, top: 0, right: 0, bottom: 0 };
+                        if (typeof b === "string") {
+                          return (
+                            parseBoundsString(b) || {
+                              left: 0,
+                              top: 0,
+                              right: 0,
+                              bottom: 0,
+                            }
+                          );
+                        }
+                        return b; // 对象
+                      })(),
+                      elementPath: (criteria as any).preview?.xpath || "",
+                      confidence: 0.8,
+                      additionalInfo: {
+                        ...additionalInfo,
+                        bounds:
+                          typeof (criteria as any).preview?.bounds === "string"
+                            ? (criteria as any).preview?.bounds
+                            : (criteria as any).preview?.bounds
+                            ? rectToBoundsString(
+                                (criteria as any).preview?.bounds
+                              )
+                            : undefined,
+                      },
+                    }
+                  : undefined;
+              if (builtLocator) {
+                form.setFieldValue("elementLocator", builtLocator);
+              }
+              // 若有当前 XML 上下文，构建自包含快照（改用 helper 保持行为一致）
+              try {
+                const snap = buildXmlSnapshotFromContext({
+                  currentXmlContent,
+                  currentDeviceInfo,
+                  currentPageInfo,
+                  fallbackDeviceId: currentDeviceId,
+                  fallbackDeviceName: devices.find(
+                    (d) => d.id === currentDeviceId
+                  )?.name,
+                });
+                if (snap) form.setFieldValue("xmlSnapshot", snap);
+              } catch (e) {
+                console.warn("构建XML快照失败（可忽略）:", e);
+              }
+
+              // 关闭分析器并打开新建步骤模态
+              setShowPageAnalyzer(false);
+              setIsQuickAnalyzer(false);
+              setEditingStepForParams(null);
+              setEditingStep(null);
+              // 允许本次在缺少XML情况下继续保存一次（已具备匹配/定位信息）
+              setAllowSaveWithoutXmlOnce(true);
+              setIsModalVisible(true);
+
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: "bold", marginBottom: 4 }}>
+                      🚀 已根据匹配条件预填新步骤
+                    </div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      {nextTitle}
+                    </div>
+                  </div>
+                ),
+                duration: 3,
+              });
+            }
+          } catch (e) {
+            console.warn("应用匹配策略到步骤失败:", e);
+          }
+        }}
+        onClose={() => {
+          setShowPageAnalyzer(false);
+          setIsQuickAnalyzer(false); // 重置快捷模式标记
+          setEditingStepForParams(null); // 重置修改参数模式标记
+          // 若是快照修复模式被用户主动关闭，则复位标志避免意外重试
+          if (snapshotFixMode.enabled) {
+            setSnapshotFixMode({ enabled: false, forStepId: undefined });
+            setPendingAutoResave(false);
+          }
+        }}
+        onElementSelected={(element) => {
+          // 当用户选择元素时，根据不同模式进行处理
+          console.log("🎯 接收到增强智能分析元素:", element);
+          console.log("🎯 当前模式检查:", {
+            isQuickAnalyzer,
+            editingStepForParams: editingStepForParams?.id,
+            editingStepName: editingStepForParams?.name,
+          });
+
+          try {
+            console.log("🎯 处理选择的元素:", element);
+
+            // 使用智能步骤生成器处理元素
+            const stepInfo = SmartStepGenerator.generateStepInfo(element);
+
+            // 填充表单字段
+            form.setFieldValue("step_type", SmartActionType.SMART_FIND_ELEMENT);
+            form.setFieldValue("search_criteria", stepInfo.searchCriteria);
+            form.setFieldValue("name", stepInfo.name);
+            form.setFieldValue("description", stepInfo.description);
+            form.setFieldValue("click_if_found", true);
+
+            // 🆕 统一构建并保存元素定位器
+            const builtLocator: ElementLocator | undefined = element.bounds
+              ? {
+                  selectedBounds:
+                    typeof (element as any).bounds === "string"
+                      ? parseBoundsString((element as any).bounds) || {
+                          left: 0,
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                        }
+                      : (element as any).bounds,
+                  elementPath:
+                    (element as any).xpath ||
+                    (element as any).element_path ||
+                    "",
+                  confidence: (element as any).smartAnalysis?.confidence || 0.8,
+                  additionalInfo: {
+                    xpath: (element as any).xpath,
+                    resourceId: (element as any).resource_id,
+                    text: (element as any).text,
+                    contentDesc: (element as any).content_desc,
+                    className: (element as any).class_name,
+                    // 额外：传递 bounds 字符串以用于 Grid 预选
+                    bounds: ((): string | undefined => {
+                      const b = (element as any).bounds;
+                      if (!b) return undefined;
+                      if (typeof b === "string") return b;
+                      return rectToBoundsString(b);
+                    })(),
+                  },
+                }
+              : undefined;
+            if (builtLocator) {
+              form.setFieldValue("elementLocator", builtLocator);
+              const sb = builtLocator.selectedBounds;
+              form.setFieldValue("boundsRect", sb);
+              form.setFieldValue("bounds", rectToBoundsString(sb));
+            }
+
+            // 🆕 构建并保存页面 XML 快照（优先当前上下文；否则尝试从元素对象兜底）
+            try {
+              const snap = buildXmlSnapshotFromContext({
+                currentXmlContent,
+                currentDeviceInfo,
+                currentPageInfo,
+                element: element as any,
+                fallbackDeviceId: currentDeviceId,
+                fallbackDeviceName: devices.find(
+                  (d) => d.id === currentDeviceId
+                )?.name,
+              });
+              if (snap) form.setFieldValue("xmlSnapshot", snap);
+            } catch (e) {
+              console.warn("构建页面快照时出现问题（可忽略）:", e);
+            }
+
+            // 🆕 保存基础元素信息到表单参数中
+            console.log("✅ 保存基础元素信息");
+
+            // 构建基础步骤参数
+            const basicParams = {
+              text: element.text,
+              element_text: element.text,
+              element_type: element.element_type,
+              resource_id: element.resource_id,
+              content_desc: sanitizeContentDesc((element as any).content_desc),
+              bounds: (element as any).bounds
+                ? `[${(element as any).bounds.left},${
+                    (element as any).bounds.top
+                  }][${(element as any).bounds.right},${
+                    (element as any).bounds.bottom
+                  }]`
+                : undefined,
+              // 如 content_desc 被清洗为空，保留友好描述在 smartDescription
+              smartDescription: (element as any).smartDescription,
+              smartAnalysis: (element as any).smartAnalysis,
+            };
+
+            // 保存参数到表单
+            Object.entries(basicParams).forEach(([key, value]) => {
+              form.setFieldValue(key, value);
+            });
+
+            console.log("💾 已保存基础步骤参数:", basicParams);
+
+            // 🆕 基于所选元素构建默认匹配配置（前端态），以便稍后打开网格检查器能恢复预设
+            try {
+              const built = buildAndCacheDefaultMatchingFromElement({
+                resource_id: (element as any).resource_id,
+                text: (element as any).text,
+                content_desc: (element as any).content_desc,
+                class_name: (element as any).class_name,
+                bounds: (element as any).bounds,
+              });
+              if (built && built.fields.length > 0) {
+                // 写入到表单参数（标准字段 matching）
+                form.setFieldValue("matching", {
+                  strategy: built.strategy,
+                  fields: built.fields,
+                  values: built.values,
+                  updatedAt: Date.now(),
+                });
+              }
+            } catch (e) {
+              console.warn("构建/保存默认匹配配置失败（可忽略）:", e);
+            }
+
+            // 关闭页面分析器并重置状态
+            setShowPageAnalyzer(false);
+            setIsQuickAnalyzer(false);
+            setEditingStepForParams(null);
+
+            // 🔄 处理不同模式的逻辑
+            if (editingStepForParams) {
+              // 修改现有步骤参数模式
+              console.log("📝 修改步骤参数模式:", editingStepForParams.id);
+
+              // 更新现有步骤的参数
+              const updatedSteps = steps.map((existingStep) => {
+                if (existingStep.id === editingStepForParams.id) {
+                  const updatedParameters: any = {
+                    ...existingStep.parameters,
+                    // 更新选择的元素信息
+                    text: element.text,
+                    element_text: element.text,
+                    element_type: element.element_type,
+                    resource_id: element.resource_id,
+                    content_desc: sanitizeContentDesc(
+                      (element as any).content_desc
+                    ),
+                    bounds: (element as any).bounds
+                      ? `[${(element as any).bounds.left},${
+                          (element as any).bounds.top
+                        }][${(element as any).bounds.right},${
+                          (element as any).bounds.bottom
+                        }]`
+                      : existingStep.parameters?.bounds,
+                    smartDescription: (element as any).smartDescription,
+                    smartAnalysis: (element as any).smartAnalysis,
+                    // 统一写入定位器
+                    ...(builtLocator ? { elementLocator: builtLocator } : {}),
+                  };
+
+                  // 将匹配配置也写入步骤参数，使后续“修改参数→网格检查器”可恢复预设
+                  try {
+                    const built = buildAndCacheDefaultMatchingFromElement({
+                      resource_id: (element as any).resource_id,
+                      text: (element as any).text,
+                      content_desc: (element as any).content_desc,
+                      class_name: (element as any).class_name,
+                      bounds: (element as any).bounds,
+                    });
+                    if (built && built.fields.length > 0) {
+                      updatedParameters.matching = {
+                        strategy: built.strategy,
+                        fields: built.fields,
+                        values: built.values,
+                        updatedAt: Date.now(),
+                      };
+                    }
+                  } catch (e) {
+                    console.warn("保存步骤匹配配置失败（可忽略）:", e);
+                  }
+
+                  // 同步写入页面快照（若可用）
+                  if (currentXmlContent) {
+                    updatedParameters.xmlSnapshot = createXmlSnapshot(
+                      currentXmlContent,
+                      {
+                        deviceId:
+                          currentDeviceInfo.deviceId ||
+                          currentDeviceId ||
+                          "unknown",
+                        deviceName:
+                          currentDeviceInfo.deviceName ||
+                          devices.find((d) => d.id === currentDeviceId)?.name ||
+                          "unknown",
+                        appPackage:
+                          currentDeviceInfo.appPackage || "com.xingin.xhs",
+                        activityName:
+                          currentDeviceInfo.activityName || "unknown",
+                      },
+                      {
+                        pageTitle: currentPageInfo.pageTitle || "小红书页面",
+                        pageType: currentPageInfo.pageType || "unknown",
+                        elementCount: currentPageInfo.elementCount || 0,
+                        appVersion: currentPageInfo.appVersion,
+                      }
+                    );
+                  }
+
+                  return {
+                    ...existingStep,
+                    name: stepInfo.name, // 更新步骤名称
+                    description: stepInfo.description, // 更新步骤描述
+                    parameters: updatedParameters,
+                  };
+                }
+                return existingStep;
+              });
+
+              setSteps(updatedSteps);
+
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                      ✏️ 步骤参数修改成功！
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#666" }}>
+                      {editingStepForParams.name} → {stepInfo.name}
+                    </div>
+                  </div>
+                ),
+                duration: 3,
+              });
+            } else if (isQuickAnalyzer) {
+              // 快捷模式：创建新步骤
+              console.log("🚀 快捷模式：创建新步骤");
+              setEditingStep(null);
+              setIsModalVisible(true);
+
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                      🚀 快捷步骤生成成功！
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#666" }}>
+                      {stepInfo.name} - 请点击确定完成创建
+                    </div>
+                  </div>
+                ),
+                duration: 4,
+              });
+            } else {
+              // 普通模式：填充表单等待用户进一步操作
+              console.log("📝 普通模式：填充表单");
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                      🎯 智能步骤生成成功！
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#666" }}>
+                      {stepInfo.name}
+                    </div>
+                  </div>
+                ),
+                duration: 3,
+              });
+            }
+
+            SmartStepGenerator.previewStepInfo(element);
+          } catch (error) {
+            console.error("❌ 智能步骤生成失败:", error);
+
+            // 降级处理：使用基础显示名称
+            const elementDesc =
+              element.text || element.element_type || "未知元素";
+            const searchCriteria = element.text
+              ? `文本: "${element.text}"`
+              : "自动识别元素特征";
+
+            form.setFieldValue("step_type", SmartActionType.SMART_FIND_ELEMENT); // 🆕 设置为智能元素查找
+            form.setFieldValue("search_criteria", searchCriteria);
+            form.setFieldValue("name", `点击"${elementDesc}"`);
+            form.setFieldValue(
+              "description",
+              `自动查找并点击"${elementDesc}"元素`
+            );
+            form.setFieldValue("click_if_found", true);
+
+            // 🆕 在降级处理中也保存完整的元素属性
+            form.setFieldValue("text", element.text);
+            form.setFieldValue("element_text", element.text);
+            form.setFieldValue("element_type", element.element_type);
+            form.setFieldValue("resource_id", element.resource_id);
+            // 清洗 content_desc，避免将可视化友好描述写入真实字段
+            const sanitizeDesc = (val: any): string => {
+              if (val == null) return "";
+              const s = String(val).trim();
+              if (!s) return "";
+              const friendlyPatterns = [
+                /^未知元素(（可点击）|（可滚动）|（可编辑）)?$/,
+                /^按钮（可点击）$/,
+                /^文本（.*）$/,
+              ];
+              return friendlyPatterns.some((re) => re.test(s)) ? "" : s;
+            };
+            form.setFieldValue(
+              "content_desc",
+              sanitizeDesc(element.content_desc)
+            );
+            form.setFieldValue("bounds", element.bounds);
+            form.setFieldValue(
+              "smartDescription",
+              (element as any).smartDescription
+            );
+            form.setFieldValue("smartAnalysis", (element as any).smartAnalysis);
+            if ((element as any).class_name) {
+              form.setFieldValue("class_name", (element as any).class_name);
+            }
+            if ((element as any).clickable !== undefined) {
+              form.setFieldValue("clickable", (element as any).clickable);
+            }
+            if ((element as any).parent) {
+              form.setFieldValue("parent", (element as any).parent);
+            }
+            if ((element as any).siblings) {
+              form.setFieldValue("siblings", (element as any).siblings);
+            }
+
+            setShowPageAnalyzer(false);
+            setIsQuickAnalyzer(false); // 重置快捷模式标记
+
+            // 🆕 如果是快捷模式，也自动打开步骤编辑模态框
+            if (isQuickAnalyzer) {
+              setEditingStep(null);
+              setIsModalVisible(true);
+            }
+
+            message.warning(
+              "使用基础模式填充步骤信息" +
+                (isQuickAnalyzer ? "，请点击确定完成创建" : "")
+            );
+          }
+        }}
+      />
 
       {/* 🆕 通讯录工作流选择器 */}
       <ContactWorkflowSelector

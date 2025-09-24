@@ -195,7 +195,7 @@ impl SmartScriptExecutor {
             },
             // 智能操作类型
             SmartActionType::SmartTap => self.test_smart_tap(&step, &mut logs).await,
-            SmartActionType::SmartFindElement => self.test_find_element(&step, &mut logs).await,
+            SmartActionType::SmartFindElement => self.test_find_element_unified(&step, &mut logs).await,
             SmartActionType::BatchMatch => self.test_batch_match(&step, &mut logs).await,
             SmartActionType::RecognizePage => self.test_recognize_page(&step, &mut logs).await,
             SmartActionType::VerifyAction => {
@@ -366,7 +366,150 @@ impl SmartScriptExecutor {
         }
     }
 
-    async fn test_find_element(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
+    /// 🆕 统一元素查找方法：优先使用 parameters.matching 进行标准匹配，回退到传统参数
+    async fn test_find_element_unified(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
+        use crate::xml_judgment_service::{MatchCriteriaDTO, match_element_by_criteria};
+        use std::collections::HashMap;
+
+        logs.push("🎯 执行统一元素查找（标准匹配引擎）".to_string());
+        
+        let params: HashMap<String, serde_json::Value> = 
+            serde_json::from_value(step.parameters.clone())?;
+
+        // 1) 优先检查是否有 parameters.matching（标准匹配策略）
+        if let Some(matching_val) = params.get("matching") {
+            logs.push("📋 发现匹配策略配置，使用统一匹配引擎".to_string());
+            
+            // 解析 matching 配置
+            let matching: serde_json::Value = matching_val.clone();
+            let strategy = matching.get("strategy")
+                .and_then(|s| s.as_str())
+                .unwrap_or("standard")
+                .to_string();
+            
+            let fields: Vec<String> = matching.get("fields")
+                .and_then(|f| f.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+                
+            let mut values = HashMap::new();
+            if let Some(values_obj) = matching.get("values").and_then(|v| v.as_object()) {
+                for (k, v) in values_obj {
+                    if let Some(s) = v.as_str() {
+                        values.insert(k.clone(), s.to_string());
+                    }
+                }
+            }
+
+            let mut includes = HashMap::new();
+            if let Some(includes_obj) = matching.get("includes").and_then(|v| v.as_object()) {
+                for (k, v) in includes_obj {
+                    if let Some(arr) = v.as_array() {
+                        let words: Vec<String> = arr.iter()
+                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                            .collect();
+                        includes.insert(k.clone(), words);
+                    }
+                }
+            }
+
+            let mut excludes = HashMap::new();
+            if let Some(excludes_obj) = matching.get("excludes").and_then(|v| v.as_object()) {
+                for (k, v) in excludes_obj {
+                    if let Some(arr) = v.as_array() {
+                        let words: Vec<String> = arr.iter()
+                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                            .collect();
+                        excludes.insert(k.clone(), words);
+                    }
+                }
+            }
+
+            logs.push(format!("🎯 匹配策略: {} | 字段: {:?} | 值: {:?}", strategy, fields, values));
+
+            // 如果有 includes/excludes 也记录一下
+            if !includes.is_empty() {
+                logs.push(format!("✅ 包含条件: {:?}", includes));
+            }
+            if !excludes.is_empty() {
+                logs.push(format!("❌ 排除条件: {:?}", excludes));
+            }
+
+            // 构造匹配条件 DTO
+            let criteria = MatchCriteriaDTO {
+                strategy: strategy.clone(),
+                fields,
+                values,
+                includes,
+                excludes,
+            };
+
+            let strategy_name = strategy.clone(); // 保存策略名以备后用
+
+            // 调用统一匹配引擎
+            match match_element_by_criteria(self.device_id.clone(), criteria).await {
+                Ok(result) if result.ok => {
+                    logs.push(format!("✅ 匹配成功: {}", result.message));
+                    
+                    // 如果有预览信息，尝试点击
+                    if let Some(preview) = result.preview {
+                        if let Some(bounds_str) = preview.bounds {
+                            logs.push(format!("📍 匹配到元素边界: {}", bounds_str));
+                            
+                            // 解析 bounds 并执行点击
+                            match crate::utils::bounds::parse_bounds_str(&bounds_str) {
+                                Ok(rect) => {
+                                    let (center_x, center_y) = rect.center();
+                                    logs.push(format!("🎯 计算中心点: ({}, {})", center_x, center_y));
+                                    
+                                    // 执行点击
+                                    match self.execute_click_with_retry(center_x, center_y, logs).await {
+                                        Ok(_) => {
+                                            let msg = format!("✅ 成功找到并点击元素 (策略: {}, 坐标: ({}, {}))", 
+                                                strategy_name, center_x, center_y);
+                                            logs.push(msg.clone());
+                                            return Ok(msg);
+                                        }
+                                        Err(e) => {
+                                            logs.push(format!("❌ 点击操作失败: {}", e));
+                                            return Err(e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    logs.push(format!("⚠️ bounds 解析失败: {} (原始: {})", e, bounds_str));
+                                }
+                            }
+                        }
+                        
+                        // 没有 bounds 信息或解析失败，但匹配成功
+                        let msg = format!("✅ 匹配成功但无法执行点击 (策略: {}, 无有效坐标)", strategy_name);
+                        logs.push(msg.clone());
+                        return Ok(msg);
+                    } else {
+                        let msg = format!("✅ 匹配成功但无预览信息 (策略: {})", strategy_name);
+                        logs.push(msg.clone());
+                        return Ok(msg);
+                    }
+                }
+                Ok(result) => {
+                    logs.push(format!("❌ 匹配失败: {} (总节点数: {:?})", result.message, result.total));
+                    // 继续执行传统回退逻辑
+                }
+                Err(e) => {
+                    logs.push(format!("❌ 匹配引擎调用失败: {}", e));
+                    // 继续执行传统回退逻辑
+                }
+            }
+        }
+
+        // 2) 回退到传统的 test_find_element 逻辑
+        logs.push("🔄 回退到传统参数解析".to_string());
+        self.test_find_element_traditional(step, logs).await
+    }
+
+    /// 传统的元素查找逻辑（重命名原 test_find_element）
+    async fn test_find_element_traditional(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
         logs.push("🔍 执行智能元素查找测试（带错误处理）".to_string());
         
         // 执行UI dump操作，用传统的重试逻辑
@@ -413,7 +556,14 @@ impl SmartScriptExecutor {
         
         // 1) 优先使用外部传入的bounds / boundsRect（兼容字符串与对象）
         if let Some(bounds_val) = params.get("bounds").or_else(|| params.get("boundsRect")) {
-            logs.push(format!("  📍 元素边界(原始): {}", bounds_val));
+            logs.push(format!("  📍 元素边界(原始): {} (类型: {})", bounds_val, match bounds_val {
+                serde_json::Value::Null => "null",
+                serde_json::Value::Bool(_) => "boolean",
+                serde_json::Value::Number(_) => "number", 
+                serde_json::Value::String(_) => "string",
+                serde_json::Value::Array(_) => "array",
+                serde_json::Value::Object(_) => "object",
+            }));
             match crate::utils::bounds::parse_bounds_value(bounds_val) {
                 Ok(rect) => {
                     let (center_x, center_y) = rect.center();
@@ -422,7 +572,11 @@ impl SmartScriptExecutor {
                     logs.push(format!("📊 归一化边界: left={}, top={}, right={}, bottom={}", rect.left, rect.top, rect.right, rect.bottom));
                 }
                 Err(e) => {
-                    logs.push(format!("⚠️  边界解析失败，将尝试基于 UI dump 查找。错误: {}", e));
+                    logs.push(format!("❌ bounds 解析失败: {}", e));
+                    logs.push(format!("🔍 来源参数键: {} | 原始值: {}", 
+                        if params.contains_key("bounds") { "bounds" } else { "boundsRect" }, 
+                        bounds_val));
+                    logs.push("🔄 将尝试基于 UI dump 文本/描述查找元素坐标".to_string());
                 }
             }
         }

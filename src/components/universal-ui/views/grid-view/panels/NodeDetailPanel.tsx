@@ -17,8 +17,10 @@ interface NodeDetailPanelProps {
   onApplyToStepComplete?: (criteria: CompleteStepCriteria) => void;
   onStrategyChanged?: (s: MatchCriteria['strategy']) => void;
   onFieldsChanged?: (fields: string[]) => void;
-  // 🆕 初始匹配预设：用于“修改参数”时优先以步骤自身为准
+  // 🆕 初始匹配预设：用于"修改参数"时优先以步骤自身为准
   initialMatching?: MatchCriteria;
+  // 🆕 XML上下文：用于智能增强匹配
+  xmlContent?: string;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({

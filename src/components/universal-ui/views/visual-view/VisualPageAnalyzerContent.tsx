@@ -47,6 +47,7 @@ export const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps>
   const createElementContextHelper = (element: VisualUIElement): any => {
     return {
       text: element.text,
+      // 仅用于上下文分析的友好描述；不要写回到 UIElement.content_desc
       contentDesc: element.description,
       resourceId: "",
       className: element.type,
@@ -112,7 +113,7 @@ export const VisualPageAnalyzerContent: React.FC<VisualPageAnalyzerContentProps>
       checked: false,
       selected: false,
       password: false,
-      // 不将友好描述写入 content_desc，保持其为真实 XML 值（此处未知则置空）
+  // 不将友好描述写入 content_desc，保持其为真实 XML 值（此处未知则置空）
       content_desc: "",
     };
 

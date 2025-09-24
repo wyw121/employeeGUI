@@ -151,9 +151,17 @@ export class VisualToUIElementConverter {
       xpath += `[@text='${visualElement.text}']`;
     }
     
-    // 如果有描述，添加描述匹配
+    // 如果有描述，且不是可视化友好占位，才添加描述匹配
     if (visualElement.description && !visualElement.text) {
-      xpath += `[@content-desc='${visualElement.description}']`;
+      const desc = visualElement.description.trim();
+      const friendlyPatterns = [
+        /^未知元素(（可点击）|（可滚动）|（可编辑）)?$/,
+        /^按钮（可点击）$/,
+        /^文本（.*）$/,
+      ];
+      if (!friendlyPatterns.some(re => re.test(desc))) {
+        xpath += `[@content-desc='${desc}']`;
+      }
     }
     
     return xpath;

@@ -2,6 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // mod commands;
+mod application; // expose new application module (normalizer, device_metrics)
+mod domain;      // expose domain DSL (actions, coords, direction)
+mod infra;       // expose infra (adb injector, device metrics provider)
 mod screenshot_service;
 mod services;
 mod types;

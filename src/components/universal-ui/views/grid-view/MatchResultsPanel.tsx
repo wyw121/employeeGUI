@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
 import type { MatchCriteria } from './panels/node-detail/types';
-import { buildCriteriaFromNode } from './panels/node-detail/helpers';
 import { nodeLabel, buildXPath } from './utils';
 import styles from './GridElementView.module.css';
 import { MatchBadges } from './MatchBadges';
 import { CopyChip } from './CopyChip';
 import { matchesToXml, downloadText } from './exporters';
+import { MatchResultSetElementButton, type CompleteStepCriteria } from './panels/node-detail';
 
 export interface MatchResultsPanelProps {
   matches: UiNode[];
@@ -19,7 +19,7 @@ export interface MatchResultsPanelProps {
   highlightNode?: UiNode | null;
   onHoverNode?: (n: UiNode | null) => void;
   // 当在“修改参数”模式下允许从匹配结果选择一个元素并回填到步骤参数
-  onSelectForStep?: (criteria: MatchCriteria) => void;
+  onSelectForStep?: (criteria: MatchCriteria | CompleteStepCriteria) => void;
   // 由上层透传的当前策略（跟随节点详情选择）
   currentStrategy?: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard' | 'custom';
   // 由上层透传的字段勾选集合（优先用于构建）
@@ -123,19 +123,12 @@ export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, m
                     <button className={styles.btn} style={{ padding: '2px 6px' }} onClick={() => onInsertXPath(buildXPath(n))}>仅插入</button>
                   )}
                   {onSelectForStep && (
-                    <button
-                      className={styles.btn}
-                      title={`将此元素作为步骤的目标（按${currentStrategy || 'standard'}策略构建）`}
-                      style={{ padding: '2px 6px' }}
-                      onClick={() => {
-                        const useStrategy = currentStrategy || 'standard';
-                        const fieldsOverride = Array.isArray(currentFields) && currentFields.length > 0 ? currentFields : undefined;
-                        const criteria = buildCriteriaFromNode(n, useStrategy as any, fieldsOverride) as any;
-                        // 附带当前节点的定位预览，便于上层立即更新步骤定位器
-                        criteria.preview = { xpath: buildXPath(n), bounds: n.attrs['bounds'] };
-                        onSelectForStep(criteria);
-                      }}
-                    >选择为步骤元素</button>
+                    <MatchResultSetElementButton
+                      node={n}
+                      onApply={(c) => onSelectForStep(c)}
+                      currentStrategy={currentStrategy}
+                      currentFields={currentFields}
+                    />
                   )}
                 </div>
               </li>

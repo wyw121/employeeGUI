@@ -3,6 +3,7 @@ import { UiNode, SearchOptions } from './types';
 import { nodeLabel } from './utils';
 import styles from './GridElementView.module.css';
 import { MatchBadges } from './MatchBadges';
+import { ScreenPreviewSetElementButton, type CompleteStepCriteria } from './panels/node-detail';
 
 const Badge: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className={styles.badge}>{children}</span>
@@ -23,6 +24,8 @@ export interface TreeRowProps {
   selectedAncestors: Set<UiNode>;
   showMatchedOnly: boolean;
   hasActiveFilter?: boolean;
+  // 可选：在“修改参数”模式允许树节点直接设为步骤元素
+  onSelectForStep?: (criteria: CompleteStepCriteria) => void;
 }
 
 export const TreeRow: React.FC<TreeRowProps> = ({
@@ -40,6 +43,7 @@ export const TreeRow: React.FC<TreeRowProps> = ({
   showMatchedOnly,
   hasActiveFilter = false,
   onHoverNode,
+  onSelectForStep,
 }) => {
   const [open, setOpen] = useState(depth <= 2);
   useEffect(() => { setOpen(false); }, [collapseVersion]);
@@ -129,6 +133,14 @@ export const TreeRow: React.FC<TreeRowProps> = ({
           {node.attrs['clickable'] === 'true' && <Badge>clickable</Badge>}
           <MatchBadges node={node} keyword={filter} />
           {!matched && hasActiveFilter && <Badge>不匹配(继承可见)</Badge>}
+          {onSelectForStep && (
+            <span className="ml-2">
+              <ScreenPreviewSetElementButton
+                node={node}
+                onApply={(c) => onSelectForStep(c)}
+              />
+            </span>
+          )}
         </div>
       </div>
       )}

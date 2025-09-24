@@ -45,6 +45,7 @@ import { FieldDocPanel } from './panels/FieldDocPanel';
 import { XPathTemplatesPanel } from './panels/XPathTemplatesPanel';
 import { LocatorAdvisorPanel } from './panels/LocatorAdvisorPanel';
 import { PreferencesPanel } from './panels/PreferencesPanel';
+import { ScreenPreviewSetElementButton } from './panels/node-detail';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -568,11 +569,19 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             <div className={styles.cardHeader}>节点树</div>
             <div className={`${styles.cardBody} ${styles.tree}`}>
               {root ? (
-                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} onHoverNode={handleHoverNode} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} />
+                <TreeRow node={root} depth={0} selected={selected} onSelect={setSelected} onHoverNode={handleHoverNode} filter={filter} searchOptions={searchOptions} expandAll={expandAll} collapseVersion={collapseVersion} expandDepth={expandDepth} matchedSet={matchedSet} selectedAncestors={selectedAncestors} showMatchedOnly={showMatchedOnly} hasActiveFilter={Boolean(filter.trim()) || Boolean(advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className || advFilter.packageName || advFilter.clickable !== null || advFilter.nodeEnabled !== null))} onSelectForStep={onApplyCriteria as any} />
               ) : (
                 <div className="p-3 text-sm text-neutral-500">解析 XML 后在此展示树结构…</div>
               )}
             </div>
+            {/* Footer action row: 设置为步骤元素（基于当前选中节点） */}
+            {selected && (
+              <div className="p-2 border-t border-[var(--g-border)] flex items-center justify-end">
+                <span className="text-xs text-neutral-500 mr-2">对当前选中节点进行统一回填：</span>
+                {/* 复用统一按钮（屏幕预览款式），其 onApply 即可上抛完整回填 */}
+                <ScreenPreviewSetElementButton node={selected} onApply={onApplyCriteria as any} />
+              </div>
+            )}
           </div>
         </div>
         {/* 分隔线 */}
@@ -607,6 +616,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             highlightKey={panelActivateKey}
             enableFlashHighlight={loadPrefs().enableFlashHighlight !== false}
             previewAutoCenter={loadPrefs().previewAutoCenter !== false}
+            onSelectForStep={onApplyCriteria as any}
           />
           <ResultsAndXPathPanel
             matches={matches}

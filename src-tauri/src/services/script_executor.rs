@@ -5,6 +5,7 @@ use std::time::Duration;
 use tauri::command;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
+use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
 
 // 操作类型枚举
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,20 +229,34 @@ impl ScriptExecutor {
 
         info!("👋 滑动: ({}, {}) -> ({}, {}), 时长: {}ms", start_x, start_y, end_x, end_y, duration);
 
-        let output = Command::new(&self.adb_path)
-            .args(&[
-                "-s", &self.device_id,
-                "shell", "input", "swipe",
-                &start_x.to_string(), &start_y.to_string(),
-                &end_x.to_string(), &end_y.to_string(),
-                &duration.to_string()
-            ])
-            .output()
-            .context("执行滑动命令失败")?;
+        // 优先通过统一注入器执行（injector-v1.0），失败则回退到原始命令
+        let injector = AdbShellInputInjector::new(self.adb_path.clone());
+        if let Err(e) = injector.swipe(
+            &self.device_id,
+            start_x as u32,
+            start_y as u32,
+            end_x as u32,
+            end_y as u32,
+            duration as u32,
+        ).await {
+            warn!("🪄 injector-v1.0: 注入器执行失败，将回退旧命令。错误: {}", e);
+            let output = Command::new(&self.adb_path)
+                .args(&[
+                    "-s", &self.device_id,
+                    "shell", "input", "swipe",
+                    &start_x.to_string(), &start_y.to_string(),
+                    &end_x.to_string(), &end_y.to_string(),
+                    &duration.to_string()
+                ])
+                .output()
+                .context("执行滑动命令失败")?;
 
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("滑动命令执行失败: {}", error_msg));
+            if !output.status.success() {
+                let error_msg = String::from_utf8_lossy(&output.stderr);
+                return Err(anyhow::anyhow!("滑动命令执行失败: {}", error_msg));
+            }
+        } else {
+            info!("🪄 injector-v1.0: swipe 已通过统一注入器执行");
         }
 
         // 滑动后额外等待

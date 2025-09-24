@@ -3,14 +3,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::command;
+#[allow(unused_imports)]
 use tracing::{error, info, warn, debug};
 
 use crate::services::adb_session_manager::get_device_session;
 use crate::services::error_handling::{ErrorHandler, ErrorHandlingConfig};
 use crate::services::script_execution::ScriptPreprocessor;
+#[allow(unused_imports)]
 use crate::services::contact_automation::generate_vcf_file;
 use crate::services::vcf_importer::VcfImporter;
 use crate::services::multi_brand_vcf_importer::MultiBrandVcfImporter;
+use crate::application::normalizer::normalize_step_json;
+use crate::application::device_metrics::{DeviceMetrics, DeviceMetricsProvider};
+use crate::infra::device::metrics_provider::RealDeviceMetricsProvider;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -146,6 +151,27 @@ impl SmartScriptExecutor {
         info!("{}", step_details);
         logs.push(step_details);
 
+        // 后端兜底标准化：若参数为“smart_scroll风格”（有 direction/无 start_x 等），则归一化为 swipe 所需参数
+        let mut step = step;
+        if Self::is_smart_scroll_like(&step.parameters) && matches!(step.step_type, SmartActionType::Swipe) {
+            // 使用真实设备分辨率用于归一化（安全回退到 1080x1920）
+            let provider = RealDeviceMetricsProvider::new(self.adb_path.clone());
+            let metrics = match provider.get(&self.device_id) {
+                Some(m) => {
+                    info!("📐 real-metrics: width={} height={} density={:?}", m.width_px, m.height_px, m.density);
+                    m
+                }
+                None => {
+                    warn!("📐 real-metrics: 获取失败，使用默认 1080x1920");
+                    DeviceMetrics::new(1080, 1920)
+                }
+            };
+            let (new_type, new_params) = normalize_step_json("smart_scroll", step.parameters.clone(), &metrics);
+            logs.push(format!("🧩 后端归一化: smart_scroll→{}，已补齐坐标/时长", new_type));
+            info!("🧩 后端归一化: smart_scroll→{}", new_type);
+            step.parameters = new_params;
+        }
+
         let result = match step.step_type {
             // 基础操作类型
             SmartActionType::Tap => self.test_tap(&step, &mut logs).await,
@@ -229,6 +255,13 @@ impl SmartScriptExecutor {
                 })
             }
         }
+    }
+
+    fn is_smart_scroll_like(params: &serde_json::Value) -> bool {
+        let has_direction = params.get("direction").is_some();
+        let has_coords = params.get("start_x").is_some() && params.get("start_y").is_some()
+            && params.get("end_x").is_some() && params.get("end_y").is_some();
+        has_direction && !has_coords
     }
 
     async fn test_tap(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
@@ -1029,13 +1062,33 @@ impl SmartScriptExecutor {
             detailed_logging: true,
         });
 
-        info!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len());
-        logs.push(format!("🚀 开始批量执行智能脚本，总共 {} 个步骤", steps.len()));
+        // 批量执行前：后端兜底标准化每个步骤（smart_scroll风格 → swipe 坐标）
+        // 使用真实设备分辨率，失败回退默认
+        let provider = RealDeviceMetricsProvider::new(self.adb_path.clone());
+        let metrics = match provider.get(&self.device_id) {
+            Some(m) => { info!("📐 real-metrics: width={} height={} density={:?}", m.width_px, m.height_px, m.density); m }
+            None => { warn!("📐 real-metrics: 获取失败，使用默认 1080x1920"); DeviceMetrics::new(1080, 1920) }
+        };
+        let mut normalized_steps: Vec<SmartScriptStep> = Vec::with_capacity(steps.len());
+        let mut normalized_count = 0usize;
+        for mut s in steps.into_iter() {
+            if Self::is_smart_scroll_like(&s.parameters) && matches!(s.step_type, SmartActionType::Swipe) {
+                let (new_type, new_params) = normalize_step_json("smart_scroll", s.parameters.clone(), &metrics);
+                s.parameters = new_params;
+                normalized_count += 1;
+                logs.push(format!("🧩 后端归一化: smart_scroll→{} (step_id={})", new_type, s.id));
+            }
+            normalized_steps.push(s);
+        }
+
+        info!("🚀 开始批量执行智能脚本，总共 {} 个步骤", normalized_steps.len());
+        logs.push(format!("🚀 开始批量执行智能脚本，总共 {} 个步骤", normalized_steps.len()));
+        if normalized_count > 0 { logs.push(format!("🛡️ 已应用后端兜底标准化 {} 次", normalized_count)); }
         
         // 详细记录每个传入步骤的信息
         info!("📋 前端发送的完整脚本步骤详情:");
         logs.push("📋 前端发送的完整脚本步骤详情:".to_string());
-        for (i, step) in steps.iter().enumerate() {
+    for (i, step) in normalized_steps.iter().enumerate() {
             let params: Result<HashMap<String, serde_json::Value>, _> = 
                 serde_json::from_value(step.parameters.clone());
             let step_details = match params {
@@ -1056,7 +1109,7 @@ impl SmartScriptExecutor {
         }
 
         // 1. 使用新的模块化控制流预处理器
-        let processed_steps = match self.preprocessor.lock().unwrap().preprocess_for_legacy_executor(steps) {
+    let processed_steps = match self.preprocessor.lock().unwrap().preprocess_for_legacy_executor(normalized_steps) {
             Ok(result) => {
                 logs.push(format!("🔄 控制流预处理成功：处理完成，生成 {} 个执行步骤", result.len()));
                 result

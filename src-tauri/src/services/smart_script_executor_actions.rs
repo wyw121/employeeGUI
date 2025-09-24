@@ -1,5 +1,6 @@
 // smart_script_executor_actions.rs - 智能脚本执行器的具体操作实现
 use super::*;
+use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
 
 impl SmartScriptExecutor {
     
@@ -347,7 +348,17 @@ impl SmartScriptExecutor {
         let duration = params.get("duration").and_then(|v| v.as_u64()).unwrap_or(1000);
 
         info!("👋 基础滑动: ({}, {}) -> ({}, {}), 时长: {}ms", start_x, start_y, end_x, end_y, duration);
-        self.adb_swipe(start_x, start_y, end_x, end_y, duration).await?;
+        // 灰度切换到统一注入器（injector-v1.0），失败则回退旧实现
+        let injector = AdbShellInputInjector::new(self.adb_path.clone());
+        match injector.swipe(&self.device_id, start_x as u32, start_y as u32, end_x as u32, end_y as u32, duration as u32).await {
+            Ok(()) => {
+                info!("🪄 injector-v1.0: swipe 已通过统一注入器执行");
+            }
+            Err(e) => {
+                warn!("🪄 injector-v1.0: 注入器执行失败，将回退旧命令。错误: {}", e);
+                self.adb_swipe(start_x, start_y, end_x, end_y, duration).await?;
+            }
+        }
 
         Ok((vec![], None))
     }

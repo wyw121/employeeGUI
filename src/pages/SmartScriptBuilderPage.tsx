@@ -2805,13 +2805,11 @@ const SmartScriptBuilderPage: React.FC = () => {
         })()}
         // 🆕 XML内容更新回调
         onXmlContentUpdated={updateCurrentXmlContext}
-        // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略并更新标题
+        // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略：
+        // - 若处于“修改参数”模式：更新当前步骤参数并关闭分析器
+        // - 否则（页面分析模式）：填充表单并打开新建步骤模态
   onApplyCriteria={(criteria) => {
           try {
-            if (!editingStepForParams) {
-              // 非“修改参数”模式，忽略
-              return;
-            }
             // 构建强类型的 MatchCriteria 以满足辅助函数的类型要求
             const matchCriteria: UIMatchCriteria = {
               strategy: criteria.strategy as UIMatchStrategy,
@@ -2823,49 +2821,126 @@ const SmartScriptBuilderPage: React.FC = () => {
             // 生成简短标题/描述（模块化 helper，ESM 顶层导入）
             const nextTitle: string = buildShortTitleFromCriteria(matchCriteria);
             const nextDesc: string = buildShortDescriptionFromCriteria(matchCriteria);
-            const stepId = editingStepForParams.id;
-            setSteps((prev) => prev.map((s) => {
-              if (s.id !== stepId) return s;
-              const p: any = { ...(s.parameters || {}) };
-              // 将匹配策略写入标准化字段 parameters.matching
-              p.matching = {
+            if (editingStepForParams) {
+              // === 修改参数模式：更新当前步骤 ===
+              const stepId = editingStepForParams.id;
+              setSteps((prev) => prev.map((s) => {
+                if (s.id !== stepId) return s;
+                const p: any = { ...(s.parameters || {}) };
+                // 将匹配策略写入标准化字段 parameters.matching
+                p.matching = {
+                  strategy: criteria.strategy,
+                  fields: criteria.fields,
+                  values: criteria.values,
+                  includes: (criteria as any).includes,
+                  excludes: (criteria as any).excludes,
+                  updatedAt: Date.now(),
+                };
+                // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
+                p.elementLocator = p.elementLocator || {};
+                p.elementLocator.additionalInfo = {
+                  ...(p.elementLocator.additionalInfo || {}),
+                  // 若本次回填携带了预览的 xpath，则优先记录下来
+                  xpath: (criteria as any).preview?.xpath || p.elementLocator.additionalInfo?.xpath || undefined,
+                  resourceId: p.elementLocator.additionalInfo?.resourceId || criteria.values['resource-id'],
+                  text: p.elementLocator.additionalInfo?.text || criteria.values['text'],
+                  contentDesc: p.elementLocator.additionalInfo?.contentDesc || criteria.values['content-desc'],
+                  className: p.elementLocator.additionalInfo?.className || criteria.values['class'],
+                };
+                // 兼容后端现有执行器参数命名（尽量回写常用字段）
+                if (criteria.values['resource-id']) p.resource_id = criteria.values['resource-id'];
+                if (criteria.values['text']) p.text = criteria.values['text'];
+                if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
+                if (criteria.values['class']) p.class_name = criteria.values['class'];
+                // bounds 优先使用 preview.bounds（来自当前 XML 选中节点），否则用 values 中的
+                if ((criteria as any).preview?.bounds) p.bounds = (criteria as any).preview.bounds;
+                else if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
+                // 同步更新标题与描述
+                const patched = { ...s, parameters: p } as any;
+                patched.name = nextTitle || s.name;
+                patched.description = nextDesc || s.description;
+                return patched;
+              }));
+
+              // ✅ 应用后自动关闭分析器
+              setShowPageAnalyzer(false);
+              setIsQuickAnalyzer(false);
+              setEditingStepForParams(null);
+            } else {
+              // === 页面分析模式：创建新步骤（预填并打开创建模态） ===
+              // 统一写入到表单字段，后续保存逻辑会将其组装为新步骤
+              form.setFieldValue('step_type', SmartActionType.SMART_FIND_ELEMENT);
+              form.setFieldValue('name', nextTitle || '查找元素');
+              form.setFieldValue('description', nextDesc || '根据匹配条件查找元素');
+              // 写入匹配策略到参数
+              form.setFieldValue('matching', {
                 strategy: criteria.strategy,
                 fields: criteria.fields,
                 values: criteria.values,
                 includes: (criteria as any).includes,
                 excludes: (criteria as any).excludes,
                 updatedAt: Date.now(),
+              });
+              // 同步定位器（便于执行器与预览）
+              const additionalInfo = {
+                xpath: (criteria as any).preview?.xpath,
+                resourceId: criteria.values['resource-id'],
+                text: criteria.values['text'],
+                contentDesc: criteria.values['content-desc'],
+                className: criteria.values['class'],
               };
-              // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
-              p.elementLocator = p.elementLocator || {};
-              p.elementLocator.additionalInfo = {
-                ...(p.elementLocator.additionalInfo || {}),
-                // 若本次回填携带了预览的 xpath，则优先记录下来
-                xpath: (criteria as any).preview?.xpath || p.elementLocator.additionalInfo?.xpath || undefined,
-                resourceId: p.elementLocator.additionalInfo?.resourceId || criteria.values['resource-id'],
-                text: p.elementLocator.additionalInfo?.text || criteria.values['text'],
-                contentDesc: p.elementLocator.additionalInfo?.contentDesc || criteria.values['content-desc'],
-                className: p.elementLocator.additionalInfo?.className || criteria.values['class'],
-              };
-              // 兼容后端现有执行器参数命名（尽量回写常用字段）
-              if (criteria.values['resource-id']) p.resource_id = criteria.values['resource-id'];
-              if (criteria.values['text']) p.text = criteria.values['text'];
-              if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
-              if (criteria.values['class']) p.class_name = criteria.values['class'];
-              // bounds 优先使用 preview.bounds（来自当前 XML 选中节点），否则用 values 中的
-              if ((criteria as any).preview?.bounds) p.bounds = (criteria as any).preview.bounds;
-              else if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
-              // 同步更新标题与描述（仅在“修改参数”模式下，由 UI 生成一份直观的可读标题/描述）
-              const patched = { ...s, parameters: p } as any;
-              patched.name = nextTitle || s.name;
-              patched.description = nextDesc || s.description;
-              return patched;
-            }));
+              const builtLocator: ElementLocator | undefined = (additionalInfo.xpath || (criteria as any).preview?.bounds)
+                ? {
+                    selectedBounds: (criteria as any).preview?.bounds,
+                    elementPath: (criteria as any).preview?.xpath || '',
+                    confidence: 0.8,
+                    additionalInfo,
+                  }
+                : undefined;
+              if (builtLocator) {
+                form.setFieldValue('elementLocator', builtLocator);
+              }
+              // 若有当前 XML 上下文，构建自包含快照
+              try {
+                if (currentXmlContent) {
+                  const snap = createXmlSnapshot(
+                    currentXmlContent,
+                    {
+                      deviceId: currentDeviceInfo.deviceId || currentDeviceId || 'unknown',
+                      deviceName: currentDeviceInfo.deviceName || (devices.find(d => d.id === currentDeviceId)?.name) || 'unknown',
+                      appPackage: currentDeviceInfo.appPackage || 'com.xingin.xhs',
+                      activityName: currentDeviceInfo.activityName || 'unknown',
+                    },
+                    {
+                      pageTitle: currentPageInfo.pageTitle || '小红书页面',
+                      pageType: currentPageInfo.pageType || 'unknown',
+                      elementCount: currentPageInfo.elementCount || 0,
+                      appVersion: currentPageInfo.appVersion,
+                    }
+                  );
+                  form.setFieldValue('xmlSnapshot', snap);
+                }
+              } catch (e) {
+                console.warn('构建XML快照失败（可忽略）:', e);
+              }
 
-            // ✅ 应用后自动关闭分析器，保持与“选择为步骤元素”一致的体验
-            setShowPageAnalyzer(false);
-            setIsQuickAnalyzer(false);
-            setEditingStepForParams(null);
+              // 关闭分析器并打开新建步骤模态
+              setShowPageAnalyzer(false);
+              setIsQuickAnalyzer(false);
+              setEditingStepForParams(null);
+              setEditingStep(null);
+              setIsModalVisible(true);
+
+              message.success({
+                content: (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: 4 }}>🚀 已根据匹配条件预填新步骤</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>{nextTitle}</div>
+                  </div>
+                ),
+                duration: 3,
+              });
+            }
           } catch (e) {
             console.warn('应用匹配策略到步骤失败:', e);
           }

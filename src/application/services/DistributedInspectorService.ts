@@ -2,6 +2,7 @@ import { useInspectorStore } from '../inspectorStore';
 import { DistributedScriptManager, DistributedStep } from '../../domain/distributed-script';
 import { LocatorService } from '../../infrastructure/inspector/LocatorService';
 import { parseUiAutomatorXml, attachParents } from '../../components/universal-ui/views/grid-view/utils';
+import { buildXPath } from '../../domain/inspector/utils/xpath';
 
 /**
  * 分布式检查器应用服务
@@ -89,9 +90,7 @@ export class DistributedInspectorService {
    * 从节点提取定位器信息
    */
   private extractNodeLocator(node: any): import('../../domain/inspector/entities/NodeLocator').NodeLocator {
-    // 使用现有的 buildXPath 函数
-    const { buildXPath } = require('../../domain/inspector/utils/xpath');
-    
+    // 使用现有的 buildXPath 函数（ESM 导入）
     return {
       absoluteXPath: buildXPath(node),
       attributes: {

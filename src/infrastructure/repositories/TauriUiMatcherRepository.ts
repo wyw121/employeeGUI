@@ -8,7 +8,7 @@ export class TauriUiMatcherRepository implements IUiMatcherRepository {
       return { ok: false, message: '非Tauri环境无法执行真机匹配' };
     }
     try {
-      const res = await invoke('match_element_by_criteria', { deviceId, criteria });
+  const res = await invoke('match_element_by_criteria', { deviceId, criteria });
       return res as MatchResultDTO;
     } catch (error) {
       console.error('match_element_by_criteria 调用失败:', error);

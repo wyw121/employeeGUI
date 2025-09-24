@@ -321,6 +321,10 @@ pub struct MatchCriteriaDTO {
     pub strategy: String,           // 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'
     pub fields: Vec<String>,        // 勾选的字段
     pub values: std::collections::HashMap<String, String>, // 字段值
+    #[serde(default)]
+    pub excludes: std::collections::HashMap<String, Vec<String>>, // 每字段“不可包含”的词
+    #[serde(default)]
+    pub includes: std::collections::HashMap<String, Vec<String>>, // 每字段“必须包含”的词
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -365,12 +369,13 @@ pub async fn match_element_by_criteria(
     let mut matched_idx: Option<usize> = None;
     for (idx, line) in lines.iter().enumerate() {
         let mut ok = true;
+
+        // 1) 正向匹配：values
         for f in &criteria.fields {
             if *f == "bounds" && ignore_bounds { continue; }
             if let Some(v) = criteria.values.get(f) {
-                // 宽松匹配：text/content-desc 使用包含，其他使用等值（字符串出现）
                 if f == "text" || f == "content-desc" {
-                    if !line.contains(&format!("{}=\"{}", f, v)) && !line.contains(v) {
+                    if !line.contains(&format!("{}=\"{}\"", f, v)) && !line.contains(v) {
                         ok = false; break;
                     }
                 } else if f == "resource-id" {
@@ -382,7 +387,39 @@ pub async fn match_element_by_criteria(
                 }
             }
         }
-        if ok { matched_idx = Some(idx); break; }
+        if !ok { continue; }
+
+        // 2) 额外包含：includes（若某字段有 includes 条件，则每个词都必须出现；仅对被选字段生效）
+        for (f, words) in &criteria.includes {
+            if !criteria.fields.contains(f) { continue; }
+            if *f == "bounds" && ignore_bounds { continue; }
+            for w in words {
+                if w.trim().is_empty() { continue; }
+                // 文本类字段使用包含判断；其他字段也使用包含以增强兼容（预先已在前端限制/引导）
+                if !line.contains(&format!("{}=\"{}\"", f, w)) && !line.contains(w) {
+                    ok = false; break;
+                }
+            }
+            if !ok { break; }
+        }
+        if !ok { continue; }
+
+        // 3) 不包含：excludes（若某字段有 excludes 条件，则任何一个词出现都判为不匹配；仅对被选字段生效）
+        for (f, words) in &criteria.excludes {
+            if !criteria.fields.contains(f) { continue; }
+            if *f == "bounds" && ignore_bounds { continue; }
+            for w in words {
+                if w.trim().is_empty() { continue; }
+                if line.contains(&format!("{}=\"{}\"", f, w)) || line.contains(w) {
+                    ok = false; break;
+                }
+            }
+            if !ok { break; }
+        }
+        if !ok { continue; }
+
+        matched_idx = Some(idx);
+        break;
     }
 
     if let Some(i) = matched_idx {

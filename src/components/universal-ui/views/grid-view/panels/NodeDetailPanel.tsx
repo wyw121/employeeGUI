@@ -8,6 +8,7 @@ import { useAdb } from '../../../../../application/hooks/useAdb';
 import { MatchingStrategySelector } from './node-detail/MatchingStrategySelector';
 import { SelectedFieldsChips, SelectedFieldsTable } from './node-detail/';
 import { PRESET_FIELDS, inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes } from './node-detail';
+import { buildXPath } from '../utils';
 
 interface NodeDetailPanelProps {
   node: UiNode | null;
@@ -117,12 +118,16 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
     try {
       // 规范化：移除值为空的字段，表示“任意/忽略该维度”
       const normalized = normalizeFieldsAndValues(selectedFields, values);
+      const ex = normalizeExcludes(excludes, normalized.fields);
+      const inc = normalizeIncludes(includes, normalized.fields);
       // 后端不识别 'custom'，在发送时转换为等效策略（考虑是否存在有效位置约束）
       const effectiveStrategy = toBackendStrategy(strategy, normalized.fields, normalized.values);
       const res = await matchElementByCriteria(selectedDevice.id, {
         strategy: effectiveStrategy as any,
         fields: normalized.fields,
         values: normalized.values,
+        excludes: ex,
+        includes: inc,
       });
       if (res.ok) {
         // 简单提示；后续可联动预览高亮（需要回传 bounds/xpath 并在上层转换为 UiNode）
@@ -202,6 +207,8 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onMatche
                   values: normalized.values,
                   excludes: normalizeExcludes(excludes, normalized.fields),
                   includes: normalizeIncludes(includes, normalized.fields),
+                  // 追加当前选中节点的定位预览信息，便于上层立即更新步骤定位器
+                  ...(node ? { preview: { xpath: buildXPath(node), bounds: node.attrs['bounds'] } } : {}),
                 });
               }}
               title={canApply ? '' : '请选择匹配预设或至少一个字段'}

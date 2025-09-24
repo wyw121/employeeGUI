@@ -104,6 +104,19 @@ npm run tauri build
 
 后端实现：Tauri 命令 `match_element_by_criteria` 在 `standard` 策略下会忽略位置/分辨率差异，仅按语义字段匹配。
 
+### 自定义策略与包含/不包含
+- 自定义（`custom`）策略：前端用于表达“字段自定义”的 UI 状态，发送请求时会根据是否存在有效位置约束自动映射为：
+	- 含有效 `bounds/index` 值 → `absolute`
+	- 否则 → `standard`
+- 条件扩展：支持 per-field 的“包含（includes）/不包含（excludes）”
+	- 仅对已勾选的字段生效
+	- “包含”：列表中每个词都必须出现（属性等值或子串均可）
+	- “不包含”：列表中任一词出现即排除
+	- 位置策略为 `positionless/relaxed/strict/standard` 时自动忽略 `bounds`
+- 入口：
+	1) 页面分析器 → 右侧节点详情 → 每个字段下方“包含/不包含”编辑器
+	2) 通过 `useAdb().matchElementByCriteria(deviceId, { strategy, fields, values, includes, excludes })`
+
 ### 可维护性
 - 组件化设计，便于复用和维护
 - TypeScript类型安全

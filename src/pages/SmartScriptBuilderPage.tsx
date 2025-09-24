@@ -62,6 +62,9 @@ import {
 // import { runAllElementNameMapperTests } from '../test/ElementNameMapperTest';
 import { PageAnalysisProvider } from "../application/page-analysis/PageAnalysisProvider";
 import { PageAnalysisApplicationService } from "../application/page-analysis/PageAnalysisApplicationService";
+import { PageAnalysisRepositoryFactory } from "../infrastructure/repositories/PageAnalysisRepositoryFactory";
+import { buildShortTitleFromCriteria, buildShortDescriptionFromCriteria } from "../components/universal-ui/views/grid-view/panels/node-detail/titleHelpers";
+import type { MatchCriteria as UIMatchCriteria, MatchStrategy as UIMatchStrategy } from "../components/universal-ui/views/grid-view/panels/node-detail/types";
 import { SmartActionType } from "../types/smartComponents";
 import type { LaunchAppComponentParams } from "../types/smartComponents";
 import type { SmartScriptStep } from "../types/smartScript";
@@ -607,13 +610,6 @@ const SmartScriptBuilderPage: React.FC = () => {
   // 创建页面分析服务实例
   const pageAnalysisService = React.useMemo(() => {
     try {
-      const {
-        PageAnalysisApplicationService,
-      } = require("../application/page-analysis/PageAnalysisApplicationService");
-      const {
-        PageAnalysisRepositoryFactory,
-      } = require("../infrastructure/repositories/PageAnalysisRepositoryFactory");
-
       const pageAnalysisRepository =
         PageAnalysisRepositoryFactory.getPageAnalysisRepository();
       const deviceUIStateRepository =
@@ -1469,32 +1465,6 @@ const SmartScriptBuilderPage: React.FC = () => {
     message.success("通讯录导入步骤创建成功！已添加3个步骤到脚本中");
   };
 
-  // 🆕 创建屏幕交互步骤（默认：智能滚动 向下）
-  const handleCreateScreenInteraction = () => {
-    const newStep: ExtendedSmartScriptStep = {
-      id: `step_${Date.now()}_scroll`,
-      step_type: 'smart_scroll',
-      name: '屏幕交互 - 智能滚动',
-      description: '向下滚动屏幕（可在卡片中调整方向/距离/速度）',
-      enabled: true,
-      order: steps.length + 1,
-      parameters: {
-        direction: 'down',
-        distance: 600,
-        speed_ms: 300,
-      },
-      find_condition: null,
-      verification: null,
-      retry_config: null,
-      fallback_actions: [],
-      pre_conditions: [],
-      post_conditions: [],
-    };
-
-    setSteps((prev) => [...prev, newStep]);
-    message.success('已添加屏幕交互步骤：智能滚动');
-  };
-
   // 删除循环
   const handleDeleteLoop = (loopId: string) => {
     Modal.confirm({
@@ -1713,6 +1683,75 @@ const SmartScriptBuilderPage: React.FC = () => {
     }
 
     const enabledSteps = steps.filter((s) => s.enabled);
+    // 后端不识别 smart_scroll，这里统一映射为 swipe；并为 tap 缺省坐标兜底
+    const normalizeStepForBackend = (step: ExtendedSmartScriptStep): ExtendedSmartScriptStep => {
+      try {
+        if (String(step.step_type) === 'smart_scroll') {
+          const p: any = step.parameters || {};
+          const direction = p.direction || 'down';
+          const distance = Number(p.distance ?? 600);
+          const speed = Number(p.speed_ms ?? 300);
+          const screen = { width: 1080, height: 1920 };
+          const cx = Math.floor(screen.width / 2);
+          const cy = Math.floor(screen.height / 2);
+          const delta = Math.max(100, Math.min(distance, Math.floor(screen.height * 0.8)));
+          let start_x = cx, start_y = cy, end_x = cx, end_y = cy;
+          switch (direction) {
+            case 'up':
+              start_y = cy - Math.floor(delta / 2);
+              end_y = cy + Math.floor(delta / 2);
+              break;
+            case 'down':
+              start_y = cy + Math.floor(delta / 2);
+              end_y = cy - Math.floor(delta / 2);
+              break;
+            case 'left':
+              start_x = cx - Math.floor(delta / 2);
+              end_x = cx + Math.floor(delta / 2);
+              break;
+            case 'right':
+              start_x = cx + Math.floor(delta / 2);
+              end_x = cx - Math.floor(delta / 2);
+              break;
+            default:
+              start_y = cy + Math.floor(delta / 2);
+              end_y = cy - Math.floor(delta / 2);
+          }
+
+          return {
+            ...step,
+            step_type: 'swipe' as any,
+            name: step.name || '滑动',
+            description: step.description || `标准化滚动映射为滑动(${direction})`,
+            parameters: {
+              ...p,
+              start_x, start_y, end_x, end_y,
+              duration: speed > 0 ? speed : 300,
+            },
+          } as ExtendedSmartScriptStep;
+        }
+
+        if (String(step.step_type) === 'tap') {
+          const p: any = step.parameters || {};
+          if ((p.x === undefined || p.y === undefined)) {
+            const screen = { width: 1080, height: 1920 };
+            return {
+              ...step,
+              parameters: {
+                ...p,
+                x: p.x ?? Math.floor(screen.width / 2),
+                y: p.y ?? Math.floor(screen.height / 2),
+                hold_duration_ms: p.duration_ms ?? p.hold_duration_ms ?? 100,
+              },
+            } as ExtendedSmartScriptStep;
+          }
+        }
+      } catch (e) {
+        console.warn('标准化步骤失败（执行前）：', e);
+      }
+      return step;
+    };
+    const normalizedEnabledSteps = enabledSteps.map(normalizeStepForBackend);
     if (enabledSteps.length === 0) {
       message.warning("没有启用的步骤可执行");
       return;
@@ -1797,7 +1836,7 @@ const SmartScriptBuilderPage: React.FC = () => {
 
         const result = (await invoke("execute_smart_automation_script", {
           deviceId: selectedDevice,
-          steps: enabledSteps,
+          steps: normalizedEnabledSteps,
           config: backendConfig,
         })) as SmartExecutionResult;
 
@@ -2104,7 +2143,48 @@ const SmartScriptBuilderPage: React.FC = () => {
               onCreateContactImport={handleCreateContactImport}
               onAddStep={handleAddStep}
               onBatchMatch={handleBatchMatch}
-              onCreateScreenInteraction={handleCreateScreenInteraction}
+              onCreateScreenInteraction={(tpl: any | any[]) => {
+                const baseOrder = steps.length;
+                const now = Date.now();
+                const ensureStep = (s: any, idx: number) => {
+                  const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+                  if (!step.id) step.id = `step_${now + idx}_scroll`;
+                  if (!step.step_type) step.step_type = 'smart_scroll';
+                  if (!step.parameters) step.parameters = { direction: 'down', distance: 600, speed_ms: 300 } as any;
+                  step.order = baseOrder + idx + 1;
+                  return step;
+                };
+                const list = Array.isArray(tpl) ? tpl.map(ensureStep) : [ensureStep(tpl, 0)];
+                setSteps((prev) => [...prev, ...list]);
+                if (list.length === 1) {
+                  const dir = (list[0].parameters as any)?.direction || 'down';
+                  message.success(`已添加屏幕交互步骤：智能滚动（${dir}）`);
+                } else {
+                  message.success(`已添加屏幕交互步骤 ${list.length} 个`);
+                }
+              }}
+                onCreateTapAction={(tpl: any | any[]) => {
+                  const baseOrder = steps.length;
+                  const now = Date.now();
+                  const ensureStep = (s: any, idx: number) => {
+                    const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+                    if (!step.id) step.id = `step_${now + idx}_tap`;
+                    if (!step.step_type) step.step_type = 'tap';
+                    if (!step.parameters) step.parameters = { position: 'center' } as any;
+                    step.order = baseOrder + idx + 1;
+                    return step;
+                  };
+                  const list = Array.isArray(tpl) ? tpl.map(ensureStep) : [ensureStep(tpl, 0)];
+                  setSteps((prev) => [...prev, ...list]);
+                  if (list.length === 1) {
+                    const p: any = list[0].parameters || {};
+                    const label = p.duration_ms ? `长按` : `轻点`;
+                    const pos = p.position === 'absolute' && p.x !== undefined ? `(${p.x}, ${p.y})` : '中心';
+                    message.success(`已添加屏幕交互步骤：${label} ${pos}`);
+                  } else {
+                    message.success(`已添加轻点步骤 ${list.length} 个`);
+                  }
+                }}
             />
           </div>
         </Col>
@@ -2696,12 +2776,13 @@ const SmartScriptBuilderPage: React.FC = () => {
         preselectLocator={(() => {
           const p: any = editingStepForParams?.parameters || {};
           const locator: NodeLocator = {} as any;
-          // XPath 优先
-          if (p.xpath && typeof p.xpath === "string" && p.xpath.trim()) {
+          // XPath 优先：优先从 elementLocator.additionalInfo.xpath 取（最新来源更可靠）
+          const preferXPath: string | undefined = p.elementLocator?.additionalInfo?.xpath || p.xpath;
+          if (preferXPath && typeof preferXPath === "string" && preferXPath.trim()) {
             // 简单判断：以 / 开头认为是绝对 XPath，否则当作谓词
-            if (/^\s*\//.test(p.xpath))
-              locator.absoluteXPath = String(p.xpath).trim();
-            else locator.predicateXPath = String(p.xpath).trim();
+            if (/^\s*\//.test(preferXPath))
+              locator.absoluteXPath = String(preferXPath).trim();
+            else locator.predicateXPath = String(preferXPath).trim();
           }
           // 属性与 bounds
           locator.attributes = {
@@ -2725,16 +2806,23 @@ const SmartScriptBuilderPage: React.FC = () => {
         // 🆕 XML内容更新回调
         onXmlContentUpdated={updateCurrentXmlContext}
         // 🆕 从“节点详情/匹配结果→应用到步骤”回写匹配策略并更新标题
-        onApplyCriteria={(criteria) => {
+  onApplyCriteria={(criteria) => {
           try {
             if (!editingStepForParams) {
               // 非“修改参数”模式，忽略
               return;
             }
-            // 生成简短标题/描述（模块化 helper）
-            const { buildShortTitleFromCriteria, buildShortDescriptionFromCriteria } = require('../components/universal-ui/views/grid-view/panels/node-detail/titleHelpers');
-            const nextTitle: string = buildShortTitleFromCriteria(criteria);
-            const nextDesc: string = buildShortDescriptionFromCriteria(criteria);
+            // 构建强类型的 MatchCriteria 以满足辅助函数的类型要求
+            const matchCriteria: UIMatchCriteria = {
+              strategy: criteria.strategy as UIMatchStrategy,
+              fields: criteria.fields,
+              values: criteria.values,
+              includes: (criteria as any).includes,
+              excludes: (criteria as any).excludes,
+            };
+            // 生成简短标题/描述（模块化 helper，ESM 顶层导入）
+            const nextTitle: string = buildShortTitleFromCriteria(matchCriteria);
+            const nextDesc: string = buildShortDescriptionFromCriteria(matchCriteria);
             const stepId = editingStepForParams.id;
             setSteps((prev) => prev.map((s) => {
               if (s.id !== stepId) return s;
@@ -2744,13 +2832,16 @@ const SmartScriptBuilderPage: React.FC = () => {
                 strategy: criteria.strategy,
                 fields: criteria.fields,
                 values: criteria.values,
+                includes: (criteria as any).includes,
+                excludes: (criteria as any).excludes,
                 updatedAt: Date.now(),
               };
               // 同步补齐 elementLocator.additionalInfo（便于执行器兜底）
               p.elementLocator = p.elementLocator || {};
               p.elementLocator.additionalInfo = {
                 ...(p.elementLocator.additionalInfo || {}),
-                xpath: p.elementLocator.additionalInfo?.xpath || undefined,
+                // 若本次回填携带了预览的 xpath，则优先记录下来
+                xpath: (criteria as any).preview?.xpath || p.elementLocator.additionalInfo?.xpath || undefined,
                 resourceId: p.elementLocator.additionalInfo?.resourceId || criteria.values['resource-id'],
                 text: p.elementLocator.additionalInfo?.text || criteria.values['text'],
                 contentDesc: p.elementLocator.additionalInfo?.contentDesc || criteria.values['content-desc'],
@@ -2761,13 +2852,20 @@ const SmartScriptBuilderPage: React.FC = () => {
               if (criteria.values['text']) p.text = criteria.values['text'];
               if (criteria.values['content-desc']) p.content_desc = criteria.values['content-desc'];
               if (criteria.values['class']) p.class_name = criteria.values['class'];
-              if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
+              // bounds 优先使用 preview.bounds（来自当前 XML 选中节点），否则用 values 中的
+              if ((criteria as any).preview?.bounds) p.bounds = (criteria as any).preview.bounds;
+              else if (criteria.values['bounds']) p.bounds = criteria.values['bounds'];
               // 同步更新标题与描述（仅在“修改参数”模式下，由 UI 生成一份直观的可读标题/描述）
               const patched = { ...s, parameters: p } as any;
               patched.name = nextTitle || s.name;
               patched.description = nextDesc || s.description;
               return patched;
             }));
+
+            // ✅ 应用后自动关闭分析器，保持与“选择为步骤元素”一致的体验
+            setShowPageAnalyzer(false);
+            setIsQuickAnalyzer(false);
+            setEditingStepForParams(null);
           } catch (e) {
             console.warn('应用匹配策略到步骤失败:', e);
           }

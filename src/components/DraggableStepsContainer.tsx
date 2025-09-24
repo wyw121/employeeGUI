@@ -2,7 +2,8 @@
 
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
-import { EyeOutlined, ReloadOutlined, PlusOutlined, MobileOutlined } from '@ant-design/icons';
+import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { ScreenActionDropdownButton, TapActionDropdownButton } from './step-card';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
@@ -42,7 +43,9 @@ export interface DraggableStepsContainerProps {
   /** 批量匹配操作回调 */
   onBatchMatch?: (stepId: string) => void;
   /** 创建屏幕交互步骤（如滚动/滑动等）回调 */
-  onCreateScreenInteraction?: () => void;
+  onCreateScreenInteraction?: (template: any | any[]) => void;
+  /** 创建轻点/长按等点击行为步骤回调 */
+  onCreateTapAction?: (template: any | any[]) => void;
 }
 
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
@@ -62,6 +65,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onCreateContactImport,
   onBatchMatch,
   onCreateScreenInteraction,
+  onCreateTapAction,
 }) => {
   // 配置传感器
   const sensors = useSensors(
@@ -135,14 +139,14 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
               </Button>
             )}
             {onCreateScreenInteraction && (
-              <Button
-                type="default"
-                icon={<MobileOutlined />}
-                onClick={onCreateScreenInteraction}
-                style={{ flex: '0 0 24%' }}
-              >
-                📲 屏幕交互步骤
-              </Button>
+              <div style={{ flex: '0 0 24%' }}>
+                <ScreenActionDropdownButton onSelectTemplate={(tpl) => onCreateScreenInteraction(tpl)} />
+              </div>
+            )}
+            {onCreateTapAction && (
+              <div style={{ flex: '0 0 24%' }}>
+                <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
+              </div>
             )}
             {/* 预留空间给后续的其他按钮 */}
           </div>
@@ -215,14 +219,14 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                   </Button>
                 )}
                 {onCreateScreenInteraction && (
-                  <Button
-                    type="default"
-                    icon={<MobileOutlined />}
-                    onClick={onCreateScreenInteraction}
-                    style={{ flex: '0 0 24%' }}
-                  >
-                    📲 屏幕交互步骤
-                  </Button>
+                  <div style={{ flex: '0 0 24%' }}>
+                    <ScreenActionDropdownButton onSelectTemplate={(tpl) => onCreateScreenInteraction(tpl)} />
+                  </div>
+                )}
+                {onCreateTapAction && (
+                  <div style={{ flex: '0 0 24%' }}>
+                    <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
+                  </div>
                 )}
                 {/* 预留空间给后续的其他按钮 */}
               </div>

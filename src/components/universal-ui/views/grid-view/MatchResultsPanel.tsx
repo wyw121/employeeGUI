@@ -130,7 +130,9 @@ export const MatchResultsPanel: React.FC<MatchResultsPanelProps> = ({ matches, m
                       onClick={() => {
                         const useStrategy = currentStrategy || 'standard';
                         const fieldsOverride = Array.isArray(currentFields) && currentFields.length > 0 ? currentFields : undefined;
-                        const criteria = buildCriteriaFromNode(n, useStrategy as any, fieldsOverride);
+                        const criteria = buildCriteriaFromNode(n, useStrategy as any, fieldsOverride) as any;
+                        // 附带当前节点的定位预览，便于上层立即更新步骤定位器
+                        criteria.preview = { xpath: buildXPath(n), bounds: n.attrs['bounds'] };
                         onSelectForStep(criteria);
                       }}
                     >选择为步骤元素</button>

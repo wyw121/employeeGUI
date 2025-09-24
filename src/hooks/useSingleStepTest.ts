@@ -39,22 +39,98 @@ export const useSingleStepTest = () => {
       }
 
       console.log(`🚀 调用后端单步测试API...`);
+
+      // 在下发前做类型标准化映射：
+      // 1) smart_scroll -> swipe（后端不识别 smart_scroll）
+      // 2) tap 若缺少坐标则降级为中心点击（保持开发可用）
+      const normalizedStep: SmartScriptStep = (() => {
+        try {
+          if (String(step.step_type) === 'smart_scroll') {
+            const p: any = step.parameters || {};
+            const direction = p.direction || 'down';
+            const distance = Number(p.distance ?? 600);
+            const speed = Number(p.speed_ms ?? 300); // 映射到 duration
+            const screen = { width: 1080, height: 1920 }; // 兜底屏幕尺寸（后续可从设备信息获取）
+
+            // 依据方向构造 swipe 起止坐标（相对屏幕中线）
+            const cx = Math.floor(screen.width / 2);
+            const cy = Math.floor(screen.height / 2);
+            const delta = Math.max(100, Math.min(distance, Math.floor(screen.height * 0.8)));
+            let start_x = cx, start_y = cy, end_x = cx, end_y = cy;
+            switch (direction) {
+              case 'up':
+                start_y = cy - Math.floor(delta / 2);
+                end_y = cy + Math.floor(delta / 2);
+                break;
+              case 'down':
+                start_y = cy + Math.floor(delta / 2);
+                end_y = cy - Math.floor(delta / 2);
+                break;
+              case 'left':
+                start_x = cx - Math.floor(delta / 2);
+                end_x = cx + Math.floor(delta / 2);
+                break;
+              case 'right':
+                start_x = cx + Math.floor(delta / 2);
+                end_x = cx - Math.floor(delta / 2);
+                break;
+              default:
+                // 未知方向，默认向下
+                start_y = cy + Math.floor(delta / 2);
+                end_y = cy - Math.floor(delta / 2);
+            }
+
+            return {
+              ...step,
+              step_type: 'swipe' as any,
+              name: step.name || '滑动',
+              description: step.description || `标准化滚动映射为滑动(${direction})`,
+              parameters: {
+                ...p,
+                start_x, start_y, end_x, end_y,
+                duration: speed > 0 ? speed : 300,
+              },
+            } as SmartScriptStep;
+          }
+
+          if (String(step.step_type) === 'tap') {
+            const p: any = step.parameters || {};
+            if ((p.x === undefined || p.y === undefined)) {
+              // 将中心点击映射为固定中心点（兜底）
+              const screen = { width: 1080, height: 1920 };
+              return {
+                ...step,
+                parameters: {
+                  ...p,
+                  x: p.x ?? Math.floor(screen.width / 2),
+                  y: p.y ?? Math.floor(screen.height / 2),
+                  hold_duration_ms: p.duration_ms ?? p.hold_duration_ms ?? 100,
+                },
+              } as SmartScriptStep;
+            }
+          }
+        } catch (e) {
+          console.warn('标准化步骤失败，按原样下发:', e);
+        }
+        return step;
+      })();
+
       // 规范化下发给后端的 step，补齐后端要求的字段（如 order）
       const payloadStep = {
-        id: step.id,
-        step_type: step.step_type,
-        name: step.name,
-        description: step.description ?? '',
-        parameters: step.parameters ?? {},
+        id: normalizedStep.id,
+        step_type: normalizedStep.step_type,
+        name: normalizedStep.name,
+        description: normalizedStep.description ?? '',
+        parameters: normalizedStep.parameters ?? {},
         enabled: true,
-        order: typeof (step as any).order === 'number' ? (step as any).order : 0,
+        order: typeof (normalizedStep as any).order === 'number' ? (normalizedStep as any).order : 0,
         // 透传可选的扩展字段（若存在）
-        find_condition: (step as any).find_condition,
-        verification: (step as any).verification,
-        retry_config: (step as any).retry_config,
-        fallback_actions: (step as any).fallback_actions,
-        pre_conditions: (step as any).pre_conditions,
-        post_conditions: (step as any).post_conditions,
+        find_condition: (normalizedStep as any).find_condition,
+        verification: (normalizedStep as any).verification,
+        retry_config: (normalizedStep as any).retry_config,
+        fallback_actions: (normalizedStep as any).fallback_actions,
+        pre_conditions: (normalizedStep as any).pre_conditions,
+        post_conditions: (normalizedStep as any).post_conditions,
       };
 
       console.log(`📋 传递参数:`, { deviceId, stepType: payloadStep.step_type, stepName: payloadStep.name, order: payloadStep.order });

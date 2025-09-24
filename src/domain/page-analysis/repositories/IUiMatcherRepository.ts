@@ -8,6 +8,10 @@ export interface MatchCriteriaDTO {
   strategy: MatchStrategy;
   fields: string[];
   values: Record<string, string>;
+  /** 负向匹配：每字段一个字符串数组，表示“不包含”的词列表 */
+  excludes?: Record<string, string[]>;
+  /** 正向额外包含：每字段一个字符串数组，表示“必须包含”的词列表 */
+  includes?: Record<string, string[]>;
 }
 
 export interface MatchPreview {

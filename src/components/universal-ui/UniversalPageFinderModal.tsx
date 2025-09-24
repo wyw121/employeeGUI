@@ -136,7 +136,7 @@ interface UniversalPageFinderModalProps {
   // 🆕 修改参数时预选元素定位器（基于步骤指纹构建）
   preselectLocator?: NodeLocator;
   // 新增：当在“网格检查器/节点详情”里选择了匹配策略并点击“应用到步骤”时回调
-  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => void;
+  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
 }
 
 const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
@@ -1100,6 +1100,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                   }
                 }}
                 onApplyCriteria={handleApplyCriteria}
+                onLatestMatchingChange={(m) => { (window as any).__latestMatching__ = m; }}
               />
             </ErrorBoundary>
           ) : (
@@ -1262,7 +1263,17 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     <Modal
       title="Universal UI 智能页面查找器"
       open={visible}
-      onCancel={onClose}
+      onCancel={() => {
+        try {
+          const m = (window as any).__latestMatching__ as { strategy: string; fields: string[] } | undefined;
+          if (m && m.strategy && Array.isArray(m.fields) && m.fields.length > 0) {
+            onApplyCriteria?.({ strategy: m.strategy, fields: m.fields, values: {} });
+          }
+        } catch (e) {
+          console.warn('关闭时自动回填匹配策略失败:', e);
+        }
+        onClose();
+      }}
       width="98vw" // 几乎全屏，确保四列不换行
       style={{ top: 10 }}
       footer={null}

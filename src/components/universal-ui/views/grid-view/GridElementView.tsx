@@ -58,7 +58,9 @@ interface GridElementViewProps {
   locator?: NodeLocator;
   locatorResolve?: (root: UiNode | null, locator: NodeLocator) => UiNode | null;
   // 新增：将节点详情选择的匹配策略回传给上层（例如步骤卡片“修改参数”模式）
-  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => void;
+  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
+  // 🆕 上抛“最新匹配配置”（仅策略与字段），便于外层在离开时自动回填
+  onLatestMatchingChange?: (m: { strategy: string; fields: string[] }) => void;
 }
 
 // =============== 工具函数（见 ./utils） ===============
@@ -80,6 +82,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   locator,
   locatorResolve,
   onApplyCriteria,
+  onLatestMatchingChange,
 }) => {
   // XML 文本与解析树
   const [xmlText, setXmlText] = useState<string>("");
@@ -577,7 +580,19 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
         {/* 右侧 */}
         <div className="space-y-4">
           <PreferencesPanel />
-          <NodeDetailPanel node={selected} onMatched={handleMatchedFromDevice} onApplyToStep={onApplyCriteria as any} onStrategyChanged={(s) => setCurrentStrategy(s)} onFieldsChanged={(fs) => setCurrentFields(fs)} />
+          <NodeDetailPanel
+            node={selected}
+            onMatched={handleMatchedFromDevice}
+            onApplyToStep={onApplyCriteria as any}
+            onStrategyChanged={(s) => {
+              setCurrentStrategy(s);
+              onLatestMatchingChange?.({ strategy: s, fields: currentFields });
+            }}
+            onFieldsChanged={(fs) => {
+              setCurrentFields(fs);
+              onLatestMatchingChange?.({ strategy: currentStrategy, fields: fs });
+            }}
+          />
           <LocatorAdvisorPanel
             node={selected}
             onApply={(xp) => { setXPathInput(xp); setTimeout(() => locateXPath(), 0); }}

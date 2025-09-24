@@ -297,7 +297,7 @@ export const useAdb = () => {
   // ===== UI 元素匹配 =====
   const matchElementByCriteria = useCallback(async (
     deviceId: string,
-    criteria: { strategy: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'; fields: string[]; values: Record<string, string>; }
+    criteria: { strategy: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'; fields: string[]; values: Record<string, string>; includes?: Record<string, string[]>; excludes?: Record<string, string[]>; }
   ) => {
     return await applicationService.matchElementByCriteria(deviceId, criteria);
   }, []);

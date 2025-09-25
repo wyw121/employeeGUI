@@ -8,6 +8,7 @@ pub mod app_detection_framework;  // 新增：应用检测框架
 pub mod app_lifecycle_manager;  // 新增：应用生命周期管理器
 pub mod auth_service;
 pub mod contact_automation;
+pub mod contact;
 pub mod error_handling;  // 新增：错误处理模块
 pub mod page_analyzer_service;  // 新增：页面分析服务
 pub mod universal_ui_page_analyzer;  // 新增：Universal UI 页面分析器

@@ -3,10 +3,11 @@ use crate::application::device_metrics::{DeviceMetrics, DeviceMetricsProvider};
 use crate::infra::device::metrics_provider::RealDeviceMetricsProvider;
 use crate::infra::adb::input_injector::AdbShellInputInjector;
 use crate::infra::adb::safe_input_injector::SafeInputInjector;
+use crate::services::execution::model::SmartScriptStep;
 use super::{adapter::adapt_legacy_steps, mapping::{map_legacy_to_actions}};
 
 #[allow(dead_code)]
-pub async fn run_v2_compat(steps: &[crate::services::smart_script_executor::SmartScriptStep], device_id: &str, adb_path: &str) -> Result<()> {
+pub async fn run_v2_compat(steps: &[SmartScriptStep], device_id: &str, adb_path: &str) -> Result<()> {
     // 1) 适配旧结构
     let legacy = adapt_legacy_steps(steps);
     // 2) 映射到 DSL

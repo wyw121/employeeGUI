@@ -1,4 +1,4 @@
-use crate::services::smart_script_executor::SmartScriptStep;
+use crate::services::execution::model::SmartScriptStep;
 use super::mapping::LegacyStep;
 
 #[allow(dead_code)]

@@ -6,7 +6,7 @@
 /// - 为扩展新控制结构提供基础
 
 use serde::{Deserialize, Serialize};
-use crate::services::smart_script_executor::SmartScriptStep;
+use crate::services::execution::model::SmartScriptStep;
 
 /// 控制流节点类型
 #[derive(Debug, Clone, Serialize, Deserialize)]

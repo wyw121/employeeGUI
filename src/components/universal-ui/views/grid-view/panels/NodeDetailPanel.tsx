@@ -3,6 +3,7 @@ import styles from "../GridElementView.module.css";
 import { UiNode } from "../types";
 import { NodeDetail } from "../NodeDetail";
 import { MatchPresetsRow } from './node-detail/MatchPresetsRow';
+import { ElementPresetsRow } from './node-detail';
 import { SelectedFieldsChips, SelectedFieldsTable, NodeDetailSetElementButton, type CompleteStepCriteria } from './node-detail';
 import type { MatchCriteria, MatchResultSummary } from './node-detail/types';
 import { inferStrategyFromFields, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, normalizeExcludes, normalizeIncludes, PRESET_FIELDS } from './node-detail';
@@ -215,7 +216,15 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
           </div>
         </div>
 
-  <MatchPresetsRow node={node} onApply={applyPreset} activeStrategy={strategy} />
+        {/* 元素级预设（例如：关注按钮） */}
+        <ElementPresetsRow
+          node={node}
+          onApply={applyPreset}
+          onPreviewFields={(fs) => setSelectedFields(fs)}
+        />
+
+        {/* 策略级预设 */}
+        <MatchPresetsRow node={node} onApply={applyPreset} activeStrategy={strategy} />
 
         <div className={styles.section}>
           <SelectedFieldsChips

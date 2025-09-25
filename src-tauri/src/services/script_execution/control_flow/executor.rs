@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn, error};
 
-use crate::services::smart_script_executor::{SmartScriptStep, SingleStepTestResult, SmartExecutionResult};
+use crate::services::execution::model::{SmartScriptStep, SingleStepTestResult, SmartExecutionResult};
 use super::ast::{ControlFlowNode, ExecutionPlan, LinearStep};
 use super::context::ExecutionContext;
 use super::handlers::base::{ControlStructureHandler, HandlerConfig};

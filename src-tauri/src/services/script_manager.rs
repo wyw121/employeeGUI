@@ -6,7 +6,7 @@ use tauri::command;
 use tracing::{info, warn};
 use chrono::{DateTime, Utc};
 
-use crate::services::smart_script_executor::{SmartScriptStep, SmartExecutionResult, SmartExecutorConfig};
+use crate::services::execution::model::{SmartScriptStep, SmartExecutionResult, SmartExecutorConfig};
 
 /// 智能脚本完整定义
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -2,6 +2,14 @@
 
 mod step;
 mod context;
+mod smart;
 
 pub use step::{ExecStep, ExecStepKind, ExecStepId, ExecStepMeta};
 pub use context::{ExecutionContext, ExecVariables, ExecMetrics};
+pub use smart::{
+	SmartActionType,
+	SmartScriptStep,
+	SmartExecutorConfig,
+	SmartExecutionResult,
+	SingleStepTestResult,
+};

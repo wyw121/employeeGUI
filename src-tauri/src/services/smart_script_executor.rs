@@ -1,103 +1,59 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::command;
 #[allow(unused_imports)]
 use tracing::{error, info, warn, debug};
 
+// ExecutionEnvironment 相关导入（重试 + 快照 + 注册表 + 匹配桥接）
+use crate::services::execution::{
+    ExecutionEnvironment,
+    ExponentialBackoffPolicy,
+    RetryConfig,
+    RealSnapshotProvider,
+    register_execution_environment,
+    run_unified_match,
+    LegacyUiActions,
+};
+use crate::services::execution::matching::{find_all_follow_buttons, find_element_in_ui};
+use crate::services::execution::model::{
+    SmartActionType,
+    SmartExecutorConfig,
+    SmartExecutionResult,
+    SmartScriptStep,
+    SingleStepTestResult,
+};
+use crate::services::contact::{run_generate_vcf_step, run_import_contacts_step};
+
 use crate::services::adb_session_manager::get_device_session;
 use crate::services::error_handling::{ErrorHandler, ErrorHandlingConfig};
 use crate::services::script_execution::ScriptPreprocessor;
-#[allow(unused_imports)]
-use crate::services::contact_automation::generate_vcf_file;
-use crate::services::vcf_importer::VcfImporter;
-use crate::services::multi_brand_vcf_importer::MultiBrandVcfImporter;
 use crate::application::normalizer::normalize_step_json;
 use crate::application::device_metrics::{DeviceMetrics, DeviceMetricsProvider};
 use crate::infra::device::metrics_provider::RealDeviceMetricsProvider;
+// (已在顶部统一导入)  // 新执行环境聚合 + 重试策略 + 快照提供器 + 注册表
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SmartActionType {
-    // 基础操作类型
-    Tap,
-    Input,
-    Wait,
-    Swipe,
-    // 智能操作类型
-    SmartTap,
-    SmartFindElement,
-    BatchMatch,  // 批量匹配操作（动态元素查找）
-    RecognizePage,
-    VerifyAction,
-    WaitForPageState,
-    ExtractElement,
-    SmartNavigation,
-    // 循环控制类型
-    LoopStart,
-    LoopEnd,
-    // 通讯录自动化操作
-    ContactGenerateVcf,
-    ContactImportToDevice,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SmartScriptStep {
-    pub id: String,
-    pub step_type: SmartActionType,
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value,
-    pub enabled: bool,
-    pub order: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SingleStepTestResult {
-    pub success: bool,
-    pub step_id: String,
-    pub step_name: String,
-    pub message: String,
-    pub duration_ms: u64,
-    pub timestamp: i64,
-    pub page_state: Option<String>,
-    pub ui_elements: Vec<serde_json::Value>,
-    pub logs: Vec<String>,
-    pub error_details: Option<String>,
-    pub extracted_data: std::collections::HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SmartExecutionResult {
-    pub success: bool,
-    pub total_steps: u32,
-    pub executed_steps: u32,
-    pub failed_steps: u32,
-    pub skipped_steps: u32,
-    pub duration_ms: u64,
-    pub logs: Vec<String>,
-    pub final_page_state: Option<String>,
-    pub extracted_data: HashMap<String, serde_json::Value>,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SmartExecutorConfig {
-    pub continue_on_error: bool,
-    pub auto_verification_enabled: bool,
-    pub smart_recovery_enabled: bool,
-    pub detailed_logging: bool,
-}
 
 pub struct SmartScriptExecutor {
     pub device_id: String,
     pub adb_path: String,
     error_handler: ErrorHandler,
     preprocessor: Arc<Mutex<ScriptPreprocessor>>,
+    /// 新的执行环境（重试/快照/上下文）。迁移期可选，后续完全替换内部散落逻辑。
+    exec_env: Arc<ExecutionEnvironment>,
+}
+
+impl SmartScriptExecutor {
+    /// 统一获取 UI 快照（XML + 可选截图）。
+    /// 当前实现：委托给 ExecutionEnvironment.snapshot_provider。
+    /// TODO: 后续在这里加入缓存 / 失败重试 / 指标记录 等扩展。
+    async fn capture_ui_snapshot(&self) -> anyhow::Result<Option<String>> {
+        let snapshot = self.exec_env.capture_snapshot().await?;
+        Ok(snapshot.raw_xml)
+    }
 }
 
 impl SmartScriptExecutor {
@@ -120,11 +76,28 @@ impl SmartScriptExecutor {
             Some(device_id.clone())
         );
         
-        Self { 
-            device_id, 
+        // 构建可配置重试策略（支持环境变量）
+        let retry_cfg = RetryConfig::from_env();
+        let retry_policy = ExponentialBackoffPolicy::new(retry_cfg.clone());
+
+        // 注入真实快照提供器（后续可扩展截图等）
+        let snapshot_provider = RealSnapshotProvider::default();
+
+        let exec_env = Arc::new(
+            ExecutionEnvironment::new(device_id.clone())
+                .with_retry_policy(retry_policy)
+                .with_snapshot_provider(snapshot_provider)
+        );
+
+        // 注册到全局执行环境注册表（弱引用存储）
+        register_execution_environment(&device_id, &exec_env);
+
+        Self {
+            device_id: device_id.clone(),
             adb_path,
             error_handler,
             preprocessor: Arc::new(Mutex::new(ScriptPreprocessor::new())),
+            exec_env,
         }
     }
 
@@ -224,8 +197,8 @@ impl SmartScriptExecutor {
                 Ok("循环结束已标记".to_string())
             },
             // 通讯录自动化操作
-            SmartActionType::ContactGenerateVcf => self.test_contact_generate_vcf(&step, &mut logs).await,
-            SmartActionType::ContactImportToDevice => self.test_contact_import_to_device(&step, &mut logs).await,
+            SmartActionType::ContactGenerateVcf => run_generate_vcf_step(&step, &mut logs).await,
+            SmartActionType::ContactImportToDevice => run_import_contacts_step(&step, &mut logs).await,
         };
 
         let duration = start_time.elapsed().as_millis() as u64;
@@ -366,267 +339,9 @@ impl SmartScriptExecutor {
         }
     }
 
-    /// 🆕 统一元素查找方法：优先使用 parameters.matching 进行标准匹配，回退到传统参数
+    /// 🆕 统一元素查找方法：委托给新的匹配模块。
     async fn test_find_element_unified(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
-        use crate::xml_judgment_service::{MatchCriteriaDTO, match_element_by_criteria};
-        use std::collections::HashMap;
-
-        logs.push("🎯 执行统一元素查找（标准匹配引擎）".to_string());
-        
-        let params: HashMap<String, serde_json::Value> = 
-            serde_json::from_value(step.parameters.clone())?;
-
-        // 1) 优先检查是否有 parameters.matching（标准匹配策略）
-        if let Some(matching_val) = params.get("matching") {
-            logs.push("📋 发现匹配策略配置，使用统一匹配引擎".to_string());
-            
-            // 解析 matching 配置
-            let matching: serde_json::Value = matching_val.clone();
-            let strategy = matching.get("strategy")
-                .and_then(|s| s.as_str())
-                .unwrap_or("standard")
-                .to_string();
-            
-            let fields: Vec<String> = matching.get("fields")
-                .and_then(|f| f.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-                .unwrap_or_default();
-                
-            let mut values = HashMap::new();
-            if let Some(values_obj) = matching.get("values").and_then(|v| v.as_object()) {
-                for (k, v) in values_obj {
-                    if let Some(s) = v.as_str() {
-                        values.insert(k.clone(), s.to_string());
-                    }
-                }
-            }
-
-            let mut includes = HashMap::new();
-            if let Some(includes_obj) = matching.get("includes").and_then(|v| v.as_object()) {
-                for (k, v) in includes_obj {
-                    if let Some(arr) = v.as_array() {
-                        let words: Vec<String> = arr.iter()
-                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                            .collect();
-                        includes.insert(k.clone(), words);
-                    }
-                }
-            }
-
-            let mut excludes = HashMap::new();
-            if let Some(excludes_obj) = matching.get("excludes").and_then(|v| v.as_object()) {
-                for (k, v) in excludes_obj {
-                    if let Some(arr) = v.as_array() {
-                        let words: Vec<String> = arr.iter()
-                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                            .collect();
-                        excludes.insert(k.clone(), words);
-                    }
-                }
-            }
-
-            logs.push(format!("🎯 匹配策略: {} | 字段: {:?} | 值: {:?}", strategy, fields, values));
-
-            // 如果有 includes/excludes 也记录一下
-            if !includes.is_empty() {
-                logs.push(format!("✅ 包含条件: {:?}", includes));
-            }
-            if !excludes.is_empty() {
-                logs.push(format!("❌ 排除条件: {:?}", excludes));
-            }
-
-            // 构造匹配条件 DTO
-            let criteria = MatchCriteriaDTO {
-                strategy: strategy.clone(),
-                fields,
-                values,
-                includes,
-                excludes,
-            };
-
-            let strategy_name = strategy.clone(); // 保存策略名以备后用
-
-            // 调用统一匹配引擎（clone 避免后续继续访问 criteria 字段时报“moved”错误）
-            match match_element_by_criteria(self.device_id.clone(), criteria.clone()).await {
-                Ok(result) if result.ok => {
-                    logs.push(format!("✅ 匹配成功: {}", result.message));
-                    
-                    // 如果有预览信息，尝试点击
-                    if let Some(preview) = result.preview {
-                        if let Some(bounds_str) = preview.bounds {
-                            logs.push(format!("📍 匹配到元素边界: {}", bounds_str));
-                            
-                            // 解析 bounds 并执行点击
-                            match crate::utils::bounds::parse_bounds_str(&bounds_str) {
-                                Ok(rect) => {
-                                    let (center_x, center_y) = rect.center();
-                                    logs.push(format!("🎯 计算中心点: ({}, {})", center_x, center_y));
-                                    
-                                    // 执行点击
-                                    match self.execute_click_with_retry(center_x, center_y, logs).await {
-                                        Ok(_) => {
-                                            let msg = format!("✅ 成功找到并点击元素 (策略: {}, 坐标: ({}, {}))", 
-                                                strategy_name, center_x, center_y);
-                                            logs.push(msg.clone());
-                                            return Ok(msg);
-                                        }
-                                        Err(e) => {
-                                            logs.push(format!("❌ 点击操作失败: {}", e));
-                                            return Err(e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    logs.push(format!("⚠️ bounds 解析失败: {} (原始: {})", e, bounds_str));
-                                }
-                            }
-                        }
-                        
-                        // 没有 bounds 信息或解析失败，但匹配成功
-                        let msg = format!("✅ 匹配成功但无法执行点击 (策略: {}, 无有效坐标)", strategy_name);
-                        logs.push(msg.clone());
-                        return Ok(msg);
-                    } else {
-                        let msg = format!("✅ 匹配成功但无预览信息 (策略: {})", strategy_name);
-                        logs.push(msg.clone());
-                        return Ok(msg);
-                    }
-                }
-                Ok(result) => {
-                    logs.push(format!("❌ 匹配失败: {} (总节点数: {:?})", result.message, result.total));
-                    // 继续执行传统回退逻辑
-                }
-                Err(e) => {
-                    logs.push(format!("❌ 匹配引擎调用失败: {}", e));
-                    // 继续执行传统回退逻辑
-                }
-            }
-        }
-
-        // 2) 回退到传统的 test_find_element 逻辑
-        logs.push("🔄 回退到传统参数解析".to_string());
-        self.test_find_element_traditional(step, logs).await
-    }
-
-    /// 传统的元素查找逻辑（重命名原 test_find_element）
-    async fn test_find_element_traditional(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("🔍 执行智能元素查找测试（带错误处理）".to_string());
-        
-        // 执行UI dump操作，用传统的重试逻辑
-        let ui_dump = self.execute_ui_dump_with_retry(logs).await?;
-        
-        let params: HashMap<String, serde_json::Value> = 
-            serde_json::from_value(step.parameters.clone())?;
-        
-        // 记录查找参数
-        logs.push("🎯 查找参数:".to_string());
-        
-        // 先尝试不同的查找方式，但无论哪种方式，最终都要执行点击
-        let mut element_found = false;
-        let mut find_method = String::new();
-        let mut click_coords: Option<(i32, i32)> = None;
-        
-        if let Some(element_text) = params.get("element_text").and_then(|v| v.as_str()) {
-            if !element_text.is_empty() {
-                logs.push(format!("  📝 元素文本: {}", element_text));
-                if ui_dump.contains(element_text) {
-                    logs.push(format!("✅ 在UI中找到目标元素: {}", element_text));
-                    element_found = true;
-                    find_method = format!("通过文本: {}", element_text);
-                } else {
-                    logs.push(format!("❌ 未在UI中找到目标元素: {}", element_text));
-                }
-            }
-        }
-        
-        if !element_found {
-            if let Some(content_desc) = params.get("content_desc").and_then(|v| v.as_str()) {
-                if !content_desc.is_empty() {
-                    logs.push(format!("  📝 内容描述: {}", content_desc));
-                    if ui_dump.contains(content_desc) {
-                        logs.push(format!("✅ 在UI中找到目标元素 (通过content-desc): {}", content_desc));
-                        element_found = true;
-                        find_method = format!("通过content-desc: {}", content_desc);
-                    } else {
-                        logs.push(format!("❌ 未在UI中找到目标元素 (通过content-desc): {}", content_desc));
-                    }
-                }
-            }
-        }
-        
-        // 1) 优先使用外部传入的bounds / boundsRect（兼容字符串与对象）
-        if let Some(bounds_val) = params.get("bounds").or_else(|| params.get("boundsRect")) {
-            logs.push(format!("  📍 元素边界(原始): {} (类型: {})", bounds_val, match bounds_val {
-                serde_json::Value::Null => "null",
-                serde_json::Value::Bool(_) => "boolean",
-                serde_json::Value::Number(_) => "number", 
-                serde_json::Value::String(_) => "string",
-                serde_json::Value::Array(_) => "array",
-                serde_json::Value::Object(_) => "object",
-            }));
-            match crate::utils::bounds::parse_bounds_value(bounds_val) {
-                Ok(rect) => {
-                    let (center_x, center_y) = rect.center();
-                    click_coords = Some((center_x, center_y));
-                    logs.push(format!("🎯 计算中心点坐标: ({}, {})", center_x, center_y));
-                    logs.push(format!("📊 归一化边界: left={}, top={}, right={}, bottom={}", rect.left, rect.top, rect.right, rect.bottom));
-                }
-                Err(e) => {
-                    logs.push(format!("❌ bounds 解析失败: {}", e));
-                    logs.push(format!("🔍 来源参数键: {} | 原始值: {}", 
-                        if params.contains_key("bounds") { "bounds" } else { "boundsRect" }, 
-                        bounds_val));
-                    logs.push("🔄 将尝试基于 UI dump 文本/描述查找元素坐标".to_string());
-                }
-            }
-        }
-
-        if click_coords.is_none() {
-            // 2) 未提供bounds时，尝试从UI dump中解析坐标
-            let query_text = params.get("element_text").and_then(|v| v.as_str()).unwrap_or("");
-            let query_desc = params.get("content_desc").and_then(|v| v.as_str()).unwrap_or("");
-
-            if !query_text.is_empty() || !query_desc.is_empty() {
-                let needle = if !query_text.is_empty() { query_text } else { query_desc };
-                logs.push(format!("🔎 未提供bounds，尝试基于UI dump按'{}'解析坐标", needle));
-                if let Some((cx, cy)) = self.find_element_in_ui(&ui_dump, needle, logs).await? {
-                    logs.push(format!("✅ 解析到元素中心坐标: ({}, {})", cx, cy));
-                    click_coords = Some((cx, cy));
-                } else {
-                    logs.push("⚠️  在UI dump中找到元素文本但未能解析到有效坐标".to_string());
-                }
-            } else {
-                logs.push("ℹ️ 未提供bounds且未提供文本/描述用于解析坐标".to_string());
-            }
-        }
-
-        // 3) 若已获得坐标，则执行点击（带重试）
-        if let Some((center_x, center_y)) = click_coords {
-            let click_result = self.execute_click_with_retry(center_x, center_y, logs).await;
-            match click_result {
-                Ok(output) => {
-                    logs.push(format!("✅ 点击命令输出: {}", output));
-                    let result_msg = if element_found {
-                        format!("✅ 成功找到并点击元素: {} -> 坐标({}, {})", find_method, center_x, center_y)
-                    } else {
-                        format!("✅ 基于坐标点击元素: ({}, {}) (未在UI中确认元素存在)", center_x, center_y)
-                    };
-                    Ok(result_msg)
-                }
-                Err(e) => {
-                    logs.push(format!("❌ 点击操作失败: {}", e));
-                    Err(e)
-                }
-            }
-        } else {
-            // 未能取得坐标
-            if element_found {
-                Ok(format!("✅ 找到元素但无法定位坐标: {}", find_method))
-            } else {
-                logs.push("⚠️  未提供有效的查找参数".to_string());
-                Ok("元素查找测试完成 (无查找条件)".to_string())
-            }
-        }
+        run_unified_match(self, &self.device_id, step, logs).await
     }
 
     /// 批量匹配方法：动态查找元素，不使用预设坐标
@@ -667,7 +382,7 @@ impl SmartScriptExecutor {
         logs.push(format!("  📝 目标元素文本: '{}'", final_element_text));
         
         // 在UI dump中搜索匹配的元素
-        let element_coords = self.find_element_in_ui(&ui_dump, final_element_text, logs).await?;
+    let element_coords = find_element_in_ui(&ui_dump, final_element_text, logs).await?;
         
         if let Some((x, y)) = element_coords {
             logs.push(format!("🎯 动态找到元素坐标: ({}, {})", x, y));
@@ -677,7 +392,7 @@ impl SmartScriptExecutor {
                 logs.push("⚠️  检测到可疑的硬编码坐标 (540, 960)，这可能是错误的".to_string());
                 logs.push("🔄 重新尝试查找关注按钮...".to_string());
                 // 强制使用关注按钮查找逻辑
-                if let Some(correct_coords) = self.find_all_follow_buttons(&ui_dump, logs).await? {
+                if let Some(correct_coords) = find_all_follow_buttons(&ui_dump, logs).await? {
                     logs.push(format!("✅ 重新找到正确的关注按钮坐标: ({}, {})", correct_coords.0, correct_coords.1));
                     let click_result = self.execute_click_with_retry(correct_coords.0, correct_coords.1, logs).await;
                     match click_result {
@@ -712,252 +427,46 @@ impl SmartScriptExecutor {
         }
     }
 
-    /// 通用批量匹配 - 查找所有匹配元素，支持排除特定文本
-    async fn find_element_in_ui(&self, ui_dump: &str, element_text: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
-        info!("🔍🔍🔍 [ENHANCED] 批量匹配搜索: '{}'", element_text);
-        info!("📊📊📊 [ENHANCED] UI dump 长度: {} 字符", ui_dump.len());
-        logs.push(format!("🔍🔍🔍 [ENHANCED] 批量匹配搜索: '{}'", element_text));
-        logs.push(format!("📊📊📊 [ENHANCED] UI dump 长度: {} 字符", ui_dump.len()));
-        
-        // 检查是否是批量关注场景
-        if element_text == "关注" {
-            info!("🎯🎯🎯 [ENHANCED] 批量关注模式：查找所有关注按钮，排除已关注");
-            info!("🔄🔄🔄 [ENHANCED] 调用 find_all_follow_buttons 方法...");
-            logs.push("🎯🎯🎯 [ENHANCED] 批量关注模式：查找所有关注按钮，排除已关注".to_string());
-            logs.push("🔄🔄🔄 [ENHANCED] 调用 find_all_follow_buttons 方法...".to_string());
-            let result = self.find_all_follow_buttons(ui_dump, logs).await;
-            info!("📋📋📋 [ENHANCED] find_all_follow_buttons 返回结果: {:?}", result);
-            logs.push(format!("📋📋📋 [ENHANCED] find_all_follow_buttons 返回结果: {:?}", result));
-            return result;
-        }
-        
-        // 通用单个元素匹配逻辑
-        let text_pattern = format!(r#"text="[^"]*{}[^"]*""#, regex::escape(element_text));
-        let content_desc_pattern = format!(r#"content-desc="[^"]*{}[^"]*""#, regex::escape(element_text));
-        
-        let text_regex = regex::Regex::new(&text_pattern).unwrap_or_else(|_| {
-            logs.push(format!("⚠️  正则表达式编译失败: {}", text_pattern));
-            regex::Regex::new(r".*").unwrap()
-        });
-        
-        let content_desc_regex = regex::Regex::new(&content_desc_pattern).unwrap_or_else(|_| {
-            logs.push(format!("⚠️  正则表达式编译失败: {}", content_desc_pattern));
-            regex::Regex::new(r".*").unwrap()
-        });
-        
-        // 分行搜索UI dump
-        for (line_num, line) in ui_dump.lines().enumerate() {
-            // 检查是否包含目标文本 (text 属性)
-            if text_regex.is_match(line) {
-                logs.push(format!("✅ 在第{}行找到匹配的text属性", line_num + 1));
-                if let Some(coords) = self.extract_bounds_from_line(line, logs) {
-                    return Ok(Some(coords));
-                }
-            }
-            
-            // 检查是否包含目标文本 (content-desc 属性)
-            if content_desc_regex.is_match(line) {
-                logs.push(format!("✅ 在第{}行找到匹配的content-desc属性", line_num + 1));
-                if let Some(coords) = self.extract_bounds_from_line(line, logs) {
-                    return Ok(Some(coords));
-                }
-            }
-        }
-        
-        logs.push("❌ 在UI dump中未找到匹配的元素".to_string());
-        Ok(None)
-    }
-
-    /// 从UI dump行中提取bounds坐标
-    fn extract_bounds_from_line(&self, line: &str, logs: &mut Vec<String>) -> Option<(i32, i32)> {
-        // 使用正则表达式提取bounds属性
-        let bounds_regex = regex::Regex::new(r#"bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]""#).ok()?;
-        
-        if let Some(captures) = bounds_regex.captures(line) {
-            let left: i32 = captures.get(1)?.as_str().parse().ok()?;
-            let top: i32 = captures.get(2)?.as_str().parse().ok()?;
-            let right: i32 = captures.get(3)?.as_str().parse().ok()?;
-            let bottom: i32 = captures.get(4)?.as_str().parse().ok()?;
-            
-            let center_x = (left + right) / 2;
-            let center_y = (top + bottom) / 2;
-            
-            logs.push(format!("📊 提取到bounds: [{},{}][{},{}] -> 中心点({},{})", 
-                left, top, right, bottom, center_x, center_y));
-            
-            Some((center_x, center_y))
-        } else {
-            logs.push("⚠️  该行未找到有效的bounds属性".to_string());
-            None
-        }
-    }
-
-    /// 通用批量关注按钮查找 - 支持所有APP，自动排除"已关注"
-    async fn find_all_follow_buttons(&self, ui_dump: &str, logs: &mut Vec<String>) -> Result<Option<(i32, i32)>> {
-        info!("🎯🎯🎯 [ENHANCED] 通用批量关注模式启动...");
-        info!("🔍🔍🔍 [ENHANCED] 搜索策略：查找所有'关注'按钮，排除'已关注'按钮");
-        logs.push("🎯🎯🎯 [ENHANCED] 通用批量关注模式启动...".to_string());
-        logs.push("🔍🔍🔍 [ENHANCED] 搜索策略：查找所有'关注'按钮，排除'已关注'按钮".to_string());
-        
-        let mut candidates = Vec::new();
-        
-        // 构建匹配模式
-        let follow_patterns = [
-            r#"text="关注""#,           // 精确匹配 "关注"
-            r#"text="[^"]*关注[^"]*""#,   // 包含关注的文本
-            r#"content-desc="[^"]*关注[^"]*""#, // content-desc中包含关注
-        ];
-        
-        // 排除模式 - 避免匹配"已关注"相关按钮
-        let exclude_patterns = [
-            r#"text="[^"]*已关注[^"]*""#,
-            r#"text="[^"]*取消关注[^"]*""#,
-            r#"text="[^"]*following[^"]*""#,  // 英文版已关注
-            r#"text="[^"]*unfollow[^"]*""#,   // 英文版取消关注
-            r#"content-desc="[^"]*已关注[^"]*""#,
-            r#"content-desc="[^"]*following[^"]*""#,
-        ];
-        
-        logs.push(format!("🔍 开始扫描UI dump，共{}行", ui_dump.lines().count()));
-        info!("🔍 开始扫描UI dump，共{}行", ui_dump.lines().count());
-        
-        for (line_num, line) in ui_dump.lines().enumerate() {
-            // 首先检查是否匹配排除模式
-            let mut should_exclude = false;
-            for exclude_pattern in &exclude_patterns {
-                if let Ok(regex) = regex::Regex::new(exclude_pattern) {
-                    if regex.is_match(line) {
-                        logs.push(format!("❌ 第{}行被排除: 包含已关注相关文本", line_num + 1));
-                        should_exclude = true;
-                        break;
-                    }
-                }
-            }
-            
-            if should_exclude {
-                continue;
-            }
-            
-            // 检查是否匹配关注模式
-            for (pattern_idx, pattern) in follow_patterns.iter().enumerate() {
-                if let Ok(regex) = regex::Regex::new(pattern) {
-                    if regex.is_match(line) {
-                        // 进一步验证是否为可点击按钮
-                        if line.contains(r#"clickable="true""#) {
-                            info!("✅ 第{}行匹配模式{}: 找到可点击关注按钮", line_num + 1, pattern_idx + 1);
-                            logs.push(format!("✅ 第{}行匹配模式{}: 找到可点击关注按钮", line_num + 1, pattern_idx + 1));
-                            
-                            if let Some(coords) = self.extract_bounds_from_line(line, logs) {
-                                // 优先级: 精确匹配 > 文本包含 > content-desc
-                                let priority = match pattern_idx {
-                                    0 => 1, // 精确匹配 "关注"
-                                    1 => 2, // 文本包含关注
-                                    2 => 3, // content-desc包含关注
-                                    _ => 4,
-                                };
-                                
-                                // 记录候选按钮的详细信息
-                                logs.push(format!("📍 候选按钮 {}: 坐标({}, {}), 优先级{}", 
-                                    candidates.len() + 1, coords.0, coords.1, priority));
-                                
-                                candidates.push((coords, priority, line_num + 1, line.to_string()));
-                            }
-                        } else {
-                            logs.push(format!("⚠️  第{}行匹配但不可点击，跳过", line_num + 1));
-                        }
-                        break; // 找到一个匹配就跳出pattern循环
-                    }
-                }
-            }
-        }
-        
-        // 按优先级排序选择最佳候选
-        candidates.sort_by_key(|&(_, priority, _, _)| priority);
-        
-        if candidates.is_empty() {
-            info!("❌ 未找到任何可用的关注按钮");
-            logs.push("❌ 未找到任何可用的关注按钮".to_string());
-            logs.push("💡 请检查当前页面是否包含关注按钮，或者按钮文本是否为'关注'".to_string());
-            return Ok(None);
-        }
-        
-        info!("🎯 共找到{}个关注按钮候选", candidates.len());
-        logs.push(format!("🎯 共找到{}个关注按钮候选", candidates.len()));
-        
-        // 列出所有候选按钮信息
-        for (idx, (coords, priority, line_num, _)) in candidates.iter().enumerate() {
-            logs.push(format!("  📋 候选{}: 第{}行, 坐标({}, {}), 优先级{}", 
-                idx + 1, line_num, coords.0, coords.1, priority));
-        }
-        
-        // 选择优先级最高的候选
-        let (best_coords, best_priority, best_line, best_content) = &candidates[0];
-        logs.push(format!("✅ 选择最佳关注按钮: 第{}行，优先级{}，坐标({}, {})", 
-            best_line, best_priority, best_coords.0, best_coords.1));
-        logs.push(format!("📝 按钮内容预览: {}", 
-            best_content.chars().take(100).collect::<String>()));
-        
-        // 最终验证坐标的合理性
-        if best_coords.0 <= 0 || best_coords.1 <= 0 || best_coords.0 > 2000 || best_coords.1 > 3000 {
-            logs.push(format!("⚠️  坐标({}, {})看起来不合理，请检查XML解析", best_coords.0, best_coords.1));
-        } else {
-            logs.push(format!("✅ 坐标({}, {})看起来合理", best_coords.0, best_coords.1));
-        }
-        
-        Ok(Some(*best_coords))
-    }
-
     /// 带重试机制的 UI dump 执行
     async fn execute_ui_dump_with_retry(&self, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("📱 开始获取设备UI结构（带重试机制）...".to_string());
-        
-        let max_retries = 3;
-        let mut last_error: Option<anyhow::Error> = None;
-        
-        for attempt in 1..=max_retries {
-            if attempt > 1 {
-                logs.push(format!("� 重试获取UI结构 - 第 {}/{} 次尝试", attempt, max_retries));
-                
-                // 重试前的恢复操作
-                logs.push("🧹 清理旧的UI dump文件...".to_string());
-                if let Ok(session) = get_device_session(&self.device_id).await {
-                    let _ = session.execute_command("rm -f /sdcard/ui_dump.xml").await;
-                }
-                
-                // 延迟重试
-                let delay = std::time::Duration::from_millis(500 * attempt as u64);
-                logs.push(format!("⏱️  等待 {:?} 后重试...", delay));
-                tokio::time::sleep(delay).await;
+        logs.push("📱 开始获取设备UI结构（优先使用快照提供器）...".to_string());
+        // 首先尝试快照渠道（单次，不自带复杂重试；失败再回退旧逻辑）
+        match self.capture_ui_snapshot().await {
+            Ok(Some(xml)) if !xml.is_empty() => {
+                logs.push(format!("✅ 快照获取成功（snapshot_provider），长度: {} 字符", xml.len()));
+                return Ok(xml);
             }
-            
-            match self.try_ui_dump().await {
-                Ok(dump) => {
-                    if !dump.is_empty() && !dump.contains("ERROR:") && !dump.contains("null root node") {
-                        logs.push(format!("✅ UI结构获取成功，长度: {} 字符", dump.len()));
-                        return Ok(dump);
-                    } else {
-                        let error_msg = format!("UI dump 内容异常: 空内容或包含错误信息 (尝试 {}/{})", attempt, max_retries);
-                        logs.push(format!("⚠️  {}", error_msg));
-                        last_error = Some(anyhow::anyhow!(error_msg));
-                    }
-                }
-                Err(e) => {
-                    let error_msg = format!("UI dump 执行失败: {} (尝试 {}/{})", e, attempt, max_retries);
-                    logs.push(format!("❌ {}", error_msg));
-                    last_error = Some(e);
-                }
+            Ok(Some(_)) | Ok(None) => {
+                logs.push("⚠️ 快照结果为空或无XML，回退旧 UI dump 逻辑".to_string());
+            }
+            Err(e) => {
+                logs.push(format!("⚠️ 快照捕获失败: {}，回退旧 UI dump 逻辑", e));
             }
         }
-        
-        logs.push(format!("❌ UI结构获取最终失败，已重试 {} 次", max_retries));
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("UI dump 获取失败")))
+
+        // 回退：沿用原来的重试包装
+        let device_id_cloned = self.device_id.clone();
+        let result = self.exec_env.run_with_retry(move |attempt| {
+            let device_id = device_id_cloned.clone();
+            async move {
+                if attempt > 0 {
+                    if let Ok(session) = get_device_session(&device_id).await { let _ = session.execute_command("rm -f /sdcard/ui_dump.xml").await; }
+                }
+                let dump = get_device_session(&device_id).await?.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await?;
+                if dump.is_empty() || dump.contains("ERROR:") || dump.contains("null root node") { Err(anyhow::anyhow!("UI dump 内容异常")) } else { Ok(dump) }
+            }
+        }).await;
+        match result { Ok(d) => { logs.push(format!("✅ UI结构获取成功（回退路径），长度: {} 字符", d.len())); Ok(d) }, Err(e) => { logs.push(format!("❌ UI结构获取失败: {}", e)); Err(e) } }
     }
 
     /// 尝试执行 UI dump
     async fn try_ui_dump(&self) -> Result<String> {
-        let session = get_device_session(&self.device_id).await?;
+        if let Ok(Some(xml)) = self.capture_ui_snapshot().await { if !xml.is_empty() { return Ok(xml); } }
+        let session = get_device_session(&self.device_id).await?; // 回退
         session.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await
     }
+
+    /// LegacyUiActions trait 会通过 async_trait 生成 dyn Future，因此保持签名稳定。
 
     /// 带重试机制的点击执行
     async fn execute_click_with_retry(&self, x: i32, y: i32, logs: &mut Vec<String>) -> Result<String> {
@@ -1017,7 +526,9 @@ impl SmartScriptExecutor {
         logs.push(format!("当前Activity: {}", current_activity.trim()));
         
         // 获取UI结构进行页面识别
-        let ui_dump = session.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await?;
+        let ui_dump = match self.capture_ui_snapshot().await { Ok(Some(xml)) if !xml.is_empty() => xml, _ => {
+            session.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await?
+        } };
         
         let params: HashMap<String, serde_json::Value> = 
             serde_json::from_value(step.parameters.clone())?;
@@ -1032,196 +543,6 @@ impl SmartScriptExecutor {
             }
         } else {
             Ok("页面识别测试完成".to_string())
-        }
-    }
-
-    async fn test_contact_generate_vcf(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("🗂️ 开始VCF文件生成测试".to_string());
-        
-        let params: HashMap<String, serde_json::Value> = 
-            serde_json::from_value(step.parameters.clone())?;
-        
-        // 获取源文件路径
-        let source_file_path = params.get("source_file_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        
-        if source_file_path.is_empty() {
-            logs.push("❌ 缺少源文件路径参数".to_string());
-            return Ok("VCF生成失败: 缺少源文件路径".to_string());
-        }
-        
-        logs.push(format!("📁 源文件路径: {}", source_file_path));
-        
-        // 检查文件是否存在
-        if !std::path::Path::new(source_file_path).exists() {
-            logs.push(format!("❌ 源文件不存在: {}", source_file_path));
-            return Ok(format!("VCF生成失败: 文件不存在 - {}", source_file_path));
-        }
-        
-        // 读取文件内容进行预处理
-        match std::fs::read_to_string(source_file_path) {
-            Ok(content) => {
-                logs.push(format!("📄 成功读取文件内容，长度: {} 字符", content.len()));
-                
-                // 这里可以进行更详细的文件格式解析和联系人提取
-                // 为了测试目的，我们模拟生成一些示例联系人数据
-                let contacts = vec![
-                    crate::services::vcf_importer::Contact {
-                        id: "test_1".to_string(),
-                        name: "测试联系人1".to_string(),
-                        phone: "13800138001".to_string(),
-                        email: "test1@example.com".to_string(),
-                        address: "".to_string(),
-                        occupation: "".to_string(),
-                    },
-                    crate::services::vcf_importer::Contact {
-                        id: "test_2".to_string(),
-                        name: "测试联系人2".to_string(),
-                        phone: "13800138002".to_string(),
-                        email: "test2@example.com".to_string(),
-                        address: "".to_string(),
-                        occupation: "".to_string(),
-                    }
-                ];
-                
-                logs.push(format!("👥 解析出 {} 个联系人", contacts.len()));
-                
-                // 生成输出路径
-                let output_dir = params.get("output_dir")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("./vcf_output");
-                
-                let output_path = format!("{}/contacts_{}.vcf", output_dir, chrono::Utc::now().timestamp());
-                logs.push(format!("📤 输出路径: {}", output_path));
-                
-                // 确保输出目录存在
-                if let Some(parent) = std::path::Path::new(&output_path).parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                
-                // 调用VCF生成服务
-                match VcfImporter::generate_vcf_file(contacts, &output_path).await {
-                    Ok(_) => {
-                        logs.push(format!("✅ VCF文件生成成功: {}", output_path));
-                        Ok(format!("VCF文件生成成功: {}", output_path))
-                    },
-                    Err(e) => {
-                        logs.push(format!("❌ VCF文件生成失败: {}", e));
-                        Ok(format!("VCF生成失败: {}", e))
-                    }
-                }
-            },
-            Err(e) => {
-                logs.push(format!("❌ 读取文件失败: {}", e));
-                Ok(format!("VCF生成失败: 文件读取错误 - {}", e))
-            }
-        }
-    }
-
-    async fn test_contact_import_to_device(&self, step: &SmartScriptStep, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("📱 开始联系人导入到设备测试".to_string());
-        
-        let params: HashMap<String, serde_json::Value> = 
-            serde_json::from_value(step.parameters.clone())?;
-        
-        // 获取选择的设备ID
-        let selected_device_id = params.get("selected_device_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        
-        if selected_device_id.is_empty() {
-            logs.push("❌ 缺少设备选择参数".to_string());
-            return Ok("联系人导入失败: 未选择目标设备".to_string());
-        }
-        
-        logs.push(format!("🎯 目标设备: {}", selected_device_id));
-        
-        // 获取VCF文件路径（通常来自上一步的生成结果）
-        let vcf_file_path = params.get("vcf_file_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        
-        if vcf_file_path.is_empty() {
-            logs.push("❌ 缺少VCF文件路径参数".to_string());
-            return Ok("联系人导入失败: 缺少VCF文件路径".to_string());
-        }
-        
-        logs.push(format!("📁 VCF文件路径: {}", vcf_file_path));
-        
-        // 检查VCF文件是否存在
-        if !std::path::Path::new(vcf_file_path).exists() {
-            logs.push(format!("❌ VCF文件不存在: {}", vcf_file_path));
-            return Ok(format!("联系人导入失败: VCF文件不存在 - {}", vcf_file_path));
-        }
-        
-        // 创建多品牌VcfImporter实例，支持批量尝试不同品牌手机
-        let mut multi_brand_importer = MultiBrandVcfImporter::new(selected_device_id.to_string());
-        
-        logs.push("🚀 启动多品牌联系人导入流程".to_string());
-        logs.push("📋 支持的品牌: 华为、小米、OPPO、VIVO、三星、原生Android等".to_string());
-        
-        // 执行多品牌联系人导入
-        match multi_brand_importer.import_vcf_contacts_multi_brand(vcf_file_path).await {
-            Ok(result) => {
-                if result.success {
-                    logs.push("✅ 多品牌联系人导入成功".to_string());
-                    
-                    if let Some(strategy) = &result.used_strategy {
-                        logs.push(format!("🎯 成功策略: {}", strategy));
-                    }
-                    
-                    if let Some(method) = &result.used_method {
-                        logs.push(format!("🔧 成功方法: {}", method));
-                    }
-                    
-                    logs.push(format!("📊 导入统计: 总计{}个，成功{}个，失败{}个", 
-                        result.total_contacts, 
-                        result.imported_contacts, 
-                        result.failed_contacts
-                    ));
-                    
-                    logs.push(format!("⏱️ 用时: {}秒", result.duration_seconds));
-                    logs.push(format!("🔄 尝试次数: {}次", result.attempts.len()));
-                    
-                    // 添加尝试详情
-                    for (i, attempt) in result.attempts.iter().enumerate() {
-                        let status = if attempt.success { "✅" } else { "❌" };
-                        logs.push(format!("  {}. {} {}-{} ({}s)", 
-                            i + 1,
-                            status,
-                            attempt.strategy_name,
-                            attempt.method_name,
-                            attempt.duration_seconds
-                        ));
-                    }
-                    
-                    logs.push("📱 联系人已成功导入到设备通讯录".to_string());
-                    Ok(format!("多品牌联系人导入成功: 已导入到设备 {} (使用{}策略)", 
-                        selected_device_id,
-                        result.used_strategy.unwrap_or_else(|| "未知".to_string())
-                    ))
-                } else {
-                    logs.push("❌ 多品牌联系人导入失败".to_string());
-                    logs.push(format!("📝 失败原因: {}", result.message));
-                    
-                    // 添加失败详情
-                    for (i, attempt) in result.attempts.iter().enumerate() {
-                        logs.push(format!("  {}. ❌ {}-{}: {}", 
-                            i + 1,
-                            attempt.strategy_name,
-                            attempt.method_name,
-                            attempt.error_message.as_deref().unwrap_or("未知错误")
-                        ));
-                    }
-                    
-                    Ok(format!("多品牌联系人导入失败: {}", result.message))
-                }
-            },
-            Err(e) => {
-                logs.push(format!("❌ 多品牌联系人导入系统错误: {}", e));
-                Ok(format!("多品牌联系人导入系统错误: {}", e))
-            }
         }
     }
 
@@ -1490,5 +811,22 @@ pub async fn execute_smart_automation_script(
             error!("❌ 智能脚本批量执行失败: {} - 错误: {}", device_id, e);
             Err(format!("智能脚本批量执行失败: {}", e))
         },
+    }
+}
+
+// LegacyUiActions trait implementation for backward compatibility
+#[async_trait]
+impl LegacyUiActions for SmartScriptExecutor {
+    async fn execute_click_with_retry(
+        &self,
+        x: i32,
+        y: i32,
+        logs: &mut Vec<String>,
+    ) -> Result<String> {
+        SmartScriptExecutor::execute_click_with_retry(self, x, y, logs).await
+    }
+
+    async fn execute_ui_dump_with_retry(&self, logs: &mut Vec<String>) -> Result<String> {
+        SmartScriptExecutor::execute_ui_dump_with_retry(self, logs).await
     }
 }

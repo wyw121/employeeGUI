@@ -58,6 +58,13 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use xml_judgment_service::*;
 
+// Execution context metrics 导出命令：聚合全局执行环境注册表
+#[tauri::command]
+async fn get_execution_context_metrics() -> Result<serde_json::Value, String> {
+    use crate::services::execution::collect_execution_metrics_json;
+    Ok(collect_execution_metrics_json())
+}
+
 // Tauri命令：获取所有员工
 #[tauri::command]
 async fn get_employees(
@@ -957,6 +964,7 @@ fn main() {
             get_filtered_logs,
             clear_logs,
             add_log_entry,
+            get_execution_context_metrics,
             employee_login,
             verify_token,
             get_current_user,

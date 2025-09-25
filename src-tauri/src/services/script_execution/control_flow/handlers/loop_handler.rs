@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use tracing::{info, warn};
 
-use crate::services::smart_script_executor::SmartScriptStep;
 use super::super::ast::{ControlFlowNode, ControlFlowType, LinearStep, StepContext};
 use super::super::context::ExecutionContext;
+use crate::services::execution::model::{SmartScriptStep, SmartActionType};
 use super::base::{
     ControlStructureHandler, HandlerResult, HandlerConfig, HandlerStats, 
     ValidationResult, ValidationError, ValidationWarning, WarningSeverity,
@@ -186,8 +186,6 @@ impl LoopHandler {
     
     /// 判断是否为相同的等待步骤
     fn is_same_wait_step(&self, step1: &SmartScriptStep, step2: &SmartScriptStep) -> bool {
-        use crate::services::smart_script_executor::SmartActionType;
-        
         matches!(step1.step_type, SmartActionType::Wait) &&
         matches!(step2.step_type, SmartActionType::Wait) &&
         step1.parameters.get("duration") == step2.parameters.get("duration")

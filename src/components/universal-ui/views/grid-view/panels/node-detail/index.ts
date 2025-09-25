@@ -50,3 +50,8 @@ export * from './types';
 export { PRESET_FIELDS, inferStrategyFromFields, isSameFieldsAsPreset, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, hasPositionConstraint, normalizeExcludes, normalizeIncludes, buildFindSimilarCriteria } from './helpers';
 // 标题/描述辅助
 export { buildShortDescriptionFromCriteria } from './titleHelpers';
+
+// 元素预设子模块导出
+export { ElementPresetsRow } from './element-presets/ElementPresetsRow';
+export { ELEMENT_PRESETS } from './element-presets/registry';
+export type { ElementPreset, ElementPresetId } from './element-presets/types';

@@ -7,7 +7,8 @@ use crate::infra::adb::input_injector::{AdbShellInputInjector, InputInjector};
 use crate::infra::adb::safe_input_injector::SafeInputInjector;
 use crate::infra::device::metrics_provider::RealDeviceMetricsProvider;
 use crate::services::script_execution::swipe::EnhancedSwipeExecutor;
-use crate::services::smart_script_executor::{SmartScriptExecutor, SmartScriptStep};
+use crate::services::execution::model::SmartScriptStep;
+use crate::services::smart_script_executor::SmartScriptExecutor;
 
 impl SmartScriptExecutor {
     /// 执行基础滑动（增强执行器）

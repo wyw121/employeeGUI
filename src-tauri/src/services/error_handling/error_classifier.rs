@@ -89,6 +89,14 @@ impl ErrorClassifier {
             2
         );
 
+        // 一些系统/工具的错误输出顺序相反（先文件名，后错误描述）
+        self.add_pattern(
+            ErrorType::UiDumpFailed,
+            r"(?i)ui_dump\.xml.*No such file or directory",
+            "UI dump文件不存在（错误信息顺序反转）",
+            2
+        );
+
         self.add_pattern(
             ErrorType::UiDumpFailed,
             r"(?i)ERROR.*uiautomator.*dump",

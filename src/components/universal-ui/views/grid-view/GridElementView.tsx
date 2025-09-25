@@ -1,6 +1,17 @@
 /**
  * ADB XML 可视化检查器 - 网格视图版本
- * 用于在 GUI 中展示 ADB/UiAutomator 导出的 XML（page source）树结构与节点详情。
+ * 用于在 GUI 中展示 ADB/UiAutomat  // 新增：将节点详情选择的匹配策略回传给上层（例如步骤卡片"修改参数"模式）
+  onApplyCriteria?: (criteria: { 
+    strategy: string; 
+    fields: string[]; 
+    values: Record<string,string>; 
+    includes?: Record<string,string[]>; 
+    excludes?: Record<string,string[]>;
+    // 🆕 添加正则表达式相关参数
+    matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+    regexIncludes?: Record<string, string[]>;
+    regexExcludes?: Record<string, string[]>;
+  }) => void; 导出的 XML（page source）树结构与节点详情。
  * 
  * 设计目标（样式 & 交互）：
  * 1) 顶部工具栏：导入 XML / 一键填充示例 / 关键词搜索。
@@ -60,7 +71,18 @@ interface GridElementViewProps {
   locator?: NodeLocator;
   locatorResolve?: (root: UiNode | null, locator: NodeLocator) => UiNode | null;
   // 新增：将节点详情选择的匹配策略回传给上层（例如步骤卡片“修改参数”模式）
-  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
+  // 承载完整字段（含正则/匹配模式），以便后续单步测试与后端增强匹配使用
+  onApplyCriteria?: (criteria: {
+    strategy: string;
+    fields: string[];
+    values: Record<string, string>;
+    includes?: Record<string, string[]>;
+    excludes?: Record<string, string[]>;
+    matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+    regexIncludes?: Record<string, string[]>;
+    regexExcludes?: Record<string, string[]>;
+    preview?: { xpath?: string; bounds?: string | { left: number; top: number; right: number; bottom: number } };
+  }) => void;
   // 🆕 上抛“最新匹配配置”（仅策略与字段），便于外层在离开时自动回填
   onLatestMatchingChange?: (m: { strategy: string; fields: string[] }) => void;
   // 🆕 初始匹配预设：用于“修改参数”时优先以步骤自身为准
@@ -620,6 +642,14 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           <NodeDetailPanel
             node={selected}
             onMatched={handleMatchedFromDevice}
+            // 传入完整回填回调，保留 regex/matchMode 信息
+            onApplyToStepComplete={(complete) => {
+              console.log('🎯 [GridElementView] onApplyToStepComplete 被调用，complete:', complete);
+              console.log('🎯 [GridElementView] 即将调用 onApplyCriteria');
+              onApplyCriteria?.(complete as any);
+              console.log('🎯 [GridElementView] onApplyCriteria 调用完成');
+            }}
+            // 兼容旧回调（仅基础字段），仍然保留
             onApplyToStep={onApplyCriteria as any}
             onStrategyChanged={(s) => {
               setCurrentStrategy(s);

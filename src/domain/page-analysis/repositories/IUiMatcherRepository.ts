@@ -12,6 +12,12 @@ export interface MatchCriteriaDTO {
   excludes?: Record<string, string[]>;
   /** 正向额外包含：每字段一个字符串数组，表示“必须包含”的词列表 */
   includes?: Record<string, string[]>;
+  /** 每字段匹配模式：equals | contains | regex（camelCase，前端内部使用） */
+  matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+  /** 每字段“必须匹配”的正则（全部需满足，camelCase，前端内部使用） */
+  regexIncludes?: Record<string, string[]>;
+  /** 每字段“不可匹配”的正则（任一命中即失败，camelCase，前端内部使用） */
+  regexExcludes?: Record<string, string[]>;
 }
 
 export interface MatchPreview {

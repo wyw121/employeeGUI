@@ -5,3 +5,11 @@
 
 export { GridElementView } from './GridElementView';
 export type { UiNode } from './types';
+export {
+	resolveSnapshot,
+	resolveFromBinding,
+	resolveFromSnapshotAndXPath,
+	useSnapshotResolver,
+	type SnapshotResolveInput,
+	type SnapshotResolveResult,
+} from './snapshotResolver';

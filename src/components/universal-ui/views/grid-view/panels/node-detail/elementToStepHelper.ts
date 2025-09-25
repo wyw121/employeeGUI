@@ -36,6 +36,12 @@ export interface ElementToStepOptions {
   currentIncludes?: Record<string, string[]>;
   // 当前不包含条件（来自节点详情面板）
   currentExcludes?: Record<string, string[]>;
+  // 当前每字段匹配模式（equals|contains|regex）
+  currentMatchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+  // 当前每字段“必须匹配”的正则
+  currentRegexIncludes?: Record<string, string[]>;
+  // 当前每字段“不可匹配”的正则
+  currentRegexExcludes?: Record<string, string[]>;
   // 是否强制使用节点的原始值（忽略面板编辑的值）
   forceNodeValues?: boolean;
   // 后备策略（当无法从字段推断时使用）
@@ -81,6 +87,9 @@ export function buildCompleteStepCriteria(
     currentValues,
     currentIncludes,
     currentExcludes,
+    currentMatchMode,
+    currentRegexIncludes,
+    currentRegexExcludes,
     forceNodeValues = false,
     fallbackStrategy = 'standard'
   } = options;
@@ -157,8 +166,20 @@ export function buildCompleteStepCriteria(
     }
 
     // 5. 处理包含/不包含条件
-  const includes = normalizeIncludes(currentIncludes || {}, normalized.fields);
-  const excludes = normalizeExcludes(currentExcludes || {}, normalized.fields);
+    const includes = normalizeIncludes(currentIncludes || {}, normalized.fields);
+    const excludes = normalizeExcludes(currentExcludes || {}, normalized.fields);
+
+    // 5.1 处理匹配模式与正则（仅保留已选字段）
+    const fieldSet = new Set(normalized.fields);
+    const matchMode = Object.fromEntries(
+      Object.entries(currentMatchMode || {}).filter(([k]) => fieldSet.has(k))
+    ) as Record<string, 'equals' | 'contains' | 'regex'>;
+    const regexIncludes = Object.fromEntries(
+      Object.entries(currentRegexIncludes || {}).filter(([k]) => fieldSet.has(k))
+    ) as Record<string, string[]>;
+    const regexExcludes = Object.fromEntries(
+      Object.entries(currentRegexExcludes || {}).filter(([k]) => fieldSet.has(k))
+    ) as Record<string, string[]>;
 
     // 6. 构建预览信息
     const preview = {
@@ -182,6 +203,9 @@ export function buildCompleteStepCriteria(
       values: normalized.values,
       includes,
       excludes,
+      ...(Object.keys(matchMode).length ? { matchMode } : {}),
+      ...(Object.keys(regexIncludes).length ? { regexIncludes } : {}),
+      ...(Object.keys(regexExcludes).length ? { regexExcludes } : {}),
       preview,
       metadata
     };

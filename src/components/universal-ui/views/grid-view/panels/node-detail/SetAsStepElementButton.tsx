@@ -50,6 +50,9 @@ export interface SetAsStepElementButtonProps {
     values?: Record<string, string>;
     includes?: Record<string, string[]>;
     excludes?: Record<string, string[]>;
+    matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+    regexIncludes?: Record<string, string[]>;
+    regexExcludes?: Record<string, string[]>;
   };
   
   // 显示详细信息提示
@@ -99,6 +102,9 @@ export const SetAsStepElementButton: React.FC<SetAsStepElementButtonProps> = ({
             currentValues: panelState.values,
             currentIncludes: panelState.includes,
             currentExcludes: panelState.excludes,
+            currentMatchMode: panelState.matchMode,
+            currentRegexIncludes: panelState.regexIncludes,
+            currentRegexExcludes: panelState.regexExcludes,
           },
           'node-detail'
         );
@@ -154,12 +160,15 @@ export const SetAsStepElementButton: React.FC<SetAsStepElementButtonProps> = ({
 
   // 处理点击事件
   const handleClick = () => {
+    console.log('🎯 [SetAsStepElementButton] handleClick 被调用');
     if (!criteria) {
       console.error('SetAsStepElementButton: 无法构建回填条件');
       return;
     }
     console.log('🎯 设置为步骤元素:', formatCriteriaForDebug(criteria));
+    console.log('🎯 [SetAsStepElementButton] 即将调用 onApply');
     onApply(criteria);
+    console.log('🎯 [SetAsStepElementButton] onApply 调用完成');
   };
 
   // 渲染详细信息（可选）
@@ -246,7 +255,10 @@ export const NodeDetailSetElementButton: React.FC<{
   values?: Record<string, string>;
   includes?: Record<string, string[]>;
   excludes?: Record<string, string[]>;
-}> = ({ node, onApply, strategy, fields, values, includes, excludes }) => {
+  matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+  regexIncludes?: Record<string, string[]>;
+  regexExcludes?: Record<string, string[]>;
+}> = ({ node, onApply, strategy, fields, values, includes, excludes, matchMode, regexIncludes, regexExcludes }) => {
   return (
     <SetAsStepElementButton
       node={node}
@@ -258,6 +270,9 @@ export const NodeDetailSetElementButton: React.FC<{
         values,
         includes,
         excludes,
+        matchMode,
+        regexIncludes,
+        regexExcludes,
       }}
       variant="success"
       label="应用到步骤"

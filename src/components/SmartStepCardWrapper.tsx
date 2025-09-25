@@ -4,18 +4,18 @@
  */
 
 import React from "react";
-import { DraggableStepCard, DraggableStepCardProps } from "./DraggableStepCard";
+import { DraggableStepCard } from "./DraggableStepCard";
 import { SmartScriptStep } from "../types/smartScript"; // 使用统一的类型定义
 
-interface SmartStepCardWrapperProps
-  extends Omit<DraggableStepCardProps, "step"> {
+type DraggableCardProps = React.ComponentProps<typeof DraggableStepCard>;
+
+interface SmartStepCardWrapperProps extends Omit<DraggableCardProps, "step"> {
   step: SmartScriptStep; // 使用统一的SmartScriptStep类型
+  onOpenPageAnalyzer?: () => void; // 仅容器层使用，不向下透传
 }
 
-export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (
-  props
-) => {
-  const { step } = props;
+export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (props) => {
+  const { step, onOpenPageAnalyzer, ...rest } = props;
 
   console.log("🔍 SmartStepCardWrapper 使用传统样式:", {
     stepId: step.id,
@@ -33,7 +33,8 @@ export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (
     enabled: step.enabled,
   };
 
-  return <DraggableStepCard {...props} step={draggableStep} />;
+  // 不透传 onOpenPageAnalyzer 给 DraggableStepCard，避免类型不匹配
+  return <DraggableStepCard {...rest} step={draggableStep} />;
 };
 
 export default SmartStepCardWrapper;

@@ -5,7 +5,7 @@ import { SelectedFieldsTable } from './SelectedFieldsTable';
 import { SelectedFieldsPreview } from './SelectedFieldsPreview';
 import type { MatchCriteria, MatchStrategy } from './types';
 import type { UiNode } from '../../types';
-import { PRESET_FIELDS, normalizeExcludes, normalizeIncludes, inferStrategyFromFields } from './helpers';
+import { PRESET_FIELDS, normalizeExcludes, normalizeIncludes, inferStrategyFromFields, buildDefaultValues } from './helpers';
 
 export interface StrategyConfiguratorProps {
   node: UiNode | null;
@@ -16,23 +16,57 @@ export interface StrategyConfiguratorProps {
 export const StrategyConfigurator: React.FC<StrategyConfiguratorProps> = ({ node, criteria, onChange }) => {
   const current = criteria || { strategy: 'standard', fields: [], values: {}, includes: {}, excludes: {} } as MatchCriteria;
 
+  // 小工具：转义正则特殊字符（与 NodeDetailPanel 中逻辑保持一致）
+  const escapeRegex = (input: string): string => {
+    return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  // 从当前 criteria 推断“仅匹配关键词（正则精确）”开关状态
+  const keywordOnly: Record<string, boolean> = React.useMemo(() => {
+    const result: Record<string, boolean> = {};
+    const textLike = ['text', 'content-desc'];
+    const mode = (current as any).matchMode as Record<string, 'equals' | 'contains' | 'regex'> | undefined;
+    const regexIncludes = (current as any).regexIncludes as Record<string, string[]> | undefined;
+    for (const f of current.fields || []) {
+      if (!textLike.includes(f)) continue;
+      const isRegex = mode?.[f] === 'regex';
+      const patterns = regexIncludes?.[f] || [];
+      const val = (current.values || {})[f];
+      // 若设置为 regex 且存在正则，即认为启用；
+      // 若正则刚好为 ^值$ 则属于“仅关键词”精确匹配
+      if (isRegex && patterns.length > 0) {
+        if (val && patterns.some(p => p === `^${escapeRegex(String(val))}$`)) {
+          result[f] = true;
+        } else {
+          // 自定义正则也视为“启用”（但非精确关键词），同样标记为 true 以提示已启用
+          result[f] = true;
+        }
+      } else {
+        result[f] = false;
+      }
+    }
+    return result;
+  }, [current]);
+
   return (
     <div>
       <MatchingStrategySelector
         value={(current.strategy as MatchStrategy) || 'standard'}
         onChange={(next: MatchStrategy) => {
           const preset = PRESET_FIELDS[next as any] || [];
-          const values: Record<string, any> = current.values || {};
-          let nextFields = Array.isArray(preset) ? preset.filter((f) => values[f] != null) : [];
-          if (!nextFields || nextFields.length === 0) {
-            nextFields = next === 'custom' ? (current.fields || []) : preset;
-          }
+          // 与网格检查器保持一致：切换到某策略时直接采用该策略的完整预设字段集合
+          // 自定义策略维持当前字段集合，其它策略使用预设
+          const nextFields = next === 'custom' ? (current.fields || []) : preset;
+          // 当存在 node 时，用节点默认值回填新字段，再与已有值合并（用户输入优先）
+          const nodeDefaults = node ? buildDefaultValues(node, nextFields) : {};
+          const mergedValues = { ...nodeDefaults, ...(current.values || {}) };
           const normalizedExcludes = normalizeExcludes(current.excludes || {}, nextFields);
           const normalizedIncludes = normalizeIncludes(current.includes || {}, nextFields);
           onChange({
             ...current,
             strategy: next,
             fields: nextFields,
+            values: mergedValues,
             excludes: normalizedExcludes,
             includes: normalizedIncludes,
           });
@@ -85,9 +119,26 @@ export const StrategyConfigurator: React.FC<StrategyConfiguratorProps> = ({ node
             });
           }}
           onChangeValue={(field, v) => {
+            // 基础值更新
+            const nextValues = { ...(current.values || {}), [field]: v } as Record<string,string>;
+
+            // 若该字段启用了“仅匹配关键词（正则）”，则同步更新 matchMode/regexIncludes
+            const textLike = ['text', 'content-desc'];
+            const isTextLike = textLike.includes(field);
+            const isKeywordOnly = (keywordOnly as any)?.[field];
+            let nextMatchMode = { ...((current as any).matchMode || {}) } as Record<string, 'equals' | 'contains' | 'regex'>;
+            let nextRegexIncludes = { ...((current as any).regexIncludes || {}) } as Record<string, string[]>;
+            if (isTextLike && isKeywordOnly) {
+              nextMatchMode[field] = 'regex';
+              const trimmed = (v ?? '').toString().trim();
+              nextRegexIncludes[field] = trimmed ? [`^${escapeRegex(trimmed)}$`] : ['^$'];
+            }
+
             onChange({
               ...current,
-              values: { ...(current.values || {}), [field]: v },
+              values: nextValues,
+              ...(Object.keys(nextMatchMode).length ? { matchMode: nextMatchMode } : {}),
+              ...(Object.keys(nextRegexIncludes).length ? { regexIncludes: nextRegexIncludes } : {}),
             });
           }}
           includes={current.includes || {}}
@@ -101,6 +152,36 @@ export const StrategyConfigurator: React.FC<StrategyConfiguratorProps> = ({ node
             const combined = { ...(current.excludes || {}), [field]: next } as Record<string,string[]>;
             const normalized = normalizeExcludes(combined, current.fields || []);
             onChange({ ...current, excludes: normalized });
+          }}
+          // 将“仅匹配关键词（正则）”开关与 MatchCriteria 中的 matchMode/regexIncludes 进行双向绑定
+          keywordOnly={keywordOnly}
+          onToggleKeywordOnly={(field, enabled) => {
+            const textLike = ['text', 'content-desc'];
+            if (!textLike.includes(field)) return;
+            const nextMatchMode = { ...((current as any).matchMode || {}) } as Record<string, 'equals' | 'contains' | 'regex'>;
+            const nextRegexIncludes = { ...((current as any).regexIncludes || {}) } as Record<string, string[]>;
+
+            if (enabled) {
+              nextMatchMode[field] = 'regex';
+              const val = (current.values || {})[field];
+              if (val != null && String(val).trim() !== '') {
+                nextRegexIncludes[field] = [`^${escapeRegex(String(val).trim())}$`];
+              } else {
+                // 没有值时给一个空串精确匹配，避免出现不一致
+                nextRegexIncludes[field] = ['^$'];
+              }
+            } else {
+              // 关闭时移除对应字段的 regex 设置
+              if (field in nextMatchMode) delete nextMatchMode[field];
+              if (field in nextRegexIncludes) delete nextRegexIncludes[field];
+            }
+
+            onChange({
+              ...current,
+              // 仅当有键时保留对象，避免无意义的空对象污染
+              ...(Object.keys(nextMatchMode).length ? { matchMode: nextMatchMode } : { matchMode: undefined as any }),
+              ...(Object.keys(nextRegexIncludes).length ? { regexIncludes: nextRegexIncludes } : { regexIncludes: undefined as any }),
+            });
           }}
         />
       </div>

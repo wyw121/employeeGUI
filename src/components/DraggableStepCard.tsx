@@ -1,6 +1,6 @@
 // 可拖拽的步骤卡片组件
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card, Button, Space, Tag, Switch, Typography, InputNumber, Modal, Divider, Popconfirm, message, Popover } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -18,6 +18,9 @@ import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from
 import { StrategyConfigurator } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
 import { PRESET_FIELDS, normalizeExcludes, normalizeIncludes, inferStrategyFromFields, buildFindSimilarCriteria } from './universal-ui/views/grid-view/panels/node-detail';
+// 绑定解析
+import { resolveBinding, createBindingFromSnapshotAndXPath } from './step-card/element-binding/helpers';
+import { resolveSnapshot } from './universal-ui/views/grid-view';
 // 移除独立的正/负条件编辑器，统一由表格承载
 
 const { Text } = Typography;
@@ -145,6 +148,71 @@ export const DraggableStepCard: React.FC<
     'smart_extract',
   ]);
   const showStrategyControls = STRATEGY_ENABLED_TYPES.has(step.step_type) || !!step.parameters?.matching;
+
+  // 🆕 从 elementBinding 解析出 UiNode，用于策略编辑的“基于节点回填”体验
+  // 兼容旧步骤：若缺失 elementBinding，但存在 xmlSnapshot + xpath，则自动补齐并持久化
+  const [boundNode, setBoundNode] = useState<any>(null);
+  const attemptedAutoBindRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const p: any = step.parameters || {};
+
+    const tryResolveFromBinding = (bindingAny: any) => {
+      try {
+        if (bindingAny && bindingAny.snapshot && bindingAny.locator?.xpath) {
+          const resolved = resolveSnapshot({ elementBinding: bindingAny });
+          if (!cancelled) setBoundNode(resolved.node);
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    };
+
+    // 1) 首选现有绑定
+    if (tryResolveFromBinding(p.elementBinding)) return () => { cancelled = true; };
+
+    // 2) 若尚未尝试过自动绑定，则基于已存数据补齐一次
+    if (!attemptedAutoBindRef.current) {
+      attemptedAutoBindRef.current = true;
+      try {
+        const xpath: string | undefined = p?.elementLocator?.additionalInfo?.xpath || p?.xpath;
+        const snap = p?.xmlSnapshot;
+        const xmlText: string | undefined = snap?.xmlContent || p?.xmlContent;
+        if (xpath && typeof xpath === 'string' && xpath.trim() && typeof xmlText === 'string' && xmlText.trim()) {
+          const snapshot = {
+            source: 'memory' as const,
+            text: xmlText,
+            sha1: snap?.xmlHash,
+            capturedAt: snap?.timestamp || Date.now(),
+            deviceId: snap?.deviceInfo?.deviceId || p?.deviceId,
+          };
+          // 先用共用解析器直接解析节点，保证本次渲染可用
+          const resolved = resolveSnapshot({ xmlText: snapshot.text, xpath });
+          if (!cancelled) setBoundNode(resolved.node);
+          // 再尝试创建并持久化绑定（行为与原逻辑一致）
+          const binding = createBindingFromSnapshotAndXPath(snapshot, xpath);
+          if (binding) {
+            onUpdateStepParameters?.(step.id, {
+              ...p,
+              elementBinding: binding,
+            });
+          }
+        } else {
+          if (!cancelled) setBoundNode(null);
+        }
+      } catch (_) {
+        if (!cancelled) setBoundNode(null);
+      }
+    } else {
+      // 无可用数据，清空
+      setBoundNode(null);
+    }
+
+    return () => { cancelled = true; };
+    // 仅在这些关键依赖变化时尝试一次自动补齐；避免因为持久化回写造成的循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.id, step.parameters?.elementBinding, step.parameters?.xmlSnapshot, step.parameters?.elementLocator?.additionalInfo?.xpath, step.parameters?.xpath]);
 
   return (
     <div 
@@ -388,8 +456,58 @@ export const DraggableStepCard: React.FC<
                   content={
                     <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 360 }}>
                       <StrategyConfigurator
-                        node={null}
-                        criteria={(step.parameters?.matching as any) || { strategy: 'standard', fields: [], values: {}, includes: {}, excludes: {} }}
+                        node={(() => {
+                          // 优先使用解析到的 boundNode
+                          if (boundNode) return boundNode;
+                          
+                          // 如果没有 boundNode，尝试从步骤参数构建临时节点信息
+                          const p = step.parameters || {};
+                          const matching = p.matching as any;
+                          if (matching?.values) {
+                            return {
+                              id: `temp-${step.id}`,
+                              attrs: {
+                                'resource-id': matching.values['resource-id'] || p.resource_id,
+                                'text': matching.values['text'] || p.text,
+                                'content-desc': matching.values['content-desc'] || p.content_desc,
+                                'class': matching.values['class'] || p.class_name,
+                                'bounds': matching.values['bounds'] || p.bounds,
+                                'package': matching.values['package'],
+                                'checkable': matching.values['checkable'],
+                                'clickable': matching.values['clickable'],
+                                'enabled': matching.values['enabled'],
+                                'focusable': matching.values['focusable'],
+                                'scrollable': matching.values['scrollable'],
+                              }
+                            };
+                          }
+                          return null;
+                        })()}
+                        criteria={(() => {
+                          const matching = step.parameters?.matching as any;
+                          console.log('🔍 [步骤卡片策略气泡] 步骤参数:', step.parameters);
+                          console.log('🔍 [步骤卡片策略气泡] matching 参数:', matching);
+                          
+                          if (!matching) {
+                            console.log('❌ [步骤卡片策略气泡] 没有 matching 参数，使用默认值');
+                            return { strategy: 'standard', fields: [], values: {}, includes: {}, excludes: {} };
+                          }
+                          
+                          // 确保包含所有必要的参数，包括正则表达式相关参数
+                          const criteria = {
+                            strategy: matching.strategy || 'standard',
+                            fields: matching.fields || [],
+                            values: matching.values || {},
+                            includes: matching.includes || {},
+                            excludes: matching.excludes || {},
+                            // 🆕 添加正则表达式参数支持
+                            ...(matching.matchMode && { matchMode: matching.matchMode }),
+                            ...(matching.regexIncludes && { regexIncludes: matching.regexIncludes }),
+                            ...(matching.regexExcludes && { regexExcludes: matching.regexExcludes }),
+                          };
+                          console.log('✅ [步骤卡片策略气泡] 构建的 criteria:', criteria);
+                          return criteria;
+                        })()}
                         onChange={(next) => {
                           const prev = step.parameters?.matching || {};
                           const nextParams = {

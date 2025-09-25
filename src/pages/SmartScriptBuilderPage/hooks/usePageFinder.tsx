@@ -28,6 +28,13 @@ import type {
   MatchCriteria as UIMatchCriteria,
   MatchStrategy as UIMatchStrategy,
 } from "../../../components/universal-ui/views/grid-view/panels/node-detail/types";
+import { createBindingFromSnapshotAndXPath } from "../../../components/step-card/element-binding/helpers";
+
+// 🆕 导入增强匹配系统
+import { EnhancedMatchingHelper } from "../../../modules/enhanced-matching/integration/EnhancedMatchingHelper";
+
+// 轻量正则转义，避免用户输入影响 ^...$ 模式
+const escapeRegex = (input: string): string => input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export interface SnapshotFixMode {
   enabled: boolean;
@@ -212,7 +219,28 @@ export function usePageFinder(deps: UsePageFinderDeps) {
         fallbackDeviceName: devices.find((d) => d.id === currentDeviceId)
             ?.name,
       });
-      if (snap) form.setFieldValue("xmlSnapshot", snap);
+      if (snap) {
+        form.setFieldValue("xmlSnapshot", snap);
+        // 🆕 表单态：根据 element.xpath + xmlSnapshot 生成绑定
+        try {
+          const xpathFromElement: string | undefined = (element as any).xpath || (element as any).element_path;
+          if (xpathFromElement && typeof xpathFromElement === 'string') {
+            const bindingSnapshot = {
+              source: 'memory' as const,
+              text: snap.xmlContent,
+              sha1: snap.xmlHash,
+              capturedAt: snap.timestamp || Date.now(),
+              deviceId: snap.deviceInfo?.deviceId,
+            };
+            const binding = createBindingFromSnapshotAndXPath(bindingSnapshot, xpathFromElement);
+            if (binding) {
+              form.setFieldValue('elementBinding', binding);
+            }
+          }
+        } catch (e) {
+          console.warn('elementBinding（表单态）生成失败（允许跳过）：', e);
+        }
+      }
 
       const basicParams = {
         text: element.text,
@@ -230,18 +258,60 @@ export function usePageFinder(deps: UsePageFinderDeps) {
         form.setFieldValue(key, value);
       });
 
-      const built = buildAndCacheDefaultMatchingFromElement({
+      // 🆕 使用增强匹配系统生成匹配条件
+      const enhancedElement = {
         resource_id: element.resource_id,
         text: element.text,
         content_desc: element.content_desc,
         class_name: element.class_name,
         bounds: element.bounds,
+        xpath: element.xpath || element.element_path,
+        element_path: element.element_path,
+        // 添加可能存在的扩展属性
+        clickable: element.clickable,
+        enabled: element.enabled,
+        selected: element.selected,
+        checkable: element.checkable,
+        checked: element.checked,
+        scrollable: element.scrollable,
+        package: element.package,
+        index: element.index,
+      };
+
+      const built = EnhancedMatchingHelper.buildEnhancedMatching(enhancedElement, {
+        useEnhancedMatching: true,
+        xmlContext: currentXmlContent,
+        optimizationOptions: {
+          enableParentContext: true,
+          enableChildContext: true,
+          enableDescendantSearch: false, // 保守设置，避免性能问题
+          maxDepth: 2,
+          prioritizeSemanticFields: true,
+          excludePositionalFields: false // 允许位置字段作为备选
+        },
+        fallbackToLegacy: true, // 增强匹配失败时降级到原有逻辑
+        debug: process.env.NODE_ENV === 'development' // 开发模式下启用调试
       });
       if (built && built.fields.length > 0) {
+        // 为文本相关字段默认注入精确正则 ^词$，便于后端 enhanced_unified 直接采用
+        const textLike = ["text", "content-desc"] as const;
+        const matchMode: Record<string, "equals" | "contains" | "regex"> = {};
+        const regexIncludes: Record<string, string[]> = {};
+        for (const f of built.fields) {
+          if ((textLike as readonly string[]).includes(f) && typeof built.values[f] === 'string') {
+            const v = String(built.values[f]).trim();
+            if (v) {
+              matchMode[f] = 'regex';
+              regexIncludes[f] = [`^${escapeRegex(v)}$`];
+            }
+          }
+        }
         form.setFieldValue("matching", {
           strategy: built.strategy,
           fields: built.fields,
           values: built.values,
+          ...(Object.keys(matchMode).length ? { matchMode } : {}),
+          ...(Object.keys(regexIncludes).length ? { regexIncludes } : {}),
           updatedAt: Date.now(),
         });
       }
@@ -268,10 +338,24 @@ export function usePageFinder(deps: UsePageFinderDeps) {
               ...(builtLocator ? { elementLocator: builtLocator } : {}),
             };
             if (built && built.fields.length > 0) {
+              const textLike = ["text", "content-desc"] as const;
+              const matchMode: Record<string, "equals" | "contains" | "regex"> = {};
+              const regexIncludes: Record<string, string[]> = {};
+              for (const f of built.fields) {
+                if ((textLike as readonly string[]).includes(f) && typeof built.values[f] === 'string') {
+                  const v = String(built.values[f]).trim();
+                  if (v) {
+                    matchMode[f] = 'regex';
+                    regexIncludes[f] = [`^${escapeRegex(v)}$`];
+                  }
+                }
+              }
               updatedParameters.matching = {
                 strategy: built.strategy,
                 fields: built.fields,
                 values: built.values,
+                ...(Object.keys(matchMode).length ? { matchMode } : {}),
+                ...(Object.keys(regexIncludes).length ? { regexIncludes } : {}),
                 updatedAt: Date.now(),
               };
             }
@@ -294,6 +378,25 @@ export function usePageFinder(deps: UsePageFinderDeps) {
                   appVersion: currentPageInfo.appVersion,
                 }
               );
+              // 🆕 编辑现有步骤：若有 xpath 则生成 elementBinding
+              try {
+                const xpathFromElement: string | undefined = (element as any).xpath || (element as any).element_path;
+                if (xpathFromElement) {
+                  const bindingSnapshot = {
+                    source: 'memory' as const,
+                    text: updatedParameters.xmlSnapshot.xmlContent,
+                    sha1: updatedParameters.xmlSnapshot.xmlHash,
+                    capturedAt: updatedParameters.xmlSnapshot.timestamp || Date.now(),
+                    deviceId: updatedParameters.xmlSnapshot.deviceInfo?.deviceId,
+                  };
+                  const binding = createBindingFromSnapshotAndXPath(bindingSnapshot, xpathFromElement);
+                  if (binding) {
+                    updatedParameters.elementBinding = binding;
+                  }
+                }
+              } catch (e) {
+                console.warn('elementBinding（编辑步骤）生成失败（允许跳过）：', e);
+              }
             }
             return {
               ...existingStep,
@@ -357,6 +460,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
   };
 
   const onApplyCriteria = (criteria: any) => {
+    console.log('🎯 [usePageFinder] onApplyCriteria 被调用，criteria:', criteria);
     try {
       const matchCriteria: UIMatchCriteria = {
         strategy: criteria.strategy as UIMatchStrategy,
@@ -380,6 +484,10 @@ export function usePageFinder(deps: UsePageFinderDeps) {
               values: criteria.values,
               includes: criteria.includes,
               excludes: criteria.excludes,
+              // 🆕 添加正则表达式相关参数
+              ...(criteria.matchMode && { matchMode: criteria.matchMode }),
+              ...(criteria.regexIncludes && { regexIncludes: criteria.regexIncludes }),
+              ...(criteria.regexExcludes && { regexExcludes: criteria.regexExcludes }),
               updatedAt: Date.now(),
             };
             p.elementLocator = p.elementLocator || {};
@@ -401,6 +509,28 @@ export function usePageFinder(deps: UsePageFinderDeps) {
             if (criteria.values["text"]) p.text = criteria.values["text"];
             if (criteria.values["content-desc"]) p.content_desc = criteria.values["content-desc"];
             if (criteria.values["class"]) p.class_name = criteria.values["class"];
+
+            // 🆕 保存元素绑定（elementBinding）：需要 xmlSnapshot 与 preview.xpath
+            try {
+              const snap = (p.xmlSnapshot || form.getFieldValue("xmlSnapshot")) as XmlSnapshot | undefined;
+              const xpath: string | undefined = criteria.preview?.xpath;
+              if (snap && typeof snap.xmlContent === 'string' && xpath && xpath.trim()) {
+                const bindingSnapshot = {
+                  source: 'memory' as const,
+                  text: snap.xmlContent,
+                  sha1: snap.xmlHash,
+                  capturedAt: snap.timestamp || Date.now(),
+                  deviceId: snap.deviceInfo?.deviceId,
+                };
+                // 延迟加载以避免顶部循环依赖
+                const binding = createBindingFromSnapshotAndXPath(bindingSnapshot, xpath);
+                if (binding) {
+                  p.elementBinding = binding;
+                }
+              }
+            } catch (e) {
+              console.warn('elementBinding 生成失败（允许跳过）：', e);
+            }
             
             const patched = { ...s, parameters: p } as any;
             patched.name = nextTitle || s.name;
@@ -421,6 +551,10 @@ export function usePageFinder(deps: UsePageFinderDeps) {
           values: criteria.values,
           includes: criteria.includes,
           excludes: criteria.excludes,
+          // 🆕 同步正则/匹配模式到表单
+          ...(criteria.matchMode ? { matchMode: criteria.matchMode } : {}),
+          ...(criteria.regexIncludes ? { regexIncludes: criteria.regexIncludes } : {}),
+          ...(criteria.regexExcludes ? { regexExcludes: criteria.regexExcludes } : {}),
           updatedAt: Date.now(),
         });
 
@@ -468,6 +602,27 @@ export function usePageFinder(deps: UsePageFinderDeps) {
           fallbackDeviceName: devices.find((d) => d.id === currentDeviceId)?.name,
         });
         if (snap) form.setFieldValue("xmlSnapshot", snap);
+
+        // 🆕 新建步骤表单态：生成并写入 elementBinding（随表单保存）
+        try {
+          const xpath: string | undefined = criteria.preview?.xpath;
+          const effectiveSnap: XmlSnapshot | undefined = snap || form.getFieldValue("xmlSnapshot");
+          if (effectiveSnap && typeof effectiveSnap.xmlContent === 'string' && xpath && xpath.trim()) {
+            const bindingSnapshot = {
+              source: 'memory' as const,
+              text: effectiveSnap.xmlContent,
+              sha1: effectiveSnap.xmlHash,
+              capturedAt: effectiveSnap.timestamp || Date.now(),
+              deviceId: effectiveSnap.deviceInfo?.deviceId,
+            };
+            const binding = createBindingFromSnapshotAndXPath(bindingSnapshot, xpath);
+            if (binding) {
+              form.setFieldValue('elementBinding', binding);
+            }
+          }
+        } catch (e) {
+          console.warn('elementBinding（新建表单）生成失败（允许跳过）：', e);
+        }
 
         setShowPageAnalyzer(false);
         setIsQuickAnalyzer(false);
@@ -561,6 +716,14 @@ export function usePageFinder(deps: UsePageFinderDeps) {
       locator.predicateXPath ||
       locator.bounds ||
       (locator.attributes && Object.values(locator.attributes).some(Boolean));
+    
+    console.log('🔧 [usePageFinder] 构建 preselectLocator:', {
+      hasAny,
+      locator,
+      stepId: editingStepForParams?.id,
+      stepParameters: p
+    });
+    
     return hasAny ? locator : undefined;
   }, [editingStepForParams]);
 
@@ -581,7 +744,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
 
   const pageFinderProps = {
     visible: showPageAnalyzer,
-  initialViewMode: (editingStepForParams ? "grid" : "visual") as "grid" | "visual",
+    initialViewMode: (editingStepForParams ? "grid" : "visual") as "grid" | "visual",
     snapshotOnlyMode: snapshotFixMode.enabled,
     onSnapshotCaptured,
     onSnapshotUpdated,
@@ -594,7 +757,13 @@ export function usePageFinder(deps: UsePageFinderDeps) {
     onElementSelected,
   };
 
-  return {
+  console.log('📋 [usePageFinder] pageFinderProps 配置:', {
+    visible: pageFinderProps.visible,
+    initialViewMode: pageFinderProps.initialViewMode,
+    preselectLocator: pageFinderProps.preselectLocator,
+    initialMatching: pageFinderProps.initialMatching,
+    editingStepId: editingStepForParams?.id
+  });  return {
     pageFinderProps,
     openPageFinderForStep,
     openQuickPageFinder,

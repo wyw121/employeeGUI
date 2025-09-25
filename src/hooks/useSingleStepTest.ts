@@ -5,6 +5,11 @@ import type { SmartScriptStep, SingleStepTestResult } from '../types/smartScript
 import { useAdb } from '../application/hooks/useAdb';
 import type { MatchCriteriaDTO, MatchResultDTO } from '../domain/page-analysis/repositories/IUiMatcherRepository';
 
+// 正则表达式转义函数
+const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 interface StrategyTestResult {
   success: boolean;
   output: string;
@@ -24,15 +29,36 @@ export const useSingleStepTest = () => {
   const convertStepToMatchCriteria = useCallback((step: SmartScriptStep): MatchCriteriaDTO | null => {
     const params = step.parameters as any;
     
-    // 优先使用现有的matching参数
+    // 优先使用现有的matching参数，但要增强正则逻辑
     if (params.matching) {
+      const m = params.matching as Partial<MatchCriteriaDTO> & { matchMode?: MatchCriteriaDTO['matchMode']; regexIncludes?: MatchCriteriaDTO['regexIncludes']; regexExcludes?: MatchCriteriaDTO['regexExcludes'] };
+      
+      // 为文本字段添加默认的精确正则匹配逻辑
+      const enhancedMatchMode = { ...(m.matchMode || {}) };
+      const enhancedRegexIncludes = { ...(m.regexIncludes || {}) };
+      
+      // 为 text 字段添加正则
+      if (m.fields?.includes('text') && m.values?.text && m.values.text.trim()) {
+        enhancedMatchMode.text = 'regex';
+        enhancedRegexIncludes.text = [`^${escapeRegex(m.values.text.trim())}$`];
+      }
+      
+      // 为 content-desc 字段添加正则
+      if (m.fields?.includes('content-desc') && m.values?.['content-desc'] && String(m.values['content-desc']).trim()) {
+        enhancedMatchMode['content-desc'] = 'regex';
+        enhancedRegexIncludes['content-desc'] = [`^${escapeRegex(String(m.values['content-desc']).trim())}$`];
+      }
+      
       return {
-        strategy: params.matching.strategy || 'standard',
-        fields: params.matching.fields || [],
-        values: params.matching.values || {},
-        includes: params.matching.includes || {},
-        excludes: params.matching.excludes || {}
-      };
+        strategy: (m.strategy as any) || 'standard',
+        fields: m.fields || [],
+        values: m.values || {},
+        includes: m.includes || {},
+        excludes: m.excludes || {},
+        ...(Object.keys(enhancedMatchMode).length ? { matchMode: enhancedMatchMode } : {}),
+        ...(Object.keys(enhancedRegexIncludes).length ? { regexIncludes: enhancedRegexIncludes } : {}),
+        regexExcludes: m.regexExcludes,
+      } as any;
     }
 
     // 从传统参数转换为匹配条件
@@ -63,13 +89,29 @@ export const useSingleStepTest = () => {
 
     // SmartFindElement 类型步骤才转换，并且需要有字段
     if (step.step_type === 'SmartFindElement' && fields.length > 0) {
-      return {
-        strategy: 'standard', // 默认使用标准匹配策略
+      
+      // 组装默认正则（精确 ^词$）逻辑
+      const matchMode: NonNullable<MatchCriteriaDTO['matchMode']> = {};
+      const regexIncludes: NonNullable<MatchCriteriaDTO['regexIncludes']> = {};
+      if (fields.includes('text') && values.text && values.text.trim()) {
+        matchMode.text = 'regex';
+        regexIncludes.text = [`^${escapeRegex(values.text.trim())}$`];
+      }
+      if (fields.includes('content-desc') && values['content-desc'] && String(values['content-desc']).trim()) {
+        matchMode['content-desc'] = 'regex';
+        regexIncludes['content-desc'] = [`^${escapeRegex(String(values['content-desc']).trim())}$`];
+      }
+
+      const criteria: MatchCriteriaDTO = {
+        strategy: 'standard',
         fields,
         values,
         includes: {},
-        excludes: {}
+        excludes: {},
+        ...(Object.keys(matchMode).length ? { matchMode } : {}),
+        ...(Object.keys(regexIncludes).length ? { regexIncludes } : {}),
       };
+      return criteria;
     }
 
     return null;

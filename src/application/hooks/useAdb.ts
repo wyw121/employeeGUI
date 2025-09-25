@@ -299,7 +299,16 @@ export const useAdb = () => {
   // ===== UI 元素匹配 =====
   const matchElementByCriteria = useCallback(async (
     deviceId: string,
-    criteria: { strategy: any; fields: string[]; values: Record<string, string>; includes?: Record<string, string[]>; excludes?: Record<string, string[]>; }
+    criteria: { 
+      strategy: any; 
+      fields: string[]; 
+      values: Record<string, string>; 
+      includes?: Record<string, string[]>; 
+      excludes?: Record<string, string[]>;
+      matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+      regexIncludes?: Record<string, string[]>;
+      regexExcludes?: Record<string, string[]>;
+    }
   ) => {
     // 发送前统一处理：
     // - custom → 映射为 absolute 或 standard
@@ -310,12 +319,20 @@ export const useAdb = () => {
     const includes = normalizeIncludes(criteria.includes || {}, fields);
     const excludes = normalizeExcludes(criteria.excludes || {}, fields);
 
+    // 透传并转换 camelCase → snake_case（后端采用 match_mode/regex_includes/regex_excludes）
+    const match_mode = criteria.matchMode ? Object.fromEntries(Object.entries(criteria.matchMode)) : undefined;
+    const regex_includes = criteria.regexIncludes ? Object.fromEntries(Object.entries(criteria.regexIncludes)) : undefined;
+    const regex_excludes = criteria.regexExcludes ? Object.fromEntries(Object.entries(criteria.regexExcludes)) : undefined;
+
     return await applicationService.matchElementByCriteria(deviceId, {
       strategy: backendStrategy,
       fields,
       values,
       includes,
       excludes,
+      ...(match_mode ? { match_mode } : {}),
+      ...(regex_includes ? { regex_includes } : {}),
+      ...(regex_excludes ? { regex_excludes } : {}),
     } as any);
   }, []);
 

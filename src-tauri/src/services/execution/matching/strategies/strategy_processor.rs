@@ -15,6 +15,12 @@ pub struct MatchingContext {
     pub values: HashMap<String, String>,
     pub includes: HashMap<String, Vec<String>>,
     pub excludes: HashMap<String, Vec<String>>,
+    /// 每字段匹配模式：equals | contains | regex
+    pub match_mode: HashMap<String, String>,
+    /// 每字段“必须匹配”的正则
+    pub regex_includes: HashMap<String, Vec<String>>,
+    /// 每字段“不可匹配”的正则
+    pub regex_excludes: HashMap<String, Vec<String>>,
     pub fallback_bounds: Option<Value>,
     pub device_id: String,
 }
@@ -31,19 +37,28 @@ pub struct StrategyResult {
 }
 
 /// 处理错误类型
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum ProcessingError {
-    #[error("策略不支持: {0}")]
     UnsupportedStrategy(String),
-    #[error("参数无效: {0}")]
     InvalidParameters(String),
-    #[error("匹配失败: {0}")]
-    MatchFailed(String),
-    #[error("XML 解析失败: {0}")]
-    XmlParseError(String),
-    #[error("坐标计算失败: {0}")]
-    CoordinateError(String),
+    MatchingFailed(String),
+    XmlParsingFailed(String),
+    CoordinateCalculationFailed(String),
 }
+
+impl std::fmt::Display for ProcessingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProcessingError::UnsupportedStrategy(s) => write!(f, "策略不支持: {}", s),
+            ProcessingError::InvalidParameters(s) => write!(f, "参数无效: {}", s),
+            ProcessingError::MatchingFailed(s) => write!(f, "匹配失败: {}", s),
+            ProcessingError::XmlParsingFailed(s) => write!(f, "XML 解析失败: {}", s),
+            ProcessingError::CoordinateCalculationFailed(s) => write!(f, "坐标计算失败: {}", s),
+        }
+    }
+}
+
+impl std::error::Error for ProcessingError {}
 
 /// 策略处理器接口
 #[async_trait]

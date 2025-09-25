@@ -7,6 +7,12 @@ export interface MatchCriteria {
   values: Record<string, string>; // 正向匹配值（从 UiNode.attrs 提取或用户编辑）
   excludes?: Record<string, string[]>; // 负向匹配：每字段一个字符串数组，含“不包含”的词
   includes?: Record<string, string[]>; // 额外包含：每字段一个字符串数组，含“必须包含”的词
+  /** 每字段匹配模式（默认 contains）：equals | contains | regex */
+  matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+  /** 每字段“必须匹配”的正则数组（高级用法，全部必须命中） */
+  regexIncludes?: Record<string, string[]>;
+  /** 每字段“不可匹配”的正则数组（任一命中则失败） */
+  regexExcludes?: Record<string, string[]>;
 }
 
 export interface MatchResultSummary {

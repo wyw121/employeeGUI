@@ -15,7 +15,6 @@ use super::strategies::{
     create_strategy_processor,
     extract_matching_context,
     MatchingContext,
-    StrategyResult,
     ProcessingError,
 };
 
@@ -47,9 +46,9 @@ where
         // 设置设备 ID
         context.device_id = device_id.to_string();
         
-        logs.push(format!("📋 匹配策略: {}", context.strategy));
-        logs.push(format!("🔍 匹配字段: {:?}", context.fields));
-        logs.push(format!("📝 匹配值: {:?}", context.values));
+    logs.push(format!("📋 匹配策略: {}", context.strategy));
+    logs.push(format!("🔍 匹配字段: {:?}", context.fields));
+    logs.push(format!("📝 匹配值: {:?}", context.values));
         
         if !context.includes.is_empty() {
             logs.push(format!("✅ 包含条件: {:?}", context.includes));
@@ -58,6 +57,17 @@ where
             logs.push(format!("❌ 排除条件: {:?}", context.excludes));
         }
         
+        // 额外记录匹配模式与正则
+        if !context.match_mode.is_empty() {
+            logs.push(format!("🧪 匹配模式(match_mode): {:?}", context.match_mode));
+        }
+        if !context.regex_includes.is_empty() {
+            logs.push(format!("🧩 正则包含(regex_includes): {:?}", context.regex_includes));
+        }
+        if !context.regex_excludes.is_empty() {
+            logs.push(format!("🚫 正则排除(regex_excludes): {:?}", context.regex_excludes));
+        }
+
         // 创建策略处理器
         let processor = create_strategy_processor(&context.strategy);
         logs.push(format!("🎯 创建策略处理器: {}", processor.strategy_name()));
@@ -82,7 +92,7 @@ where
                     ));
                     
                     if result.fallback_used {
-                        logs.push("⚠️ 使用了固化坐标作为回退方案".to_string());
+                        logs.push("⚠️ 使用了固化坐标作为回退方案（保守路线）".to_string());
                         warn!("增强匹配使用固化坐标回退");
                     }
                     
@@ -138,12 +148,13 @@ where
     }
 
     // 回退到传统匹配逻辑
-    logs.push("🔄 回退到传统匹配逻辑".to_string());
+    logs.push("🔄 回退到传统匹配逻辑（保守路线）".to_string());
     warn!("增强匹配失败，回退到传统匹配");
     run_traditional_find(actions, step, logs).await
 }
 
 /// 验证匹配参数是否有效
+#[allow(dead_code)]
 fn validate_matching_parameters(context: &MatchingContext, logs: &mut Vec<String>) -> bool {
     if context.strategy.is_empty() {
         logs.push("❌ 匹配策略为空".to_string());

@@ -99,6 +99,53 @@ where
             }
         }
 
+        // 解析 match_mode（兼容驼峰/下划线）
+        let mut match_mode = HashMap::new();
+        if let Some(mode_obj) = matching
+            .get("match_mode").and_then(|v| v.as_object())
+            .or_else(|| matching.get("matchMode").and_then(|v| v.as_object()))
+        {
+            for (k, v) in mode_obj {
+                if let Some(s) = v.as_str() {
+                    match_mode.insert(k.clone(), s.to_string());
+                }
+            }
+        }
+
+        // 解析 regex_includes（兼容驼峰/下划线）
+        let mut regex_includes = HashMap::new();
+        if let Some(ri_obj) = matching
+            .get("regex_includes").and_then(|v| v.as_object())
+            .or_else(|| matching.get("regexIncludes").and_then(|v| v.as_object()))
+        {
+            for (k, v) in ri_obj {
+                if let Some(arr) = v.as_array() {
+                    let patterns: Vec<String> = arr
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect();
+                    regex_includes.insert(k.clone(), patterns);
+                }
+            }
+        }
+
+        // 解析 regex_excludes（兼容驼峰/下划线）
+        let mut regex_excludes = HashMap::new();
+        if let Some(re_obj) = matching
+            .get("regex_excludes").and_then(|v| v.as_object())
+            .or_else(|| matching.get("regexExcludes").and_then(|v| v.as_object()))
+        {
+            for (k, v) in re_obj {
+                if let Some(arr) = v.as_array() {
+                    let patterns: Vec<String> = arr
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect();
+                    regex_excludes.insert(k.clone(), patterns);
+                }
+            }
+        }
+
         logs.push(format!(
             "🎯 匹配策略: {} | 字段: {:?} | 值: {:?}",
             strategy, fields, values
@@ -117,6 +164,9 @@ where
             values,
             includes,
             excludes,
+            match_mode,
+            regex_includes,
+            regex_excludes,
         };
 
         let strategy_name = strategy.clone();

@@ -3,6 +3,41 @@ use serde::{Deserialize, Serialize};
 use regex::Regex;
 use std::process::Output;
 use crate::utils::adb_utils::execute_adb_command;
+// 🆕 导入增强层级匹配器
+use crate::services::execution::matching::{HierarchyMatcher, HierarchyMatchConfig};
+
+/// 从XML节点行中提取指定字段的值
+/// 例如：从 `text="关注小熊虫的人也关注"` 中提取 "关注小熊虫的人也关注"
+fn extract_field_value(line: &str, field: &str) -> Option<String> {
+    if let Some(start) = line.find(&format!("{}=\"", field)) {
+        let value_start = start + field.len() + 2; // 跳过 field="
+        if let Some(end) = line[value_start..].find('"') {
+            return Some(line[value_start..value_start + end].to_string());
+        }
+    }
+    None
+}
+
+/// 将原始XML文本按每个 <node ...> 的“开始标签”切分，返回每个节点的 opening tag 片段。
+/// 目的：当 UIAutomator 的 XML 被压缩为单行时，无法再用按行视图来逐节点匹配；
+/// 本方法能为每个节点提供独立的属性片段，供字段提取与正则匹配使用。
+fn extract_node_opening_tags(xml: &str) -> Vec<String> {
+    let mut tags: Vec<String> = Vec::new();
+    let mut i: usize = 0;
+    while let Some(rel) = xml[i..].find("<node") {
+        let start = i + rel;
+        // 寻找与该 <node 开始标签对应的第一个 '>'，即 opening tag 末尾
+        if let Some(end_rel) = xml[start..].find('>') {
+            let end = start + end_rel + 1; // 包含 '>'
+            let tag = &xml[start..end];
+            tags.push(tag.trim().to_string());
+            i = end;
+        } else {
+            break;
+        }
+    }
+    tags
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct XmlElement {
@@ -325,6 +360,15 @@ pub struct MatchCriteriaDTO {
     pub excludes: std::collections::HashMap<String, Vec<String>>, // 每字段“不可包含”的词
     #[serde(default)]
     pub includes: std::collections::HashMap<String, Vec<String>>, // 每字段“必须包含”的词
+    /// 每字段匹配模式：equals | contains | regex
+    #[serde(default)]
+    pub match_mode: std::collections::HashMap<String, String>,
+    /// 每字段“必须匹配”的正则（全部需满足）
+    #[serde(default)]
+    pub regex_includes: std::collections::HashMap<String, Vec<String>>,
+    /// 每字段“不可匹配”的正则（任一命中即失败）
+    #[serde(default)]
+    pub regex_excludes: std::collections::HashMap<String, Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -347,37 +391,330 @@ pub struct MatchResultDTO {
     pub preview: Option<MatchPreviewDTO>,
 }
 
+/// 从多个匹配项中选择最佳匹配
+fn select_best_match(
+    matched_indices: &Vec<usize>,
+    node_lines: &Vec<&str>,
+    criteria: &MatchCriteriaDTO,
+) -> usize {
+    // 优先级规则：
+    // 1) resource-id 精确匹配优先
+    // 2) text/content-desc 精确匹配优先
+    // 3) class/package 精确匹配优先
+    // 4) 其他情况返回第一个
+
+    let rid_exact = criteria.values.get("resource-id").cloned();
+    let text_exact = criteria.values.get("text").cloned();
+    let desc_exact = criteria.values.get("content-desc").cloned();
+    let class_exact = criteria.values.get("class").cloned();
+    let package_exact = criteria.values.get("package").cloned();
+
+    // 1) resource-id 精确匹配
+    if let Some(rid) = rid_exact {
+        for &idx in matched_indices {
+            let line = node_lines[idx];
+            if line.contains(&format!("resource-id=\"{}\"", rid))
+                || line.contains(&format!("resource-id=\".*/{}\"", rid))
+            {
+                tracing::debug!("[XML] 择优: 命中 resource-id 精确匹配 => 选择 #{}", idx);
+                return idx;
+            }
+        }
+    }
+
+    // 2) 文本精确匹配
+    if let Some(txt) = text_exact {
+        for &idx in matched_indices {
+            let line = node_lines[idx];
+            if line.contains(&format!("text=\"{}\"", txt)) {
+                tracing::debug!("[XML] 择优: 命中文本精确匹配 => 选择 #{}", idx);
+                return idx;
+            }
+        }
+    }
+    if let Some(desc) = desc_exact {
+        for &idx in matched_indices {
+            let line = node_lines[idx];
+            if line.contains(&format!("content-desc=\"{}\"", desc)) {
+                tracing::debug!("[XML] 择优: 命中 content-desc 精确匹配 => 选择 #{}", idx);
+                return idx;
+            }
+        }
+    }
+
+    // 3) class/package 精确匹配
+    if let Some(cls) = class_exact {
+        for &idx in matched_indices {
+            let line = node_lines[idx];
+            if line.contains(&format!("class=\"{}\"", cls)) {
+                tracing::debug!("[XML] 择优: 命中 class 精确匹配 => 选择 #{}", idx);
+                return idx;
+            }
+        }
+    }
+    if let Some(pkg) = package_exact {
+        for &idx in matched_indices {
+            let line = node_lines[idx];
+            if line.contains(&format!("package=\"{}\"", pkg)) {
+                tracing::debug!("[XML] 择优: 命中 package 精确匹配 => 选择 #{}", idx);
+                return idx;
+            }
+        }
+    }
+
+    // 4) 默认返回第一个
+    tracing::debug!("[XML] 择优: 未触发优先规则，默认选择第一个 => #{}", matched_indices[0]);
+    matched_indices[0]
+}
+
+/// 子元素字段匹配辅助函数
+/// 检查指定节点的第一个子节点的文本是否匹配给定值
+#[allow(dead_code)]
+fn check_first_child_text(all_lines: &[&str], node_idx: usize, expected_value: &str) -> bool {
+    // 找到当前节点在全部行中的位置
+    let node_lines: Vec<&str> = all_lines.iter().filter(|l| l.contains("<node")).cloned().collect();
+    if node_idx >= node_lines.len() {
+        return false;
+    }
+    
+    let current_line = node_lines[node_idx];
+    
+    // 获取当前节点的缩进级别（简单方法：计算前导空格）
+    let current_indent = current_line.chars().take_while(|&c| c == ' ').count();
+    
+    // 查找当前节点在所有行中的位置
+    if let Some(current_pos) = all_lines.iter().position(|&line| line == current_line) {
+        // 在当前节点之后查找子节点
+        for i in (current_pos + 1)..all_lines.len() {
+            let line = all_lines[i];
+            if line.contains("<node") {
+                let line_indent = line.chars().take_while(|&c| c == ' ').count();
+                if line_indent > current_indent {
+                    // 这是一个子节点，检查其 text 属性
+                    if line.contains(&format!("text=\"{}\"", expected_value)) {
+                        return true;
+                    }
+                } else if line_indent <= current_indent {
+                    // 已经到了同级或更高级节点，停止搜索
+                    break;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// 检查指定节点的第一个子节点的 class 是否匹配给定值
+#[allow(dead_code)]
+fn check_first_child_class(all_lines: &[&str], node_idx: usize, expected_value: &str) -> bool {
+    let node_lines: Vec<&str> = all_lines.iter().filter(|l| l.contains("<node")).cloned().collect();
+    if node_idx >= node_lines.len() {
+        return false;
+    }
+    
+    let current_line = node_lines[node_idx];
+    let current_indent = current_line.chars().take_while(|&c| c == ' ').count();
+    
+    if let Some(current_pos) = all_lines.iter().position(|&line| line == current_line) {
+        for i in (current_pos + 1)..all_lines.len() {
+            let line = all_lines[i];
+            if line.contains("<node") {
+                let line_indent = line.chars().take_while(|&c| c == ' ').count();
+                if line_indent > current_indent {
+                    if line.contains(&format!("class=\"{}\"", expected_value)) {
+                        return true;
+                    }
+                } else if line_indent <= current_indent {
+                    break;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// 检查指定节点的第一个子节点的文本是否包含给定字符串（用于 includes 条件）
+#[allow(dead_code)]
+fn check_first_child_text_contains(all_lines: &[&str], node_idx: usize, search_text: &str) -> bool {
+    let node_lines: Vec<&str> = all_lines.iter().filter(|l| l.contains("<node")).cloned().collect();
+    if node_idx >= node_lines.len() {
+        return false;
+    }
+    
+    let current_line = node_lines[node_idx];
+    let current_indent = current_line.chars().take_while(|&c| c == ' ').count();
+    
+    if let Some(current_pos) = all_lines.iter().position(|&line| line == current_line) {
+        for i in (current_pos + 1)..all_lines.len() {
+            let line = all_lines[i];
+            if line.contains("<node") {
+                let line_indent = line.chars().take_while(|&c| c == ' ').count();
+                if line_indent > current_indent {
+                    // 检查 text 属性是否包含搜索文本
+                    if let Some(text_start) = line.find("text=\"") {
+                        let text_start = text_start + 6;
+                        if let Some(text_end) = line[text_start..].find('"') {
+                            let text_value = &line[text_start..text_start + text_end];
+                            if text_value.contains(search_text) {
+                                return true;
+                            }
+                        }
+                    }
+                } else if line_indent <= current_indent {
+                    break;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// 检查指定节点的第一个子节点的 class 是否包含给定字符串（用于 includes 条件）
+#[allow(dead_code)]
+fn check_first_child_class_contains(all_lines: &[&str], node_idx: usize, search_text: &str) -> bool {
+    let node_lines: Vec<&str> = all_lines.iter().filter(|l| l.contains("<node")).cloned().collect();
+    if node_idx >= node_lines.len() {
+        return false;
+    }
+    
+    let current_line = node_lines[node_idx];
+    let current_indent = current_line.chars().take_while(|&c| c == ' ').count();
+    
+    if let Some(current_pos) = all_lines.iter().position(|&line| line == current_line) {
+        for i in (current_pos + 1)..all_lines.len() {
+            let line = all_lines[i];
+            if line.contains("<node") {
+                let line_indent = line.chars().take_while(|&c| c == ' ').count();
+                if line_indent > current_indent {
+                    // 检查 class 属性是否包含搜索文本
+                    if let Some(class_start) = line.find("class=\"") {
+                        let class_start = class_start + 7;
+                        if let Some(class_end) = line[class_start..].find('"') {
+                            let class_value = &line[class_start..class_start + class_end];
+                            if class_value.contains(search_text) {
+                                return true;
+                            }
+                        }
+                    }
+                } else if line_indent <= current_indent {
+                    break;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
 #[command]
 #[allow(non_snake_case)]
 pub async fn match_element_by_criteria(
     deviceId: String,
     criteria: MatchCriteriaDTO,
 ) -> Result<MatchResultDTO, String> {
+    tracing::info!("🔎 [XML] 开始按条件匹配: strategy={}, device={}", criteria.strategy, deviceId);
+    tracing::debug!("[XML] 条件: fields={:?}, values={:?}, match_mode={:?}, regex_includes={:?}, regex_excludes={:?}",
+        criteria.fields, criteria.values, criteria.match_mode, criteria.regex_includes, criteria.regex_excludes);
     // 读取当前XML
     let xml = XmlJudgmentService::get_ui_xml(&deviceId).await?;
 
-    // 简单行级匹配：按 <node ...> 行过滤
-    let lines: Vec<&str> = xml.lines().filter(|l| l.contains("<node")).collect();
+    // 🆕 初始化增强层级匹配配置
+    let hierarchy_config = HierarchyMatchConfig {
+        enable_parent_context: true,
+        enable_child_context: true,
+        enable_descendant_search: criteria.strategy == "smart_hierarchy", // 仅在智能层级模式下启用深度搜索
+        max_depth: 2,
+        prioritize_semantic_fields: true,
+    };
 
-    if lines.is_empty() {
+    // 增强XML解析：支持子元素字段匹配
+    let all_lines: Vec<&str> = xml.lines().collect();
+    // 优先使用 opening-tag 视图以适配“单行XML”的情况
+    let node_opening_tags: Vec<String> = extract_node_opening_tags(&xml);
+    let node_lines: Vec<&str> = if !node_opening_tags.is_empty() {
+        tracing::debug!("[XML] 采用 opening-tag 视图解析节点: count={}", node_opening_tags.len());
+        node_opening_tags.iter().map(|s| s.as_str()).collect()
+    } else {
+        // 回退为按行视图（历史实现）
+        let v: Vec<&str> = all_lines.iter().filter(|l| l.contains("<node")).cloned().collect();
+        tracing::debug!("[XML] 按行视图解析节点: lines_with_node={}", v.len());
+        v
+    };
+
+    if node_lines.is_empty() {
+        tracing::warn!("[XML] 未解析到任何节点，匹配失败");
         return Ok(MatchResultDTO { ok: false, message: "未解析到任何节点".into(), total: Some(0), matchedIndex: None, preview: None });
     }
 
     // 根据选择字段匹配；对 positionless/relaxed/strict/standard 策略忽略位置字段
     let ignore_bounds = criteria.strategy == "positionless" || criteria.strategy == "relaxed" || criteria.strategy == "strict" || criteria.strategy == "standard";
+    if ignore_bounds {
+        tracing::debug!("[XML] 策略 {} 将忽略 bounds 参与过滤/比较", criteria.strategy);
+    }
 
-    let mut matched_idx: Option<usize> = None;
-    for (idx, line) in lines.iter().enumerate() {
+    // 收集全部命中项，后续做择优选择，避免首个命中导致误选
+    let mut matched_indices: Vec<usize> = Vec::new();
+    for (idx, line) in node_lines.iter().enumerate() {
         let mut ok = true;
 
         // 1) 正向匹配：values
         for f in &criteria.fields {
             if *f == "bounds" && ignore_bounds { continue; }
             if let Some(v) = criteria.values.get(f) {
-                if f == "text" || f == "content-desc" {
-                    if !line.contains(&format!("{}=\"{}\"", f, v)) && !line.contains(v) {
+                // 先检查是否指定 regex 模式
+                let mode = criteria.match_mode.get(f).map(|s| s.as_str()).unwrap_or("contains");
+                // 🆕 使用增强层级匹配器处理层级字段
+                if f.starts_with("parent_") || f.starts_with("child_") || f.starts_with("descendant_") || f.starts_with("ancestor_") {
+                    let hit = match mode {
+                        "regex" => HierarchyMatcher::check_hierarchy_field_regex(&all_lines, idx, f, v, &hierarchy_config),
+                        "equals" => HierarchyMatcher::check_hierarchy_field_equals(&all_lines, idx, f, v, &hierarchy_config),
+                        _ => HierarchyMatcher::check_hierarchy_field_contains(&all_lines, idx, f, v, &hierarchy_config),
+                    };
+                    if !hit {
+                        ok = false; 
+                        break;
+                    }
+                }
+                // 处理传统子元素字段（向后兼容）
+                else if f == "first_child_text" {
+                    let hit = match mode {
+                        "regex" => HierarchyMatcher::check_hierarchy_field_regex(&all_lines, idx, "child_text", v, &hierarchy_config),
+                        "equals" => HierarchyMatcher::check_hierarchy_field_equals(&all_lines, idx, "child_text", v, &hierarchy_config),
+                        _ => HierarchyMatcher::check_hierarchy_field_contains(&all_lines, idx, "child_text", v, &hierarchy_config),
+                    };
+                    if !hit {
                         ok = false; break;
                     }
+                } else if f == "first_child_class" {
+                    let hit = match mode {
+                        "regex" => HierarchyMatcher::check_hierarchy_field_regex(&all_lines, idx, "child_class", v, &hierarchy_config),
+                        "equals" => HierarchyMatcher::check_hierarchy_field_equals(&all_lines, idx, "child_class", v, &hierarchy_config),
+                        _ => HierarchyMatcher::check_hierarchy_field_contains(&all_lines, idx, "child_class", v, &hierarchy_config),
+                    };
+                    if !hit {
+                        ok = false; break;
+                    }
+                } else if f == "text" || f == "content-desc" {
+                    let hit = match mode {
+                        "regex" => {
+                            if let Ok(re) = regex::Regex::new(v) {
+                                // 🔧 修复：提取字段值进行正则匹配，而不是匹配整行
+                                if let Some(field_value) = extract_field_value(line, f) {
+                                    re.is_match(&field_value)
+                                } else {
+                                    false
+                                }
+                            } else { 
+                                false 
+                            }
+                        }
+                        "equals" => line.contains(&format!("{}=\"{}\"", f, v)),
+                        _ => line.contains(&format!("{}=\"{}\"", f, v)) || line.contains(v),
+                    };
+                    if !hit { ok = false; break; }
                 } else if f == "resource-id" {
                     if !line.contains(&format!("resource-id=\"{}\"", v)) && !line.contains(&format!("resource-id=\".*/{}\"", v)) {
                         if !line.contains(v) { ok = false; break; }
@@ -395,10 +732,52 @@ pub async fn match_element_by_criteria(
             if *f == "bounds" && ignore_bounds { continue; }
             for w in words {
                 if w.trim().is_empty() { continue; }
-                // 文本类字段使用包含判断；其他字段也使用包含以增强兼容（预先已在前端限制/引导）
-                if !line.contains(&format!("{}=\"{}\"", f, w)) && !line.contains(w) {
-                    ok = false; break;
+                
+                // 🆕 使用增强层级匹配器处理包含条件
+                if f.starts_with("parent_") || f.starts_with("child_") || f.starts_with("descendant_") || f.starts_with("ancestor_") {
+                    if !HierarchyMatcher::check_hierarchy_field(&all_lines, idx, f, w, &hierarchy_config) {
+                        ok = false;
+                        break;
+                    }
                 }
+                // 处理传统子元素字段包含条件
+                else if f == "first_child_text" {
+                    if !HierarchyMatcher::check_hierarchy_field(&all_lines, idx, "child_text", w, &hierarchy_config) {
+                        ok = false; break;
+                    }
+                } else if f == "first_child_class" {
+                    if !HierarchyMatcher::check_hierarchy_field(&all_lines, idx, "child_class", w, &hierarchy_config) {
+                        ok = false; break;
+                    }
+                } else {
+                    // 文本类字段使用包含判断；其他字段也使用包含以增强兼容
+                    if !line.contains(&format!("{}=\"{}\"", f, w)) && !line.contains(w) {
+                        ok = false; break;
+                    }
+                }
+            }
+            if !ok { break; }
+        }
+        if !ok { continue; }
+
+        // 2.1) 额外包含：regex_includes（若有，则每个正则都必须命中；仅对被选字段生效）
+        for (f, patterns) in &criteria.regex_includes {
+            if !criteria.fields.contains(f) { continue; }
+            if *f == "bounds" && ignore_bounds { continue; }
+            for pat in patterns {
+                if pat.trim().is_empty() { continue; }
+                let hit = if f.starts_with("parent_") || f.starts_with("child_") || f.starts_with("descendant_") || f.starts_with("ancestor_") {
+                    HierarchyMatcher::check_hierarchy_field_regex(&all_lines, idx, f, pat, &hierarchy_config)
+                } else {
+                    // 🔧 修复：提取字段值进行正则匹配，而不是匹配整行
+                    if let Some(field_value) = extract_field_value(line, f) {
+                        regex::Regex::new(pat).ok().map(|re| re.is_match(&field_value)).unwrap_or(false)
+                    } else {
+                        // 对于没有明确字段值的情况，回退到原来的行匹配
+                        regex::Regex::new(pat).ok().map(|re| re.is_match(line)).unwrap_or(false)
+                    }
+                };
+                if !hit { ok = false; break; }
             }
             if !ok { break; }
         }
@@ -410,21 +789,85 @@ pub async fn match_element_by_criteria(
             if *f == "bounds" && ignore_bounds { continue; }
             for w in words {
                 if w.trim().is_empty() { continue; }
-                if line.contains(&format!("{}=\"{}\"", f, w)) || line.contains(w) {
-                    ok = false; break;
+                
+                // 🆕 使用增强层级匹配器处理排除条件
+                if f.starts_with("parent_") || f.starts_with("child_") || f.starts_with("descendant_") || f.starts_with("ancestor_") {
+                    if HierarchyMatcher::check_hierarchy_field(&all_lines, idx, f, w, &hierarchy_config) {
+                        ok = false; // 找到排除词，匹配失败
+                        break;
+                    }
+                }
+                // 处理传统子元素字段排除条件
+                else if f == "first_child_text" {
+                    if HierarchyMatcher::check_hierarchy_field(&all_lines, idx, "child_text", w, &hierarchy_config) {
+                        ok = false; break;
+                    }
+                } else if f == "first_child_class" {
+                    if HierarchyMatcher::check_hierarchy_field(&all_lines, idx, "child_class", w, &hierarchy_config) {
+                        ok = false; break;
+                    }
+                } else {
+                    if line.contains(&format!("{}=\"{}\"", f, w)) || line.contains(w) {
+                        ok = false; break;
+                    }
                 }
             }
             if !ok { break; }
         }
         if !ok { continue; }
 
-        matched_idx = Some(idx);
-        break;
+        // 3.1) 不包含：regex_excludes（任一正则命中即不匹配；仅对被选字段生效）
+        for (f, patterns) in &criteria.regex_excludes {
+            if !criteria.fields.contains(f) { continue; }
+            if *f == "bounds" && ignore_bounds { continue; }
+            for pat in patterns {
+                if pat.trim().is_empty() { continue; }
+                let hit = if f.starts_with("parent_") || f.starts_with("child_") || f.starts_with("descendant_") || f.starts_with("ancestor_") {
+                    HierarchyMatcher::check_hierarchy_field_regex(&all_lines, idx, f, pat, &hierarchy_config)
+                } else {
+                    // 🔧 修复：提取字段值进行正则匹配，而不是匹配整行
+                    if let Some(field_value) = extract_field_value(line, f) {
+                        regex::Regex::new(pat).ok().map(|re| re.is_match(&field_value)).unwrap_or(false)
+                    } else {
+                        // 对于没有明确字段值的情况，回退到原来的行匹配
+                        regex::Regex::new(pat).ok().map(|re| re.is_match(line)).unwrap_or(false)
+                    }
+                };
+                if hit { ok = false; break; }
+            }
+            if !ok { break; }
+        }
+        if !ok { continue; }
+
+        // 记录命中索引；不立即返回，留待择优
+        // 限制打印关键信息，避免日志爆炸
+        if let Some(b) = extract_field_value(line, "bounds") {
+            tracing::debug!("[XML] ✅ 候选命中 #{} bounds={}", idx, b);
+        } else {
+            tracing::debug!("[XML] ✅ 候选命中 #{} (无bounds)", idx);
+        }
+        matched_indices.push(idx);
+    }
+    // 没有任何命中
+    if matched_indices.is_empty() {
+        tracing::info!("[XML] 未找到匹配元素");
+        return Ok(MatchResultDTO { ok: false, message: "未找到匹配元素".into(), total: Some(0), matchedIndex: None, preview: None });
     }
 
-    if let Some(i) = matched_idx {
+    // 从多个命中中选择最佳匹配
+    let best_index = if matched_indices.len() == 1 {
+        tracing::info!("[XML] 仅有 1 个候选，直接选用 #{}", matched_indices[0]);
+        matched_indices[0]
+    } else {
+        tracing::info!("[XML] 共命中 {} 个候选，进入择优逻辑", matched_indices.len());
+        let chosen = select_best_match(&matched_indices, &node_lines, &criteria);
+        tracing::info!("[XML] 择优选择结果: #{}", chosen);
+        chosen
+    };
+
+    {
         // 构造预览
-        let line = lines[i];
+        let line = node_lines[best_index];
         let get_attr = |name: &str| -> Option<String> {
             let pat = format!("{}=\"", name);
             if let Some(s) = line.find(&pat) {
@@ -441,8 +884,14 @@ pub async fn match_element_by_criteria(
             bounds: get_attr("bounds"),
             xpath: None,
         };
-        Ok(MatchResultDTO { ok: true, message: "已匹配".into(), total: Some(lines.len()), matchedIndex: Some(i), preview: Some(preview) })
-    } else {
-        Ok(MatchResultDTO { ok: false, message: "未找到匹配元素".into(), total: Some(lines.len()), matchedIndex: None, preview: None })
+        tracing::info!(
+            "[XML] 最终选择: index=#{} text={:?} resource-id={:?} class={:?} bounds={:?}",
+            best_index,
+            preview.text,
+            preview.resource_id,
+            preview.class_name,
+            preview.bounds
+        );
+        Ok(MatchResultDTO { ok: true, message: "已匹配".into(), total: Some(matched_indices.len()), matchedIndex: Some(best_index), preview: Some(preview) })
     }
 }

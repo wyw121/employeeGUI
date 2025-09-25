@@ -49,6 +49,28 @@ impl StandardStrategyProcessor {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
+
+    /// 过滤 match_mode，仅保留语义字段对应的模式
+    fn filter_semantic_modes(&self, modes: &std::collections::HashMap<String, String>)
+        -> std::collections::HashMap<String, String> {
+        modes
+            .iter()
+            .filter(|(key, _)| !self.is_position_field(key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    /// 过滤 regex map，仅保留语义字段
+    fn filter_semantic_regex_map(
+        &self,
+        map: &std::collections::HashMap<String, Vec<String>>,
+    ) -> std::collections::HashMap<String, Vec<String>> {
+        map
+            .iter()
+            .filter(|(key, _)| !self.is_position_field(key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
 }
 
 #[async_trait]
@@ -87,15 +109,29 @@ impl StrategyProcessor for StandardStrategyProcessor {
             values: semantic_values,
             includes: context.includes.clone(),
             excludes: context.excludes.clone(),
+            match_mode: self.filter_semantic_modes(&context.match_mode),
+            regex_includes: self.filter_semantic_regex_map(&context.regex_includes),
+            regex_excludes: self.filter_semantic_regex_map(&context.regex_excludes),
         };
+
+        // 记录一次完整 criteria 快照（避免过多日志，仅在 debug 级别下一行摘要）
+        logs.push(format!("🧾 标准策略条件摘要: fields={:?}, values={:?}, match_mode={:?}",
+            criteria.fields, criteria.values, criteria.match_mode));
+        if !criteria.regex_includes.is_empty() {
+            logs.push(format!("🧩 正则包含: {:?}", criteria.regex_includes));
+        }
+        if !criteria.regex_excludes.is_empty() {
+            logs.push(format!("� 正则排除: {:?}", criteria.regex_excludes));
+        }
         
-        logs.push("🚀 调用后端匹配引擎进行 Standard 匹配".to_string());
+        logs.push("�🚀 调用后端匹配引擎进行 Standard 匹配".to_string());
         info!("🎯 Standard 策略执行匹配 - 设备: {}", context.device_id);
         
         // 执行匹配
         match match_element_by_criteria(context.device_id.clone(), criteria).await {
             Ok(result) if result.ok => {
-                logs.push(format!("✅ Standard 匹配成功: {}", result.message));
+                logs.push(format!("✅ Standard 匹配成功: {} (候选总数: {:?}, 命中索引: {:?})",
+                    result.message, result.total, result.matchedIndex));
                 
                 if let Some(preview) = result.preview {
                     if let Some(bounds_str) = preview.bounds {
@@ -123,7 +159,7 @@ impl StrategyProcessor for StandardStrategyProcessor {
                     }
                 }
                 
-                logs.push("✅ Standard 匹配成功但无坐标信息".to_string());
+                logs.push("✅ Standard 匹配成功但无坐标信息（可能是匹配到但缺少 bounds 字段）".to_string());
                 Ok(StrategyResult::success("Standard 策略匹配成功但无坐标".to_string(), (0, 0)))
             }
             Ok(result) => {
@@ -136,7 +172,7 @@ impl StrategyProcessor for StandardStrategyProcessor {
                 let msg = format!("❌ Standard 匹配引擎调用失败: {}", e);
                 logs.push(msg.clone());
                 warn!("Standard 匹配引擎调用失败: {}", e);
-                Err(ProcessingError::MatchFailed(e.to_string()))
+                Err(ProcessingError::MatchingFailed(e.to_string()))
             }
         }
     }

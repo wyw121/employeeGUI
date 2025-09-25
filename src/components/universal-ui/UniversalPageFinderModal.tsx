@@ -143,7 +143,17 @@ interface UniversalPageFinderModalProps {
   // 🆕 修改参数时预选元素定位器（基于步骤指纹构建）
   preselectLocator?: NodeLocator;
   // 新增：当在“网格检查器/节点详情”里选择了匹配策略并点击“应用到步骤”时回调
-  onApplyCriteria?: (criteria: { strategy: string; fields: string[]; values: Record<string,string>; includes?: Record<string,string[]>; excludes?: Record<string,string[]>; }) => void;
+  onApplyCriteria?: (criteria: { 
+    strategy: string; 
+    fields: string[]; 
+    values: Record<string,string>; 
+    includes?: Record<string,string[]>; 
+    excludes?: Record<string,string[]>;
+    // 🆕 添加正则表达式相关参数
+    matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+    regexIncludes?: Record<string, string[]>;
+    regexExcludes?: Record<string, string[]>;
+  }) => void;
   // 🆕 初始匹配预设（来自步骤参数.matching），用于覆盖“最近缓存”
   initialMatching?: UIMatchCriteria;
 }
@@ -1215,6 +1225,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 // 🆕 传入定位器以在解析后自动选中步骤元素
                 locator={preselectLocator}
                 locatorResolve={(root, locator) => {
+                  console.log('🔍 [UniversalPageFinderModal] locatorResolve 被调用:', { root: !!root, locator });
                   try {
                     if (!root || !locator) return null;
                     // 0) 基于 bounds 的快速预选（如果提供）
@@ -1396,10 +1407,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
 
   // 🆕 统一封装：应用到步骤后自动关闭模态框
   const handleApplyCriteria = (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => {
+    console.log('🎯 [UniversalPageFinderModal] handleApplyCriteria 被调用，criteria:', criteria);
     try {
       onApplyCriteria?.(criteria);
+      console.log('🎯 [UniversalPageFinderModal] onApplyCriteria 调用成功');
+    } catch (error) {
+      console.error('❌ [UniversalPageFinderModal] onApplyCriteria 调用失败:', error);
     } finally {
       // 成功或失败都关闭，以便用户回到步骤卡查看/继续
+      console.log('🎯 [UniversalPageFinderModal] 关闭模态框');
       onClose();
     }
   };

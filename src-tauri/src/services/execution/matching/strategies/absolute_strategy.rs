@@ -65,6 +65,9 @@ impl StrategyProcessor for AbsoluteStrategyProcessor {
                 values: context.values.clone(),
                 includes: context.includes.clone(),
                 excludes: context.excludes.clone(),
+                match_mode: context.match_mode.clone(),
+                regex_includes: context.regex_includes.clone(),
+                regex_excludes: context.regex_excludes.clone(),
             };
             
             match crate::xml_judgment_service::match_element_by_criteria(context.device_id.clone(), criteria).await {

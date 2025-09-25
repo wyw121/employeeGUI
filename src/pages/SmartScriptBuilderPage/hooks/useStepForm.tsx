@@ -95,6 +95,30 @@ export function useStepForm(deps: UseStepFormDeps) {
       const values = await form.validateFields();
       const { step_type, name, description, ...parameters } = values;
 
+      // 合并未注册但通过 setFieldValue 写入的关键字段（AntD 仅校验并返回注册字段）
+      // 这些字段可能在分析器回填时直接 set 到 form：matching / elementBinding / xmlSnapshot / elementLocator
+      try {
+        const extraMatching = form.getFieldValue('matching');
+        if (extraMatching && !(parameters as any).matching) {
+          (parameters as any).matching = extraMatching;
+        }
+        const extraBinding = form.getFieldValue('elementBinding');
+        if (extraBinding && !(parameters as any).elementBinding) {
+          (parameters as any).elementBinding = extraBinding;
+        }
+        const extraSnapshot = form.getFieldValue('xmlSnapshot');
+        if (extraSnapshot && !(parameters as any).xmlSnapshot) {
+          (parameters as any).xmlSnapshot = extraSnapshot;
+        }
+        const extraLocator = form.getFieldValue('elementLocator');
+        if (extraLocator && !(parameters as any).elementLocator) {
+          (parameters as any).elementLocator = extraLocator;
+        }
+      } catch (e) {
+        // 兼容性容错：即便取不到也不阻断保存
+        console.warn('合并表单额外字段失败（可忽略）:', e);
+      }
+
       // 特殊处理：通讯录导入工作流 - 打开选择器
       if (step_type === SmartActionType.CONTACT_IMPORT_WORKFLOW) {
         setShowContactWorkflowSelector(true);

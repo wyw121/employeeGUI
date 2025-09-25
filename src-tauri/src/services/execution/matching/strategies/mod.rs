@@ -93,6 +93,53 @@ pub fn extract_matching_context(params: &HashMap<String, Value>) -> Option<Match
         }
     }
 
+    // 提取 match_mode（兼容驼峰/下划线）
+    let mut match_mode = HashMap::new();
+    if let Some(mode_obj) = matching_val
+        .get("match_mode").and_then(|v| v.as_object())
+        .or_else(|| matching_val.get("matchMode").and_then(|v| v.as_object()))
+    {
+        for (k, v) in mode_obj {
+            if let Some(s) = v.as_str() {
+                match_mode.insert(k.clone(), s.to_string());
+            }
+        }
+    }
+
+    // 提取 regex_includes（兼容驼峰/下划线）
+    let mut regex_includes = HashMap::new();
+    if let Some(ri_obj) = matching_val
+        .get("regex_includes").and_then(|v| v.as_object())
+        .or_else(|| matching_val.get("regexIncludes").and_then(|v| v.as_object()))
+    {
+        for (k, v) in ri_obj {
+            if let Some(arr) = v.as_array() {
+                let patterns: Vec<String> = arr
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect();
+                regex_includes.insert(k.clone(), patterns);
+            }
+        }
+    }
+
+    // 提取 regex_excludes（兼容驼峰/下划线）
+    let mut regex_excludes = HashMap::new();
+    if let Some(re_obj) = matching_val
+        .get("regex_excludes").and_then(|v| v.as_object())
+        .or_else(|| matching_val.get("regexExcludes").and_then(|v| v.as_object()))
+    {
+        for (k, v) in re_obj {
+            if let Some(arr) = v.as_array() {
+                let patterns: Vec<String> = arr
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect();
+                regex_excludes.insert(k.clone(), patterns);
+            }
+        }
+    }
+
     // 提取固化的坐标信息（用于回退）
     let fallback_bounds = params.get("bounds")
         .or_else(|| params.get("boundsRect"))
@@ -104,6 +151,9 @@ pub fn extract_matching_context(params: &HashMap<String, Value>) -> Option<Match
         values,
         includes,
         excludes,
+        match_mode,
+        regex_includes,
+        regex_excludes,
         fallback_bounds,
         device_id: String::new(), // 将在调用时设置
     })

@@ -1,5 +1,6 @@
 import type { XmlSnapshot } from './xmlSnapshot';
 import type { ElementLocator } from './elementLocator';
+import { createXmlSnapshot } from './xmlSnapshot';
 
 export interface SelfContainedStepParameters {
   text?: string;
@@ -30,7 +31,6 @@ export const migrateToSelfContainedParameters = (
   currentDeviceInfo?: Partial<XmlSnapshot['deviceInfo']>,
   currentPageInfo?: Partial<XmlSnapshot['pageInfo']>
 ): SelfContainedStepParameters => {
-  const { createXmlSnapshot } = require('./xmlSnapshot') as typeof import('./xmlSnapshot');
 
   const newParams: SelfContainedStepParameters = { ...oldParams };
   if (oldParams.xmlContent || currentXmlContent) {

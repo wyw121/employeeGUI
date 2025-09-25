@@ -28,7 +28,7 @@ export function useScriptPersistence({
       const scriptData = {
         name: `智能脚本_${now}`,
   description: `包含 ${steps.length} 个步骤的自动化脚本`,
-        version: "1.0.0",
+  version: "2.0.0",
         created_at: now,
         updated_at: now,
         author: defaultAuthor,
@@ -91,7 +91,43 @@ export function useScriptPersistence({
     try {
       const { steps: deserializedSteps, config } =
         ScriptSerializer.deserializeScript(loadedScript);
-      setSteps(deserializedSteps);
+
+      // 一次性迁移：将旧版步骤参数映射为 parameters.matching 标准结构
+      const migratedSteps = (deserializedSteps || []).map((s) => {
+        const p = s.parameters || {};
+        const hasMatching = !!p.matching && Array.isArray(p.matching.fields);
+        if (hasMatching) return s; // 已是新结构
+
+        // 收集可能的旧字段
+        const candidateFields = [
+          'resource-id','text','content-desc','class','package','bounds','index'
+        ].filter((k) => p[k] != null && String(p[k]).trim() !== '');
+
+        if (candidateFields.length === 0) return s; // 无可迁移信息
+
+        const values: Record<string,string> = {};
+        for (const f of candidateFields) values[f] = String(p[f]);
+
+        // 推断策略：存在有效位置约束→absolute，否则 standard
+        const hasBounds = candidateFields.includes('bounds') && String(p.bounds || '').trim() !== '';
+        const hasIndex = candidateFields.includes('index') && String(p.index || '').trim() !== '';
+        const strategy = (hasBounds || hasIndex) ? 'absolute' : 'standard';
+
+        const next = {
+          ...s,
+          parameters: {
+            ...p,
+            matching: {
+              strategy,
+              fields: candidateFields,
+              values,
+            },
+          }
+        };
+        return next;
+      });
+
+      setSteps(migratedSteps);
       setExecutorConfig((prev) => ({ ...prev, ...config }));
       message.success(`已成功加载脚本: ${loadedScript.name || "未命名脚本"}`);
     } catch (error) {

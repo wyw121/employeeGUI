@@ -1,6 +1,6 @@
 import React from 'react';
 import { Result, Button, Space } from 'antd';
-import { UseAuthWizard } from '../useAuthWizard';
+import { UseAuthWizard } from '../useAuthWizard.ts';
 import { AuthStep } from '../types';
 
 export const Done: React.FC<{ ctx: UseAuthWizard }> = ({ ctx }) => {

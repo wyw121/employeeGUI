@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Button, Form, Input, Space } from 'antd';
 import { WifiOutlined, LinkOutlined } from '@ant-design/icons';
-import { UseAuthWizard } from '../useAuthWizard';
+import { UseAuthWizard } from '../useAuthWizard.ts';
 import { isValidHostPort, isValidIp, isValidPort, isValidPairCode } from '../utils/validators';
 
 export const Wireless: React.FC<{ ctx: UseAuthWizard }> = ({ ctx }) => {

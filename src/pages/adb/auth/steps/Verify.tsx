@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Alert, Button, Space, Tag, Typography, Divider } from 'antd';
-import { UseAuthWizard } from '../useAuthWizard';
+import { UseAuthWizard } from '../useAuthWizard.ts';
 import { useAdb } from '../../../../application/hooks/useAdb';
 import { DeviceStatus } from '../../../../domain/adb';
 import DeviceSummary from '../components/DeviceSummary';

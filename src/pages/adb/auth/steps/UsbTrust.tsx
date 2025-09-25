@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Button, Space, Switch, Typography } from 'antd';
 import { UsbOutlined, ReloadOutlined } from '@ant-design/icons';
-import { UseAuthWizard } from '../useAuthWizard';
+import { UseAuthWizard } from '../useAuthWizard.ts';
 
 const { Text } = Typography;
 

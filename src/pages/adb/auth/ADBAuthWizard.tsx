@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Steps, Space, Typography } from 'antd';
 import { SafetyOutlined } from '@ant-design/icons';
 import { AuthStep } from './types';
-import { useAuthWizard } from './useAuthWizard';
+import { useAuthWizard } from './useAuthWizard.ts';
 import Prerequisites from './steps/Prerequisites';
 import UsbTrust from './steps/UsbTrust';
 import Wireless from './steps/Wireless';

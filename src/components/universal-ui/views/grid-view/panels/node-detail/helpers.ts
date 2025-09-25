@@ -350,3 +350,41 @@ export function suggestFieldsForNode(node: UiNode | null, strategy: MatchStrateg
   
   return { recommended, optional, reasons };
 }
+
+/**
+ * 根据已有 values 构建“相似查找”的标准化匹配条件
+ * - 默认使用 standard 策略（跨设备稳定），可通过 env 控制使用 relaxed
+ * - 仅保留预设字段中的非空值
+ * - includes 推断：
+ *   - text 存在：includes.text = [text]（简单且稳妥）
+ *   - resource-id 存在：提取末尾段作为包含词（如 com.app:id/follow_btn → follow_btn）
+ */
+export function buildFindSimilarCriteria(values: Record<string, string>): MatchCriteria {
+  const useRelaxed = (typeof (import.meta as any) !== 'undefined') && (import.meta as any).env?.VITE_FIND_SIMILAR_RELAXED === '1';
+  const strategy: MatchStrategy = (useRelaxed ? 'relaxed' : 'standard') as MatchStrategy;
+  const preset = PRESET_FIELDS[strategy] || [];
+  const v: Record<string,string> = {};
+  for (const f of preset) {
+    const val = values?.[f];
+    if (val != null && String(val).trim() !== '') v[f] = String(val).trim();
+  }
+
+  // includes 推断
+  const includes: Record<string,string[]> = {};
+  if (v['text']) {
+    includes['text'] = [v['text']];
+  }
+  if (v['resource-id']) {
+    const rid = v['resource-id'];
+    const last = rid.split(/[\/:]/).filter(Boolean).pop();
+    if (last) includes['resource-id'] = [last];
+  }
+
+  return {
+    strategy,
+    fields: Object.keys(v),
+    values: v,
+    includes,
+    excludes: {},
+  };
+}

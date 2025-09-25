@@ -16,8 +16,13 @@ import {
 import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from './step-card';
 // 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
 import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
+import { SelectedFieldsPreview } from './universal-ui/views/grid-view/panels/node-detail';
+import { SelectedFieldsChips } from './universal-ui/views/grid-view/panels/node-detail';
+import { SelectedFieldsEditor } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
-import { PRESET_FIELDS, normalizeExcludes } from './universal-ui/views/grid-view/panels/node-detail';
+import { PRESET_FIELDS, normalizeExcludes, normalizeIncludes, inferStrategyFromFields, buildFindSimilarCriteria } from './universal-ui/views/grid-view/panels/node-detail';
+import { PositiveConditionsEditor } from './universal-ui/views/grid-view/panels/node-detail';
+import { NegativeConditionsEditor } from './universal-ui/views/grid-view/panels/node-detail';
 
 const { Text } = Typography;
 
@@ -90,6 +95,8 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
   onUpdateStepParameters,
   onBatchMatch
 }) => {
+  // 灰度开关：禁用旧批量匹配按钮，重定向到策略路径（默认禁用旧逻辑）
+  const ENABLE_BATCH_MATCH = (import.meta as any).env?.VITE_ENABLE_BATCH_MATCH === '1';
   // 循环次数设置状态
   const [isLoopConfigVisible, setIsLoopConfigVisible] = useState(false);
   const [loopCount, setLoopCount] = useState(step.parameters?.loop_count || 3);
@@ -489,6 +496,7 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                           const baseParams = step.parameters || {};
                           // 规范化 excludes：仅保留仍被选中的字段的排除词
                           const normalizedExcludes = normalizeExcludes(prevMatching.excludes || {}, nextFields);
+                          const normalizedIncludes = normalizeIncludes(prevMatching.includes || {}, nextFields);
                           const nextParams = {
                             ...baseParams,
                             matching: {
@@ -497,12 +505,109 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                               fields: nextFields,
                               values,
                               excludes: normalizedExcludes,
+                              includes: normalizedIncludes,
                             },
                           };
                           onUpdateStepParameters?.(step.id, nextParams);
                           message.success(`已切换匹配策略为：${next}`);
                         }}
                       />
+                      {/* 字段 chips 快速增删（变更后自动标记为 custom） */}
+                      <div className="mt-2">
+                        <SelectedFieldsChips
+                          selected={step.parameters?.matching?.fields || []}
+                          onToggle={(field) => {
+                            const prev = step.parameters?.matching || {};
+                            const set = new Set<string>(prev.fields || []);
+                            if (set.has(field)) set.delete(field); else set.add(field);
+                            const nextFields = Array.from(set);
+                            const normalizedExcludes = normalizeExcludes(prev.excludes || {}, nextFields);
+                            const normalizedIncludes = normalizeIncludes(prev.includes || {}, nextFields);
+                            const nextStrategy = inferStrategyFromFields(nextFields);
+                            onUpdateStepParameters?.(step.id, {
+                              ...step.parameters,
+                              matching: {
+                                ...prev,
+                                strategy: nextStrategy,
+                                fields: nextFields,
+                                // 移除已不在 fields 中的值
+                                values: Object.fromEntries(Object.entries(prev.values || {}).filter(([k,v]) => nextFields.includes(k) && String(v).trim() !== '')),
+                                excludes: normalizedExcludes,
+                                includes: normalizedIncludes,
+                              },
+                            });
+                          }}
+                        />
+                      </div>
+                      {/* 可编辑值面板（空值视为“忽略该维度”） */}
+                      <SelectedFieldsEditor
+                        node={{ id: 'preview', attrs: step.parameters?.matching?.values || {} } as any}
+                        fields={step.parameters?.matching?.fields || []}
+                        values={step.parameters?.matching?.values || {}}
+                        onChange={(nextValues) => {
+                          const prev = step.parameters?.matching || {};
+                          onUpdateStepParameters?.(step.id, {
+                            ...step.parameters,
+                            matching: {
+                              ...prev,
+                              // 值编辑不改变策略；若当前为非 custom 但字段与预设不一致，可由 inferStrategyFromFields 决定，但此处保持当前策略
+                              values: nextValues,
+                            },
+                          });
+                        }}
+                      />
+                      {/* 字段与值只读预览（与网格检查器一致） */}
+                      {Array.isArray(step.parameters?.matching?.fields) && step.parameters?.matching?.fields.length > 0 && (
+                        <div className="mt-2 border-t pt-2">
+                          <SelectedFieldsPreview
+                            // 预览层只读：无具体 node，可按需扩展传入当前快照节点
+                            node={{ id: 'preview', attrs: step.parameters?.matching?.values || {} } as any}
+                            fields={step.parameters?.matching?.fields}
+                          />
+                        </div>
+                      )}
+
+                      {/* 包含/不包含 条件编辑区（对每个选中字段） */}
+                      {Array.isArray(step.parameters?.matching?.fields) && step.parameters?.matching?.fields.length > 0 && (
+                        <div className="mt-3 border-t pt-2 space-y-2">
+                          {step.parameters.matching.fields.map((f: string) => {
+                            const prev = step.parameters?.matching || {};
+                            const fieldIncludes: string[] = (prev.includes && prev.includes[f]) || [];
+                            const fieldExcludes: string[] = (prev.excludes && prev.excludes[f]) || [];
+                            return (
+                              <div key={f} className="space-y-1">
+                                <div className="text-xs text-neutral-600">条件：{f}</div>
+                                <div className="flex flex-wrap items-start gap-3">
+                                  <PositiveConditionsEditor
+                                    field={f}
+                                    includes={fieldIncludes}
+                                    onChange={(nextList) => {
+                                      const nextIncludes = { ...(prev.includes || {}), [f]: nextList } as Record<string,string[]>;
+                                      const normalizedIncludes = normalizeIncludes(nextIncludes, prev.fields || []);
+                                      onUpdateStepParameters?.(step.id, {
+                                        ...step.parameters,
+                                        matching: { ...prev, includes: normalizedIncludes },
+                                      });
+                                    }}
+                                  />
+                                  <NegativeConditionsEditor
+                                    field={f}
+                                    excludes={fieldExcludes}
+                                    onChange={(nextList) => {
+                                      const nextExcludes = { ...(prev.excludes || {}), [f]: nextList } as Record<string,string[]>;
+                                      const normalizedExcludes = normalizeExcludes(nextExcludes, prev.fields || []);
+                                      onUpdateStepParameters?.(step.id, {
+                                        ...step.parameters,
+                                        matching: { ...prev, excludes: normalizedExcludes },
+                                      });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   }
                 >
@@ -528,6 +633,29 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 ghost={step.step_type === 'smart_find_element'}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!ENABLE_BATCH_MATCH) {
+                    // 使用 helper 基于当前值智能构建“找相似”匹配条件（standard 或 relaxed）
+                    const prevMatching = step.parameters?.matching || {};
+                    const values: Record<string, any> = (prevMatching.values || {}) as Record<string, any>;
+                    const criteria = buildFindSimilarCriteria(values as Record<string, string>);
+                    const preset = PRESET_FIELDS[criteria.strategy as any] || [];
+                    const candidateFields = (criteria.fields && criteria.fields.length > 0) ? criteria.fields : preset;
+                    const normalizedExcludes = normalizeExcludes(prevMatching.excludes || criteria.excludes || {}, candidateFields);
+                    const normalizedIncludes = normalizeIncludes({ ...(prevMatching.includes || {}), ...(criteria.includes || {}) }, candidateFields);
+                    const nextParams = {
+                      ...(step.parameters || {}),
+                      matching: {
+                        ...prevMatching,
+                        ...criteria,
+                        fields: candidateFields,
+                        excludes: normalizedExcludes,
+                        includes: normalizedIncludes,
+                      }
+                    };
+                    onUpdateStepParameters?.(step.id, nextParams);
+                    message.info(`批量匹配已切换为“策略”路径：${criteria.strategy === 'relaxed' ? '宽松匹配' : '标准匹配'}`);
+                    return;
+                  }
                   onBatchMatch(step.id);
                 }}
                 style={{ 

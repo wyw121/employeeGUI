@@ -17,6 +17,8 @@ import {
 } from '../store/adbStore';
 import { AdbConfig } from '../../domain/adb';
 import { ServiceFactory } from '../services/ServiceFactory';
+// 统一策略/字段规范化工具（与网格检查器一致）
+import { toBackendStrategy, normalizeFieldsAndValues, normalizeIncludes, normalizeExcludes } from '../../components/universal-ui/views/grid-view/panels/node-detail';
 
 /**
  * 统一的ADB Hook
@@ -297,9 +299,24 @@ export const useAdb = () => {
   // ===== UI 元素匹配 =====
   const matchElementByCriteria = useCallback(async (
     deviceId: string,
-    criteria: { strategy: 'absolute' | 'strict' | 'relaxed' | 'positionless' | 'standard'; fields: string[]; values: Record<string, string>; includes?: Record<string, string[]>; excludes?: Record<string, string[]>; }
+    criteria: { strategy: any; fields: string[]; values: Record<string, string>; includes?: Record<string, string[]>; excludes?: Record<string, string[]>; }
   ) => {
-    return await applicationService.matchElementByCriteria(deviceId, criteria);
+    // 发送前统一处理：
+    // - custom → 映射为 absolute 或 standard
+    // - 移除空值字段
+    // - includes/excludes 仅保留已选字段且去重
+    const backendStrategy = toBackendStrategy(criteria.strategy, criteria.fields || [], criteria.values || {});
+    const { fields, values } = normalizeFieldsAndValues(criteria.fields || [], criteria.values || {});
+    const includes = normalizeIncludes(criteria.includes || {}, fields);
+    const excludes = normalizeExcludes(criteria.excludes || {}, fields);
+
+    return await applicationService.matchElementByCriteria(deviceId, {
+      strategy: backendStrategy,
+      fields,
+      values,
+      includes,
+      excludes,
+    } as any);
   }, []);
 
   // ===== 生命周期 =====

@@ -47,6 +47,6 @@ export {
 
 export * from './types';
 // 公共工具（供其他面板/列表模块化复用）
-export { PRESET_FIELDS, inferStrategyFromFields, isSameFieldsAsPreset, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, hasPositionConstraint, normalizeExcludes, normalizeIncludes } from './helpers';
+export { PRESET_FIELDS, inferStrategyFromFields, isSameFieldsAsPreset, toBackendStrategy, buildDefaultValues, normalizeFieldsAndValues, hasPositionConstraint, normalizeExcludes, normalizeIncludes, buildFindSimilarCriteria } from './helpers';
 // 标题/描述辅助
 export { buildShortDescriptionFromCriteria } from './titleHelpers';

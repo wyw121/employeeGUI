@@ -270,6 +270,28 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
     }
   };
 
+  const onCreateSystemAction = (tpl: any) => {
+    const baseOrder = steps.length;
+    const now = Date.now();
+    const ensureStep = (s: any, idx: number): ExtendedSmartScriptStep => {
+      const step = { ...(s || {}) } as ExtendedSmartScriptStep;
+      if (!step.id) step.id = `step_${now + idx}_syskey`;
+      if (!step.step_type) step.step_type = 'keyevent' as any;
+      if (!step.parameters) step.parameters = { code: 4 } as any; // 默认返回
+      step.order = baseOrder + idx + 1;
+      return step;
+    };
+    const list = Array.isArray(tpl) ? tpl.map(ensureStep) : [ensureStep(tpl, 0)];
+    setSteps((prev) => [...prev, ...list]);
+    if (list.length === 1) {
+      const code = (list[0].parameters as any)?.code;
+      const label = code === 3 ? '首页' : code === 4 ? '返回' : code === 187 ? '最近任务' : `code=${code}`;
+      message.success(`已添加系统按键步骤：${label}`);
+    } else {
+      message.success(`已添加系统按键步骤 ${list.length} 个`);
+    }
+  };
+
   return (
     <div style={{ height: '100%' }}>
       <EnhancedDraggableStepsContainer
@@ -292,6 +314,7 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
         onBatchMatch={handleBatchMatch}
         onCreateScreenInteraction={onCreateScreenInteraction}
         onCreateTapAction={onCreateTapAction}
+        onCreateSystemAction={onCreateSystemAction}
       />
     </div>
   );

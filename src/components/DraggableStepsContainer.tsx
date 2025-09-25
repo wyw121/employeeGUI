@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
 import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { ScreenActionDropdownButton, TapActionDropdownButton } from './step-card';
+import { SystemKeyDropdownButton } from './step-card/system-actions/SystemKeyDropdownButton';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
@@ -46,6 +47,8 @@ export interface DraggableStepsContainerProps {
   onCreateScreenInteraction?: (template: any | any[]) => void;
   /** 创建轻点/长按等点击行为步骤回调 */
   onCreateTapAction?: (template: any | any[]) => void;
+  /** 创建系统按键步骤回调 */
+  onCreateSystemAction?: (template: any) => void;
 }
 
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
@@ -66,6 +69,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onBatchMatch,
   onCreateScreenInteraction,
   onCreateTapAction,
+  onCreateSystemAction,
 }) => {
   // 配置传感器
   const sensors = useSensors(
@@ -148,6 +152,11 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
               </div>
             )}
+            {onCreateSystemAction && (
+              <div style={{ flex: '0 0 24%' }}>
+                <SystemKeyDropdownButton onSelectTemplate={(tpl) => onCreateSystemAction(tpl)} />
+              </div>
+            )}
             {/* 预留空间给后续的其他按钮 */}
           </div>
         )}
@@ -226,6 +235,11 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 {onCreateTapAction && (
                   <div style={{ flex: '0 0 24%' }}>
                     <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
+                  </div>
+                )}
+                {onCreateSystemAction && (
+                  <div style={{ flex: '0 0 24%' }}>
+                    <SystemKeyDropdownButton onSelectTemplate={(tpl) => onCreateSystemAction(tpl)} />
                   </div>
                 )}
                 {/* 预留空间给后续的其他按钮 */}

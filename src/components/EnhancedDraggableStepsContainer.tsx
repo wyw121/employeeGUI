@@ -47,6 +47,8 @@ export interface EnhancedDraggableStepsContainerProps {
   onCreateScreenInteraction?: (template: any | any[]) => void;
   /** 创建轻点/长按等点击行为步骤回调 */
   onCreateTapAction?: (template: any | any[]) => void;
+  /** 创建系统按键步骤回调 */
+  onCreateSystemAction?: (template: any) => void;
 }
 
 const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerProps> = ({
@@ -70,6 +72,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   onBatchMatch,
   onCreateScreenInteraction,
   onCreateTapAction,
+  onCreateSystemAction,
 }) => {
   
   // 暂时使用基础的DraggableStepsContainer，后续可以扩展
@@ -215,6 +218,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         onBatchMatch={onBatchMatch}
         onCreateScreenInteraction={onCreateScreenInteraction}
         onCreateTapAction={onCreateTapAction}
+        onCreateSystemAction={onCreateSystemAction}
       />
     </Card>
   );

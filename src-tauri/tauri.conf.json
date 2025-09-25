@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "identifier": "com.example.employeegui",
   "build": {
-  "beforeDevCommand": "npm run dev:1421",
+    "beforeDevCommand": "npm run dev:1421",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1421"
@@ -12,13 +12,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon.png"
-    ],
-    "resources": [
-      "../platform-tools/*"
-    ],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "resources": ["../platform-tools"],
     "windows": {
       "wix": {
         "language": "zh-CN"

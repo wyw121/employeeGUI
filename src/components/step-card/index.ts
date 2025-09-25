@@ -12,3 +12,4 @@ export type { ScrollParams } from './scroll/ScrollParamsEditor';
 // screen-actions submodule (barrel)
 export * from './screen-actions';
 export * from './tap-actions';
+export * from './system-actions/index';

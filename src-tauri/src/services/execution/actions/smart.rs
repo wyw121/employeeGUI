@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 
 use crate::services::adb_session_manager::get_device_session;
 use crate::services::execution::matching::{find_all_follow_buttons, find_element_in_ui};
+use crate::services::execution::matching::enhanced_unified::run_enhanced_unified_match;
 use crate::services::execution::model::SmartScriptStep;
 use crate::services::execution::run_unified_match;
 use crate::services::smart_script_executor::SmartScriptExecutor;
@@ -63,7 +64,14 @@ pub async fn handle_unified_match(
     step: &SmartScriptStep,
     logs: &mut Vec<String>,
 ) -> Result<String> {
-    run_unified_match(executor, executor.device_id(), step, logs).await
+    logs.push("🎯 [增强版] 进入 handle_unified_match".to_string());
+    logs.push(format!("🎯 [增强版] 步骤参数: {:?}", step.parameters));
+    
+    // 优先使用增强版本的匹配引擎
+    let result = run_enhanced_unified_match(executor, executor.device_id(), step, logs).await;
+    
+    logs.push(format!("🎯 [增强版] run_enhanced_unified_match 返回结果: {:?}", result));
+    result
 }
 
 pub async fn handle_batch_match(

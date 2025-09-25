@@ -44,7 +44,10 @@ use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
 use services::smart_element_finder_service::{smart_element_finder, click_detected_element};
-use services::smart_script_executor::*;
+use services::commands::{
+    execute_single_step_test,
+    execute_smart_automation_script,
+};
 use services::smart_vcf_opener::*;
 use services::ui_reader_service::*;
 use services::universal_ui_service::*;

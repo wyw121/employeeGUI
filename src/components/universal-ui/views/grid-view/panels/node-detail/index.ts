@@ -53,5 +53,6 @@ export { buildShortDescriptionFromCriteria } from './titleHelpers';
 
 // 元素预设子模块导出
 export { ElementPresetsRow } from './element-presets/ElementPresetsRow';
-export { ELEMENT_PRESETS } from './element-presets/registry';
+export { ELEMENT_PRESETS } from './element-presets/registry.ts';
 export type { ElementPreset, ElementPresetId } from './element-presets/types';
+export { StrategyConfigurator } from './StrategyConfigurator';

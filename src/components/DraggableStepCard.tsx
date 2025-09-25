@@ -15,15 +15,10 @@ import {
 } from '@ant-design/icons';
 import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from './step-card';
 // 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
-import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
-import { ElementPresetsRow } from './universal-ui/views/grid-view/panels/node-detail';
-import { SelectedFieldsPreview } from './universal-ui/views/grid-view/panels/node-detail';
-import { SelectedFieldsChips } from './universal-ui/views/grid-view/panels/node-detail';
-import { SelectedFieldsEditor } from './universal-ui/views/grid-view/panels/node-detail';
+import { StrategyConfigurator } from './universal-ui/views/grid-view/panels/node-detail';
 import type { MatchStrategy } from './universal-ui/views/grid-view/panels/node-detail';
 import { PRESET_FIELDS, normalizeExcludes, normalizeIncludes, inferStrategyFromFields, buildFindSimilarCriteria } from './universal-ui/views/grid-view/panels/node-detail';
-import { PositiveConditionsEditor } from './universal-ui/views/grid-view/panels/node-detail';
-import { NegativeConditionsEditor } from './universal-ui/views/grid-view/panels/node-detail';
+// 移除独立的正/负条件编辑器，统一由表格承载
 
 const { Text } = Typography;
 
@@ -63,25 +58,20 @@ export interface DraggableStepCardProps {
   devices: any[];
   /** 是否正在拖拽 */
   isDragging?: boolean;
-  /** 编辑步骤回调 */
-  onEdit: (step: SmartScriptStep) => void;
-  /** 删除步骤回调 */
-  onDelete: (stepId: string) => void;
-  /** 切换启用状态回调 */
-  onToggle: (stepId: string) => void;
-  /** 修改参数按钮回调 - 打开页面分析器进行参数配置 */
-  onOpenPageAnalyzer?: () => void;
-  /** 修改步骤参数回调 */
-  onEditStepParams?: (step: SmartScriptStep) => void;
-  /** 测试步骤组件 */
-  StepTestButton?: React.ComponentType<any>;
-  /** 更新步骤参数回调 */
-  onUpdateStepParameters?: (stepId: string, parameters: any) => void;
-  /** 批量匹配操作回调 */
-  onBatchMatch?: (stepId: string) => void;
 }
 
-export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
+export const DraggableStepCard: React.FC<
+  DraggableStepCardProps & {
+    onEdit: (step: SmartScriptStep) => void;
+    onDelete: (id: string) => void;
+    onToggle: (id: string) => void;
+    onBatchMatch?: (id: string) => void;
+    onUpdateStepParameters?: (id: string, nextParams: any) => void;
+    StepTestButton?: React.ComponentType<{ step: SmartScriptStep; deviceId?: string; disabled?: boolean }>;
+    ENABLE_BATCH_MATCH?: boolean;
+    onEditStepParams?: (step: SmartScriptStep) => void;
+  }
+> = ({
   step,
   index,
   currentDeviceId,
@@ -90,128 +80,45 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
   onEdit,
   onDelete,
   onToggle,
-  onOpenPageAnalyzer,
-  onEditStepParams,
-  StepTestButton,
+  onBatchMatch,
   onUpdateStepParameters,
-  onBatchMatch
+  StepTestButton,
+  ENABLE_BATCH_MATCH = false,
+  onEditStepParams,
 }) => {
-  // 灰度开关：禁用旧批量匹配按钮，重定向到策略路径（默认禁用旧逻辑）
-  const ENABLE_BATCH_MATCH = (import.meta as any).env?.VITE_ENABLE_BATCH_MATCH === '1';
-  // 循环次数设置状态
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: sortableIsDragging } = useSortable({
+    id: step.id,
+  });
   const [isLoopConfigVisible, setIsLoopConfigVisible] = useState(false);
-  const [loopCount, setLoopCount] = useState(step.parameters?.loop_count || 3);
-  const [isInfiniteLoop, setIsInfiniteLoop] = useState(step.parameters?.is_infinite_loop || false);
+  const [loopCount, setLoopCount] = useState<number>(step.parameters?.loop_count || 3);
+  const [isInfiniteLoop, setIsInfiniteLoop] = useState<boolean>(step.parameters?.is_infinite_loop || false);
 
-  // 文件选择处理函数 - 针对VCF生成步骤
-  const handleSelectSourceFile = async () => {
-    try {
-      const selected = await open({
-        filters: [{
-          name: 'Text Files',
-          extensions: ['txt']
-        }],
-        multiple: false
-      });
-
-      if (selected && typeof selected === 'string') {
-        // 更新步骤参数中的源文件路径
-        if (onUpdateStepParameters) {
-          onUpdateStepParameters(step.id, {
-            ...step.parameters,
-            source_file_path: selected
-          });
-          message.success(`已选择源文件: ${selected.split(/[/\\]/).pop()}`);
-        }
-      }
-    } catch (error) {
-      console.error('文件选择失败:', error);
-      message.error('文件选择失败');
-    }
-  };
-
-  // 选择设备
-  const handleSelectDevice = () => {
-    const onlineDevices = devices.filter(d => d.status === 'online');
-    
-    if (onlineDevices.length === 0) {
-      message.warning('没有在线设备可选择');
-      return;
-    }
-
-    // 如果只有一个在线设备，直接选择
-    if (onlineDevices.length === 1) {
-      const selectedDevice = onlineDevices[0];
-      if (onUpdateStepParameters) {
-        onUpdateStepParameters(step.id, {
-          ...step.parameters,
-          selected_device_id: selectedDevice.id
-        });
-        message.success(`已选择设备: ${selectedDevice.name || selectedDevice.id}`);
-      }
-      return;
-    }
-
-    // 多个设备时显示选择器
-    Modal.confirm({
-      title: '选择目标设备',
-      content: (
-        <div>
-          <p>请选择要导入联系人的设备:</p>
-          {onlineDevices.map(device => (
-            <div 
-              key={device.id}
-              style={{
-                padding: '8px 12px',
-                margin: '4px 0',
-                border: '1px solid #d9d9d9',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                if (onUpdateStepParameters) {
-                  onUpdateStepParameters(step.id, {
-                    ...step.parameters,
-                    selected_device_id: device.id
-                  });
-                  message.success(`已选择设备: ${device.name || device.id}`);
-                }
-                Modal.destroyAll();
-              }}
-            >
-              📱 {device.name || device.id}
-              {device.id === currentDeviceId && <span style={{color: '#52c41a', marginLeft: '8px'}}>当前设备</span>}
-            </div>
-          ))}
-        </div>
-      ),
-      okButtonProps: { style: { display: 'none' } },
-      cancelText: '取消'
-    });
-  };
-
-  // 保存循环次数
   const handleSaveLoopConfig = () => {
-    if (onUpdateStepParameters) {
-      onUpdateStepParameters(step.id, {
-        ...step.parameters,
-        loop_count: isInfiniteLoop ? -1 : loopCount, // -1 表示无限循环
-        is_infinite_loop: isInfiniteLoop
-      });
-    }
+    onUpdateStepParameters?.(step.id, {
+      ...(step.parameters || {}),
+      loop_count: loopCount,
+      is_infinite_loop: isInfiniteLoop,
+    });
     setIsLoopConfigVisible(false);
   };
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: sortableIsDragging,
-  } = useSortable({
-    id: step.id,
-  });
+  const handleSelectSourceFile = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: 'Text', extensions: ['txt'] }],
+    });
+    if (selected) {
+      const file = Array.isArray(selected) ? selected[0] : selected;
+      onUpdateStepParameters?.(step.id, {
+        ...(step.parameters || {}),
+        source_file_path: file,
+      });
+    }
+  };
+
+  const handleSelectDevice = () => {
+    message.info('请在设备列表中选择目标设备');
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -477,173 +384,24 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                 <Popover
                   trigger={["click"]}
                   placement="bottomRight"
-                  overlayInnerStyle={{ padding: 8 }}
+                  overlayInnerStyle={{ padding: 8, maxHeight: 440, overflowY: 'auto', width: 420 }}
                   content={
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <MatchingStrategySelector
-                        value={(step.parameters?.matching?.strategy as MatchStrategy) || 'standard'}
-                        onChange={(next: MatchStrategy) => {
-                          const prevMatching = step.parameters?.matching || {};
-                          const preset = PRESET_FIELDS[next as any] || [];
-                          const values: Record<string, any> = prevMatching.values || {};
-                          let nextFields = Array.isArray(preset)
-                            ? preset.filter((f) => values[f] != null)
-                            : [];
-                          if (!nextFields || nextFields.length === 0) {
-                            // 若选择 custom，保留原有字段；否则使用预设
-                            nextFields = next === 'custom' ? (prevMatching.fields || []) : preset;
-                          }
-
-                          const baseParams = step.parameters || {};
-                          // 规范化 excludes：仅保留仍被选中的字段的排除词
-                          const normalizedExcludes = normalizeExcludes(prevMatching.excludes || {}, nextFields);
-                          const normalizedIncludes = normalizeIncludes(prevMatching.includes || {}, nextFields);
+                    <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 360 }}>
+                      <StrategyConfigurator
+                        node={null}
+                        criteria={(step.parameters?.matching as any) || { strategy: 'standard', fields: [], values: {}, includes: {}, excludes: {} }}
+                        onChange={(next) => {
+                          const prev = step.parameters?.matching || {};
                           const nextParams = {
-                            ...baseParams,
+                            ...(step.parameters || {}),
                             matching: {
-                              ...prevMatching,
-                              strategy: next,
-                              fields: nextFields,
-                              values,
-                              excludes: normalizedExcludes,
-                              includes: normalizedIncludes,
+                              ...prev,
+                              ...next,
                             },
                           };
                           onUpdateStepParameters?.(step.id, nextParams);
-                          message.success(`已切换匹配策略为：${next}`);
                         }}
                       />
-                      {/* 元素级预设（关注按钮/通用社交等） */}
-                      <div className="mt-2">
-                        <ElementPresetsRow
-                          node={null}
-                          onPreviewFields={(fs) => {
-                            const prev = step.parameters?.matching || {};
-                            const nextParams = {
-                              ...(step.parameters || {}),
-                              matching: {
-                                ...prev,
-                                fields: fs,
-                                // 预设切换即视为自定义
-                                strategy: 'custom' as MatchStrategy,
-                              },
-                            };
-                            onUpdateStepParameters?.(step.id, nextParams);
-                          }}
-                          onApply={(criteria) => {
-                            const prev = step.parameters?.matching || {};
-                            const nextParams = {
-                              ...(step.parameters || {}),
-                              matching: {
-                                ...prev,
-                                strategy: criteria.strategy as MatchStrategy,
-                                fields: criteria.fields,
-                                values: criteria.values,
-                                excludes: criteria.excludes,
-                                includes: criteria.includes,
-                              },
-                            };
-                            onUpdateStepParameters?.(step.id, nextParams);
-                            message.success('已应用元素预设');
-                          }}
-                        />
-                      </div>
-                      {/* 字段 chips 快速增删（变更后自动标记为 custom） */}
-                      <div className="mt-2">
-                        <SelectedFieldsChips
-                          selected={step.parameters?.matching?.fields || []}
-                          onToggle={(field) => {
-                            const prev = step.parameters?.matching || {};
-                            const set = new Set<string>(prev.fields || []);
-                            if (set.has(field)) set.delete(field); else set.add(field);
-                            const nextFields = Array.from(set);
-                            const normalizedExcludes = normalizeExcludes(prev.excludes || {}, nextFields);
-                            const normalizedIncludes = normalizeIncludes(prev.includes || {}, nextFields);
-                            const nextStrategy = inferStrategyFromFields(nextFields);
-                            onUpdateStepParameters?.(step.id, {
-                              ...step.parameters,
-                              matching: {
-                                ...prev,
-                                strategy: nextStrategy,
-                                fields: nextFields,
-                                // 移除已不在 fields 中的值
-                                values: Object.fromEntries(Object.entries(prev.values || {}).filter(([k,v]) => nextFields.includes(k) && String(v).trim() !== '')),
-                                excludes: normalizedExcludes,
-                                includes: normalizedIncludes,
-                              },
-                            });
-                          }}
-                        />
-                      </div>
-                      {/* 可编辑值面板（空值视为“忽略该维度”） */}
-                      <SelectedFieldsEditor
-                        node={{ id: 'preview', attrs: step.parameters?.matching?.values || {} } as any}
-                        fields={step.parameters?.matching?.fields || []}
-                        values={step.parameters?.matching?.values || {}}
-                        onChange={(nextValues) => {
-                          const prev = step.parameters?.matching || {};
-                          onUpdateStepParameters?.(step.id, {
-                            ...step.parameters,
-                            matching: {
-                              ...prev,
-                              // 值编辑不改变策略；若当前为非 custom 但字段与预设不一致，可由 inferStrategyFromFields 决定，但此处保持当前策略
-                              values: nextValues,
-                            },
-                          });
-                        }}
-                      />
-                      {/* 字段与值只读预览（与网格检查器一致） */}
-                      {Array.isArray(step.parameters?.matching?.fields) && step.parameters?.matching?.fields.length > 0 && (
-                        <div className="mt-2 border-t pt-2">
-                          <SelectedFieldsPreview
-                            // 预览层只读：无具体 node，可按需扩展传入当前快照节点
-                            node={{ id: 'preview', attrs: step.parameters?.matching?.values || {} } as any}
-                            fields={step.parameters?.matching?.fields}
-                          />
-                        </div>
-                      )}
-
-                      {/* 包含/不包含 条件编辑区（对每个选中字段） */}
-                      {Array.isArray(step.parameters?.matching?.fields) && step.parameters?.matching?.fields.length > 0 && (
-                        <div className="mt-3 border-t pt-2 space-y-2">
-                          {step.parameters.matching.fields.map((f: string) => {
-                            const prev = step.parameters?.matching || {};
-                            const fieldIncludes: string[] = (prev.includes && prev.includes[f]) || [];
-                            const fieldExcludes: string[] = (prev.excludes && prev.excludes[f]) || [];
-                            return (
-                              <div key={f} className="space-y-1">
-                                <div className="text-xs text-neutral-600">条件：{f}</div>
-                                <div className="flex flex-wrap items-start gap-3">
-                                  <PositiveConditionsEditor
-                                    field={f}
-                                    includes={fieldIncludes}
-                                    onChange={(nextList) => {
-                                      const nextIncludes = { ...(prev.includes || {}), [f]: nextList } as Record<string,string[]>;
-                                      const normalizedIncludes = normalizeIncludes(nextIncludes, prev.fields || []);
-                                      onUpdateStepParameters?.(step.id, {
-                                        ...step.parameters,
-                                        matching: { ...prev, includes: normalizedIncludes },
-                                      });
-                                    }}
-                                  />
-                                  <NegativeConditionsEditor
-                                    field={f}
-                                    excludes={fieldExcludes}
-                                    onChange={(nextList) => {
-                                      const nextExcludes = { ...(prev.excludes || {}), [f]: nextList } as Record<string,string[]>;
-                                      const normalizedExcludes = normalizeExcludes(nextExcludes, prev.fields || []);
-                                      onUpdateStepParameters?.(step.id, {
-                                        ...step.parameters,
-                                        matching: { ...prev, excludes: normalizedExcludes },
-                                      });
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   }
                 >
@@ -874,3 +632,5 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
     </div>
   );
 };
+
+export default DraggableStepCard;

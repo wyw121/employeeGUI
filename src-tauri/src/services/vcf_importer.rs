@@ -46,57 +46,7 @@ pub struct ContactVerification {
     pub method: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct XiaohongshuFollowOptions {
-    pub max_pages: Option<usize>,
-    pub follow_interval: Option<u64>,
-    pub skip_existing: Option<bool>,
-    pub take_screenshots: Option<bool>,
-    pub return_to_home: Option<bool>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct XiaohongshuFollowResult {
-    pub success: bool,
-    pub total_followed: usize,
-    pub pages_processed: usize,
-    pub duration: u64,
-    pub details: Vec<FollowDetail>,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FollowDetail {
-    pub user_position: (i32, i32),
-    pub follow_success: bool,
-    pub button_text_before: Option<String>,
-    pub button_text_after: Option<String>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ImportAndFollowResult {
-    pub import_result: VcfImportResult,
-    pub follow_result: XiaohongshuFollowResult,
-    pub total_duration: u64,
-    pub success: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AppStatusResult {
-    pub app_installed: bool,
-    pub app_running: bool,
-    pub app_version: Option<String>,
-    pub package_name: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NavigationResult {
-    pub success: bool,
-    pub current_page: String,
-    pub message: String,
-    pub attempts: usize,
-}
+// 已移除所有与小红书自动关注相关的结构体定义
 
 pub struct VcfImporter {
     device_id: String,

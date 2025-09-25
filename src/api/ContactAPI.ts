@@ -2,18 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   AdbOperation,
   AdbOperationType,
-  AppStatusResult,
   Contact,
   ContactDocument,
   ContactStatistics,
   ContactTask,
-  EnhancedImportAndFollowResult,
-  ImportAndFollowResult,
-  NavigationResult,
   VcfImportResult,
   VcfVerifyResult,
-  XiaohongshuFollowOptions,
-  XiaohongshuFollowResult,
 } from "../types";
 
 /**
@@ -177,25 +171,7 @@ export class ContactAPI {
     await invoke("delete_file", { path });
   }
 
-  /**
-   * 完整的VCF导入+小红书自动关注流程（增强版 - 前端兼容入口）
-   * 说明：为兼容历史引用（ContactAPI.importAndFollowXiaohongshuEnhanced），
-   * 这里提供一个同名静态方法代理到后端命令。
-   */
-  static async importAndFollowXiaohongshuEnhanced(
-    deviceId: string,
-    contactsFilePath: string,
-    options?: XiaohongshuFollowOptions
-  ): Promise<EnhancedImportAndFollowResult> {
-    return await invoke<EnhancedImportAndFollowResult>(
-      "import_and_follow_xiaohongshu_enhanced",
-      {
-        deviceId,
-        contactsFilePath,
-        options,
-      }
-    );
-  }
+  // 已移除小红书相关增强流程方法
 }
 
 /**
@@ -418,76 +394,7 @@ export class AdbAPI {
     });
   }
 
-  /**
-   * 小红书自动关注通讯录好友
-   */
-  static async xiaohongshuAutoFollow(
-    deviceId: string,
-    options?: XiaohongshuFollowOptions
-  ): Promise<XiaohongshuFollowResult> {
-    return await invoke<XiaohongshuFollowResult>("xiaohongshu_auto_follow", {
-      deviceId,
-      options,
-    });
-  }
-
-  /**
-   * 完整的VCF导入+小红书自动关注流程
-   */
-  static async importAndFollowXiaohongshu(
-    deviceId: string,
-    contactsFilePath: string,
-    options?: XiaohongshuFollowOptions
-  ): Promise<ImportAndFollowResult> {
-    return await invoke<ImportAndFollowResult>(
-      "import_and_follow_xiaohongshu",
-      {
-        deviceId,
-        contactsFilePath,
-        options,
-      }
-    );
-  }
-
-  /**
-   * 完整的VCF导入+小红书自动关注流程（增强版 - 包含详细步骤信息和完整状态检查）
-   */
-  static async importAndFollowXiaohongshuEnhanced(
-    deviceId: string,
-    contactsFilePath: string,
-    options?: XiaohongshuFollowOptions
-  ): Promise<EnhancedImportAndFollowResult> {
-    return await invoke<EnhancedImportAndFollowResult>(
-      "import_and_follow_xiaohongshu_enhanced",
-      {
-        deviceId,
-        contactsFilePath,
-        options,
-      }
-    );
-  }
-
-  /**
-   * 检查小红书应用状态
-   */
-  static async checkXiaohongshuAppStatus(
-    deviceId: string
-  ): Promise<AppStatusResult> {
-    return await invoke<AppStatusResult>("check_xiaohongshu_app_status", {
-      deviceId,
-    });
-  }
-
-  /**
-   * 导航到小红书通讯录页面
-   */
-  static async navigateToXiaohongshuContacts(
-    deviceId: string
-  ): Promise<NavigationResult> {
-    return await invoke<NavigationResult>("navigate_to_xiaohongshu_contacts", {
-      deviceId,
-    });
-  }
+  // 已移除所有小红书相关命令调用方法
 
   /**
    * 使用权限测试中的可靠导入方法（直接调用基础VCF导入）

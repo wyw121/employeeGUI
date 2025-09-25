@@ -1,17 +1,13 @@
-import { AlertCircle, FileDown, Heart, Smartphone, Zap } from 'lucide-react';
+import { AlertCircle, FileDown, Smartphone } from 'lucide-react';
 import React, { useState } from 'react';
-import { ImportAndFollow, VcfImporter, XiaohongshuAutoFollow } from '../components/contact';
+import { VcfImporter } from '../components/contact';
 import { useAdb } from '../application/hooks/useAdb';
-import { ImportAndFollowResult, VcfImportResult, XiaohongshuFollowResult } from '../types';
+import { VcfImportResult } from '../types';
 
 export const ContactAutomationPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'vcf-import' | 'auto-follow' | 'complete-flow'>('complete-flow');
+  const [activeTab, setActiveTab] = useState<'vcf-import'>('vcf-import');
   const [selectedDevice, setSelectedDevice] = useState<string>('');
-  const [results, setResults] = useState<{
-    vcfImport?: VcfImportResult;
-    autoFollow?: XiaohongshuFollowResult;
-    completeFlow?: ImportAndFollowResult;
-  }>({});
+  const [results, setResults] = useState<{ vcfImport?: VcfImportResult; }>({});
 
   const { devices, isLoading: devicesLoading, lastError: devicesError, refreshDevices } = useAdb();
 
@@ -23,28 +19,12 @@ export const ContactAutomationPage: React.FC = () => {
   // Sindre风格的功能配置
   const tabOptions = [
     {
-      id: 'complete-flow' as const,
-      name: 'Complete Flow',
-      description: 'Import & Auto-follow',
-      icon: Zap,
-      gradient: 'var(--gradient-brand)',
-      emoji: '⚡'
-    },
-    {
       id: 'vcf-import' as const,
       name: 'VCF Import',
       description: 'Import contacts only',
       icon: FileDown,
       gradient: 'var(--gradient-cyan)',
       emoji: '📁'
-    },
-    {
-      id: 'auto-follow' as const,
-      name: 'Auto Follow',
-      description: 'Xiaohongshu batch follow',
-      icon: Heart,
-      gradient: 'var(--gradient-pink)',
-      emoji: '💖'
     }
   ];
 
@@ -241,23 +221,11 @@ export const ContactAutomationPage: React.FC = () => {
               </div>
             ) : (
               <div className="h-full">
-                {activeTab === 'complete-flow' && (
-                  <ImportAndFollow
-                    selectedDevice={selectedDevice}
-                    onComplete={(result) => setResults(prev => ({ ...prev, completeFlow: result }))}
-                  />
-                )}
                 {activeTab === 'vcf-import' && (
                   <VcfImporter
                     selectedDevice={selectedDevice}
                     contacts={[]}
                     onImportComplete={(result) => setResults(prev => ({ ...prev, vcfImport: result }))}
-                  />
-                )}
-                {activeTab === 'auto-follow' && (
-                  <XiaohongshuAutoFollow
-                    selectedDevice={selectedDevice}
-                    onWorkflowComplete={(result) => setResults(prev => ({ ...prev, autoFollow: result }))}
                   />
                 )}
               </div>
@@ -267,7 +235,7 @@ export const ContactAutomationPage: React.FC = () => {
       </div>
 
       {/* Sindre风格结果展示区域（如果有结果） */}
-      {Object.keys(results).length > 0 && (
+      {results.vcfImport && (
         <div className="p-6 border-t" style={{ borderColor: 'var(--border-primary)' }}>
           <div className="glass-card p-6 rounded-2xl">
             <div className="flex items-center space-x-3 mb-4">
@@ -275,28 +243,10 @@ export const ContactAutomationPage: React.FC = () => {
                    style={{ background: 'var(--gradient-green)' }}>
                 📊
               </div>
-              <h3 className="font-semibold gradient-text">Automation Results</h3>
+              <h3 className="font-semibold gradient-text">Import Result</h3>
             </div>
             
             <div className="grid gap-4 md:grid-cols-3">
-              {results.completeFlow && (
-                <div className="p-4 rounded-xl" 
-                     style={{ background: 'var(--bg-secondary)' }}>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Zap className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Complete Flow
-                    </span>
-                  </div>
-                  <p className="text-sm mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    Contacts: {results.completeFlow.importResult.importedContacts}
-                  </p>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    Followed: {results.completeFlow.followResult.totalFollowed}
-                  </p>
-                </div>
-              )}
-              
               {results.vcfImport && (
                 <div className="p-4 rounded-xl" 
                      style={{ background: 'var(--bg-secondary)' }}>
@@ -308,21 +258,6 @@ export const ContactAutomationPage: React.FC = () => {
                   </div>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                     {results.vcfImport.importedContacts} contacts imported
-                  </p>
-                </div>
-              )}
-              
-              {results.autoFollow && (
-                <div className="p-4 rounded-xl" 
-                     style={{ background: 'var(--bg-secondary)' }}>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Heart className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Auto Follow
-                    </span>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {results.autoFollow.totalFollowed} users followed
                   </p>
                 </div>
               )}

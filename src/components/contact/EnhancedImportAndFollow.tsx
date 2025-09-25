@@ -19,13 +19,37 @@ import {
   PlayCircleOutlined,
 } from '@ant-design/icons';
 import { ContactAPI } from '../../api/ContactAPI';
-import type {
-  EnhancedImportAndFollowResult,
-  XiaohongshuFollowOptions,
-} from '../../types';
+import { XiaohongshuService, type XiaohongshuFollowOptions, type XiaohongshuFollowResult, type AppStatusResult, type NavigationResult } from '../../services/xiaohongshuService';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
+
+// 本地定义增强流程的组合结果类型，避免依赖全局已移除类型
+interface EnhancedImportAndFollowResult {
+  success: boolean;
+  totalDuration: number; // 秒
+  importResult: {
+    success: boolean;
+    importedContacts: number;
+    totalContacts: number;
+    failedContacts: number;
+    duration?: number;
+    message?: string;
+  };
+  appStatus?: {
+    appInstalled: boolean;
+    appRunning: boolean;
+    appVersion?: string;
+  };
+  navigationResult?: {
+    success: boolean;
+    currentPage?: string;
+    attempts?: number;
+    message?: string;
+  };
+  followResult: XiaohongshuFollowResult;
+  stepDetails?: string[];
+}
 
 interface EnhancedImportAndFollowProps {
   deviceId: string;
@@ -66,11 +90,50 @@ const EnhancedImportAndFollow: React.FC<EnhancedImportAndFollowProps> = ({
 
       message.info('开始执行增强版VCF导入+自动关注流程...');
 
-      const executeResult = await ContactAPI.importAndFollowXiaohongshuEnhanced(
-        deviceId,
-        contactsFilePath,
-        options
-      );
+      // 1) 执行导入（调用已存在的 VCF 导入 API）
+      const importResultRaw: any = await ContactAPI.executeVcfImport(contactsFilePath, deviceId);
+
+      const importOk = !!importResultRaw?.success;
+      setCurrentStep(1);
+
+      // 2) 初始化与状态检查（通过 XiaohongshuService）
+      await XiaohongshuService.initializeService(deviceId);
+      const appStatus: AppStatusResult = await XiaohongshuService.checkAppStatus();
+
+      setCurrentStep(2);
+      // 3) 导航到通讯录
+      const navigation: NavigationResult = await XiaohongshuService.navigateToContacts();
+
+      setCurrentStep(3);
+      // 4) 自动关注
+      const followRes = await XiaohongshuService.autoFollowContacts(options);
+
+      const executeResult: EnhancedImportAndFollowResult = {
+        success: importOk && appStatus.app_installed && navigation.success && followRes.success,
+        totalDuration: (importResultRaw?.duration || 0) + (followRes?.duration || 0),
+        importResult: {
+          success: importOk,
+          importedContacts: importResultRaw?.importedContacts ?? importResultRaw?.imported_contacts ?? 0,
+          totalContacts: importResultRaw?.totalContacts ?? importResultRaw?.total_contacts ?? 0,
+          failedContacts: importResultRaw?.failedContacts ?? importResultRaw?.failed_contacts ?? 0,
+          duration: importResultRaw?.duration,
+          message: importResultRaw?.message,
+        },
+        appStatus: {
+          appInstalled: appStatus.app_installed,
+          appRunning: appStatus.app_running,
+          appVersion: appStatus.app_version,
+        },
+        navigationResult: {
+          success: navigation.success,
+          // 兼容服务端可能未提供的字段
+          currentPage: (navigation as any).currentPage,
+          attempts: (navigation as any).attempts,
+          message: navigation.message,
+        },
+        followResult: followRes,
+        stepDetails: [],
+      };
 
       setResult(executeResult);
       setStepDetails(executeResult.stepDetails || []);
@@ -207,7 +270,7 @@ const EnhancedImportAndFollow: React.FC<EnhancedImportAndFollowProps> = ({
                 <Text>总耗时: {result.totalDuration}秒</Text>
                 {result.success && (
                   <Text type="success">
-                    成功关注 {result.followResult.totalFollowed} 个好友
+                    成功关注 {result.followResult.total_followed} 个好友
                   </Text>
                 )}
               </Space>
@@ -283,8 +346,8 @@ const EnhancedImportAndFollow: React.FC<EnhancedImportAndFollowProps> = ({
                     {result.followResult.success ? '是' : '否'}
                   </Tag>
                 </Space>
-                <Text>成功关注: {result.followResult.totalFollowed} 人</Text>
-                <Text>处理页面: {result.followResult.pagesProcessed} 页</Text>
+                <Text>成功关注: {result.followResult.total_followed} 人</Text>
+                <Text>处理页面: {result.followResult.pages_processed} 页</Text>
                 <Text>耗时: {result.followResult.duration} 秒</Text>
                 {result.followResult.message && (
                   <Text type="secondary">{result.followResult.message}</Text>

@@ -222,10 +222,6 @@ impl AppStateDetector {
             return AppLaunchState::Loading;
         }
 
-        // 针对小红书的特定检测
-        if self.package_name == "com.xingin.xhs" {
-            return self.analyze_xiaohongshu_state(ui_content, current_activity).await;
-        }
 
         // 通用就绪状态检测
         if self.is_app_ready(ui_content, current_activity) {
@@ -235,37 +231,6 @@ impl AppStateDetector {
         }
     }
 
-    /// 小红书专用状态分析
-    async fn analyze_xiaohongshu_state(&self, ui_content: &str, _current_activity: &Option<String>) -> AppLaunchState {
-        // 检查是否在主页
-        let has_home_indicators = ui_content.contains("首页") || 
-                                ui_content.contains("发现") || 
-                                ui_content.contains("购物") ||
-                                ui_content.contains("消息") ||
-                                ui_content.contains("我");
-
-        // 检查关键UI元素
-        let has_navigation_bar = ui_content.contains("com.xingin.xhs:id/") && 
-                               (ui_content.contains("TabLayout") || ui_content.contains("BottomNavigationView"));
-
-        // 检查是否有可交互内容
-        let has_interactive_content = ui_content.contains("clickable=\"true\"") && 
-                                    (ui_content.contains("笔记") || ui_content.contains("关注"));
-
-        if has_home_indicators && has_navigation_bar && has_interactive_content {
-            info!("🏠 小红书主页已加载完成");
-            AppLaunchState::Ready
-        } else if has_home_indicators {
-            debug!("🔄 小红书主页正在加载内容");
-            AppLaunchState::Loading
-        } else if ui_content.contains("小红书") && ui_content.len() < 1000 {
-            debug!("🎬 小红书启动画面");
-            AppLaunchState::SplashScreen
-        } else {
-            debug!("🔄 小红书启动中");
-            AppLaunchState::Starting
-        }
-    }
 
     /// 检查进程是否运行
     async fn is_process_running(&self) -> bool {

@@ -1,6 +1,37 @@
 import { AlertTriangle, ArrowRight, CheckCircle, FileDown, Heart, Play, Smartphone, Users } from 'lucide-react';
 import React, { useState } from 'react';
-import { Contact, ImportAndFollowResult, XiaohongshuFollowOptions } from '../../types';
+import type { Contact } from '../../types';
+
+// 本地定义与小红书关注相关的轻量类型以避免依赖已移除的全局类型
+interface XiaohongshuFollowOptions {
+  maxPages?: number;
+  followInterval?: number;
+  skipExisting?: boolean;
+  takeScreenshots?: boolean;
+  returnToHome?: boolean;
+}
+
+interface ImportAndFollowResult {
+  success: boolean;
+  totalDuration: number;
+  importResult: {
+    success: boolean;
+    totalContacts: number;
+    importedContacts: number;
+    failedContacts: number;
+    message?: string;
+    details?: string;
+    duration?: number;
+  };
+  followResult: {
+    success: boolean;
+    totalFollowed: number;
+    pagesProcessed: number;
+    duration: number;
+    details: any[];
+    message: string;
+  };
+}
 
 interface ImportAndFollowProps {
   selectedDevice?: string;

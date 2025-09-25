@@ -7,15 +7,11 @@
   "scripts": {
     "dev": "vite",
     "dev:5321": "cross-env VITE_PORT=5321 vite",
-    "dev:1421": "cross-env VITE_PORT=1421 vite",
-    "dev:guard": "node scripts/dev-guard.mjs 1421",
     "build": "vite build",
     "build-with-ts": "tsc && vite build",
     "preview": "vite preview",
-  "tauri": "tauri",
-  "tauri:dev:5321": "cross-env VITE_PORT=5321 tauri dev",
-  "tauri:dev:1421": "cross-env VITE_PORT=1421 tauri dev",
-  "start:dev": "npm run dev:guard && npm run tauri dev",
+    "tauri": "tauri",
+    "tauri:dev:5321": "cross-env VITE_PORT=5321 tauri dev",
     "type-check": "tsc -p tsconfig.app.json --noEmit",
     "scan:executor": "node scripts/refactor/scan_executor_functions.mjs"
   },

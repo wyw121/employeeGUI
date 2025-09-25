@@ -20,11 +20,10 @@ import {
 } from 'antd';
 import React, { useCallback, useState } from 'react';
 import {
-    ContactImportManager,
-    ContactReader,
-    XiaohongshuAutoFollow
+  ContactImportManager,
+  ContactReader
 } from '../components/contact';
-import { Contact, ContactDocument, Device, VcfImportResult, XiaohongshuFollowResult } from '../types';
+import { Contact, ContactDocument, Device, VcfImportResult } from '../types';
 
 const { Title, Paragraph } = Typography;
 const { Step } = Steps;
@@ -36,9 +35,7 @@ export const ContactImportPage: React.FC = () => {
   const [importResults, setImportResults] = useState<VcfImportResult[]>([]);
   
   // 小红书关注相关状态
-  const [enableAutoFollow, setEnableAutoFollow] = useState(true);
-  const [selectedDeviceForFollow, setSelectedDeviceForFollow] = useState<string | null>(null);
-  const [xiaohongshuResults, setXiaohongshuResults] = useState<XiaohongshuFollowResult | null>(null);
+  // 小红书自动关注功能已移除
 
   // 处理通讯录文档解析完成
   const handleContactsParsed = useCallback((document: any) => {
@@ -80,25 +77,11 @@ export const ContactImportPage: React.FC = () => {
     
     message.success(`导入完成！成功设备: ${successCount}/${results.length}，总导入联系人: ${totalImported}`);
     
-    // 检查是否启用小红书关注联动
-    if (enableAutoFollow && results.some(r => r.success)) {
-      setCurrentStep(2); // 进入小红书关注步骤
-      message.info('3秒后将自动开始小红书关注流程...');
-    } else {
-      setCurrentStep(3); // 跳过小红书关注，直接进入完成步骤
-    }
-  }, [enableAutoFollow]);
+    setCurrentStep(2); // 直接进入完成步骤（去掉关注环节）
+  }, []);
 
   // 处理小红书关注完成
-  const handleXiaohongshuComplete = useCallback((result: XiaohongshuFollowResult) => {
-    setXiaohongshuResults(result);
-    setCurrentStep(3); // 进入最终结果页
-    
-    const totalImported = importResults.reduce((sum, r) => sum + r.importedContacts, 0);
-    message.success(
-      `🎉 全流程完成！导入了 ${totalImported} 个联系人，关注了 ${result.totalFollowed} 个好友`
-    );
-  }, [importResults]);
+  // 小红书完成回调已移除
 
   // 处理错误
   const handleError = useCallback((error: string) => {
@@ -111,8 +94,7 @@ export const ContactImportPage: React.FC = () => {
     setParsedContacts([]);
     setParsedDocument(null);
     setImportResults([]);
-    setXiaohongshuResults(null);
-    setSelectedDeviceForFollow(null);
+    // 重置已移除功能相关状态无需处理
   }, []);
 
   // 渲染导入结果摘要

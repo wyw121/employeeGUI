@@ -155,33 +155,6 @@ impl NavigationBarDetector {
         Ok(false)
     }
 
-    /// 创建小红书导航配置
-    pub fn create_xiaohongshu_navigation_config() -> NavigationBarDetectionConfig {
-        let mut target_buttons = HashMap::new();
-        target_buttons.insert("我".to_string(), NavigationButtonConfig {
-            text: Some("我".to_string()),
-            content_desc: None,
-            resource_id_pattern: None,
-            class_name: None,
-            must_clickable: true,
-            position_in_bar: None,
-        });
-
-        NavigationBarDetectionConfig {
-            package_name: "com.xingin.xhs".to_string(),
-            bar_position: NavigationBarPosition {
-                bar_type: NavigationBarType::Bottom,
-                position_ratio: PositionRatio {
-                    start: 0.85,
-                    end: 1.0,
-                },
-                size_ratio: 0.1,
-                min_size_threshold: 60,
-            },
-            target_buttons,
-            enable_smart_adaptation: true,
-        }
-    }
 
     /// 创建通用底部导航配置
     pub fn create_generic_bottom_navigation_config() -> NavigationBarDetectionConfig {
@@ -632,7 +605,6 @@ pub async fn detect_and_click_navigation_button(
     
     // 根据应用包名创建配置
     let config = match app_package.as_str() {
-        "com.xingin.xhs" => create_xiaohongshu_navigation_config(),
         _ => {
             // 通用配置
             let mut target_buttons = HashMap::new();

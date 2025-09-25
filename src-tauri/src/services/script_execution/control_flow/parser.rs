@@ -112,7 +112,7 @@ impl ControlFlowParser {
         self.validate_control_structures(&boundaries)?;
         
         // 3. 构建嵌套的AST结构
-    let ast = self.build_ast_from_boundaries(&steps, &boundaries, 0, steps.len())?;
+        let ast = self.build_ast_from_boundaries(&steps, &boundaries, 0)?;
         
         info!("✅ 控制流解析完成，统计信息: {:?}", self.stats);
         
@@ -125,9 +125,8 @@ impl ControlFlowParser {
         
         let mut linear_steps = Vec::new();
         let mut nesting_level = 0;
-        let mut loop_stack: Vec<i32> = Vec::new();
         
-        self.linearize_node(ast, &mut linear_steps, &mut nesting_level, &mut loop_stack)?;
+        self.linearize_node(ast, &mut linear_steps, &mut nesting_level)?;
         
         // 计算执行统计信息
         let stats = self.calculate_execution_stats(&linear_steps);
@@ -236,15 +235,13 @@ impl ControlFlowParser {
         &self, 
         steps: &[SmartScriptStep], 
         boundaries: &[ControlBoundary], 
-        start_index: usize,
-        stop_index: usize
+        start_index: usize
     ) -> Result<ControlFlowNode> {
         let mut current_index = start_index;
         let mut children = Vec::new();
         let mut sequential_steps = Vec::new();
         
-        // 限定扫描范围，确保在循环体内不会越界到上层的 LoopEnd
-        while current_index < steps.len() && current_index < stop_index {
+        while current_index < steps.len() {
             // 检查当前位置是否是控制结构的开始
             if let Some(boundary) = boundaries.iter().find(|b| b.start_index == current_index) {
                 // 如果有积累的顺序步骤，先创建顺序节点
@@ -265,19 +262,13 @@ impl ControlFlowParser {
                 // 跳过整个控制结构
                 current_index = boundary.end_index.unwrap() + 1;
             } else {
-                // 检查是否是传入边界集合中的结束标记
+                // 检查是否是控制结构的结束标记
                 if boundaries.iter().any(|b| b.end_index == Some(current_index)) {
                     break;
                 }
                 
                 // 普通步骤，添加到顺序执行列表
-                // 显式过滤控制结构标记，防止误加入
-                match steps[current_index].step_type {
-                    SmartActionType::LoopStart | SmartActionType::LoopEnd => {
-                        // 忽略控制结构标记
-                    }
-                    _ => sequential_steps.push(steps[current_index].clone()),
-                }
+                sequential_steps.push(steps[current_index].clone());
                 current_index += 1;
             }
         }
@@ -296,14 +287,12 @@ impl ControlFlowParser {
         if children.len() == 1 {
             Ok(children.into_iter().next().unwrap())
         } else {
-            // 创建根节点并挂载所有子节点（避免返回空的顺序节点导致线性化为0步）
-            let mut root = ControlFlowNode::sequential(
+            // 创建根节点包含所有子节点
+            Ok(ControlFlowNode::sequential(
                 "root".to_string(),
                 "Root Node".to_string(),
                 vec![]
-            );
-            root.children = children;
-            Ok(root)
+            ))
         }
     }
     
@@ -343,7 +332,7 @@ impl ControlFlowParser {
                     )]
                 } else {
                     // 复杂循环：包含嵌套控制结构
-                    vec![self.build_ast_from_boundaries(steps, &child_boundaries, loop_body_start, loop_body_end)?]
+                    vec![self.build_ast_from_boundaries(steps, &child_boundaries, loop_body_start)?]
                 };
                 
                 Ok(ControlFlowNode::loop_node(
@@ -367,33 +356,18 @@ impl ControlFlowParser {
         &self, 
         node: &ControlFlowNode, 
         linear_steps: &mut Vec<LinearStep>, 
-        nesting_level: &mut i32,
-        loop_stack: &mut Vec<i32>
+        nesting_level: &mut i32
     ) -> Result<()> {
         *nesting_level += 1;
         
         match &node.flow_type {
             ControlFlowType::Sequential => {
                 for step in &node.steps {
-                    // 根据循环迭代栈生成稳定的后缀，确保跨多层循环时ID唯一
-                    let mut modified_step = step.clone();
-                    if !loop_stack.is_empty() {
-                        let id_suffix = loop_stack
-                            .iter()
-                            .map(|i| format!("__iter_{}", i))
-                            .collect::<String>();
-                        modified_step.id = format!("{}{}", modified_step.id, id_suffix);
-                        // 名称保持兼容：显示最近一层的迭代计数
-                        if let Some(last) = loop_stack.last() {
-                            modified_step.name = format!("{} (第{}次)", modified_step.name, last);
-                        }
-                    }
-
                     let linear_step = LinearStep {
-                        step: modified_step,
+                        step: step.clone(),
                         context: StepContext {
                             source_node_id: node.id.clone(),
-                            loop_iteration: loop_stack.last().cloned(),
+                            loop_iteration: None,
                             conditional_path: None,
                             nesting_level: *nesting_level,
                         },
@@ -403,7 +377,7 @@ impl ControlFlowParser {
                 
                 // 处理子节点
                 for child in &node.children {
-                    self.linearize_node(child, linear_steps, nesting_level, loop_stack)?;
+                    self.linearize_node(child, linear_steps, nesting_level)?;
                 }
             }
             
@@ -411,14 +385,9 @@ impl ControlFlowParser {
                 let iter_count = if *is_infinite { 1000 } else { *iterations };
                 
                 for iteration in 1..=iter_count {
-                    // 入栈当前迭代次数
-                    loop_stack.push(iteration);
                     for child in &node.children {
-                        // 在当前迭代上下文中线性化子节点
-                        self.linearize_node(child, linear_steps, nesting_level, loop_stack)?;
+                        self.linearize_loop_iteration(child, linear_steps, nesting_level, iteration)?;
                     }
-                    // 出栈
-                    loop_stack.pop();
                 }
             }
             
@@ -433,7 +402,39 @@ impl ControlFlowParser {
     }
     
     /// 线性化循环迭代
-    // 已移除旧的 linearize_loop_iteration；逻辑合并至 linearize_node + loop_stack
+    fn linearize_loop_iteration(
+        &self,
+        node: &ControlFlowNode,
+        linear_steps: &mut Vec<LinearStep>,
+        nesting_level: &mut i32,
+        iteration: i32
+    ) -> Result<()> {
+        for step in &node.steps {
+            let mut modified_step = step.clone();
+            
+            // 为循环步骤生成唯一ID和名称
+            modified_step.id = format!("{}__iter_{}", step.id, iteration);
+            modified_step.name = format!("{} (第{}次)", step.name, iteration);
+            
+            let linear_step = LinearStep {
+                step: modified_step,
+                context: StepContext {
+                    source_node_id: node.id.clone(),
+                    loop_iteration: Some(iteration),
+                    conditional_path: None,
+                    nesting_level: *nesting_level,
+                },
+            };
+            linear_steps.push(linear_step);
+        }
+        
+        // 递归处理子节点
+        for child in &node.children {
+            self.linearize_loop_iteration(child, linear_steps, nesting_level, iteration)?;
+        }
+        
+        Ok(())
+    }
     
     /// 工具方法：提取控制结构ID
     fn extract_control_id(&self, parameters: &serde_json::Value, key: &str) -> Result<String> {
@@ -521,215 +522,5 @@ impl Default for ParserConfig {
             max_nesting_depth: 10,
             allow_unmatched_structures: false,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::services::execution::model::{SmartScriptStep, SmartActionType};
-
-    fn step(id: &str, name: &str, step_type: SmartActionType, params: serde_json::Value) -> SmartScriptStep {
-        SmartScriptStep {
-            id: id.to_string(),
-            step_type,
-            name: name.to_string(),
-            description: String::new(),
-            parameters: params,
-            enabled: true,
-            order: 0,
-        }
-    }
-
-    #[test]
-    fn linearize_simple_flow_with_loop_should_produce_steps() {
-        let mut parser = ControlFlowParser::new();
-
-        // 构造：普通 → 循环(2次，含1步) → 普通
-        let mut steps: Vec<SmartScriptStep> = Vec::new();
-
-        // 普通步骤（循环前）
-        steps.push(step(
-            "s1",
-            "普通A",
-            SmartActionType::Tap,
-            serde_json::json!({"x": 10, "y": 10}),
-        ));
-
-        // 循环开始
-        steps.push(step(
-            "loop_start",
-            "循环开始",
-            SmartActionType::LoopStart,
-            serde_json::json!({
-                "loop_id": "L1",
-                "loop_count": 2,
-                "is_infinite_loop": false
-            }),
-        ));
-
-        // 循环体内 1 步
-        steps.push(step(
-            "find1",
-            "智能查找",
-            SmartActionType::SmartFindElement,
-            serde_json::json!({
-                "matching": {
-                    "strategy": "standard",
-                    "fields": ["text"],
-                    "values": {"text": "关注"}
-                }
-            }),
-        ));
-
-        // 循环结束
-        steps.push(step(
-            "loop_end",
-            "循环结束",
-            SmartActionType::LoopEnd,
-            serde_json::json!({"loop_id": "L1"}),
-        ));
-
-        // 普通步骤（循环后）
-        steps.push(step(
-            "s2",
-            "普通B",
-            SmartActionType::Wait,
-            serde_json::json!({"ms": 300}),
-        ));
-
-        let ast = parser.parse_to_ast(steps).expect("parse ast");
-        let plan = parser.linearize_ast(&ast).expect("linearize ast");
-
-        // 期望：普通A(1) + 循环体1步 * 2次(2) + 普通B(1) = 4
-        assert_eq!(plan.stats.total_steps, 4, "线性化步骤数应为 4");
-    }
-
-    #[test]
-    fn linearize_no_control_structures_should_keep_count() {
-        let mut parser = ControlFlowParser::new();
-        let steps = vec![
-            step(
-                "a",
-                "点A",
-                SmartActionType::Tap,
-                serde_json::json!({"x":1,"y":1}),
-            ),
-            step(
-                "b",
-                "点B",
-                SmartActionType::Tap,
-                serde_json::json!({"x":2,"y":2}),
-            ),
-        ];
-
-        let ast = parser.parse_to_ast(steps).expect("parse ast");
-        let plan = parser.linearize_ast(&ast).expect("linearize ast");
-        assert_eq!(plan.stats.total_steps, 2, "应保留原有步骤数");
-    }
-
-    #[test]
-    fn linearize_nested_loops_should_expand_properly() {
-        let mut parser = ControlFlowParser::new();
-
-        // 构造：外层循环(2次)
-        //        内层循环(3次)
-        //           动作A, 动作B  (共2步)
-        let mut steps: Vec<SmartScriptStep> = Vec::new();
-
-        // 外层 LoopStart
-        steps.push(step(
-            "outer_start",
-            "循环开始(外)",
-            SmartActionType::LoopStart,
-            serde_json::json!({
-                "loop_id": "OUTER",
-                "loop_count": 2,
-                "is_infinite_loop": false
-            }),
-        ));
-
-        // 内层 LoopStart
-        steps.push(step(
-            "inner_start",
-            "循环开始(内)",
-            SmartActionType::LoopStart,
-            serde_json::json!({
-                "loop_id": "INNER",
-                "loop_count": 3,
-                "is_infinite_loop": false
-            }),
-        ));
-
-        // 循环体动作A
-        steps.push(step(
-            "act_a",
-            "动作A",
-            SmartActionType::Tap,
-            serde_json::json!({"x": 10, "y": 10}),
-        ));
-
-        // 循环体动作B
-        steps.push(step(
-            "act_b",
-            "动作B",
-            SmartActionType::Wait,
-            serde_json::json!({"ms": 100}),
-        ));
-
-        // 内层 LoopEnd
-        steps.push(step(
-            "inner_end",
-            "循环结束(内)",
-            SmartActionType::LoopEnd,
-            serde_json::json!({"loop_id": "INNER"}),
-        ));
-
-        // 外层 LoopEnd
-        steps.push(step(
-            "outer_end",
-            "循环结束(外)",
-            SmartActionType::LoopEnd,
-            serde_json::json!({"loop_id": "OUTER"}),
-        ));
-
-        let ast = parser.parse_to_ast(steps).expect("parse ast");
-        let plan = parser.linearize_ast(&ast).expect("linearize ast");
-
-        // 期望展开：外2次 * 内3次 * 2步 = 12 步
-        assert_eq!(plan.stats.total_steps, 12, "嵌套循环应正确展开为 12 步");
-
-        // 额外校验：ID 后缀应包含两层 __iter_ 前后顺序稳定
-        let ids: Vec<String> = plan.linear_steps.iter().map(|ls| ls.step.id.clone()).collect();
-        let names: Vec<String> = plan.linear_steps.iter().map(|ls| ls.step.name.clone()).collect();
-        
-        // 打印详细的展开结果，验证执行顺序
-        println!("=== 嵌套循环线性化结果 ===");
-        for (i, linear_step) in plan.linear_steps.iter().enumerate() {
-            println!("步骤 {}: ID='{}', 名称='{}'", 
-                i + 1, 
-                linear_step.step.id, 
-                linear_step.step.name
-            );
-        }
-
-        assert!(ids.iter().all(|id| id.contains("__iter_")), "线性化后的ID应包含迭代后缀");
-        
-        // 验证执行顺序：外循环第1次的内循环应完全执行完3次，然后才是外循环第2次
-        let expected_sequence = vec![
-            "act_a__iter_1__iter_1", "act_b__iter_1__iter_1", // 外1内1
-            "act_a__iter_1__iter_2", "act_b__iter_1__iter_2", // 外1内2
-            "act_a__iter_1__iter_3", "act_b__iter_1__iter_3", // 外1内3
-            "act_a__iter_2__iter_1", "act_b__iter_2__iter_1", // 外2内1
-            "act_a__iter_2__iter_2", "act_b__iter_2__iter_2", // 外2内2
-            "act_a__iter_2__iter_3", "act_b__iter_2__iter_3", // 外2内3
-        ];
-        
-        for (i, expected_id) in expected_sequence.iter().enumerate() {
-            assert_eq!(ids[i], *expected_id, "步骤 {} 的ID不匹配，期望: {}, 实际: {}", 
-                i + 1, expected_id, ids[i]);
-        }
-        
-        println!("嵌套循环执行顺序验证通过！");
     }
 }

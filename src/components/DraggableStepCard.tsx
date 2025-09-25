@@ -130,12 +130,18 @@ export const DraggableStepCard: React.FC<
     cursor: isDragging ? 'grabbing' : 'grab',
   };
 
-  const config = SMART_ACTION_CONFIGS[step.step_type] || { 
-    icon: '⚙️', 
-    name: '未知操作', 
-    color: 'default', 
-    category: '其他' 
-  };
+  const config = (() => {
+    // 专用 keyevent 可视样式（🗝️/🔑 图标，金色主题）
+    if (String(step.step_type).toLowerCase() === 'keyevent') {
+      return { icon: '🔑', name: '系统按键', color: 'gold', category: '系统' };
+    }
+    return SMART_ACTION_CONFIGS[step.step_type] || {
+      icon: '⚙️',
+      name: '未知操作',
+      color: 'default',
+      category: '其他',
+    };
+  })();
 
   // 是否展示匹配策略控件：
   // 1) 这些步骤天然依赖元素匹配；2) 或步骤已存在 matching 参数
@@ -283,7 +289,9 @@ export const DraggableStepCard: React.FC<
               >
                 {step.name}
               </Text>
-              <Tag color={config.color}>{config.name}</Tag>
+              <Tag color={config.color}>
+                {String(step.step_type).toLowerCase() === 'keyevent' ? '🔑 系统按键' : config.name}
+              </Tag>
               {!step.enabled && <Tag>已禁用</Tag>}
               {(step as any).parent_loop_id && (
                 <Tag color="blue" className="bg-blue-100 text-blue-700 border-blue-300">

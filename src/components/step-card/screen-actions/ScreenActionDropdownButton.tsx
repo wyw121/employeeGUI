@@ -3,6 +3,7 @@ import { Dropdown, Button, MenuProps } from 'antd';
 import { MobileOutlined } from '@ant-design/icons';
 import { ScreenActionTemplates, createScrollStepsBatch, createScrollStepTemplate } from './screenTemplates';
 import { CustomScrollModal } from './CustomScrollModal';
+import { EdgeBackGestureModal } from './EdgeBackGestureModal';
 
 export interface ScreenActionDropdownButtonProps {
   onSelectTemplate: (stepOrSteps: ReturnType<typeof ScreenActionTemplates.scrollDown> | ReturnType<typeof createScrollStepsBatch>) => void;
@@ -17,6 +18,7 @@ const stopAll = (e: React.SyntheticEvent) => {
 
 export const ScreenActionDropdownButton: React.FC<ScreenActionDropdownButtonProps> = ({ onSelectTemplate, size = 'middle' }) => {
   const [openCustom, setOpenCustom] = useState(false);
+  const [openEdgeCustom, setOpenEdgeCustom] = useState(false);
   const items: MenuProps['items'] = [
     { type: 'group', label: '单步滚动', children: [
       { key: 'scrollDown', label: '📜 向下滚动', onClick: () => onSelectTemplate(ScreenActionTemplates.scrollDown()) },
@@ -24,6 +26,11 @@ export const ScreenActionDropdownButton: React.FC<ScreenActionDropdownButtonProp
       { key: 'scrollLeft', label: '📜 向左滚动', onClick: () => onSelectTemplate(ScreenActionTemplates.scrollLeft()) },
       { key: 'scrollRight', label: '📜 向右滚动', onClick: () => onSelectTemplate(ScreenActionTemplates.scrollRight()) },
     ] },
+    { type: 'group', label: '全面屏返回手势', children: [
+      { key: 'edgeBackLeft', label: '⬅️ 左边缘 → 右滑（返回）', onClick: () => onSelectTemplate(ScreenActionTemplates.backGestureFromLeft()) },
+      { key: 'edgeBackRight', label: '➡️ 右边缘 → 左滑（返回）', onClick: () => onSelectTemplate(ScreenActionTemplates.backGestureFromRight()) },
+    ] },
+    { key: 'edgeCustom', label: '🛠️ 自定义边缘返回…', onClick: () => setOpenEdgeCustom(true) },
     { type: 'group', label: '批量滚动', children: [
       { key: 'scrollDown3', label: '📜 向下滚动 ×3', onClick: () => onSelectTemplate(createScrollStepsBatch('down', 3)) },
       { key: 'scrollUp3', label: '📜 向上滚动 ×3', onClick: () => onSelectTemplate(createScrollStepsBatch('up', 3)) },
@@ -52,6 +59,14 @@ export const ScreenActionDropdownButton: React.FC<ScreenActionDropdownButtonProp
           } else {
             onSelectTemplate(createScrollStepTemplate(direction, { distance, speed_ms }));
           }
+        }}
+      />
+      <EdgeBackGestureModal
+        open={openEdgeCustom}
+        onCancel={() => setOpenEdgeCustom(false)}
+        onConfirm={(cfg) => {
+          setOpenEdgeCustom(false);
+          onSelectTemplate(ScreenActionTemplates.createEdgeBackFromConfig(cfg));
         }}
       />
     </div>

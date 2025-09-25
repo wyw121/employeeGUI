@@ -4,7 +4,7 @@ use tracing::{info, debug};
 
 use crate::services::adb_shell_session::AdbShellSession;
 use super::super::core::{AppDetector, AppConfigManager, DetectionConfig};
-use super::super::detectors::{XiaohongshuDetector, WechatDetector, GenericDetector};
+use super::super::detectors::{WechatDetector, GenericDetector};
 
 /// 应用检测器工厂
 /// 根据应用包名创建对应的检测器实例
@@ -36,10 +36,6 @@ impl DetectorFactory {
         info!("🏭 创建应用检测器: {} ({})", app_name, package_name);
         
         match package_name {
-            "com.xingin.xhs" => {
-                debug!("📱 使用小红书专用检测器");
-                Arc::new(XiaohongshuDetector::new(shell_session))
-            },
             "com.tencent.mm" => {
                 debug!("💬 使用微信专用检测器");
                 Arc::new(WechatDetector::new(shell_session))
@@ -81,7 +77,6 @@ impl DetectorFactory {
     /// 获取支持的应用列表
     pub fn get_supported_apps(&self) -> Vec<&'static str> {
         vec![
-            "com.xingin.xhs",        // 小红书
             "com.tencent.mm",        // 微信
             // TODO: 添加更多支持的应用
             // "com.tencent.mobileqq",  // QQ
@@ -127,10 +122,6 @@ impl DetectorFactory {
         let shell_session = AdbShellSession::new(device_id.to_string(), adb_path);
         
         let detector: Arc<dyn AppDetector> = match package_name {
-            "com.xingin.xhs" => {
-                debug!("📱 使用小红书专用检测器");
-                Arc::new(XiaohongshuDetector::new(shell_session))
-            },
             "com.tencent.mm" => {
                 debug!("💬 使用微信专用检测器");
                 Arc::new(WechatDetector::new(shell_session))

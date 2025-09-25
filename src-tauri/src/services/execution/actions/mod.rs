@@ -22,7 +22,6 @@ impl<'a> SmartActionDispatcher<'a> {
             SmartActionType::Wait => basic::handle_wait(step, logs).await,
             SmartActionType::Input => basic::handle_input(self.executor, step, logs).await,
             SmartActionType::Swipe => basic::handle_swipe(self.executor, step, logs).await,
-                SmartActionType::KeyEvent => basic::handle_keyevent(self.executor, step, logs).await,
             SmartActionType::SmartTap => smart::handle_smart_tap(self.executor, step, logs).await,
             SmartActionType::SmartFindElement => smart::handle_unified_match(self.executor, step, logs).await,
             SmartActionType::BatchMatch => smart::handle_batch_match(self.executor, step, logs).await,

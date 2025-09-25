@@ -1,11 +1,11 @@
 import React from 'react';
-import { EnhancedDraggableStepsContainer } from '../../../../components/EnhancedDraggableStepsContainer';
-import StepTestButton from '../../../../components/StepTestButton';
-import { ExtendedSmartScriptStep, LoopConfig } from '../../../../types/loopScript';
-import { Device } from '../../../../domain/adb/entities/Device';
+import { EnhancedDraggableStepsContainer } from '../../../components/EnhancedDraggableStepsContainer';
+import StepTestButton from '../../../components/StepTestButton';
+import { ExtendedSmartScriptStep, LoopConfig } from '../../../types/loopScript';
+import { Device } from '../../../domain/adb/entities/Device';
 import { message, Modal } from 'antd';
-import { SmartActionType } from '../../../../types/smartComponents';
-import { generateContactImportWorkflowSteps } from '../../../../modules/contact-automation';
+import { SmartActionType } from '../../../types/smartComponents';
+import { generateContactImportWorkflowSteps } from '../../../modules/contact-automation';
 
 interface StepListPanelProps {
   steps: ExtendedSmartScriptStep[];

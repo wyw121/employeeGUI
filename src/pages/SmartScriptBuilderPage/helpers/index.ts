@@ -14,3 +14,4 @@ export { SMART_ACTION_CONFIGS } from "./constants";
 export { renderParameterInput } from "./renderers";
 export { createHandleExecuteScript } from "./executeScript";
 export { createHandleSaveStep } from "./saveStep";
+export { normalizeStep, buildDistributedSteps } from "./stepUtils";

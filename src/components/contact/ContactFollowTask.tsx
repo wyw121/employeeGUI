@@ -2,17 +2,12 @@ import { Activity, CheckCircle, Pause, Play, Smartphone, Target, Users, XCircle 
 import React, { useEffect, useState } from 'react';
 import { useAdb } from '../../application/hooks/useAdb';
 import { Device } from '../../domain/adb/entities/Device';
+import type { Contact } from '../../types/Contact';
 
 // 定义平台类型
 type Platform = 'xiaohongshu' | 'wechat' | 'qq';
 
-// 定义联系人类型
-interface Contact {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-}
+// 统一使用全局 Contact 类型（phone 可能为可选）
 
 // 定义任务状态类型
 type TaskStatus = 'idle' | 'running' | 'completed' | 'failed' | 'paused';

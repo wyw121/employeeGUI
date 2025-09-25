@@ -446,8 +446,8 @@ impl SmartScriptExecutor {
 
             let strategy_name = strategy.clone(); // 保存策略名以备后用
 
-            // 调用统一匹配引擎
-            match match_element_by_criteria(self.device_id.clone(), criteria).await {
+            // 调用统一匹配引擎（clone 避免后续继续访问 criteria 字段时报“moved”错误）
+            match match_element_by_criteria(self.device_id.clone(), criteria.clone()).await {
                 Ok(result) if result.ok => {
                     logs.push(format!("✅ 匹配成功: {}", result.message));
                     

@@ -1,16 +1,15 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { message, FormInstance } from "antd";
+import SmartStepGenerator from "../../../modules/SmartStepGenerator";
 import {
   ElementLocator,
   XmlSnapshot,
-  buildXmlSnapshotFromContext,
+  createXmlSnapshot,
 } from "../../../types/selfContainedScript";
 import {
   SmartActionType,
-  EnhancedUIElement,
 } from "../../../types/smartComponents";
 import { ExtendedSmartScriptStep } from "../../../types/loopScript";
-import { SmartStepGenerator } from "../../../modules/smart-step-generator/SmartStepGenerator";
 import {
   parseBoundsString,
   rectToBoundsString,
@@ -24,6 +23,11 @@ import {
 import { buildAndCacheDefaultMatchingFromElement } from "../helpers/matchingHelpers";
 import buildXmlSnapshotFromContext from "../helpers/xmlSnapshotHelper";
 import sanitizeContentDesc from "../helpers/contentDescSanitizer";
+import type { NodeLocator } from "../../../domain/inspector/entities/NodeLocator";
+import type {
+  MatchCriteria as UIMatchCriteria,
+  MatchStrategy as UIMatchStrategy,
+} from "../../../components/universal-ui/views/grid-view/panels/node-detail/types";
 
 export interface SnapshotFixMode {
   enabled: boolean;
@@ -36,12 +40,23 @@ export interface UsePageFinderDeps {
   form: FormInstance;
   currentDeviceId: string;
   devices: Device[];
-  showAddModal: () => void;
+  showAddModal: (options?: { resetFields?: boolean }) => void;
+  // 新增依赖
+  setEditingStep: React.Dispatch<React.SetStateAction<ExtendedSmartScriptStep | null>>;
+  handleSaveStep: () => Promise<void>;
 }
 
 export function usePageFinder(deps: UsePageFinderDeps) {
-  const { steps, setSteps, form, currentDeviceId, devices, showAddModal } =
-    deps;
+  const {
+    steps,
+    setSteps,
+    form,
+    currentDeviceId,
+    devices,
+    showAddModal,
+    setEditingStep,
+    handleSaveStep,
+  } = deps;
 
   const [showPageAnalyzer, setShowPageAnalyzer] = useState(false);
   const [snapshotFixMode, setSnapshotFixMode] = useState<SnapshotFixMode>({
@@ -49,18 +64,11 @@ export function usePageFinder(deps: UsePageFinderDeps) {
   });
   const [pendingAutoResave, setPendingAutoResave] = useState<boolean>(false);
   const [isQuickAnalyzer, setIsQuickAnalyzer] = useState(false);
-  const [editingStepForParams, setEditingStepForParams] =
-    useState<ExtendedSmartScriptStep | null>(null);
-  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] =
-    useState<boolean>(false);
-
+  const [editingStepForParams, setEditingStepForParams] = useState<ExtendedSmartScriptStep | null>(null);
+  const [allowSaveWithoutXmlOnce, setAllowSaveWithoutXmlOnce] = useState<boolean>(false);
   const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
-  const [currentDeviceInfo, setCurrentDeviceInfo] = useState<
-    Partial<XmlSnapshot["deviceInfo"]>
-  >({});
-  const [currentPageInfo, setCurrentPageInfo] = useState<
-    Partial<XmlSnapshot["pageInfo"]>
-  >({});
+  const [currentDeviceInfo, setCurrentDeviceInfo] = useState<Partial<XmlSnapshot["deviceInfo"]>>({});
+  const [currentPageInfo, setCurrentPageInfo] = useState<Partial<XmlSnapshot["pageInfo"]>>({});
 
   const openPageAnalyzer = (options: {
     quick?: boolean;
@@ -142,7 +150,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
     }
   };
 
-  const onElementSelected = (element: EnhancedUIElement) => {
+  const onElementSelected = (element: any) => {
     console.log("🎯 接收到增强智能分析元素:", element);
     console.log("🎯 当前模式检查:", {
       isQuickAnalyzer,
@@ -151,6 +159,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
 
     try {
       const stepInfo = SmartStepGenerator.generateStepInfo(element);
+
       form.setFieldValue("step_type", SmartActionType.SMART_FIND_ELEMENT);
       form.setFieldValue("search_criteria", stepInfo.searchCriteria);
       form.setFieldValue("name", stepInfo.name);
@@ -311,7 +320,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
         });
       } else if (isQuickAnalyzer) {
         setEditingStep(null);
-        setIsModalVisible(true);
+        showAddModal({ resetFields: false });
         message.success({
           content: (
             <div>
@@ -463,9 +472,9 @@ export function usePageFinder(deps: UsePageFinderDeps) {
         setShowPageAnalyzer(false);
         setIsQuickAnalyzer(false);
         setEditingStepForParams(null);
-        setEditingStep(null);
-        setAllowSaveWithoutXmlOnce(true);
-        setIsModalVisible(true);
+  setEditingStep(null);
+  setAllowSaveWithoutXmlOnce(true);
+  showAddModal({ resetFields: false });
 
         message.success({
           content: (
@@ -560,7 +569,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
     const m: any = editingStepForParams.parameters?.matching;
     if (m && Array.isArray(m.fields) && m.fields.length > 0) {
       return {
-        strategy: String(m.strategy || "standard"),
+        strategy: (m.strategy || "standard") as UIMatchStrategy,
         fields: m.fields as string[],
         values: (m.values || {}) as Record<string, string>,
         includes: m.includes as Record<string, string[]>,
@@ -572,7 +581,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
 
   const pageFinderProps = {
     visible: showPageAnalyzer,
-    initialViewMode: editingStepForParams ? "grid" : "visual",
+  initialViewMode: (editingStepForParams ? "grid" : "visual") as "grid" | "visual",
     snapshotOnlyMode: snapshotFixMode.enabled,
     onSnapshotCaptured,
     onSnapshotUpdated,
@@ -596,5 +605,15 @@ export function usePageFinder(deps: UsePageFinderDeps) {
     currentPageInfo,
     updateCurrentXmlContext,
     setEditingStepForParams,
+    showPageAnalyzer,
+    setShowPageAnalyzer,
+    snapshotFixMode,
+    setSnapshotFixMode,
+    pendingAutoResave,
+    setPendingAutoResave,
+    isQuickAnalyzer,
+    setIsQuickAnalyzer,
+    allowSaveWithoutXmlOnce,
+    setAllowSaveWithoutXmlOnce,
   };
 }

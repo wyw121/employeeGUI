@@ -64,8 +64,8 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
         form={form}
         layout="vertical"
         initialValues={{
-          step_type: SmartActionType.CONTACT_IMPORT_WORKFLOW, // 默认选择通讯录导入
-          name: "通讯录导入", // 默认步骤名称
+          step_type: SmartActionType.SMART_FIND_ELEMENT, // 默认选择智能元素查找
+          name: "智能元素查找", // 默认步骤名称
           wait_after: 1000,
         }}
       >

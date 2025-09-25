@@ -51,7 +51,7 @@ const ADBAuthWizard: React.FC = () => {
           ]}
         />
         {renderStep()}
-        <ActionLogPanel logs={state.logs} onClear={() => ctx.dispatch({ type: 'CLEAR_LOG' })} />
+  <ActionLogPanel logs={state.logs} onClear={() => ctx.dispatch({ type: 'CLEAR_LOGS' })} />
       </Space>
     </Card>
   );

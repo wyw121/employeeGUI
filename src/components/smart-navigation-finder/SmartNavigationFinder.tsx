@@ -22,7 +22,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import UniversalUIService, { type UniversalClickResult } from '../../api/universalUIAPI';
+import { UniversalUIService, type UniversalClickResult } from '../../api/universalUIAPI';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -81,7 +81,6 @@ const PRESET_NAVIGATION_CONFIGS: { [key: string]: NavigationConfig } = {
 // 检测结果接口
 interface DetectedElement {
   text: string;
-  bounds: string;
   position: [number, number];
 }
 
@@ -210,11 +209,20 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
       });
       
       // 使用Universal UI API
-      const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
+  const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
 
       console.log('Universal UI result:', result);
       
       // 转换结果格式
+      // 将 position 字符串解析为元组 [x, y]
+      const toTuple = (pos?: string): [number, number] | undefined => {
+        if (!pos) return undefined;
+        const m = pos.match(/\(([-\d.]+),\s*([-\d.]+)\)/);
+        if (m) return [Number(m[1]), Number(m[2])];
+        const parts = pos.split(/[ ,]+/).map(Number).filter(n => !Number.isNaN(n));
+        return parts.length >= 2 ? [parts[0], parts[1]] : undefined;
+      };
+
       const navigationResult: NavigationFinderResult = {
         success: result.element_found,
         message: result.element_found 
@@ -222,13 +230,11 @@ const SmartNavigationFinder: React.FC<SmartNavigationFinderProps> = ({
           : (result.error_message || '未找到目标按钮'),
         found_elements: result.found_element ? [{
           text: result.found_element.text,
-          bounds: result.found_element.bounds,
-          position: result.found_element.position
+          position: toTuple(result.found_element.position) || [0, 0]
         }] : [],
         target_element: result.found_element ? {
           text: result.found_element.text,
-          bounds: result.found_element.bounds,
-          position: result.found_element.position
+          position: toTuple(result.found_element.position) || [0, 0]
         } : undefined
       };
 

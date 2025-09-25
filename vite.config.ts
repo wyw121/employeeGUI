@@ -14,7 +14,9 @@ export default defineConfig(() => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 5187,  // 调整端口以避免与本机占用冲突
+    // 允许通过环境变量覆盖端口，避免本机端口被占用时无法启动
+    // 优先级：VITE_PORT > PORT > 默认 5187
+    port: Number(process.env.VITE_PORT ?? process.env.PORT ?? 5187),
     strictPort: true,
     watch: {
       // 3. tell vite to ignore watching `src-tauri`

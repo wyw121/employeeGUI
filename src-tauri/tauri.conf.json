@@ -4,10 +4,10 @@
   "version": "0.2.0",
   "identifier": "com.example.employeegui",
   "build": {
-    "beforeDevCommand": "npm run dev",
+  "beforeDevCommand": "npm run dev:5321",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist",
-  "devUrl": "http://localhost:5187"
+    "devUrl": "http://localhost:5321"
   },
   "bundle": {
     "active": true,

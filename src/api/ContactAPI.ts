@@ -176,6 +176,26 @@ export class ContactAPI {
   static async deleteFile(path: string): Promise<void> {
     await invoke("delete_file", { path });
   }
+
+  /**
+   * 完整的VCF导入+小红书自动关注流程（增强版 - 前端兼容入口）
+   * 说明：为兼容历史引用（ContactAPI.importAndFollowXiaohongshuEnhanced），
+   * 这里提供一个同名静态方法代理到后端命令。
+   */
+  static async importAndFollowXiaohongshuEnhanced(
+    deviceId: string,
+    contactsFilePath: string,
+    options?: XiaohongshuFollowOptions
+  ): Promise<EnhancedImportAndFollowResult> {
+    return await invoke<EnhancedImportAndFollowResult>(
+      "import_and_follow_xiaohongshu_enhanced",
+      {
+        deviceId,
+        contactsFilePath,
+        options,
+      }
+    );
+  }
 }
 
 /**

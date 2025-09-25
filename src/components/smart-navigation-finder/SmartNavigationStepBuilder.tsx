@@ -21,7 +21,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import UniversalUIService, { type SmartNavigationParams, type UniversalClickResult } from '../../api/universalUIAPI';
+import { UniversalUIService, type SmartNavigationParams, type UniversalClickResult } from '../../api/universalUIAPI';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -42,11 +42,10 @@ export interface NavigationBarConfig {
 }
 
 export interface DetectedElement {
-    text: string;
-    bounds: string;
-    content_desc: string;
-    clickable: boolean;
-    position: [number, number];
+  text: string;
+  content_desc: string;
+  clickable: boolean;
+  position: [number, number];
 }
 
 export interface ElementFinderResult {
@@ -286,9 +285,17 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
       });
       
       // 使用新的Universal UI API进行检测（仅查找，不执行点击）
-      const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
+  const result = await UniversalUIService.executeUIClick(testDeviceId, navigationParams);
 
       // 将结果转换为前端格式
+      const toTuple = (pos?: string): [number, number] | undefined => {
+        if (!pos) return undefined;
+        const m = pos.match(/\(([-\d.]+),\s*([-\d.]+)\)/);
+        if (m) return [Number(m[1]), Number(m[2])];
+        const parts = pos.split(/[ ,]+/).map(Number).filter(n => !Number.isNaN(n));
+        return parts.length >= 2 ? [parts[0], parts[1]] : undefined;
+      };
+
       const elementFinderResult: ElementFinderResult = {
         success: result.element_found,
         message: result.element_found 
@@ -296,17 +303,15 @@ const SmartNavigationStepBuilder: React.FC<SmartNavigationStepBuilderProps> = ({
           : (result.error_message || '未找到目标按钮'),
         found_elements: result.found_element ? [{
           text: result.found_element.text,
-          bounds: result.found_element.bounds,
-          position: result.found_element.position,
-          content_desc: '', // 添加缺失的属性
-          clickable: true,  // 添加缺失的属性
+          position: toTuple(result.found_element.position) || [0, 0],
+          content_desc: '',
+          clickable: true,
         }] : [],
         target_element: result.found_element ? {
           text: result.found_element.text,
-          bounds: result.found_element.bounds,
-          position: result.found_element.position,
-          content_desc: '', // 添加缺失的属性
-          clickable: true,  // 添加缺失的属性
+          position: toTuple(result.found_element.position) || [0, 0],
+          content_desc: '',
+          clickable: true,
         } : undefined,
       };
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Form, Modal, message } from 'antd';
+import type { FormInstance } from 'antd';
 import { SmartActionType } from '../../../types/smartComponents';
 import type { ExtendedSmartScriptStep } from '../../../types/loopScript';
 import XmlCacheManager from '../../../services/XmlCacheManager';
@@ -19,6 +20,7 @@ export interface SnapshotFixMode {
 }
 
 export interface UseStepFormDeps {
+  form?: FormInstance;
   steps: ExtendedSmartScriptStep[];
   setSteps: React.Dispatch<React.SetStateAction<ExtendedSmartScriptStep[]>>;
   // 设备/上下文
@@ -41,6 +43,7 @@ export interface UseStepFormDeps {
 
 export function useStepForm(deps: UseStepFormDeps) {
   const {
+    form: externalForm,
     steps,
     setSteps,
     devices,
@@ -60,13 +63,19 @@ export function useStepForm(deps: UseStepFormDeps) {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingStep, setEditingStep] = useState<ExtendedSmartScriptStep | null>(null);
-  const [form] = Form.useForm();
+  const [internalForm] = Form.useForm();
+  const form = externalForm ?? internalForm;
 
-  const showAddModal = useCallback(() => {
-    setEditingStep(null);
-    form.resetFields();
-    setIsModalVisible(true);
-  }, [form]);
+  const showAddModal = useCallback(
+    (options?: { resetFields?: boolean }) => {
+      setEditingStep(null);
+      if (options?.resetFields !== false) {
+        form.resetFields();
+      }
+      setIsModalVisible(true);
+    },
+    [form]
+  );
 
   const showEditModal = useCallback((step: ExtendedSmartScriptStep) => {
     setEditingStep(step);

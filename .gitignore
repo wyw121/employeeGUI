@@ -37,7 +37,9 @@ employee-gui-v*.zip
 employee-gui-v*/
 employee-gui-release/
 *-release/
+release-package/
 *.exe
+*.msi
 
 # Android UI调试文件
 *.xml

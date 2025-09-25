@@ -701,6 +701,35 @@ mod tests {
 
         // 额外校验：ID 后缀应包含两层 __iter_ 前后顺序稳定
         let ids: Vec<String> = plan.linear_steps.iter().map(|ls| ls.step.id.clone()).collect();
+        let names: Vec<String> = plan.linear_steps.iter().map(|ls| ls.step.name.clone()).collect();
+        
+        // 打印详细的展开结果，验证执行顺序
+        println!("=== 嵌套循环线性化结果 ===");
+        for (i, linear_step) in plan.linear_steps.iter().enumerate() {
+            println!("步骤 {}: ID='{}', 名称='{}'", 
+                i + 1, 
+                linear_step.step.id, 
+                linear_step.step.name
+            );
+        }
+
         assert!(ids.iter().all(|id| id.contains("__iter_")), "线性化后的ID应包含迭代后缀");
+        
+        // 验证执行顺序：外循环第1次的内循环应完全执行完3次，然后才是外循环第2次
+        let expected_sequence = vec![
+            "act_a__iter_1__iter_1", "act_b__iter_1__iter_1", // 外1内1
+            "act_a__iter_1__iter_2", "act_b__iter_1__iter_2", // 外1内2
+            "act_a__iter_1__iter_3", "act_b__iter_1__iter_3", // 外1内3
+            "act_a__iter_2__iter_1", "act_b__iter_2__iter_1", // 外2内1
+            "act_a__iter_2__iter_2", "act_b__iter_2__iter_2", // 外2内2
+            "act_a__iter_2__iter_3", "act_b__iter_2__iter_3", // 外2内3
+        ];
+        
+        for (i, expected_id) in expected_sequence.iter().enumerate() {
+            assert_eq!(ids[i], *expected_id, "步骤 {} 的ID不匹配，期望: {}, 实际: {}", 
+                i + 1, expected_id, ids[i]);
+        }
+        
+        println!("嵌套循环执行顺序验证通过！");
     }
 }

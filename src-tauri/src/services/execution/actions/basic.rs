@@ -91,3 +91,19 @@ pub async fn handle_swipe(
         }
     }
 }
+
+pub async fn handle_keyevent(
+    executor: &SmartScriptExecutor,
+    step: &crate::services::execution::model::SmartScriptStep,
+    logs: &mut Vec<String>,
+) -> Result<String> {
+    use serde_json::Value;
+    let params: std::collections::HashMap<String, Value> = serde_json::from_value(step.parameters.clone())?;
+    let code = params.get("code").and_then(|v| v.as_i64()).unwrap_or(4) as i32; // 默认 BACK
+    logs.push(format!("🔑 发送系统按键: code={}", code));
+
+    // 走已有的会话封装（内部已支持注入器优先 + 回退）
+    let session = crate::services::adb_session_manager::get_device_session(executor.device_id()).await?;
+    session.key_event(code).await?;
+    Ok(format!("按键 {} 已发送", code))
+}

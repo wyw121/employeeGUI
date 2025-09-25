@@ -8,6 +8,10 @@ use crate::services::app_detection_framework::{
 };
 use crate::utils::adb_utils::get_adb_path;
 use tracing::{info, warn, error};
+use futures::{stream, StreamExt};
+
+use crate::services::smart_app::cache::{AppCache, CacheConfig};
+use crate::services::smart_app::fetch::{list_packages, fetch_app_info};
 
 /// 应用信息结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,8 +41,7 @@ pub struct AppLaunchResult {
 /// 智能应用管理器
 pub struct SmartAppManager {
     device_id: String,
-    apps_cache: HashMap<String, AppInfo>,
-    cache_valid: bool,
+    cache: AppCache,
 }
 
 impl SmartAppManager {
@@ -47,110 +50,46 @@ impl SmartAppManager {
         
         Self {
             device_id,
-            apps_cache: HashMap::new(),
-            cache_valid: false,
+            cache: AppCache::new(Some(CacheConfig { ttl_ms: 5 * 60 * 1000 })),
         }
     }
 
     /// 获取设备上所有已安装的应用
-    pub async fn get_installed_apps(&mut self) -> Result<Vec<AppInfo>> {
-        info!("📱 开始获取设备已安装应用列表");
-        
-        // 使用会话管理器获取ADB Shell会话
-        let session = get_device_session(&self.device_id).await?;
+    pub async fn get_installed_apps(&mut self, include_system_apps: bool, force_refresh: bool) -> Result<Vec<AppInfo>> {
+        info!("📱 获取设备应用列表: include_system_apps={}, force_refresh={}", include_system_apps, force_refresh);
 
-        // 1. 获取所有包名
-        let packages_output = session.execute_command("pm list packages").await?;
-        let mut apps = Vec::new();
-
-        for line in packages_output.lines() {
-            if let Some(package_name) = line.strip_prefix("package:") {
-                // 过滤掉一些系统包，专注用户应用
-                if self.should_include_package(package_name) {
-                    if let Ok(app_info) = self.get_app_detailed_info(package_name).await {
-                        apps.push(app_info);
-                    }
-                }
+        if !force_refresh && self.cache.is_valid() {
+            let apps = self.cache.get_all();
+            if !apps.is_empty() {
+                info!("✅ 返回缓存的应用列表: {} 项", apps.len());
+                return Ok(self.filter_and_sort(apps, include_system_apps));
             }
         }
 
-        // 按应用名称排序
-        apps.sort_by(|a, b| a.app_name.cmp(&b.app_name));
+        let packages = list_packages(&self.device_id).await?;
+        let filtered: Vec<String> = packages
+            .into_iter()
+            .filter(|p| self.should_include_package(p) || include_system_apps)
+            .collect();
 
-        info!("📊 成功获取 {} 个用户应用", apps.len());
-        
-        // 更新缓存
-        self.apps_cache.clear();
-        for app in &apps {
-            self.apps_cache.insert(app.package_name.clone(), app.clone());
-        }
-        self.cache_valid = true;
+        // 并发拉取应用详情，限制并发度
+        let concurrency = 8usize;
+        let mut apps: Vec<AppInfo> = stream::iter(filtered)
+            .map(|pkg| async move { fetch_app_info(&self.device_id, &pkg).await })
+            .buffer_unordered(concurrency)
+            .filter_map(|res| async move { res.ok() })
+            .collect()
+            .await;
 
+        apps = self.filter_and_sort(apps, include_system_apps);
+
+        info!("📊 成功获取 {} 个应用（并发）", apps.len());
+        self.cache.set_apps(apps.clone());
         Ok(apps)
     }
 
     /// 获取应用详细信息
-    async fn get_app_detailed_info(&self, package_name: &str) -> Result<AppInfo> {
-        // 使用会话管理器获取ADB Shell会话
-        let session = get_device_session(&self.device_id).await?;
-        
-        // 获取应用基本信息
-        let info_output = session.execute_command(&format!("dumpsys package {}", package_name)).await?;
-        
-        let mut app_name = package_name.to_string();
-        let mut version_name = None;
-        let mut version_code = None;
-        let mut main_activity = None;
-        let mut is_system_app = false;
-        let mut is_enabled = true;
-
-        // 解析dumpsys输出
-        for line in info_output.lines() {
-            let line = line.trim();
-            
-            if line.starts_with("versionName=") {
-                version_name = Some(line.replace("versionName=", ""));
-            } else if line.starts_with("versionCode=") {
-                version_code = Some(line.replace("versionCode=", ""));
-            } else if line.contains("android.intent.action.MAIN") {
-                // 查找主Activity
-                if let Some(activity_line) = info_output.lines().find(|l| l.contains(package_name) && l.contains("filter")) {
-                    main_activity = Some(self.extract_main_activity(activity_line, package_name));
-                }
-            } else if line.contains("system=true") {
-                is_system_app = true;
-            } else if line.contains("enabled=false") {
-                is_enabled = false;
-            }
-        }
-
-        // 尝试获取应用显示名称
-        if let Ok(label_output) = session.execute_command(&format!("pm list packages -f {} | head -1", package_name)).await {
-            if let Some(apk_path) = self.extract_apk_path(&label_output) {
-                if let Ok(label) = session.execute_command(&format!("aapt dump badging {} | grep application-label", apk_path)).await {
-                    if let Some(extracted_name) = self.extract_app_name(&label) {
-                        app_name = extracted_name;
-                    }
-                }
-            }
-        }
-
-        // 如果无法获取显示名称，使用包名的最后部分
-        if app_name == package_name {
-            app_name = self.generate_friendly_name(package_name);
-        }
-
-        Ok(AppInfo {
-            package_name: package_name.to_string(),
-            app_name,
-            version_name,
-            version_code,
-            is_system_app,
-            is_enabled,
-            main_activity,
-            icon_path: None, // 暂不获取图标路径
-        })
-    }
+    // get_app_detailed_info is replaced by smart_app::fetch::fetch_app_info
 
     /// 智能启动应用（增强版 - 包含完整状态检测）
     pub async fn launch_app(&self, package_name: &str) -> Result<AppLaunchResult> {
@@ -241,7 +180,7 @@ impl SmartAppManager {
 
         // 方法2: 使用am start命令
         info!("📱 尝试使用am start命令启动应用");
-        if let Some(app_info) = self.apps_cache.get(package_name) {
+        if let Some(app_info) = self.cache.apps_by_package.get(package_name) {
             if let Some(main_activity) = &app_info.main_activity {
                 let am_result = session.execute_command(&format!(
                     "am start -n {}/{}", package_name, main_activity
@@ -431,23 +370,25 @@ impl SmartAppManager {
     }
 
     /// 获取缓存的应用信息
-    pub fn get_cached_apps(&self) -> Vec<AppInfo> {
-        if self.cache_valid {
-            self.apps_cache.values().cloned().collect()
-        } else {
-            Vec::new()
-        }
-    }
+    pub fn get_cached_apps(&self) -> Vec<AppInfo> { self.cache.get_all() }
 
     /// 搜索应用
     pub fn search_apps(&self, query: &str) -> Vec<AppInfo> {
         let query_lower = query.to_lowercase();
-        self.apps_cache.values()
+        self.cache.apps_by_package.values()
             .filter(|app| {
                 app.app_name.to_lowercase().contains(&query_lower) ||
                 app.package_name.to_lowercase().contains(&query_lower)
             })
             .cloned()
             .collect()
+    }
+
+    fn filter_and_sort(&self, mut apps: Vec<AppInfo>, include_system_apps: bool) -> Vec<AppInfo> {
+        if !include_system_apps {
+            apps.retain(|a| !a.is_system_app);
+        }
+        apps.sort_by(|a, b| a.app_name.cmp(&b.app_name));
+        apps
     }
 }

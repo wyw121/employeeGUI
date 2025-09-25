@@ -21,6 +21,8 @@ impl SmartAppManagerState {
 #[command]
 pub async fn get_device_apps(
     device_id: String,
+    include_system_apps: Option<bool>,
+    force_refresh: Option<bool>,
     state: State<'_, SmartAppManagerState>,
 ) -> Result<Vec<AppInfo>, String> {
     info!("📱 获取设备 {} 的应用列表", device_id);
@@ -30,7 +32,10 @@ pub async fn get_device_apps(
         .entry(device_id.clone())
         .or_insert_with(|| SmartAppManager::new(device_id.clone()));
 
-    manager.get_installed_apps().await.map_err(|e| {
+    let include = include_system_apps.unwrap_or(false);
+    let force = force_refresh.unwrap_or(false);
+
+    manager.get_installed_apps(include, force).await.map_err(|e| {
         error!("获取应用列表失败: {}", e);
         format!("获取应用列表失败: {}", e)
     })

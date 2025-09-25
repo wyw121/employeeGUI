@@ -6,31 +6,37 @@ import type { AppInfo, AppLaunchResult } from '../types/smartComponents';
  * 提供设备应用发现、搜索、启动等功能
  */
 export class SmartAppService {
-  private cachedApps: Map<string, AppInfo[]> = new Map();
+  private cachedApps: Map<string, { apps: AppInfo[]; ts: number }> = new Map();
   private readonly cacheTimeout = 5 * 60 * 1000; // 5分钟缓存
 
   /**
    * 获取设备上的所有应用
    */
-  async getDeviceApps(deviceId: string, includeSystemApps = false): Promise<AppInfo[]> {
+  async getDeviceApps(deviceId: string, includeSystemApps = false, forceRefresh = false): Promise<AppInfo[]> {
     try {
+      // 先看本地缓存
+      const cached = this.cachedApps.get(deviceId);
+      const now = Date.now();
+      if (!forceRefresh && cached && now - cached.ts < this.cacheTimeout) {
+        return includeSystemApps ? cached.apps : cached.apps.filter(a => !a.is_system_app);
+      }
+
       const apps = await invoke<AppInfo[]>('get_device_apps', {
-        deviceId,
-        includeSystemApps
+        device_id: deviceId,
+        include_system_apps: includeSystemApps,
+        force_refresh: forceRefresh
       });
-      
-      // 缓存结果
-      this.cachedApps.set(deviceId, apps);
-      
-      return apps;
+      // 缓存结果（总是缓存全量，前端过滤系统/用户）
+      this.cachedApps.set(deviceId, { apps, ts: now });
+      return includeSystemApps ? apps : apps.filter(a => !a.is_system_app);
     } catch (error) {
       console.error('获取设备应用失败:', error);
       
       // 返回缓存的结果
-      const cached = this.cachedApps.get(deviceId);
-      if (cached) {
+      const cached = this.cachedApps.get(deviceId)?.apps;
+      if (cached && cached.length) {
         console.warn('使用缓存的应用列表');
-        return cached;
+        return includeSystemApps ? cached : cached.filter(a => !a.is_system_app);
       }
       
       throw error;

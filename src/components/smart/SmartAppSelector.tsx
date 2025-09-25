@@ -74,9 +74,11 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
   // 初始化加载
   useEffect(() => {
     if (visible && deviceId) {
+      // 加载全量应用一次，前端本地过滤
       loadDeviceApps();
     }
-  }, [visible, deviceId, categoryFilter]);
+    // 仅在打开或设备变化时拉取
+  }, [visible, deviceId]);
 
   // 过滤和搜索应用
   const filteredApps = useMemo(() => {

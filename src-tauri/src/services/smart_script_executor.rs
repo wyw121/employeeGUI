@@ -15,6 +15,7 @@ use crate::services::execution::{
     register_execution_environment,
     LegacyUiActions,
     SmartScriptOrchestrator,
+    UiBridge,
 };
 use crate::services::execution::model::{
     SmartActionType,
@@ -25,7 +26,6 @@ use crate::services::execution::model::{
 };
 use crate::services::execution::SmartActionDispatcher;
 
-use crate::services::adb_session_manager::get_device_session;
 use crate::services::error_handling::{ErrorHandler, ErrorHandlingConfig};
 use crate::services::script_execution::ScriptPreprocessor;
 use crate::application::normalizer::normalize_step_json;
@@ -43,6 +43,7 @@ pub struct SmartScriptExecutor {
     preprocessor: Arc<Mutex<ScriptPreprocessor>>,
     /// 新的执行环境（重试/快照/上下文）。迁移期可选，后续完全替换内部散落逻辑。
     exec_env: Arc<ExecutionEnvironment>,
+    ui_bridge: UiBridge,
 }
 
 impl SmartScriptExecutor {
@@ -50,8 +51,7 @@ impl SmartScriptExecutor {
     /// 当前实现：委托给 ExecutionEnvironment.snapshot_provider。
     /// TODO: 后续在这里加入缓存 / 失败重试 / 指标记录 等扩展。
     pub(crate) async fn capture_ui_snapshot(&self) -> anyhow::Result<Option<String>> {
-        let snapshot = self.exec_env.capture_snapshot().await?;
-        Ok(snapshot.raw_xml)
+        self.ui_bridge.capture_snapshot().await
     }
 
     pub(crate) fn device_id(&self) -> &str {
@@ -60,6 +60,10 @@ impl SmartScriptExecutor {
 
     pub(crate) fn adb_path(&self) -> &str {
         &self.adb_path
+    }
+
+    pub(crate) fn ui_bridge(&self) -> &UiBridge {
+        &self.ui_bridge
     }
 }
 
@@ -96,6 +100,8 @@ impl SmartScriptExecutor {
                 .with_snapshot_provider(snapshot_provider)
         );
 
+        let ui_bridge = UiBridge::new(device_id.clone(), exec_env.clone());
+
         // 注册到全局执行环境注册表（弱引用存储）
         register_execution_environment(&device_id, &exec_env);
 
@@ -105,6 +111,7 @@ impl SmartScriptExecutor {
             error_handler,
             preprocessor: Arc::new(Mutex::new(ScriptPreprocessor::new())),
             exec_env,
+            ui_bridge,
         }
     }
 
@@ -205,81 +212,14 @@ impl SmartScriptExecutor {
 
     /// 带重试机制的 UI dump 执行
     pub(crate) async fn execute_ui_dump_with_retry(&self, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("📱 开始获取设备UI结构（优先使用快照提供器）...".to_string());
-        // 首先尝试快照渠道（单次，不自带复杂重试；失败再回退旧逻辑）
-        match self.capture_ui_snapshot().await {
-            Ok(Some(xml)) if !xml.is_empty() => {
-                logs.push(format!("✅ 快照获取成功（snapshot_provider），长度: {} 字符", xml.len()));
-                return Ok(xml);
-            }
-            Ok(Some(_)) | Ok(None) => {
-                logs.push("⚠️ 快照结果为空或无XML，回退旧 UI dump 逻辑".to_string());
-            }
-            Err(e) => {
-                logs.push(format!("⚠️ 快照捕获失败: {}，回退旧 UI dump 逻辑", e));
-            }
-        }
-
-        // 回退：沿用原来的重试包装
-        let device_id_cloned = self.device_id.clone();
-        let result = self.exec_env.run_with_retry(move |attempt| {
-            let device_id = device_id_cloned.clone();
-            async move {
-                if attempt > 0 {
-                    if let Ok(session) = get_device_session(&device_id).await { let _ = session.execute_command("rm -f /sdcard/ui_dump.xml").await; }
-                }
-                let dump = get_device_session(&device_id).await?.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await?;
-                if dump.is_empty() || dump.contains("ERROR:") || dump.contains("null root node") { Err(anyhow::anyhow!("UI dump 内容异常")) } else { Ok(dump) }
-            }
-        }).await;
-        match result { Ok(d) => { logs.push(format!("✅ UI结构获取成功（回退路径），长度: {} 字符", d.len())); Ok(d) }, Err(e) => { logs.push(format!("❌ UI结构获取失败: {}", e)); Err(e) } }
-    }
-
-    /// 尝试执行 UI dump
-    async fn try_ui_dump(&self) -> Result<String> {
-        if let Ok(Some(xml)) = self.capture_ui_snapshot().await { if !xml.is_empty() { return Ok(xml); } }
-        let session = get_device_session(&self.device_id).await?; // 回退
-        session.execute_command("uiautomator dump /sdcard/ui_dump.xml && cat /sdcard/ui_dump.xml").await
+        self.ui_bridge.execute_ui_dump_with_retry(logs).await
     }
 
     /// LegacyUiActions trait 会通过 async_trait 生成 dyn Future，因此保持签名稳定。
 
     /// 带重试机制的点击执行
     pub(crate) async fn execute_click_with_retry(&self, x: i32, y: i32, logs: &mut Vec<String>) -> Result<String> {
-        logs.push("👆 开始执行点击操作（带重试机制）...".to_string());
-        
-        let max_retries = 2;
-        let mut last_error: Option<anyhow::Error> = None;
-        
-        for attempt in 1..=max_retries {
-            if attempt > 1 {
-                logs.push(format!("🔄 重试点击操作 - 第 {}/{} 次尝试", attempt, max_retries));
-                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-            }
-            
-            match self.try_click_xy(x, y).await {
-                Ok(output) => {
-                    // 短暂延迟确保点击生效
-                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                    logs.push("⏱️  点击后延迟200ms完成".to_string());
-                    return Ok(output);
-                }
-                Err(e) => {
-                    logs.push(format!("❌ 点击失败: {} (尝试 {}/{})", e, attempt, max_retries));
-                    last_error = Some(e);
-                }
-            }
-        }
-        
-        logs.push(format!("❌ 点击操作最终失败，已重试 {} 次", max_retries));
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("点击操作失败")))
-    }
-
-    /// 尝试执行点击
-    async fn try_click_xy(&self, x: i32, y: i32) -> Result<String> {
-        let session = get_device_session(&self.device_id).await?;
-        session.tap(x, y).await?;
-        Ok("OK".to_string())
+        self.ui_bridge.execute_click_with_retry(x, y, logs).await
     }
 
     /// 获取错误处理统计信息

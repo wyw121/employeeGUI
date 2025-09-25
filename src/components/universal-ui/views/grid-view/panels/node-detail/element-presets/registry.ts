@@ -8,7 +8,26 @@ export const ELEMENT_PRESETS: ElementPreset[] = [
     description: '适配小红书等社交 App 的"关注"按钮，基于真实XML优化',
     hints: ['标准策略匹配', '使用子节点文本', '排除已关注状态', '跨设备兼容'],
     buildCriteria: ({ node }) => {
-      if (!node) return null;
+      // 允许在没有选中节点时也提供合理的默认预设，便于在步骤卡中直接使用
+      if (!node) {
+        const fields = ['package', 'class', 'clickable', 'first_child_text', 'first_child_class'];
+        const values: Record<string, string> = {
+          'package': 'com.xingin.xhs',
+          'class': 'android.widget.FrameLayout',
+          'clickable': 'true',
+          'first_child_text': '关注',
+          'first_child_class': 'android.widget.TextView',
+        };
+        const includes: Record<string, string[]> = {
+          'package': ['com.xingin.xhs'],
+          'first_child_text': ['关注'],
+          'class': ['FrameLayout'],
+        };
+        const excludes: Record<string, string[]> = {
+          'first_child_text': ['已关注', '关注中', '已拉黑', '取消关注'],
+        };
+        return { strategy: 'standard', fields, values, includes, excludes };
+      }
       const strategy: MatchStrategy = 'standard';
       
       // 基于真实XML分析的字段组合：package, class, clickable, first_child_text, first_child_class
@@ -48,7 +67,34 @@ export const ELEMENT_PRESETS: ElementPreset[] = [
     description: '通用的社交功能按钮预设，适用于关注、删除好友、添加好友等多种场景',
     hints: ['跨APP兼容', '动态文本匹配', '智能排除已操作状态', '灵活字段组合'],
     buildCriteria: ({ node }) => {
-      if (!node) return null;
+      if (!node) {
+        // 无节点时的通用默认：在步骤卡中可直接选择使用
+        const fields = [
+          'class',
+          'clickable',
+          'text',
+          'first_child_text',
+        ];
+        const values: Record<string, string> = {
+          'clickable': 'true',
+        };
+        const socialTexts = [
+          '关注','添加好友','删除好友','移除好友','加关注','取消关注','私聊','发消息','聊天','邀请','拉黑','举报','分享','收藏','点赞','评论','转发','投票','订阅',
+          'Follow','Unfollow','Add Friend','Remove Friend','Delete Friend','Message','Chat','Share','Like','Comment','Subscribe',
+          '确定','确认','取消','删除','移除','添加'
+        ];
+        const includes: Record<string, string[]> = {
+          text: socialTexts,
+          first_child_text: socialTexts,
+        };
+        const excludes: Record<string, string[]> = {
+          text: ['已关注','已添加','已删除','已移除','已拉黑','已发送','已收藏','已点赞','已订阅','已完成','Following','Added','Sent','Done','Completed'],
+          first_child_text: ['已关注','已添加','已删除','已移除','已拉黑','已发送','已收藏','已点赞','已订阅','已完成','Following','Added','Sent','Done','Completed'],
+          clickable: ['false'],
+          class: ['android.view.View','android.widget.ImageView']
+        };
+        return { strategy: 'standard', fields, values, includes, excludes };
+      }
       const attrs = node.attrs || {};
       const strategy: MatchStrategy = 'standard';
       

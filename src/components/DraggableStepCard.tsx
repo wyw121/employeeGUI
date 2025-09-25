@@ -16,6 +16,7 @@ import {
 import { MatchingStrategyTag, ScrollDirectionSelector, ScrollParamsEditor } from './step-card';
 // 复用网格检查器里的策略选择器与预设字段映射（通过子模块桶文件导出）
 import { MatchingStrategySelector } from './universal-ui/views/grid-view/panels/node-detail';
+import { ElementPresetsRow } from './universal-ui/views/grid-view/panels/node-detail';
 import { SelectedFieldsPreview } from './universal-ui/views/grid-view/panels/node-detail';
 import { SelectedFieldsChips } from './universal-ui/views/grid-view/panels/node-detail';
 import { SelectedFieldsEditor } from './universal-ui/views/grid-view/panels/node-detail';
@@ -512,6 +513,41 @@ export const DraggableStepCard: React.FC<DraggableStepCardProps> = ({
                           message.success(`已切换匹配策略为：${next}`);
                         }}
                       />
+                      {/* 元素级预设（关注按钮/通用社交等） */}
+                      <div className="mt-2">
+                        <ElementPresetsRow
+                          node={null}
+                          onPreviewFields={(fs) => {
+                            const prev = step.parameters?.matching || {};
+                            const nextParams = {
+                              ...(step.parameters || {}),
+                              matching: {
+                                ...prev,
+                                fields: fs,
+                                // 预设切换即视为自定义
+                                strategy: 'custom' as MatchStrategy,
+                              },
+                            };
+                            onUpdateStepParameters?.(step.id, nextParams);
+                          }}
+                          onApply={(criteria) => {
+                            const prev = step.parameters?.matching || {};
+                            const nextParams = {
+                              ...(step.parameters || {}),
+                              matching: {
+                                ...prev,
+                                strategy: criteria.strategy as MatchStrategy,
+                                fields: criteria.fields,
+                                values: criteria.values,
+                                excludes: criteria.excludes,
+                                includes: criteria.includes,
+                              },
+                            };
+                            onUpdateStepParameters?.(step.id, nextParams);
+                            message.success('已应用元素预设');
+                          }}
+                        />
+                      </div>
                       {/* 字段 chips 快速增删（变更后自动标记为 custom） */}
                       <div className="mt-2">
                         <SelectedFieldsChips

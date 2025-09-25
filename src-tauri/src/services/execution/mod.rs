@@ -9,6 +9,8 @@ pub mod matcher; // MatcherService 草案
 pub mod snapshot_real; // RealSnapshotProvider 实现
 pub mod registry; // 全局执行环境注册表
 pub mod matching; // 统一匹配与传统回退逻辑
+pub mod orchestrator; // 智能脚本批量执行编排器
+pub mod actions; // 智能脚本动作分发器
 
 pub use model::*;
 pub use retry::*;
@@ -23,3 +25,5 @@ pub use matching::{
 	run_traditional_find,
 	LegacyUiActions,
 };
+pub use orchestrator::SmartScriptOrchestrator;
+pub use actions::SmartActionDispatcher;

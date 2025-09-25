@@ -1,8 +1,8 @@
 import React from 'react';
-import styles from '../../GridElementView.module.css';
+import styles from '../../../GridElementView.module.css';
 import type { UiNode } from '../../../types';
 import type { MatchCriteria } from '../types';
-import { ELEMENT_PRESETS } from './registry';
+import { ELEMENT_PRESETS } from './registry.ts';
 
 export interface ElementPresetsRowProps {
   node: UiNode | null;

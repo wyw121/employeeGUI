@@ -117,6 +117,9 @@ where
             values,
             includes,
             excludes,
+            match_mode: std::collections::HashMap::new(),
+            regex_includes: std::collections::HashMap::new(),
+            regex_excludes: std::collections::HashMap::new(),
         };
 
         let strategy_name = strategy.clone();

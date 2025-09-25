@@ -96,7 +96,7 @@ pub use core::{
 };
 
 pub use detectors::{
-    XiaohongshuDetector, WechatDetector, GenericDetector
+    WechatDetector, GenericDetector
 };
 
 pub use factory::{

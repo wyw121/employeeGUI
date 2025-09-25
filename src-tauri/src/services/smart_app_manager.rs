@@ -74,8 +74,13 @@ impl SmartAppManager {
 
         // 并发拉取应用详情，限制并发度
         let concurrency = 8usize;
-        let mut apps: Vec<AppInfo> = stream::iter(filtered)
-            .map(|pkg| async move { fetch_app_info(&self.device_id, &pkg).await })
+        // 注意：为满足异步流的生命周期要求，避免捕获 &self 的引用，改为克隆 device_id 与包名
+        let device_id = self.device_id.clone();
+        let mut apps: Vec<AppInfo> = stream::iter(filtered.into_iter())
+            .map(move |pkg: String| {
+                let did = device_id.clone();
+                async move { fetch_app_info(&did, &pkg).await }
+            })
             .buffer_unordered(concurrency)
             .filter_map(|res| async move { res.ok() })
             .collect()
@@ -85,6 +90,32 @@ impl SmartAppManager {
 
         info!("📊 成功获取 {} 个应用（并发）", apps.len());
         self.cache.set_apps(apps.clone());
+        Ok(apps)
+    }
+
+    /// 新模式：支持 filter_mode 与 refresh_strategy
+    /// filter_mode: "all" | "only_user" | "only_system"
+    /// refresh_strategy: "cache_first" | "force_refresh"
+    pub async fn get_installed_apps_with_modes(&mut self, filter_mode: &str, refresh_strategy: &str) -> Result<Vec<AppInfo>> {
+        let include_system = match filter_mode {
+            "all" => true,
+            "only_system" => true,
+            _ => false, // only_user
+        };
+        let force = matches!(refresh_strategy, "force_refresh");
+
+        let mut apps = self.get_installed_apps(include_system, force).await?;
+
+        // 二次过滤三态
+        match filter_mode {
+            "only_system" => {
+                apps.retain(|a| a.is_system_app);
+            }
+            "only_user" => {
+                apps.retain(|a| !a.is_system_app);
+            }
+            _ => {}
+        }
         Ok(apps)
     }
 

@@ -3,6 +3,7 @@ use tokio::sync::Mutex;
 use std::collections::HashMap;
 use crate::services::smart_app_manager::{SmartAppManager, AppInfo, AppLaunchResult};
 use tracing::{info, error};
+use crate::services::smart_app::icon::{pull_apk_to_temp, extract_icon_from_apk};
 
 /// 全局应用管理器状态
 pub struct SmartAppManagerState {
@@ -18,11 +19,15 @@ impl SmartAppManagerState {
 }
 
 /// 获取设备应用列表
+/// filter_mode: "all" | "only_user" | "only_system"
+/// refresh_strategy: "cache_first" | "force_refresh"
 #[command]
 pub async fn get_device_apps(
     device_id: String,
-    include_system_apps: Option<bool>,
-    force_refresh: Option<bool>,
+    include_system_apps: Option<bool>, // backward compatibility
+    force_refresh: Option<bool>, // backward compatibility
+    filter_mode: Option<String>,
+    refresh_strategy: Option<String>,
     state: State<'_, SmartAppManagerState>,
 ) -> Result<Vec<AppInfo>, String> {
     info!("📱 获取设备 {} 的应用列表", device_id);
@@ -32,12 +37,29 @@ pub async fn get_device_apps(
         .entry(device_id.clone())
         .or_insert_with(|| SmartAppManager::new(device_id.clone()));
 
+    // Back compat vs new params
     let include = include_system_apps.unwrap_or(false);
     let force = force_refresh.unwrap_or(false);
+    let fm = filter_mode.unwrap_or_else(|| if include { "all".into() } else { "only_user".into() });
+    let rs = refresh_strategy.unwrap_or_else(|| if force { "force_refresh".into() } else { "cache_first".into() });
 
-    manager.get_installed_apps(include, force).await.map_err(|e| {
+    manager.get_installed_apps_with_modes(&fm, &rs).await.map_err(|e| {
         error!("获取应用列表失败: {}", e);
         format!("获取应用列表失败: {}", e)
+    })
+}
+
+/// 按需提取应用图标（PNG字节）
+#[command]
+pub async fn get_app_icon(
+    device_id: String,
+    package_name: String,
+) -> Result<Vec<u8>, String> {
+    info!("🖼️ 提取应用图标: {} on {}", package_name, device_id);
+    tokio::task::block_in_place(|| {
+        pull_apk_to_temp(&device_id, &package_name)
+            .and_then(|apk| extract_icon_from_apk(&apk).map_err(|e| e))
+            .map_err(|e| format!("提取图标失败: {}", e))
     })
 }
 

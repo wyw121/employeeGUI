@@ -53,6 +53,8 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'user' | 'system'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled');
   const [viewMode, setViewMode] = useState<'popular' | 'all' | 'search'>('popular');
+  const [icons, setIcons] = useState<Record<string, string | null>>({});
+  const [iconLoadingSet, setIconLoadingSet] = useState<Set<string>>(new Set());
 
   // 加载设备应用
   const loadDeviceApps = async () => {
@@ -107,6 +109,41 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
 
     return result;
   }, [apps, categoryFilter, statusFilter, searchQuery, viewMode]);
+
+  // 懒加载当前可见列表的图标（限制并发）
+  useEffect(() => {
+    let cancelled = false;
+    const toLoad = filteredApps
+      .filter((a) => icons[a.package_name] === undefined && !iconLoadingSet.has(a.package_name))
+      .slice(0, 12); // 每次最多加载12个
+
+    if (toLoad.length === 0 || !deviceId) return;
+
+    const run = async () => {
+      const concurrency = 4;
+      const queue = [...toLoad];
+      const loading = new Set(iconLoadingSet);
+      toLoad.forEach((a) => loading.add(a.package_name));
+      setIconLoadingSet(loading);
+
+      const workers = Array.from({ length: concurrency }).map(async () => {
+        while (queue.length && !cancelled) {
+          const app = queue.shift();
+          if (!app) break;
+          const dataUrl = await smartAppService.getAppIcon(deviceId, app.package_name);
+          if (cancelled) break;
+          setIcons((prev) => ({ ...prev, [app.package_name]: dataUrl }));
+        }
+      });
+      await Promise.all(workers);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredApps, deviceId]);
 
   // 处理应用选择
   const handleSelectApp = (app: AppInfo) => {
@@ -272,7 +309,8 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
                 <List.Item.Meta
                   avatar={
                     <Avatar 
-                      icon={getAppIcon(app)}
+                      src={icons[app.package_name] || undefined}
+                      icon={!icons[app.package_name] ? getAppIcon(app) : undefined}
                       style={{
                         backgroundColor: app.is_system_app ? '#f5f5f5' : '#e6f7ff'
                       }}

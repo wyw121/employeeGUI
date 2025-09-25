@@ -7,6 +7,7 @@
 use crate::services::multi_brand_vcf_importer::{MultiBrandVcfImporter, MultiBrandImportResult};
 use crate::services::huawei_enhanced_importer::{HuaweiEmuiEnhancedStrategy, ImportExecutionResult};
 use crate::services::vcf_importer::{Contact, VcfImporter, VcfImportResult, VcfVerifyResult};
+use crate::services::ldplayer_vcf_opener::{open_existing_vcf_in_ldplayer, import_and_open_vcf};
 use tauri::command;
 use tracing::{error, info, warn};
 
@@ -23,6 +24,60 @@ pub async fn generate_vcf_file(contacts: Vec<Contact>, output_path: String) -> R
 }
 
 // 旧的小红书自动关注复合流程已完全移除。
+
+/// 兼容旧命令：直接导入VCF（优化版别名）
+#[command]
+pub async fn import_vcf_contacts(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<VcfImportResult, String> {
+    let importer = VcfImporter::new(device_id);
+    importer
+        .import_vcf_contacts(&contacts_file_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 兼容旧命令：带 Intent 回退的导入（推荐路径）
+#[command]
+pub async fn import_vcf_contacts_with_intent_fallback(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<VcfImportResult, String> {
+    let importer = VcfImporter::new(device_id);
+    importer
+        .import_vcf_contacts_with_intent_fallback(&contacts_file_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 兼容旧命令：异步安全版本（语义等价为推荐路径）
+/// 注：Tauri 命令本身已是异步，这里复用 intent 回退实现，确保行为一致。
+#[command]
+pub async fn import_vcf_contacts_async_safe(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<VcfImportResult, String> {
+    import_vcf_contacts_with_intent_fallback(device_id, contacts_file_path).await
+}
+
+/// 兼容旧命令：优化版（映射到基础导入实现）
+#[command]
+pub async fn import_vcf_contacts_optimized(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<VcfImportResult, String> {
+    import_vcf_contacts(device_id, contacts_file_path).await
+}
+
+/// 兼容旧命令：Python移植版本（当前统一映射到 intent 回退实现）
+#[command]
+pub async fn import_vcf_contacts_python_version(
+    device_id: String,
+    contacts_file_path: String,
+) -> Result<VcfImportResult, String> {
+    import_vcf_contacts_with_intent_fallback(device_id, contacts_file_path).await
+}
 
 /// 多品牌VCF导入（批量尝试不同品牌的导入方式）
 #[command]
@@ -145,4 +200,38 @@ pub async fn import_vcf_contacts_huawei_enhanced(
     }
 
     Err("所有华为增强导入方法都失败了".to_string())
+}
+
+/// 兼容命令：验证导入结果（调用 VcfImporter 验证接口）
+#[command]
+pub async fn verify_vcf_import(
+    device_id: String,
+    expected_contacts: Vec<Contact>,
+) -> Result<VcfVerifyResult, String> {
+    let importer = VcfImporter::new(device_id);
+    importer.verify_vcf_import(expected_contacts).await.map_err(|e| e.to_string())
+}
+
+/// 兼容命令：打开已有的VCF文件（雷电模拟器专用）
+#[command]
+pub async fn open_vcf_file_ldplayer(
+    device_id: String,
+    vcf_file_path: String,
+) -> Result<String, String> {
+    match open_existing_vcf_in_ldplayer(&device_id, &vcf_file_path).await {
+        Ok(_) => Ok("OK".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// 兼容命令：导入并打开VCF（雷电模拟器专用）
+#[command]
+pub async fn import_and_open_vcf_ldplayer(
+    device_id: String,
+    vcf_file_path: String,
+) -> Result<String, String> {
+    match import_and_open_vcf(&device_id, &vcf_file_path).await {
+        Ok(_) => Ok("OK".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
 }

@@ -12,7 +12,18 @@ export class SmartAppService {
   /**
    * 获取设备上的所有应用
    */
-  async getDeviceApps(deviceId: string, includeSystemApps = false, forceRefresh = false): Promise<AppInfo[]> {
+  /**
+   * 获取设备应用列表
+   * filterMode: 'all' | 'only_user' | 'only_system'
+   * refreshStrategy: 'cache_first' | 'force_refresh'
+   */
+  async getDeviceApps(
+    deviceId: string,
+    includeSystemApps = false,
+    forceRefresh = false,
+    filterMode?: 'all' | 'only_user' | 'only_system',
+    refreshStrategy?: 'cache_first' | 'force_refresh'
+  ): Promise<AppInfo[]> {
     try {
       // 先看本地缓存
       const cached = this.cachedApps.get(deviceId);
@@ -24,7 +35,9 @@ export class SmartAppService {
       const apps = await invoke<AppInfo[]>('get_device_apps', {
         device_id: deviceId,
         include_system_apps: includeSystemApps,
-        force_refresh: forceRefresh
+        force_refresh: forceRefresh,
+        filter_mode: filterMode ?? (includeSystemApps ? 'all' : 'only_user'),
+        refresh_strategy: refreshStrategy ?? (forceRefresh ? 'force_refresh' : 'cache_first')
       });
       // 缓存结果（总是缓存全量，前端过滤系统/用户）
       this.cachedApps.set(deviceId, { apps, ts: now });
@@ -40,6 +53,29 @@ export class SmartAppService {
       }
       
       throw error;
+    }
+  }
+
+  /**
+   * 懒加载应用图标（PNG字节）
+   */
+  async getAppIcon(deviceId: string, packageName: string): Promise<string | null> {
+    try {
+      const bytes = await invoke<number[]>('get_app_icon', {
+        device_id: deviceId,
+        package_name: packageName
+      });
+      // 将 number[] 转为 Uint8Array -> Blob -> data URL
+      const u8 = new Uint8Array(bytes);
+      const blob = new Blob([u8.buffer], { type: 'image/png' });
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn('获取图标失败:', e);
+      return null;
     }
   }
 

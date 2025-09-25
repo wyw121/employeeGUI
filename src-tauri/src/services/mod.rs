@@ -26,6 +26,7 @@ pub mod smart_app_service;
 pub mod smart_element_finder_service;  // 新增：智能元素查找服务
 pub mod smart_script_executor;
 pub mod smart_script_executor_actions;  // 公开基础操作实现（点击/滑动/输入/等待等）
+pub mod execution;  // 新增：执行分层骨架 (模型/重试/快照)
 pub mod smart_vcf_opener;
 pub mod ui_reader_service;
 pub mod universal_ui_finder;  // Universal UI Finder 核心模块

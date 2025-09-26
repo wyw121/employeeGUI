@@ -480,9 +480,9 @@ impl ScriptExecutor {
             value: params.get("value").and_then(|v| v.as_str()).map(|s| s.to_string()),
         };
 
-        let result = crate::xml_judgment_service::XmlJudgmentService::wait_for_element(
-            &self.device_id, 
-            &condition, 
+        let result = crate::xml_judgment_service::wait_for_element(
+            &self.device_id,
+            &condition,
             timeout_ms
         ).await.map_err(|e| anyhow::anyhow!("等待元素失败: {}", e))?;
 

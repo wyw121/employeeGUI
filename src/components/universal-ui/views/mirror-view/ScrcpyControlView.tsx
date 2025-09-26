@@ -5,7 +5,7 @@ import { useAdb } from '../../../../application/hooks/useAdb';
 import EmbeddedScrcpyPlayer from './EmbeddedScrcpyPlayer';
 import CapabilityChips from './CapabilityChips';
 import { useScrcpySessions } from '../../../../application/hooks/useScrcpySessions';
-import { useScrcpyPresets } from './hooks/useScrcpyPresets';
+import { usePresets } from './presets/usePresets';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -33,7 +33,7 @@ export const ScrcpyControlView: React.FC = () => {
   const [borderless, setBorderless] = useState<boolean>(localStorage.getItem('scrcpy.borderless') === 'true');
   const [renderMode, setRenderMode] = useState<'external' | 'embedded'>((localStorage.getItem('scrcpy.renderMode') as any) || 'external');
   const [caps, setCaps] = useState<ScrcpyCapabilities | null>(null);
-  const { presets, savePreset, removePreset } = useScrcpyPresets();
+  const { presets, savePreset, removePreset } = usePresets();
   // 默认选择：优先已选设备，否则第一个在线设备
   useEffect(() => {
     if (!selected) {

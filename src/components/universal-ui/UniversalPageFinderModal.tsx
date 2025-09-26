@@ -113,6 +113,10 @@ import {
 } from "./element-selection";
 // 抽离的属性匹配服务
 import { pickByAttributes } from './page-finder/services/pickByAttributes';
+import { handleLoadFromDirectXmlContent as serviceLoadDirectXml } from './page-finder/services/directXmlLoader';
+import { handleLoadFromDistributedStep as serviceLoadDistributedStep } from './page-finder/services/distributedStepLoader';
+import { handleLoadFromStepXmlCache as serviceLoadFromStepXmlCache } from './page-finder/services/stepXmlCacheLoader';
+import { handleLoadFromLocalStep as serviceLoadFromLocalStep } from './page-finder/services/localStepLoader';
 // 🆕 使用专门的可视化页面分析组件
 // 移除基于 Tab 的外置可视化容器，改为旧版两列布局中的三视图切换
 
@@ -307,321 +311,70 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
   };
 
-  // 🆕 直接从传递的XML内容加载数据（最高优先级）
-  const handleLoadFromDirectXmlContent = async (stepXmlInfo: {
-    stepId: string;
-    xmlContent: string;
-    deviceId?: string;
-    deviceName?: string;
-  }): Promise<boolean> => {
-    try {
-      // 🔧 防重复处理：检查是否已经加载了相同的内容
-      if (currentXmlContent === stepXmlInfo.xmlContent) {
-        console.log("⏸️ XML内容相同，跳过重复加载:", {
-          stepId: stepXmlInfo.stepId,
-          xmlLength: stepXmlInfo.xmlContent.length
-        });
-        return true;
-      }
+  // 重定向到抽离的 directXmlLoader 服务
+  const handleLoadFromDirectXmlContent = (info: { stepId: string; xmlContent: string; deviceId?: string; deviceName?: string; }) =>
+    serviceLoadDirectXml(info, {
+      currentXmlContent,
+      setCurrentXmlContent,
+      setCurrentXmlCacheId,
+      setSelectedDevice,
+      setUIElements,
+      setElements,
+      setCategories,
+      setViewMode,
+      onXmlContentUpdated,
+      emitSnapshotUpdated
+    });
 
-      console.log("✨ 从步骤直接传递的XML内容加载:", {
-        stepId: stepXmlInfo.stepId,
-        xmlLength: stepXmlInfo.xmlContent.length,
-        deviceId: stepXmlInfo.deviceId,
-        deviceName: stepXmlInfo.deviceName,
-      });
-
-      // 设置XML内容和缓存ID
-      setCurrentXmlContent(stepXmlInfo.xmlContent);
-      setCurrentXmlCacheId(`direct_${stepXmlInfo.stepId}_${Date.now()}`);
-      
-      // 🔧 只有在内容确实发生变化时才调用回调
-      if (onXmlContentUpdated && currentXmlContent !== stepXmlInfo.xmlContent) {
-        const deviceInfo = stepXmlInfo.deviceId
-          ? {
-              deviceId: stepXmlInfo.deviceId,
-              deviceName: stepXmlInfo.deviceName || stepXmlInfo.deviceId,
-              appPackage: "com.xingin.xhs",
-              activityName: "unknown",
-            }
-          : undefined;
-        onXmlContentUpdated(stepXmlInfo.xmlContent, deviceInfo, {
-          appName: "小红书",
-          pageTitle: "步骤内置XML",
-        } as any);
-
-        // 🆕 构建并上报快照（若可用）
-        {
-          const snap = buildSnapshotIfPossible(
-            stepXmlInfo.xmlContent,
-            deviceInfo,
-            { pageTitle: "步骤内置XML" } as any
-          );
-          if (snap) emitSnapshotUpdated(snap);
-        }
-      }
-
-      // 如果有设备信息，设置设备选择
-      if (stepXmlInfo.deviceId) {
-        setSelectedDevice(stepXmlInfo.deviceId);
-      }
-
-      // 解析XML并提取UI元素
-      const elements = await UniversalUIAPI.extractPageElements(
-        stepXmlInfo.xmlContent
-      );
-      setUIElements(elements);
-
-      // 使用新的模块化XML解析功能
-      try {
-        const parseResult = parseXML(stepXmlInfo.xmlContent);
-        setElements(parseResult.elements);
-        setCategories(parseResult.categories);
-        console.log("✅ 步骤XML直接解析完成:", {
-          elementsCount: parseResult.elements.length,
-          categoriesCount: parseResult.categories.length,
-        });
-      } catch (parseError) {
-        console.error("❌ 步骤XML直接解析失败:", parseError);
-      }
-
-      // 设置为网格视图，便于快速定位元素
-      setViewMode("grid");
-
-      message.success(`已从步骤加载原始XML页面 (${elements.length} 个元素)`);
-      return true;
-    } catch (error) {
-      console.error("❌ 从步骤XML内容加载失败:", error);
-      message.error("从步骤XML内容加载失败");
-      return false;
-    }
-  };
-
-  // 🆕 处理从分布式脚本的嵌入式XML快照加载数据
-  const handleLoadFromDistributedStep = async (
-    stepId: string
-  ): Promise<boolean> => {
-    try {
-      console.log("🔄 尝试从分布式脚本加载XML快照:", stepId);
-
-      // 尝试获取分布式步骤
-      const distributedStep = await findDistributedStepById(stepId);
-      if (!distributedStep || !distributedStep.xmlSnapshot) {
-        console.warn("⚠️ 未找到分布式步骤或XML快照:", stepId);
-        return false;
-      }
-
-      // 使用分布式检查器服务加载嵌入式XML快照
-      const distributedService = new DistributedInspectorService();
-      const tempSession = await distributedService.openStepXmlContext(
-        distributedStep
-      );
-
-      if (!tempSession || !tempSession.xmlContent) {
-        console.warn("⚠️ 创建临时会话失败:", stepId);
-        return false;
-      }
-
-      const xmlSnapshot = distributedStep.xmlSnapshot;
-      console.log("✅ 从分布式脚本加载XML快照成功:", {
-        stepId,
-        hash: xmlSnapshot.xmlHash,
-        deviceInfo: xmlSnapshot.deviceInfo,
-        pageInfo: xmlSnapshot.pageInfo,
-        timestamp: new Date(xmlSnapshot.timestamp).toLocaleString(),
-      });
-
-      // 设置XML内容和临时缓存ID
-      setCurrentXmlContent(xmlSnapshot.xmlContent);
-      setCurrentXmlCacheId(`distributed_${stepId}_${xmlSnapshot.xmlHash}`);
-      // 通知父组件（用于自包含脚本保存前校验）
-      if (onXmlContentUpdated) {
-        const deviceInfo = xmlSnapshot.deviceInfo || undefined;
-        // 兼容上层校验需要的最小字段
-        const pageInfo = { ...xmlSnapshot.pageInfo } as any;
-        if (!pageInfo.appName) pageInfo.appName = "小红书";
-        onXmlContentUpdated(xmlSnapshot.xmlContent, deviceInfo, pageInfo);
-
-        // 🆕 同步上报快照（转换/校验后）
-        {
-          const snap = buildSnapshotIfPossible(
-            xmlSnapshot.xmlContent,
-            xmlSnapshot.deviceInfo,
-            xmlSnapshot.pageInfo as any
-          );
-          if (snap) emitSnapshotUpdated(snap);
-        }
-      }
-
-      // 如果有设备信息，设置设备选择
-      if (xmlSnapshot.deviceInfo?.deviceId) {
-        setSelectedDevice(xmlSnapshot.deviceInfo.deviceId);
-      }
-
-      // 解析XML并提取UI元素
-      const elements = await UniversalUIAPI.extractPageElements(
-        xmlSnapshot.xmlContent
-      );
-      setUIElements(elements);
-
-      // 使用新的模块化XML解析功能
-      try {
-        const parseResult = parseXML(xmlSnapshot.xmlContent);
-        setElements(parseResult.elements);
-        setCategories(parseResult.categories);
-        console.log("✅ 分布式XML快照解析完成:", {
-          elementsCount: parseResult.elements.length,
-          categoriesCount: parseResult.categories.length,
-        });
-      } catch (parseError) {
-        console.error("❌ 分布式XML快照解析失败:", parseError);
-      }
-
-      // 设置为网格视图，便于快速定位元素
-      setViewMode("grid");
-
-      message.success(`已从分布式脚本加载XML快照 (${elements.length} 个元素)`);
-      return true;
-    } catch (error) {
-      console.error("❌ 从分布式脚本加载XML快照失败:", error);
-      message.error("从分布式脚本加载XML快照失败");
-      return false;
-    }
-  };
+  // 抽离后的封装：调用分布式步骤 XML 加载 service
+  const handleLoadFromDistributedStep = (stepId: string) =>
+    serviceLoadDistributedStep(stepId, {
+      currentXmlContent,
+      setCurrentXmlContent,
+      setCurrentXmlCacheId,
+      setSelectedDevice,
+      setUIElements,
+      setElements,
+      setCategories,
+      setViewMode,
+      onXmlContentUpdated,
+      emitSnapshotUpdated
+    }, { findDistributedStepById });
 
   // 🆕 查找分布式步骤的辅助方法
   const findDistributedStepById = async (stepId: string): Promise<any> => {
     return await distributedStepLookupService.findDistributedStepById(stepId);
   };
 
-  // 处理从步骤关联的XML缓存加载数据
-  const handleLoadFromStepXml = async (xmlCacheId: string) => {
-    try {
-      const xmlCacheManager = XmlCacheManager.getInstance();
-      const cacheEntry = xmlCacheManager.getCachedXml(xmlCacheId);
+  // 抽离后的封装：步骤 XML 缓存加载
+  const handleLoadFromStepXml = (xmlCacheId: string) =>
+    serviceLoadFromStepXmlCache(xmlCacheId, {
+      currentXmlContent,
+      setCurrentXmlContent,
+      setCurrentXmlCacheId,
+      setSelectedDevice,
+      setUIElements,
+      setElements,
+      setCategories,
+      setViewMode,
+      onXmlContentUpdated,
+      emitSnapshotUpdated
+    });
 
-      if (!cacheEntry) {
-        console.warn("⚠️ 未找到XML缓存条目:", xmlCacheId);
-        return false;
-      }
-
-      console.log("✅ 加载步骤关联的XML数据:", {
-        xmlCacheId,
-        deviceId: cacheEntry.deviceId,
-        elementCount: cacheEntry.pageInfo.elementCount,
-        timestamp: new Date(cacheEntry.timestamp).toLocaleString(),
-      });
-
-      // 设置XML内容和缓存ID
-      setCurrentXmlContent(cacheEntry.xmlContent);
-      setCurrentXmlCacheId(xmlCacheId);
-      if (onXmlContentUpdated) {
-        const deviceInfo = {
-          deviceId: cacheEntry.deviceId,
-          deviceName: cacheEntry.deviceName,
-          appPackage: cacheEntry.pageInfo?.appPackage || "com.xingin.xhs",
-          activityName: cacheEntry.pageInfo?.activityName || "unknown",
-        };
-        const pageInfo = { ...cacheEntry.pageInfo } as any;
-        if (!pageInfo.appName) pageInfo.appName = "小红书";
-        onXmlContentUpdated(cacheEntry.xmlContent, deviceInfo, pageInfo);
-
-        // 🆕 构建并上报快照
-        {
-          const snap = buildSnapshotIfPossible(
-            cacheEntry.xmlContent,
-            deviceInfo,
-            pageInfo
-          );
-          if (snap) emitSnapshotUpdated(snap);
-        }
-      }
-
-      // 设置设备信息
-      setSelectedDevice(cacheEntry.deviceId);
-
-      // 解析XML并提取UI元素
-      const elements = await UniversalUIAPI.extractPageElements(
-        cacheEntry.xmlContent
-      );
-      setUIElements(elements);
-
-      // 使用新的模块化XML解析功能
-      if (cacheEntry.xmlContent) {
-        try {
-          const parseResult = parseXML(cacheEntry.xmlContent);
-          setElements(parseResult.elements);
-          setCategories(parseResult.categories);
-          console.log("✅ 步骤XML解析完成:", {
-            elementsCount: parseResult.elements.length,
-            categoriesCount: parseResult.categories.length,
-          });
-        } catch (parseError) {
-          console.error("❌ 步骤XML解析失败:", parseError);
-        }
-      }
-
-      message.success(`已加载步骤关联的页面数据 (${elements.length} 个元素)`);
-      return true;
-    } catch (error) {
-      console.error("❌ 加载步骤XML数据失败:", error);
-      message.error("加载步骤关联的页面数据失败");
-      return false;
-    }
-  };
-
-  // 🆕 Fallback：根据 stepId 从本地步骤仓储载入 xmlSnapshot
-  const handleLoadFromStepByStepId = async (stepId: string) => {
-    try {
-      const repo = new LocalStepRepository();
-      const step = await repo.get(stepId);
-      if (!step || !step.xmlSnapshot) {
-        message.warning("未找到步骤的 XML 快照");
-        return false;
-      }
-      const xml = step.xmlSnapshot;
-      setCurrentXmlContent(xml);
-      const xmlCacheId = `step_${stepId}`;
-      setCurrentXmlCacheId(xmlCacheId);
-      if (onXmlContentUpdated) {
-        onXmlContentUpdated(xml, undefined, {
-          appName: "小红书",
-          pageTitle: "步骤快照",
-        } as any);
-
-        // 🆕 构建并上报快照（设备信息缺失时也可构建）
-        {
-          const snap = buildSnapshotIfPossible(
-            xml,
-            undefined,
-            { pageTitle: "步骤快照" } as any
-          );
-          if (snap) emitSnapshotUpdated(snap);
-        }
-      }
-
-      const elements = await UniversalUIAPI.extractPageElements(xml);
-      setUIElements(elements);
-      if (xml) {
-        try {
-          const parseResult = parseXML(xml);
-          setElements(parseResult.elements);
-          setCategories(parseResult.categories);
-          console.log("✅ 从步骤快照解析完成", {
-            count: parseResult.elements.length,
-          });
-        } catch (parseError) {
-          console.error("❌ 步骤快照解析失败:", parseError);
-        }
-      }
-      setViewMode("grid");
-      message.success(`已从步骤快照载入 XML`);
-      return true;
-    } catch (e) {
-      console.error("载入步骤快照失败", e);
-      return false;
-    }
-  };
+  // 抽离后的封装：本地步骤仓储快照加载
+  const handleLoadFromStepByStepId = (stepId: string) =>
+    serviceLoadFromLocalStep(stepId, {
+      currentXmlContent,
+      setCurrentXmlContent,
+      setCurrentXmlCacheId,
+      setSelectedDevice,
+      setUIElements,
+      setElements,
+      setCategories,
+      setViewMode,
+      onXmlContentUpdated,
+      emitSnapshotUpdated
+    });
 
   // 获取页面UI结构
   const getPageUIElements = async (device: string) => {

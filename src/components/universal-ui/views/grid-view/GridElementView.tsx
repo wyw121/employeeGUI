@@ -65,6 +65,12 @@ import { useXPathNavigator } from './hooks/useXPathNavigator';
 import { useMatchingSelection } from './hooks/useMatchingSelection';
 import { usePanelSync } from './hooks/usePanelSync';
 
+// 兼容遗留调用：在模块级声明可变引用，供组件内赋值
+// 某些历史代码片段可能直接引用这些名称
+let setPanelHighlightNode: (node: UiNode | null) => void;
+let setPanelActivateTab: (tab: 'results' | 'xpath') => void;
+let setPanelActivateKey: (updater: (k: number) => number) => void;
+
 // =============== 类型定义（见 ./types） ===============
 
 // 视图组件属性接口
@@ -183,6 +189,11 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   const [favXPath, setFavXPath] = useState<string[]>([]);
   // 右侧面板联动控制（已抽离 usePanelSync）
   const { panelActivateKey, panelHighlightNode, panelActivateTab } = panelSync;
+  // 兼容旧调用别名（历史代码中可能直接使用 setPanelXxx）
+  // 通过为模块级变量赋值，保证同文件内其他位置也可引用
+  setPanelHighlightNode = (node: UiNode | null) => panelSync.setHighlightNode(node, { refresh: true });
+  setPanelActivateTab = (tab: 'results' | 'xpath') => panelSync.setPanelActivateTab(tab);
+  setPanelActivateKey = (_: any) => panelSync.triggerPanelRefresh();
   // 匹配策略/字段选择（含缓存）抽离
   const { currentStrategy, currentFields, updateStrategy, updateFields } = useMatchingSelection({
     onLatestMatchingChange,

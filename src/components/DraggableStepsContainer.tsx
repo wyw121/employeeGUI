@@ -3,12 +3,14 @@
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
 import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { ScreenActionDropdownButton, TapActionDropdownButton } from './step-card';
+import { ScreenActionDropdownButton } from './step-card';
 import { SystemKeyDropdownButton } from './step-card/system-actions/SystemKeyDropdownButton';
+import { ActionsToolbar } from './universal-ui/script-builder/components/ActionsToolbar/ActionsToolbar';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
 import { SmartScriptStep } from '../types/smartScript'; // 使用统一的类型定义
+import { useStepDragAndDrop } from './universal-ui/script-builder/hooks/useStepDragAndDrop';
 
 const { Title } = Typography;
 
@@ -45,8 +47,6 @@ export interface DraggableStepsContainerProps {
   onBatchMatch?: (stepId: string) => void;
   /** 创建屏幕交互步骤（如滚动/滑动等）回调 */
   onCreateScreenInteraction?: (template: any | any[]) => void;
-  /** 创建轻点/长按等点击行为步骤回调 */
-  onCreateTapAction?: (template: any | any[]) => void;
   /** 创建系统按键步骤回调 */
   onCreateSystemAction?: (template: any) => void;
 }
@@ -68,12 +68,10 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onCreateContactImport,
   onBatchMatch,
   onCreateScreenInteraction,
-  onCreateTapAction,
   onCreateSystemAction,
 }) => {
-  // 使用抽离的拖拽 Hook
-  const { sensors, stepIds, handleDragEnd } = require('./universal-ui/script-builder/hooks/useStepDragAndDrop')
-    .useStepDragAndDrop({ steps, onStepsChange });
+  // 使用抽离的拖拽 Hook（ESM 导入，兼容 Vite/Tauri）
+  const { sensors, stepIds, handleDragEnd } = useStepDragAndDrop({ steps, onStepsChange });
 
   if (steps.length === 0) {
     return (
@@ -86,51 +84,14 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
         
         {/* 智能页面分析器快捷按钮 - 无步骤时也显示 */}
         {onOpenPageAnalyzer && (
-          <div className="mt-4 flex gap-2">
-            <Button 
-              type="primary" 
-              icon={<EyeOutlined />}
-              onClick={onOpenPageAnalyzer}
-              style={{ flex: '0 0 20%' }}
-            >
-              页面分析
-            </Button>
-            {onCreateLoop && (
-              <Button 
-                type="default"
-                icon={<ReloadOutlined />}
-                onClick={onCreateLoop}
-                style={{ flex: '0 0 20%' }}
-              >
-                🔄 创建循环
-              </Button>
-            )}
-            {onCreateContactImport && (
-              <Button 
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={onCreateContactImport}
-                style={{ flex: '0 0 22%' }}
-              >
-                📱 通讯录导入
-              </Button>
-            )}
-            {onCreateScreenInteraction && (
-              <div style={{ flex: '0 0 24%' }}>
-                <ScreenActionDropdownButton onSelectTemplate={(tpl) => onCreateScreenInteraction(tpl)} />
-              </div>
-            )}
-            {onCreateTapAction && (
-              <div style={{ flex: '0 0 24%' }}>
-                <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
-              </div>
-            )}
-            {onCreateSystemAction && (
-              <div style={{ flex: '0 0 24%' }}>
-                <SystemKeyDropdownButton onSelectTemplate={(tpl) => onCreateSystemAction(tpl)} />
-              </div>
-            )}
-            {/* 预留空间给后续的其他按钮 */}
+          <div className="mt-4">
+            <ActionsToolbar
+              onOpenPageAnalyzer={onOpenPageAnalyzer}
+              onCreateLoop={onCreateLoop}
+              onCreateContactImport={onCreateContactImport}
+              onCreateScreenInteraction={onCreateScreenInteraction}
+              onCreateSystemAction={onCreateSystemAction}
+            />
           </div>
         )}
       </Card>
@@ -171,51 +132,14 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
             
             {/* 智能页面分析器快捷按钮 */}
             {onOpenPageAnalyzer && (
-              <div className="mt-4 flex gap-2">
-                <Button 
-                  type="primary" 
-                  icon={<EyeOutlined />}
-                  onClick={onOpenPageAnalyzer}
-                  style={{ flex: '0 0 20%' }}
-                >
-                  页面分析
-                </Button>
-                {onCreateLoop && (
-                  <Button 
-                    type="default"
-                    icon={<ReloadOutlined />}
-                    onClick={onCreateLoop}
-                    style={{ flex: '0 0 20%' }}
-                  >
-                    🔄 创建循环
-                  </Button>
-                )}
-                {onCreateContactImport && (
-                  <Button 
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={onCreateContactImport}
-                    style={{ flex: '0 0 22%' }}
-                  >
-                    📱 通讯录导入
-                  </Button>
-                )}
-                {onCreateScreenInteraction && (
-                  <div style={{ flex: '0 0 24%' }}>
-                    <ScreenActionDropdownButton onSelectTemplate={(tpl) => onCreateScreenInteraction(tpl)} />
-                  </div>
-                )}
-                {onCreateTapAction && (
-                  <div style={{ flex: '0 0 24%' }}>
-                    <TapActionDropdownButton onSelectTemplate={(tpl) => onCreateTapAction(tpl)} />
-                  </div>
-                )}
-                {onCreateSystemAction && (
-                  <div style={{ flex: '0 0 24%' }}>
-                    <SystemKeyDropdownButton onSelectTemplate={(tpl) => onCreateSystemAction(tpl)} />
-                  </div>
-                )}
-                {/* 预留空间给后续的其他按钮 */}
+              <div className="mt-4">
+                <ActionsToolbar
+                  onOpenPageAnalyzer={onOpenPageAnalyzer}
+                  onCreateLoop={onCreateLoop}
+                  onCreateContactImport={onCreateContactImport}
+                  onCreateScreenInteraction={onCreateScreenInteraction}
+                  onCreateSystemAction={onCreateSystemAction}
+                />
               </div>
             )}
           </div>

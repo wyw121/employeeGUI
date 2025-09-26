@@ -169,7 +169,7 @@ const PageSelector: React.FC<PageSelectorProps> = ({
           className="w-full"
           showSearch
           optionFilterProp="children"
-          dropdownRender={(menu) => (
+          popupRender={(menu) => (
             <div>
               {menu}
             </div>

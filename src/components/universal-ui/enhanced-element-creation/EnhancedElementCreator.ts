@@ -169,12 +169,26 @@ export class EnhancedElementCreator {
     element: UIElement,
     xmlContent: string
   ): XmlNodePath {
-    
-    // 简化的XPath生成逻辑
-    // TODO: 实现更完整的XPath解析
+    // 优先：在 XML 中定位真实节点并生成绝对 XPath
+    try {
+      const doc = this.parseXml(xmlContent);
+      const matched = this.findXmlElementForUIElement(doc, element);
+      if (matched) {
+        const absoluteXPath = this.computeAbsoluteXPath(matched);
+        return {
+          xpath: absoluteXPath,
+          nodeIndex: 0,
+          depth: this.calculateNodeDepth(absoluteXPath),
+          parentPath: this.getParentXPath(absoluteXPath)
+        };
+      }
+    } catch (e) {
+      console.warn('analyzeNodePath: 解析 XML 或定位节点失败，回退到简化 XPath。', e);
+    }
+
+    // 回退：简化的XPath生成逻辑（可能不唯一，仅作兜底）
     const xpath = this.generateSimpleXPath(element);
     const nodeIndex = this.findNodeIndexInXml(element, xmlContent);
-
     return {
       xpath,
       nodeIndex,
@@ -191,10 +205,52 @@ export class EnhancedElementCreator {
     element: UIElement,
     xmlContent: string
   ): XmlNodeDetails {
-    
-    // 从XML中提取更详细的属性信息
-    const attributes = this.extractNodeAttributes(element, xmlContent);
+    // 优先：从 XML 实际节点提取权威属性
+    try {
+      const doc = this.parseXml(xmlContent);
+      const matched = this.findXmlElementForUIElement(doc, element);
+      if (matched) {
+        const attrs: Record<string, string> = {};
+        for (let i = 0; i < matched.attributes.length; i++) {
+          const a = matched.attributes[i];
+          attrs[a.name] = a.value;
+        }
+        const boundsStr = attrs['bounds'] || `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`;
+        const bounds = this.parseBounds(boundsStr) || {
+          left: element.bounds.left,
+          top: element.bounds.top,
+          right: element.bounds.right,
+          bottom: element.bounds.bottom
+        };
+        return {
+          attributes: attrs,
+          text: attrs['text'] ?? element.text,
+          contentDesc: attrs['content-desc'] ?? element.content_desc,
+          resourceId: attrs['resource-id'] ?? element.resource_id,
+          className: attrs['class'] ?? element.element_type,
+          bounds,
+          interactionStates: {
+            clickable: this.parseBool(attrs['clickable'], element.is_clickable),
+            scrollable: this.parseBool(attrs['scrollable'], element.is_scrollable),
+            enabled: this.parseBool(attrs['enabled'], element.is_enabled),
+            focused: this.parseBool(attrs['focused'], (element as any).focused || false),
+            selected: this.parseBool(attrs['selected'], (element as any).selected || false),
+            checkable: this.parseBool(attrs['checkable'], (element as any).checkable || false),
+            checked: this.parseBool(attrs['checked'], (element as any).checked || false)
+          },
+          relationships: {
+            parent: undefined,
+            children: [],
+            siblings: []
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('extractNodeDetails: 解析 XML 或定位节点失败，回退到基于 UIElement 的属性。', e);
+    }
 
+    // 回退：从UIElement推断
+    const attributes = this.extractNodeAttributes(element, xmlContent);
     return {
       attributes,
       text: element.text,
@@ -217,7 +273,7 @@ export class EnhancedElementCreator {
         checked: (element as any).checked || false
       },
       relationships: {
-        parent: undefined, // TODO: 实现父子关系分析
+        parent: undefined,
         children: [],
         siblings: []
       }
@@ -275,6 +331,97 @@ export class EnhancedElementCreator {
     const boundsStr = `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`;
     const index = xmlContent.indexOf(boundsStr);
     return index > -1 ? Math.floor(index / 100) : 0; // 粗略估算
+  }
+
+  /**
+   * XML 解析辅助
+   */
+  private static parseXml(xml: string): Document {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'text/xml');
+    // 在某些环境中，解析错误会返回带有 parsererror 标签的文档
+    if (doc.getElementsByTagName('parsererror').length > 0) {
+      throw new Error('XML 解析失败');
+    }
+    return doc;
+  }
+
+  /**
+   * 在 XML 中查找与 UIElement 最匹配的节点
+   */
+  private static findXmlElementForUIElement(doc: Document, element: UIElement): Element | null {
+    const candidates = Array.from(doc.getElementsByTagName('*')) as Element[];
+    if (candidates.length === 0) return null;
+
+    const boundsStr = `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`;
+    let best: { el: Element; score: number } | null = null;
+
+    const scoreOf = (el: Element): number => {
+      let s = 0;
+      const g = (name: string) => el.getAttribute(name) || '';
+      // 权重分配：bounds > resource-id > class > text > content-desc
+      if (g('bounds') === boundsStr) s += 8;
+      if (element.resource_id && g('resource-id') === element.resource_id) s += 6;
+      if (element.element_type && g('class') === element.element_type) s += 4;
+      if (element.text) {
+        const t = g('text');
+        if (t === element.text) s += 3; else if (t.includes(element.text)) s += 1;
+      }
+      if (element.content_desc) {
+        const c = g('content-desc');
+        if (c === element.content_desc) s += 2; else if (c.includes(element.content_desc)) s += 1;
+      }
+      return s;
+    };
+
+    for (const el of candidates) {
+      const sc = scoreOf(el);
+      if (!best || sc > best.score) {
+        best = { el, score: sc };
+      }
+    }
+
+    // 一个合理的阈值，避免误选完全无关节点
+    if (best && best.score >= 5) return best.el;
+    return null;
+  }
+
+  /**
+   * 计算元素的绝对 XPath（使用标签名 + 序号）
+   */
+  private static computeAbsoluteXPath(el: Element): string {
+    const parts: string[] = [];
+    let node: Node | null = el;
+    while (node && node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as Element;
+      const tag = element.tagName;
+      // 计算在同名兄弟中的序号（1-based）
+      let index = 1;
+      let sibling = element.previousElementSibling;
+      while (sibling) {
+        if (sibling.tagName === tag) index++;
+        sibling = sibling.previousElementSibling as Element | null;
+      }
+      parts.unshift(`/${tag}[${index}]`);
+      node = element.parentElement;
+      if (node && (node as Element).tagName.toLowerCase() === '#document') break;
+    }
+    return parts.length ? parts.join('') : '/';
+  }
+
+  /** 将字符串 bounds 转为对象 */
+  private static parseBounds(bounds?: string) {
+    if (!bounds) return null;
+    const m = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+    if (!m) return null;
+    return { left: Number(m[1]), top: Number(m[2]), right: Number(m[3]), bottom: Number(m[4]) };
+  }
+
+  /** 将 'true'/'false' 转布尔，或沿用默认 */
+  private static parseBool(value: string | null | undefined, fallback: boolean): boolean {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return fallback;
   }
 
   /**

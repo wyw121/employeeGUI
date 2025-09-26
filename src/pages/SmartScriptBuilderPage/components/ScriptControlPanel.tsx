@@ -28,7 +28,7 @@ import type {
 import { useSingleStepTest } from "../../../hooks/useSingleStepTest";
 
 const { Title } = Typography;
-const { Panel } = Collapse;
+// Note: rc-collapse warns against using children Panels; use items API instead.
 
 interface ScriptControlPanelProps {
   steps: ExtendedSmartScriptStep[];
@@ -86,8 +86,12 @@ const ScriptControlPanel: React.FC<ScriptControlPanelProps> = ({
 
       <Divider />
 
-      <Collapse>
-        <Panel header="执行器配置" key="1" extra={<SettingOutlined />}>
+      <Collapse
+        items={[{
+          key: '1',
+          label: '执行器配置',
+          extra: <SettingOutlined />,
+          children: (
           <Form layout="vertical">
             <Row gutter={16}>
               <Col span={12}>
@@ -176,7 +180,8 @@ const ScriptControlPanel: React.FC<ScriptControlPanelProps> = ({
               />
             </Form.Item>
           </Form>
-        </Panel>
+          )
+        }]}>
       </Collapse>
 
       <Divider />

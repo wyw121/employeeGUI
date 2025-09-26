@@ -205,6 +205,111 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
               );
             }
 
+            // 轻点（TAP）专属：提供常用预设选择，并可自动回填参数
+            if (stepType === SmartActionType.TAP) {
+              const renderGenericParams = () => (
+                <div>
+                  <Divider orientation="left">参数配置</Divider>
+                  <Alert
+                    message={config.description}
+                    type="info"
+                    showIcon
+                    className="mb-4"
+                  />
+
+                  {config.parameters?.map((param) => (
+                    <Form.Item
+                      key={param.key}
+                      name={param.key}
+                      label={param.label}
+                      rules={
+                        param.required
+                          ? [
+                              {
+                                required: true,
+                                message: `请输入${param.label}`,
+                              },
+                            ]
+                          : []
+                      }
+                      initialValue={param.default}
+                    >
+                      {renderParameterInput(param, undefined, () => {})}
+                    </Form.Item>
+                  ))}
+
+                  {config.advanced && config.advanced.length > 0 && (
+                    <Collapse size="small" className="mt-4">
+                      <Panel header="高级配置" key="advanced">
+                        {config.advanced.map((param) => (
+                          <Form.Item
+                            key={param.key}
+                            name={param.key}
+                            label={param.label}
+                            initialValue={param.default}
+                          >
+                            {renderParameterInput(param, undefined, () => {})}
+                          </Form.Item>
+                        ))}
+                      </Panel>
+                    </Collapse>
+                  )}
+                </div>
+              );
+
+              return (
+                <div>
+                  <Divider orientation="left">轻点预设</Divider>
+                  <Alert
+                    message="选择常用预设快速填写参数；仍可在下方进一步调整。长按会自动设置较长的按住时长。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                  />
+                  <Space wrap>
+                    <Button
+                      onClick={() => {
+                        // 轻点中心
+                        form.setFieldsValue({
+                          position: "center",
+                          x: undefined,
+                          y: undefined,
+                          duration_ms: 100,
+                          tap_mode: "single_tap",
+                        } as any);
+                      }}
+                    >
+                      👆 轻点屏幕中心
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // 长按中心
+                        form.setFieldsValue({
+                          position: "center",
+                          x: undefined,
+                          y: undefined,
+                          duration_ms: 800,
+                          tap_mode: "long_press",
+                        } as any);
+                      }}
+                    >
+                      👆 长按屏幕中心
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // 切换到绝对坐标，方便用户输入
+                        form.setFieldsValue({ position: "absolute" } as any);
+                      }}
+                    >
+                      🛠️ 自定义坐标（切换为绝对）
+                    </Button>
+                  </Space>
+
+                  {renderGenericParams()}
+                </div>
+              );
+            }
+
             return (
               <div>
                 <Divider orientation="left">参数配置</Divider>

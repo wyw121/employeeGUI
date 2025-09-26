@@ -29,6 +29,8 @@ import {
 } from '@ant-design/icons';
 import { SmartScriptStep } from '../../types/smartScript';
 import { EnhancedUIElement } from '../enhanced-element-info/types';
+import type { ElementBinding } from '../../components/step-card/element-binding/types';
+import { resolveBinding } from '../../components/step-card/element-binding/helpers';
 import { parseBounds } from '../../components/universal-ui/views/grid-view/utils';
 import { XmlInspectorModal } from '../xml-inspector/XmlInspectorModal';
 
@@ -72,6 +74,8 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
   // 🔍 获取增强元素信息（兼容多种格式）
   const enhancedElement = step.parameters?.enhancedElement as EnhancedUIElement | undefined;
   const elementSummary = step.parameters?.elementSummary;
+  const xmlSnapshot = step.parameters?.xmlSnapshot as { xmlContent: string; xmlHash?: string; timestamp?: number; deviceInfo?: any } | undefined;
+  const elementBinding = step.parameters?.elementBinding as ElementBinding | undefined;
   
   // 检查是否有增强信息（兼容简化格式）
   const hasEnhancedInfo = !!(
@@ -83,18 +87,61 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
   );
 
   // 构建XML检查器数据（兼容不同格式）
-  const xmlInspectorData = hasEnhancedInfo ? {
-    xmlContent: step.parameters?.xmlContent || enhancedElement?.xmlContext?.xmlSourceContent || '',
-    xmlCacheId: step.parameters?.xmlCacheId || enhancedElement?.xmlContext?.xmlCacheId || 'unknown',
-    targetElement: enhancedElement,
-    elementInfo: {
+  const xmlInspectorData = hasEnhancedInfo ? (() => {
+    // 优先来源：增强元素携带的 XML
+    let xmlContent = step.parameters?.xmlContent || enhancedElement?.xmlContext?.xmlSourceContent || '';
+    let xmlCacheId = step.parameters?.xmlCacheId || enhancedElement?.xmlContext?.xmlCacheId || 'unknown';
+
+    // 其次：来自 xmlSnapshot
+    if ((!xmlContent || xmlContent.length === 0) && xmlSnapshot?.xmlContent) {
+      xmlContent = xmlSnapshot.xmlContent;
+      xmlCacheId = xmlSnapshot.xmlHash || 'snapshot';
+    }
+
+    // 基础 elementInfo
+    let elementInfo: any = {
       text: step.parameters?.text || step.parameters?.element_text || '',
       element_type: step.parameters?.element_type || '',
       bounds: step.parameters?.bounds,
       resource_id: step.parameters?.resource_id,
       content_desc: step.parameters?.content_desc
+    };
+
+    // 若存在 elementBinding，尝试从快照解析并还原节点，填充分辨字段
+    if (elementBinding) {
+      try {
+        const resolved = resolveBinding(elementBinding);
+        if (resolved?.node) {
+          const a = resolved.node.attrs || {};
+          elementInfo = {
+            text: a['text'] || elementInfo.text,
+            element_type: a['class'] || elementInfo.element_type,
+            bounds: (() => {
+              const b = a['bounds'];
+              if (!b) return elementInfo.bounds;
+              const m = b.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+              if (m) {
+                return { left: Number(m[1]), top: Number(m[2]), right: Number(m[3]), bottom: Number(m[4]) };
+              }
+              return elementInfo.bounds;
+            })(),
+            resource_id: a['resource-id'] || elementInfo.resource_id,
+            content_desc: a['content-desc'] || elementInfo.content_desc,
+          };
+        }
+      } catch (e) {
+        // 忽略解析失败，保持现有 elementInfo
+        // console.warn('resolveBinding failed: ', e);
+      }
     }
-  } : null;
+
+    return {
+      xmlContent,
+      xmlCacheId,
+      targetElement: enhancedElement,
+      elementInfo,
+    };
+  })() : null;
 
   /**
    * 渲染元素信息摘要（兼容多种数据格式）

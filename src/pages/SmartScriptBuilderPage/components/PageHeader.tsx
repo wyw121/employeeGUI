@@ -41,7 +41,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               onChange={onDeviceChange}
               style={{ width: 240 }}
               loading={devices.length === 0}
-              dropdownRender={(menu) => (
+              popupRender={(menu) => (
                 <>
                   {menu}
                   <Divider style={{ margin: "8px 0" }} />

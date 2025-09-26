@@ -2,12 +2,25 @@
  * 测试Universal UI页面分析功能
  */
 
-const { invoke } = window.__TAURI__.core;
+// 仅在 Tauri 环境下启用该测试脚本，防止在浏览器环境报错
+const invoke = (function() {
+  try {
+    return window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke
+      ? window.__TAURI__.core.invoke
+      : null;
+  } catch (_) {
+    return null;
+  }
+})();
 
 async function testAnalyzeUniversalUIPage() {
   console.log('🔍 开始测试Universal UI页面分析...');
   
   try {
+    if (!invoke) {
+      console.warn('⚠️ 跳过 Universal UI 测试：当前非 Tauri 环境或 __TAURI__.core 未就绪');
+      return { success: false, error: 'TAURI_CORE_UNAVAILABLE' };
+    }
     // 测试分析页面
     const result = await invoke('analyze_universal_ui_page', { 
       device_id: 'emulator-5554'
@@ -46,6 +59,6 @@ async function testAnalyzeUniversalUIPage() {
   }
 }
 
-// 将测试函数暴露到全局
+// 将测试函数暴露到全局（始终暴露，但在非 Tauri 环境下将提示跳过）
 window.testUniversalUI = testAnalyzeUniversalUIPage;
 console.log('🧪 Universal UI测试函数已准备就绪! 运行: testUniversalUI()');

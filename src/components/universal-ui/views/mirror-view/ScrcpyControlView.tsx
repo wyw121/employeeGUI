@@ -230,7 +230,7 @@ export const ScrcpyControlView: React.FC = () => {
               if (typeof o.alwaysOnTop !== 'undefined') setAlwaysOnTop(Boolean(o.alwaysOnTop));
               if (typeof o.borderless !== 'undefined') setBorderless(Boolean(o.borderless));
             }}
-            dropdownRender={(menu) => (
+            popupRender={(menu) => (
               <div>
                 {menu}
                 <Divider style={{ margin: '4px 0' }} />

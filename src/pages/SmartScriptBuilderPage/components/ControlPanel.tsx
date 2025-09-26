@@ -19,7 +19,7 @@ import {
 } from "@ant-design/icons";
 import type { ExtendedSmartScriptStep } from "../../../types/loopScript";
 
-const { Panel } = Collapse;
+// rc-collapse/antd 警告：children Panel 将在下个大版本移除，改为使用 items API
 
 interface ControlPanelProps {
   steps: ExtendedSmartScriptStep[];
@@ -129,31 +129,46 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* 操作类型说明 */}
       <Card title="🏷️ 操作类型分类">
-        <Collapse size="small">
-          <Panel header="基础操作" key="basic">
-            <div className="text-xs space-y-1">
-              <div>• 基础点击 - 固定坐标点击</div>
-              <div>• 滑动操作 - 屏幕滑动</div>
-              <div>• 文本输入 - 键盘输入</div>
-              <div>• 等待操作 - 时间延迟</div>
-            </div>
-          </Panel>
-          <Panel header="智能操作" key="smart">
-            <div className="text-xs space-y-1">
-              <div>• 智能点击 - AI识别元素</div>
-              <div>• 智能查找 - 动态元素定位</div>
-              <div>• 页面识别 - 状态智能判断</div>
-              <div>• 智能导航 - 复杂路径规划</div>
-            </div>
-          </Panel>
-          <Panel header="验证操作" key="verification">
-            <div className="text-xs space-y-1">
-              <div>• 操作验证 - 结果确认</div>
-              <div>• 状态等待 - 页面切换等待</div>
-              <div>• 数据提取 - 信息采集</div>
-            </div>
-          </Panel>
-        </Collapse>
+        <Collapse
+          size="small"
+          items={[
+            {
+              key: 'basic',
+              label: '基础操作',
+              children: (
+                <div className="text-xs space-y-1">
+                  <div>• 基础点击 - 固定坐标点击</div>
+                  <div>• 滑动操作 - 屏幕滑动</div>
+                  <div>• 文本输入 - 键盘输入</div>
+                  <div>• 等待操作 - 时间延迟</div>
+                </div>
+              ),
+            },
+            {
+              key: 'smart',
+              label: '智能操作',
+              children: (
+                <div className="text-xs space-y-1">
+                  <div>• 智能点击 - AI识别元素</div>
+                  <div>• 智能查找 - 动态元素定位</div>
+                  <div>• 页面识别 - 状态智能判断</div>
+                  <div>• 智能导航 - 复杂路径规划</div>
+                </div>
+              ),
+            },
+            {
+              key: 'verification',
+              label: '验证操作',
+              children: (
+                <div className="text-xs space-y-1">
+                  <div>• 操作验证 - 结果确认</div>
+                  <div>• 状态等待 - 页面切换等待</div>
+                  <div>• 数据提取 - 信息采集</div>
+                </div>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* 调试和测试区域 */}

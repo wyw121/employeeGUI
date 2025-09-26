@@ -22,6 +22,105 @@ import {
 } from './helpers';
 import { buildDefaultMatchingFromElement } from '../../../../../../modules/grid-inspector/DefaultMatchingBuilder';
 
+// 将 UiNode 提取为 DefaultMatchingBuilder 可用的 ElementLike 结构
+function toElementLike(node: UiNode): {
+  resource_id?: string;
+  text?: string;
+  content_desc?: string;
+  class_name?: string;
+  bounds?: string;
+  parent_class?: string;
+  parent_text?: string;
+  parent_resource_id?: string;
+  parent_content_desc?: string;
+  clickable_ancestor_class?: string;
+  clickable_ancestor_resource_id?: string;
+  clickable_ancestor_text?: string;
+  clickable?: string;
+  enabled?: string;
+  scrollable?: string;
+  checked?: string;
+  checkable?: string;
+  password?: string;
+  index?: string;
+  first_child_text?: string;
+  first_child_content_desc?: string;
+  first_child_resource_id?: string;
+  descendant_texts?: string[];
+} {
+  const attrs = node.attrs || {};
+  const parent = node.parent as UiNode | undefined | null;
+
+  // 提取第一层子节点的代表性文本/描述/资源ID
+  const firstChild = (node.children || []).find(c => {
+    const a = c.attrs || {};
+    return Boolean((a['text'] && a['text'].trim()) || (a['content-desc'] && a['content-desc'].trim()) || a['resource-id']);
+  });
+  const first_child_text = firstChild?.attrs?.['text'];
+  const first_child_content_desc = firstChild?.attrs?.['content-desc'];
+  const first_child_resource_id = firstChild?.attrs?.['resource-id'];
+
+  // 收集少量后代文本（避免过大）
+  const descendant_texts: string[] = [];
+  const queue: UiNode[] = [...(node.children || [])];
+  while (queue.length && descendant_texts.length < 10) {
+    const cur = queue.shift()!;
+    const t = cur.attrs?.['text'];
+    if (t && t.trim()) descendant_texts.push(t.trim());
+    if (cur.children && cur.children.length) queue.push(...cur.children);
+  }
+
+  // 最近可点击祖先（向上查找）
+  let clickable_ancestor_class: string | undefined;
+  let clickable_ancestor_resource_id: string | undefined;
+  let clickable_ancestor_text: string | undefined;
+  {
+    let p: UiNode | undefined | null = parent || null;
+    let steps = 0;
+    while (p && steps < 6) {
+      const pa = p.attrs || {};
+      if (pa['clickable'] === 'true') {
+        clickable_ancestor_class = pa['class'];
+        clickable_ancestor_resource_id = pa['resource-id'];
+        clickable_ancestor_text = (pa['text'] || '').trim() || undefined;
+        break;
+      }
+      p = (p.parent as UiNode | undefined | null) || null;
+      steps++;
+    }
+  }
+
+  return {
+    resource_id: attrs['resource-id'],
+    text: attrs['text'],
+    content_desc: attrs['content-desc'],
+    class_name: attrs['class'],
+    bounds: attrs['bounds'],
+
+    parent_class: parent?.attrs?.['class'],
+    parent_text: parent?.attrs?.['text'],
+    parent_resource_id: parent?.attrs?.['resource-id'],
+    parent_content_desc: parent?.attrs?.['content-desc'],
+
+    clickable_ancestor_class,
+    clickable_ancestor_resource_id,
+    clickable_ancestor_text,
+
+    clickable: attrs['clickable'],
+    enabled: attrs['enabled'],
+    scrollable: attrs['scrollable'],
+    checked: attrs['checked'],
+    checkable: attrs['checkable'],
+    password: attrs['password'],
+    index: attrs['index'],
+
+    first_child_text,
+    first_child_content_desc,
+    first_child_resource_id,
+    descendant_texts: descendant_texts.length ? descendant_texts : undefined,
+  };
+}
+
 /**
  * 元素回填选项配置
  */
@@ -151,13 +250,7 @@ export function buildCompleteStepCriteria(
         }
       } else {
         // 进一步兜底：尝试通过统一构建器从节点常见语义字段合成默认匹配
-        const built = buildDefaultMatchingFromElement({
-          resource_id: node.attrs?.['resource-id'],
-          text: node.attrs?.['text'],
-          content_desc: node.attrs?.['content-desc'],
-          class_name: node.attrs?.['class'],
-          bounds: node.attrs?.['bounds'],
-        });
+        const built = buildDefaultMatchingFromElement(toElementLike(node));
         if (built.fields.length > 0) {
           normalized = normalizeFieldsAndValues(built.fields, built.values);
           strategy = built.strategy as MatchStrategy;

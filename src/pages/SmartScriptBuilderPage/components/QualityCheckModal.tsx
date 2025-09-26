@@ -26,8 +26,8 @@ const QualityCheckModal: React.FC<QualityCheckModalProps> = ({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={900}
-      destroyOnClose
+  width={900}
+  destroyOnHidden
     >
       <DistributedScriptQualityPanel
         script={{

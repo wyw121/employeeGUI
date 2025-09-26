@@ -29,6 +29,87 @@ export const SMART_ACTION_CONFIGS = {
     ],
   },
 
+  // 基础交互：轻点/点击
+  [SmartActionType.TAP]: {
+    name: "轻点",
+    description: "在指定位置执行一次轻点（默认在屏幕中心）",
+    icon: "👆",
+    color: "green",
+    category: "basic",
+    parameters: [
+      {
+        key: "position",
+        label: "定位方式",
+        type: "select",
+        required: true,
+        options: ["center", "absolute"],
+        default: "center",
+      },
+      { key: "x", label: "X 坐标", type: "number" },
+      { key: "y", label: "Y 坐标", type: "number" },
+      {
+        key: "duration_ms",
+        label: "按住时长(ms)",
+        type: "number",
+        default: 100,
+      },
+    ],
+    advanced: [
+      {
+        key: "tap_mode",
+        label: "点击方式",
+        type: "select",
+        options: ["single_tap", "double_tap", "long_press"],
+        default: "single_tap",
+      },
+    ],
+  },
+
+  // 基础交互：滑动
+  [SmartActionType.SWIPE]: {
+    name: "滑动",
+    description: "从起点滑动到终点，可设置时长",
+    icon: "📜",
+    color: "purple",
+    category: "basic",
+    parameters: [
+      { key: "start_x", label: "起点X", type: "number", required: true },
+      { key: "start_y", label: "起点Y", type: "number", required: true },
+      { key: "end_x", label: "终点X", type: "number", required: true },
+      { key: "end_y", label: "终点Y", type: "number", required: true },
+      { key: "duration", label: "时长(ms)", type: "number", default: 300 },
+    ],
+    advanced: [],
+  },
+
+  // 基础交互：文本输入
+  [SmartActionType.INPUT]: {
+    name: "文本输入",
+    description: "在当前焦点输入框输入文本，可选择先清空或回车",
+    icon: "✏️",
+    color: "orange",
+    category: "basic",
+    parameters: [
+      { key: "text", label: "文本内容", type: "text", required: true },
+      { key: "clear_before", label: "先清空", type: "boolean", default: false },
+      { key: "press_enter", label: "输入后回车", type: "boolean", default: false },
+    ],
+    advanced: [],
+  },
+
+  // 基础控制：等待
+  [SmartActionType.WAIT]: {
+    name: "等待",
+    description: "等待指定时间（毫秒）",
+    icon: "⏳",
+    color: "cyan",
+    category: "basic",
+    parameters: [
+      { key: "duration_ms", label: "等待时长(ms)", type: "number", required: true, default: 1000 },
+    ],
+    advanced: [],
+  },
+
   [SmartActionType.SMART_FIND_ELEMENT]: {
     name: "智能元素查找",
     description: "动态查找并定位UI元素",

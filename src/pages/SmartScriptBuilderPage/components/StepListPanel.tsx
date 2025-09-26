@@ -313,7 +313,6 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
         onAddStep={handleAddStep}
         onBatchMatch={handleBatchMatch}
         onCreateScreenInteraction={onCreateScreenInteraction}
-        onCreateTapAction={onCreateTapAction}
         onCreateSystemAction={onCreateSystemAction}
       />
     </div>

@@ -221,9 +221,10 @@ export function usePageFinder(deps: UsePageFinderDeps) {
       });
       if (snap) {
         form.setFieldValue("xmlSnapshot", snap);
-        // 🆕 表单态：根据 element.xpath + xmlSnapshot 生成绑定
+        // 🆕 表单态：优先使用 enhancedElement.nodePath.xpath + xmlSnapshot 生成元素绑定
         try {
-          const xpathFromElement: string | undefined = (element as any).xpath || (element as any).element_path;
+          const eeXPath: string | undefined = (element as any)?.enhancedElement?.nodePath?.xpath;
+          const xpathFromElement: string | undefined = eeXPath || (element as any).xpath || (element as any).element_path;
           if (xpathFromElement && typeof xpathFromElement === 'string') {
             const bindingSnapshot = {
               source: 'memory' as const,
@@ -259,28 +260,41 @@ export function usePageFinder(deps: UsePageFinderDeps) {
       });
 
       // 🆕 使用增强匹配系统生成匹配条件
+      // 优先使用增强元素的节点路径与节点详情，避免 xpath 不合法或 class_name 映射缺失
+      const ee: any = (element as any)?.enhancedElement;
+      const xmlForMatch = ee?.xmlContext?.xmlSourceContent || currentXmlContent;
       const enhancedElement = {
-        resource_id: element.resource_id,
-        text: element.text,
-        content_desc: element.content_desc,
-        class_name: element.class_name,
-        bounds: element.bounds,
-        xpath: element.xpath || element.element_path,
-        element_path: element.element_path,
-        // 添加可能存在的扩展属性
-        clickable: element.clickable,
-        enabled: element.enabled,
-        selected: element.selected,
-        checkable: element.checkable,
-        checked: element.checked,
-        scrollable: element.scrollable,
-        package: element.package,
-        index: element.index,
+        resource_id: ee?.nodeDetails?.resourceId ?? element.resource_id,
+        text: ee?.nodeDetails?.text ?? element.text,
+        content_desc: ee?.nodeDetails?.contentDesc ?? element.content_desc,
+        class_name: ee?.nodeDetails?.className ?? (element as any).class_name ?? element.element_type,
+        bounds: ee?.nodeDetails?.bounds ?? element.bounds,
+        xpath: ee?.nodePath?.xpath ?? (element as any).xpath ?? (element as any).element_path,
+        element_path: (element as any).element_path,
+        // 添加可能存在的扩展属性（从交互状态映射）
+        clickable: ee?.nodeDetails?.interactionStates?.clickable?.toString() ?? (element as any).clickable,
+        enabled: ee?.nodeDetails?.interactionStates?.enabled?.toString() ?? (element as any).enabled,
+        selected: ee?.nodeDetails?.interactionStates?.selected?.toString() ?? (element as any).selected,
+        checkable: ee?.nodeDetails?.interactionStates?.checkable?.toString() ?? (element as any).checkable,
+        checked: ee?.nodeDetails?.interactionStates?.checked?.toString() ?? (element as any).checked,
+        scrollable: ee?.nodeDetails?.interactionStates?.scrollable?.toString() ?? (element as any).scrollable,
+        package: (element as any).package,
+        index: (element as any).index,
       };
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🧩 EnhancedMatching 入参预览:', {
+          xpath: enhancedElement.xpath,
+          class_name: enhancedElement.class_name,
+          text: enhancedElement.text,
+          resource_id: enhancedElement.resource_id,
+          hasXml: !!xmlForMatch,
+        });
+      }
 
       const built = EnhancedMatchingHelper.buildEnhancedMatching(enhancedElement, {
         useEnhancedMatching: true,
-        xmlContext: currentXmlContent,
+        xmlContext: xmlForMatch,
         optimizationOptions: {
           enableParentContext: true,
           enableChildContext: true,
@@ -378,9 +392,10 @@ export function usePageFinder(deps: UsePageFinderDeps) {
                   appVersion: currentPageInfo.appVersion,
                 }
               );
-              // 🆕 编辑现有步骤：若有 xpath 则生成 elementBinding
+              // 🆕 编辑现有步骤：优先使用 enhancedElement.nodePath.xpath 生成 elementBinding
               try {
-                const xpathFromElement: string | undefined = (element as any).xpath || (element as any).element_path;
+                const eeXPath: string | undefined = (element as any)?.enhancedElement?.nodePath?.xpath;
+                const xpathFromElement: string | undefined = eeXPath || (element as any).xpath || (element as any).element_path;
                 if (xpathFromElement) {
                   const bindingSnapshot = {
                     source: 'memory' as const,
@@ -510,7 +525,7 @@ export function usePageFinder(deps: UsePageFinderDeps) {
             if (criteria.values["content-desc"]) p.content_desc = criteria.values["content-desc"];
             if (criteria.values["class"]) p.class_name = criteria.values["class"];
 
-            // 🆕 保存元素绑定（elementBinding）：需要 xmlSnapshot 与 preview.xpath
+            // 🆕 保存元素绑定（elementBinding）：需要 xmlSnapshot 与 preview.xpath（优先来自 enhancedElement.nodePath.xpath）
             try {
               const snap = (p.xmlSnapshot || form.getFieldValue("xmlSnapshot")) as XmlSnapshot | undefined;
               const xpath: string | undefined = criteria.preview?.xpath;

@@ -12,7 +12,7 @@ import {
   EyeOutlined
 } from '@ant-design/icons';
 // import { MatchingStrategyTag } from './step-card';
-import { StepItem } from './universal-ui/script-builder/components/StepItem';
+import { StepItem } from './universal-ui/script-builder/components/StepCardItem';
 
 export interface SmartScriptStep {
   id: string;

@@ -23,7 +23,7 @@ pub mod xml_judgment_service; // 新模块化 XML 判断服务 (旧文件已弃�
 use tauri_plugin_dialog;
 use std::sync::Mutex; // 为 .manage 使用
 #[cfg(windows)]
-use std::os::windows::process::CommandExt; // 为 adb.rs 创建进程 flags 所需
+// use std::os::windows::process::CommandExt; // 为 adb.rs 创建进程 flags 所需
 
 use screenshot_service::*;
 use commands::*; // 引入拆分后的命令（所有 #[tauri::command] 均集中）
@@ -44,7 +44,7 @@ use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
 use services::smart_element_finder_service::{smart_element_finder, click_detected_element};
 use services::commands::{execute_single_step_test, execute_smart_automation_script};
-use services::scrcpy_manager::{start_device_mirror, stop_device_mirror, stop_device_mirror_session, list_device_mirror_sessions, cleanup_all};
+use services::scrcpy_manager::{start_device_mirror, stop_device_mirror, stop_device_mirror_session, list_device_mirror_sessions, cleanup_all, check_scrcpy_available, get_scrcpy_capabilities};
 // 直接使用的其他命令函数（未在 commands::* re-export 中覆盖的服务命令）
 use services::ui_reader_service::read_device_ui_state;
 use services::smart_vcf_opener::smart_vcf_opener;
@@ -232,6 +232,9 @@ fn main() {
             stop_device_mirror,
             stop_device_mirror_session,
             list_device_mirror_sessions
+            ,
+            check_scrcpy_available,
+            get_scrcpy_capabilities
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

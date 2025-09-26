@@ -58,6 +58,11 @@ import { LocatorAdvisorPanel } from './panels/LocatorAdvisorPanel';
 import { PreferencesPanel } from './panels/PreferencesPanel';
 import { ScreenPreviewSetElementButton } from './panels/node-detail';
 import { loadLatestMatching, saveLatestMatching } from './matchingCache';
+import { useResizableSplit } from './hooks/useResizableSplit';
+import { useXmlParsing } from './hooks/useXmlParsing';
+import { useSearchAndMatch } from './hooks/useSearchAndMatch';
+import { useXPathNavigator } from './hooks/useXPathNavigator';
+import { useMatchingSelection } from './hooks/useMatchingSelection';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -111,48 +116,84 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   onLatestMatchingChange,
   initialMatching,
 }) => {
-  // XML 文本与解析树
-  const [xmlText, setXmlText] = useState<string>("");
-  const [root, setRoot] = useState<UiNode | null>(null);
+  // 选中节点
   const [selected, setSelected] = useState<UiNode | null>(null);
-  const [filter, setFilter] = useState<string>("");
+  // 展开/折叠与层级控制
   const [expandAll, setExpandAll] = useState<boolean>(false);
   const [collapseVersion, setCollapseVersion] = useState<number>(0);
   const [expandDepth, setExpandDepth] = useState<number>(0);
-  const [matches, setMatches] = useState<UiNode[]>([]);
-  const [matchIndex, setMatchIndex] = useState<number>(-1);
-  const [xPathInput, setXPathInput] = useState<string>("");
   const [showMatchedOnly, setShowMatchedOnly] = useState<boolean>(false);
   // 首选项映射到本地 UI 状态（持久化）
   const [autoSelectOnParse, setAutoSelectOnParse] = useState<boolean>(false);
-  const [advFilter, setAdvFilter] = useState<AdvancedFilter>({
-    enabled: false,
-    mode: 'AND',
-    resourceId: '',
-    text: '',
-    className: '',
-    packageName: '',
-    clickable: null,
-    nodeEnabled: null,
+  // ================= Hook: XML 解析 =================
+  const { xmlText, setXmlText, root, parse } = useXmlParsing({
+    initialXml: xmlContent,
+    onAfterParse: (tree) => {
+      // 解析完成后重置展开与匹配相关状态
+      setExpandAll(false);
+      setCollapseVersion(v => v + 1);
+      setExpandDepth(2);
+      // 自动定位首匹配（延迟触发，等待 hook 内部状态就绪）
+      if (autoSelectOnParse) setTimeout(() => locateFirstMatch(), 0);
+      // 外部 locator 精确定位
+      if (tree && locator && locatorResolve) {
+        try {
+          const n = locatorResolve(tree, locator);
+            if (n) {
+              setSelected(n);
+              setPanelHighlightNode(n);
+              const prefs = loadPrefs();
+              if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
+              setPanelActivateKey(k => k + 1);
+            }
+        } catch { /* ignore */ }
+      }
+    }
   });
-  const [searchOptions, setSearchOptions] = useState<SearchOptions>({
-    caseSensitive: false,
-    useRegex: false,
-    fields: { id: true, text: true, desc: true, className: true, tag: true, pkg: false },
+
+  // ================= Hook: 搜索与匹配集合 =================
+  const {
+    filter, setFilter,
+    advFilter, setAdvFilter,
+    searchOptions, setSearchOptions,
+    matches, matchIndex, setMatchIndex,
+    matchedSet, selectedAncestors,
+    locateFirstMatch, goToMatch,
+  } = useSearchAndMatch({
+    root,
+    selected,
+    onSelect: (n) => setSelected(n),
+    onAutoLocate: (n) => {
+      setPanelHighlightNode(n);
+      const prefs = loadPrefs();
+      if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
+      setPanelActivateKey(k => k + 1);
+    }
+  });
+
+  // ================= Hook: XPath 导航 =================
+  const {
+    xPathInput, setXPathInput, xpathTestNodes, locateXPath
+  } = useXPathNavigator({
+    root,
+    onSelect: (n) => setSelected(n),
+    onPanelSwitch: (tab) => setPanelActivateTab(tab),
+    onHighlight: (n) => setPanelHighlightNode(n),
+    triggerPanelRefresh: () => setPanelActivateKey(k => k + 1)
   });
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [favSearch, setFavSearch] = useState<string[]>([]);
   const [xpathHistory, setXpathHistory] = useState<string[]>([]);
   const [favXPath, setFavXPath] = useState<string[]>([]);
-  const [xpathTestNodes, setXpathTestNodes] = useState<UiNode[]>([]);
   // 右侧面板联动控制
   const [panelActivateKey, setPanelActivateKey] = useState<number>(0);
   const [panelHighlightNode, setPanelHighlightNode] = useState<UiNode | null>(null);
   const [panelActivateTab, setPanelActivateTab] = useState<'results' | 'xpath'>('results');
-  // 跟随节点详情的当前匹配策略，供“匹配结果”按钮使用
-  const [currentStrategy, setCurrentStrategy] = useState<string>('standard'); // may be 'custom' as inferred
-  // 跟随节点详情的字段勾选集合
-  const [currentFields, setCurrentFields] = useState<string[]>([]);
+  // 匹配策略/字段选择（含缓存）抽离
+  const { currentStrategy, currentFields, updateStrategy, updateFields } = useMatchingSelection({
+    onLatestMatchingChange,
+    initialMatching: initialMatching ? { strategy: initialMatching.strategy, fields: initialMatching.fields } : null
+  });
 
   // 悬停联动处理：树/结果列表/测试列表悬停时预览高亮
   const handleHoverNode = (n: UiNode | null) => {
@@ -221,161 +262,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
 
   // 上传文件（可选）
 
-  // 初始化时如果有 xmlContent 则自动解析
-  useEffect(() => {
-    if (xmlContent && xmlContent !== xmlText) {
-      setXmlText(xmlContent);
-      onParse(xmlContent);
-    }
-  }, [xmlContent]);
-
-  const onParse = (xmlToUse?: string) => {
-    const targetXml = xmlToUse || xmlText;
-    const tree = parseUiAutomatorXml(targetXml);
-    if (tree) {
-      attachParents(tree);
-      setRoot(tree);
-      // 重置展开与匹配状态
-      setExpandAll(false);
-      setCollapseVersion(v => v + 1);
-      setExpandDepth(2);
-      setMatches([]);
-      setMatchIndex(-1);
-      // 解析完成后，如启用“自动定位”，则尝试定位首个匹配
-      if (autoSelectOnParse) {
-        setTimeout(() => locateFirstMatch(), 0);
-      }
-      // 外部提供 locator 时，优先执行精确定位
-      if (locator && locatorResolve) {
-        setTimeout(() => {
-          try {
-            const n = locatorResolve(tree, locator);
-            if (n) {
-              // 选中定位到的节点
-              setSelected(n);
-              // 确保右侧联动高亮与可见性（自动切换到“匹配结果”便于用户确认）
-              setPanelHighlightNode(n);
-              const prefs = loadPrefs();
-              if (prefs.autoSwitchTab !== false) {
-                setPanelActivateTab('results');
-              }
-              setPanelActivateKey((k) => k + 1);
-            }
-          } catch {
-            // ignore
-          }
-        }, 0);
-      }
-    } else {
-      alert("XML 解析失败，请检查格式");
-    }
-  };
-
-  // 按关键字定位首个匹配
-  const locateFirstMatch = () => {
-    const kw = filter.trim();
-    const anyAdv = advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className);
-    const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
-    if (!kw && !anyAdv) return; // 无任何条件则不定位
-    const dfs = (n?: UiNode | null): UiNode | null => {
-      if (!n) return null;
-      if (combined(n)) return n;
-      for (const c of n.children) {
-        const r = dfs(c);
-        if (r) return r;
-      }
-      return null;
-    };
-    const found = dfs(root);
-    if (found) {
-      setSelected(found);
-      // 在“匹配结果”中高亮并滚动
-      setPanelHighlightNode(found);
-      const prefs = loadPrefs();
-      if (prefs.autoSwitchTab !== false) {
-        setPanelActivateTab('results');
-      }
-      setPanelActivateKey(k => k + 1);
-    }
-  };
-
-  // 计算当前匹配列表（不自动选中，供用户导航）
-  useEffect(() => {
-    if (!root) {
-      setMatches([]);
-      setMatchIndex(-1);
-      return;
-    }
-    const kw = filter.trim();
-    const anyAdv = advFilter.enabled && (advFilter.resourceId || advFilter.text || advFilter.className);
-    if (!kw && !anyAdv) {
-      // 无筛选条件则清空匹配集合
-      setMatches([]);
-      setMatchIndex(-1);
-      return;
-    }
-    const result: UiNode[] = [];
-    const stk: UiNode[] = [root];
-    const combined = makeCombinedMatcher(kw, advFilter, searchOptions);
-    while (stk.length) {
-      const n = stk.pop()!;
-      if (combined(n)) result.push(n);
-      for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
-    }
-    setMatches(result);
-    setMatchIndex(result.length > 0 ? 0 : -1);
-  }, [root, filter, advFilter, searchOptions]);
-
-  // 当选中节点改变时，同步匹配索引
-  useEffect(() => {
-    if (!selected || matches.length === 0) return;
-    const idx = matches.indexOf(selected);
-    if (idx !== -1) setMatchIndex(idx);
-  }, [selected, matches]);
-
-  const goToMatch = (dir: 1 | -1) => {
-    if (matches.length === 0) return;
-    let idx = matchIndex;
-    if (idx < 0) idx = 0;
-    idx = (idx + dir + matches.length) % matches.length;
-    setSelected(matches[idx]);
-    setMatchIndex(idx);
-  };
-
-  // 匹配集合与选中祖先集合
-  const matchedSet = useMemo(() => new Set(matches), [matches]);
-  const selectedAncestors = useMemo(() => {
-    const s = new Set<UiNode>();
-    let cur = selected || null;
-    while (cur && cur.parent) {
-      s.add(cur.parent);
-      cur = cur.parent;
-    }
-    return s;
-  }, [selected]);
-
-  const locateXPath = () => {
-    const xp = xPathInput.trim();
-    if (!xp) return;
-    const n = findByXPathRoot(root, xp) || findByPredicateXPath(root, xp);
-    if (n) setSelected(n);
-    else alert('未找到匹配的 XPath 节点');
-    // 额外：计算全部命中用于测试面板（绝对路径命中则仅显示该节点，否则尝试谓词查找全部）
-    if (n && findByXPathRoot(root, xp)) {
-      setXpathTestNodes([n]);
-      setPanelHighlightNode(n);
-    } else {
-      const all = findAllByPredicateXPath(root, xp);
-      setXpathTestNodes(all);
-      setPanelHighlightNode(all && all.length > 0 ? all[0] : null);
-    }
-    // 切换到 XPath 工具页签并触发一次联动（尊重偏好）
-    const prefs = loadPrefs();
-    if (prefs.autoSwitchTab !== false) {
-      setPanelActivateTab('xpath');
-    }
-    setPanelActivateKey((k) => k + 1);
-  };
+  // 兼容旧 onParse 调用点（按钮） -> 调用 parse
+  const onParse = (xmlToUse?: string) => parse(xmlToUse);
 
   // 真机匹配回调：根据返回的 xpath 或 bounds 在当前树中选中并高亮
   const handleMatchedFromDevice = (payload: { preview?: { xpath?: string; bounds?: string } | null }) => {
@@ -441,35 +329,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     reader.readAsText(file);
   };
 
-  // 分栏宽度（可拖拽）
-  const [leftWidth, setLeftWidth] = useState<number>(() => {
-    const v = Number(localStorage.getItem('grid.leftWidth'));
-    return Number.isFinite(v) && v >= 20 && v <= 80 ? v : 36; // 百分比
-  });
-  const draggingRef = useRef<boolean>(false);
-  useEffect(() => {
-    localStorage.setItem('grid.leftWidth', String(leftWidth));
-  }, [leftWidth]);
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!draggingRef.current) return;
-      const container = document.getElementById('grid-split');
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const pct = Math.max(20, Math.min(80, (px / rect.width) * 100));
-      setLeftWidth(pct);
-      e.preventDefault();
-    };
-    const onUp = () => { draggingRef.current = false; document.body.style.cursor = ''; };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, []);
-  const startDrag = (e: React.MouseEvent) => { draggingRef.current = true; document.body.style.cursor = 'col-resize'; e.preventDefault(); };
+  // 分栏宽度（可拖拽） - 已抽离自定义 Hook
+  const { leftWidth, startDrag } = useResizableSplit('grid.leftWidth', 36);
 
   return (
     <div className={`${styles.root} w-full h-full p-4 md:p-6`}>
@@ -651,18 +512,8 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
             }}
             // 兼容旧回调（仅基础字段），仍然保留
             onApplyToStep={onApplyCriteria as any}
-            onStrategyChanged={(s) => {
-              setCurrentStrategy(s);
-              const payload = { strategy: s, fields: currentFields };
-              onLatestMatchingChange?.(payload);
-              saveLatestMatching(payload);
-            }}
-            onFieldsChanged={(fs) => {
-              setCurrentFields(fs);
-              const payload = { strategy: currentStrategy, fields: fs };
-              onLatestMatchingChange?.(payload);
-              saveLatestMatching(payload);
-            }}
+            onStrategyChanged={(s) => updateStrategy(s)}
+            onFieldsChanged={(fs) => updateFields(fs)}
             initialMatching={initialMatching as any}
           />
           <LocatorAdvisorPanel

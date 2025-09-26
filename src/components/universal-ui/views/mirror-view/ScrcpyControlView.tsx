@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip, Input, InputNumber, Switch, Form, Popconfirm, Radio } from 'antd';
-import { invoke } from '@tauri-apps/api/core';
+import { scrcpyService, ScrcpyCapabilities } from '../../../../application/services/ScrcpyApplicationService';
 import { useAdb } from '../../../../application/hooks/useAdb';
 import EmbeddedScrcpyPlayer from './EmbeddedScrcpyPlayer';
 
@@ -25,6 +25,7 @@ export const ScrcpyControlView: React.FC = () => {
   const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(false);
   const [borderless, setBorderless] = useState<boolean>(false);
   const [renderMode, setRenderMode] = useState<'external' | 'embedded'>('external');
+  const [caps, setCaps] = useState<ScrcpyCapabilities | null>(null);
   // 默认选择：优先已选设备，否则第一个在线设备
   useEffect(() => {
     if (!selected) {
@@ -58,7 +59,7 @@ export const ScrcpyControlView: React.FC = () => {
       if (resolution) options.resolution = resolution;
       if (maxFps && maxFps > 0) options.maxFps = maxFps;
       if (sessionName) options.sessionName = sessionName;
-      const session: string = await invoke('start_device_mirror', { deviceId: selected, options });
+  const session: string = await scrcpyService.start(selected, options);
       // 记录运行状态（按设备标记即可；如需细分会话可扩展成 Record<device, Record<session, boolean>>）
       setRunningMap((m) => ({ ...m, [selected]: true }));
       refreshSessions();
@@ -75,9 +76,9 @@ export const ScrcpyControlView: React.FC = () => {
     setError(null);
     try {
       if (sessionName) {
-        await invoke('stop_device_mirror_session', { deviceId: selected, sessionName });
+        await scrcpyService.stopSession(selected, sessionName);
       } else {
-        await invoke('stop_device_mirror', { deviceId: selected });
+        await scrcpyService.stopAll(selected);
       }
       setRunningMap((m) => ({ ...m, [selected]: false }));
     } catch (e: any) {
@@ -90,12 +91,35 @@ export const ScrcpyControlView: React.FC = () => {
   const refreshSessions = async () => {
     if (!selected) { setSessions([]); return; }
     try {
-      const list: string[] = await invoke('list_device_mirror_sessions', { deviceId: selected });
+      const list: string[] = await scrcpyService.listSessions(selected);
       setSessions(list);
     } catch (e: any) {
       // 忽略列出失败
     }
   };
+
+  const checkEnv = async () => {
+    try {
+      const version = await scrcpyService.checkAvailable();
+      setError(null);
+      // 使用浏览器原生提示或通知库，此处简化：
+      console.info('scrcpy version:', version);
+      // 同步探测能力
+      try {
+        const c = await scrcpyService.getCapabilities();
+        setCaps(c);
+      } catch {}
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    }
+  };
+
+  useEffect(() => {
+    // 初次进入尝试探测能力（静默失败）
+    (async () => {
+      try { setCaps(await scrcpyService.getCapabilities()); } catch {}
+    })();
+  }, []);
 
   // 切换设备/启动/停止后刷新会话列表
   useEffect(() => { refreshSessions(); }, [selected]);
@@ -149,6 +173,7 @@ export const ScrcpyControlView: React.FC = () => {
           <Button danger loading={busy} onClick={stopMirror} disabled={!selected}>
             停止镜像
           </Button>
+          <Button onClick={checkEnv}>环境检查</Button>
           {selected && runningMap[selected] && <Tag color="green">运行中</Tag>}
         </Space>
       </Card>
@@ -161,20 +186,26 @@ export const ScrcpyControlView: React.FC = () => {
               <Input placeholder="默认 default" value={sessionName} onChange={(e) => setSessionName(e.target.value)} style={{ width: 220 }} />
             </Form.Item>
             <Form.Item label="分辨率/最大边像素">
-              <Input placeholder="如 1280 或 1280x720" value={resolution} onChange={(e) => setResolution(e.target.value)} style={{ width: 220 }} />
+              <Tooltip title={caps && !caps.maxSize ? '当前 scrcpy 不支持 --max-size' : ''}>
+                <Input placeholder="如 1280 或 1280x720" value={resolution} onChange={(e) => setResolution(e.target.value)} style={{ width: 220 }} disabled={!!caps && !caps.maxSize} />
+              </Tooltip>
             </Form.Item>
             <Form.Item label="码率">
               <Space>
-                <Input placeholder="如 8M" value={bitrate} onChange={(e) => setBitrate(e.target.value)} style={{ width: 160 }} />
+                <Tooltip title={caps && !caps.bitRate ? '当前 scrcpy 不支持 --bit-rate' : ''}>
+                  <Input placeholder="如 8M" value={bitrate} onChange={(e) => setBitrate(e.target.value)} style={{ width: 160 }} disabled={!!caps && !caps.bitRate} />
+                </Tooltip>
                 <Space size={4}>
                   {["4M","8M","16M"].map(p => (
-                    <Button key={p} size="small" onClick={() => setBitrate(p)}>{p}</Button>
+                    <Button key={p} size="small" onClick={() => setBitrate(p)} disabled={!!caps && !caps.bitRate}>{p}</Button>
                   ))}
                 </Space>
               </Space>
             </Form.Item>
             <Form.Item label="最大 FPS">
-              <InputNumber min={1} max={240} value={maxFps ?? undefined} onChange={(v) => setMaxFps((v ?? null) as any)} style={{ width: 120 }} />
+              <Tooltip title={caps && !caps.maxFps ? '当前 scrcpy 不支持 --max-fps' : ''}>
+                <InputNumber min={1} max={240} value={maxFps ?? undefined} onChange={(v) => setMaxFps((v ?? null) as any)} style={{ width: 120 }} disabled={!!caps && !caps.maxFps} />
+              </Tooltip>
             </Form.Item>
             <Form.Item label="窗口标题">
               <Input value={windowTitle} onChange={(e) => setWindowTitle(e.target.value)} style={{ width: 260 }} />
@@ -186,10 +217,14 @@ export const ScrcpyControlView: React.FC = () => {
               <Switch checked={turnScreenOff} onChange={setTurnScreenOff} />
             </Form.Item>
             <Form.Item label="置顶窗口">
-              <Switch checked={alwaysOnTop} onChange={setAlwaysOnTop} />
+              <Tooltip title={caps && !caps.alwaysOnTop ? '当前 scrcpy 不支持 --always-on-top' : ''}>
+                <Switch checked={alwaysOnTop} onChange={setAlwaysOnTop} disabled={!!caps && !caps.alwaysOnTop} />
+              </Tooltip>
             </Form.Item>
             <Form.Item label="无边框窗口">
-              <Switch checked={borderless} onChange={setBorderless} />
+              <Tooltip title={caps && !caps.windowBorderless ? '当前 scrcpy 不支持 --window-borderless' : ''}>
+                <Switch checked={borderless} onChange={setBorderless} disabled={!!caps && !caps.windowBorderless} />
+              </Tooltip>
             </Form.Item>
           </Space>
         </Form>
@@ -209,7 +244,7 @@ export const ScrcpyControlView: React.FC = () => {
                   title={`停止会话 ${s} ？`}
                   onConfirm={async () => {
                     try {
-                      await invoke('stop_device_mirror_session', { deviceId: selected, sessionName: s });
+                      await scrcpyService.stopSession(selected!, s);
                       refreshSessions();
                     } catch (e) { /* ignore */ }
                   }}

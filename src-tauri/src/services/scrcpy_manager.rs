@@ -53,6 +53,16 @@ pub struct ScrcpyOptions {
     pub borderless: Option<bool>,    // --window-borderless
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrcpyCapabilities {
+    pub always_on_top: bool,
+    pub window_borderless: bool,
+    pub max_fps: bool,
+    pub bit_rate: bool,
+    pub max_size: bool,
+}
+
 fn build_args(device_id: &str, opts: &ScrcpyOptions) -> Vec<String> {
     let mut args: Vec<String> = vec!["--serial".into(), device_id.into()];
 
@@ -124,6 +134,45 @@ fn ensure_scrcpy_available() -> Result<()> {
             }
         }
         Err(e) => Err(anyhow!("scrcpy not found or not executable: {}. 请确认已安装并加入 PATH。", e))
+    }
+}
+
+fn get_scrcpy_version() -> Result<String> {
+    let exe = scrcpy_path();
+    let output = Command::new(&exe)
+        .arg("--version")
+        .output()
+        .map_err(|e| anyhow!("scrcpy not found or not executable: {}", e))?;
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(stdout.trim().to_string())
+    } else {
+        Err(anyhow!("scrcpy exists but --version returned non-zero"))
+    }
+}
+
+fn get_scrcpy_help() -> Result<String> {
+    let exe = scrcpy_path();
+    let output = Command::new(&exe)
+        .arg("--help")
+        .output()
+        .map_err(|e| anyhow!("scrcpy not found or not executable: {}", e))?;
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(stdout)
+    } else {
+        Err(anyhow!("scrcpy exists but --help returned non-zero"))
+    }
+}
+
+fn parse_capabilities(help_text: &str) -> ScrcpyCapabilities {
+    let ht = help_text.to_lowercase();
+    ScrcpyCapabilities {
+        always_on_top: ht.contains("--always-on-top"),
+        window_borderless: ht.contains("--window-borderless"),
+        max_fps: ht.contains("--max-fps"),
+        bit_rate: ht.contains("--bit-rate"),
+        max_size: ht.contains("--max-size"),
     }
 }
 
@@ -226,5 +275,21 @@ pub async fn list_device_mirror_sessions(device_id: String) -> Result<Vec<String
         Ok(map.keys().cloned().collect())
     } else {
         Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
+pub async fn check_scrcpy_available() -> Result<String, String> {
+    match get_scrcpy_version() {
+        Ok(v) => Ok(v),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_scrcpy_capabilities() -> Result<ScrcpyCapabilities, String> {
+    match get_scrcpy_help() {
+        Ok(help) => Ok(parse_capabilities(&help)),
+        Err(e) => Err(e.to_string()),
     }
 }

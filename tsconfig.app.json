@@ -21,6 +21,7 @@
     "src"
   ],
   "exclude": [
+    // 显式排除 JSX-capable shim，防止重复实现与冲突
     "src/components/universal-ui/views/visual-view/hooks/useParsedVisualElements.tsx",
     "src/**/*_old.ts",
     "src/**/*_old.tsx",

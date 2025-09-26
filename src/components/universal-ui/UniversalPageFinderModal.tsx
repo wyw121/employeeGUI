@@ -118,6 +118,9 @@ import {
 // 抽离的属性匹配服务
 import { pickByAttributes } from "./page-finder/services/pickByAttributes";
 import usePageFinderSourceLoader from "./page-finder/hooks/usePageFinderSourceLoader";
+import usePageFinderSelection from "./page-finder/hooks/usePageFinderSelection";
+import FilterBar from "./page-finder/components/FilterBar";
+import ResultList from "./page-finder/components/ResultList";
 // 🆕 使用专门的可视化页面分析组件
 // 移除基于 Tab 的外置可视化容器，改为旧版两列布局中的三视图切换
 
@@ -193,6 +196,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   // 🆕 使用新的模块化XML解析功能
   const [elements, setElements] = useState<VisualUIElement[]>([]);
+  // 注意：必须先定义 categories，再调用 usePageFinderCategories(categories)
   const [categories, setCategories] = useState<VisualElementCategory[]>([]);
   // 分类筛选（与视觉解析 categories 协同）
   const { selectedCategory, setSelectedCategory } = usePageFinderCategories(categories as any);
@@ -221,6 +225,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       await handleSmartElementSelect(selectedElement as any);
     }
   );
+  // 统一化的元素选择 Hook
+  const { handleSmartElementSelect, handleVisualElementSelect } = usePageFinderSelection({
+    currentXmlContent,
+    currentXmlCacheId,
+    selectedDeviceId: selectedDevice,
+    findDeviceName: (id?: string) => devices.find((d) => d.id === id)?.name,
+    onElementSelected,
+    onClose,
+  });
 
   // === 设备连接处理 ===
   useEffect(() => {
@@ -536,108 +549,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
   };
 
-  // 智能元素选择处理
-  const handleSmartElementSelect = async (element: UIElement) => {
-    console.log("🎯 智能元素选择:", element);
-    console.log("🔍 使用XML缓存ID:", {
-      currentXmlCacheId,
-      hasContent: !!currentXmlContent,
-    });
-
-    try {
-      // 使用正确的XML缓存ID，确保步骤能正确关联到其原始XML源
-      const xmlCacheId = currentXmlCacheId || `xml_${Date.now()}`;
-      console.log("📋 最终使用的XML缓存ID:", xmlCacheId);
-
-      // 🆕 创建增强元素信息，包含完整XML上下文
-      const enhancedElement =
-        await EnhancedElementCreator.createEnhancedElement(element, {
-          xmlContent: currentXmlContent,
-          xmlCacheId: xmlCacheId,
-          packageName: "com.xingin.xhs", // 小红书包名，TODO: 动态获取
-          pageInfo: {
-            appName: "小红书",
-            pageName: "当前页面",
-          },
-          deviceInfo: selectedDevice
-            ? {
-                deviceId: selectedDevice,
-                deviceName:
-                  devices.find((d) => d.id === selectedDevice)?.name ||
-                  selectedDevice,
-                resolution: { width: 1080, height: 1920 }, // TODO: 动态获取设备分辨率
-              }
-            : undefined,
-          enableSmartAnalysis: true,
-        });
-
-      console.log("✅ 增强元素信息创建完成:", {
-        xmlContentLength: enhancedElement.xmlContext.xmlSourceContent.length,
-        xmlCacheId: enhancedElement.xmlContext.xmlCacheId,
-        hasSmartAnalysis: !!enhancedElement.smartAnalysis,
-        smartDescription: enhancedElement.smartDescription,
-      });
-
-      // 🆕 将增强信息附加到原始element上，保持兼容性
-      const enhancedElementWithCompat = {
-        ...element,
-        // 兼容旧版本的标识
-        isEnhanced: true,
-        xmlCacheId: enhancedElement.xmlContext.xmlCacheId,
-        xmlContent: enhancedElement.xmlContext.xmlSourceContent,
-        smartDescription: enhancedElement.smartDescription,
-
-        // 新版本的完整增强信息
-        enhancedElement: enhancedElement,
-
-        // 快速访问的元素摘要
-        elementSummary: {
-          displayName:
-            enhancedElement.smartDescription ||
-            element.text ||
-            element.element_type,
-          elementType: element.element_type,
-          position: {
-            x: element.bounds.left,
-            y: element.bounds.top,
-            width: element.bounds.right - element.bounds.left,
-            height: element.bounds.bottom - element.bounds.top,
-          },
-          xmlSource: enhancedElement.xmlContext.xmlCacheId,
-          confidence: enhancedElement.smartAnalysis?.confidence || 0.5,
-        },
-      } as UIElement;
-
-      console.log("🚀 传递增强元素信息:", {
-        hasEnhancedElement: !!(enhancedElementWithCompat as any)
-          .enhancedElement,
-        hasXmlContent: !!(enhancedElementWithCompat as any).xmlContent,
-        hasElementSummary: !!(enhancedElementWithCompat as any).elementSummary,
-        smartDescription: (enhancedElementWithCompat as any).smartDescription,
-      });
-
-      if (onElementSelected) {
-        onElementSelected(enhancedElementWithCompat);
-      }
-    } catch (error) {
-      console.error("❌ 创建增强元素信息失败:", error);
-      message.error("创建增强元素信息失败");
-
-      // 降级到基础元素选择
-      if (onElementSelected) {
-        onElementSelected(element);
-      }
-    }
-
-    onClose();
-  };
-
-  // 处理可视化元素选择（适配函数）
-  const handleVisualElementSelect = async (element: VisualUIElement) => {
-    // 转换 VisualUIElement 到 UIElement
-    const uiElement = convertVisualToUIElement(element);
-    await handleSmartElementSelect(uiElement);
-  };
+  // 本地选择处理函数已由 usePageFinderSelection 提供
 
   // filteredElements / stats 已由 usePageFinderSearch 提供
 
@@ -647,77 +559,19 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const renderInlineListView = () => (
     <div>
       <Card title="元素筛选" className="mb-4">
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Input
-            placeholder="搜索元素..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <Space>
-            <label>
-              <input
-                type="checkbox"
-                checked={showOnlyClickable}
-                onChange={(e) => setShowOnlyClickable(e.target.checked)}
-              />
-              <span style={{ marginLeft: 8 }}>只显示可点击元素</span>
-            </label>
-          </Space>
-        </Space>
+        <FilterBar
+          searchText={searchText}
+          onSearchTextChange={setSearchText}
+          showOnlyClickable={showOnlyClickable}
+          onShowOnlyClickableChange={setShowOnlyClickable}
+        />
       </Card>
 
-      <Card
-        title={`元素列表 (${filteredElements.length}/${uiElements.length})`}
-        extra={
-          <Space>
-            <Tag color="blue">总数: {stats.total}</Tag>
-            <Tag color="green">可点击: {stats.clickable}</Tag>
-            <Tag color="orange">含文本: {stats.withText}</Tag>
-          </Space>
-        }
-      >
-        <List
-          dataSource={filteredElements}
-          renderItem={(element) => (
-            <List.Item
-              key={element.id}
-              actions={[
-                <Button
-                  key="select"
-                  type="primary"
-                  size="small"
-                  onClick={() => handleSmartElementSelect(element)}
-                  disabled={!element.is_clickable}
-                >
-                  选择
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                title={
-                  <Space>
-                    <Text strong>{element.text || element.element_type}</Text>
-                    {element.is_clickable && <Tag color="green">可点击</Tag>}
-                    {element.is_scrollable && <Tag color="blue">可滚动</Tag>}
-                  </Space>
-                }
-                description={
-                  <div>
-                    <Text type="secondary">
-                      {element.content_desc || "无描述"}
-                    </Text>
-                    <br />
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      位置: ({element.bounds.left}, {element.bounds.top}) 大小:{" "}
-                      {element.bounds.right - element.bounds.left} ×{" "}
-                      {element.bounds.bottom - element.bounds.top}
-                    </Text>
-                  </div>
-                }
-              />
-            </List.Item>
-          )}
+      <Card title={`元素列表 (${filteredElements.length}/${uiElements.length})`}>
+        <ResultList
+          elements={filteredElements}
+          totalStats={stats}
+          onSelect={handleSmartElementSelect}
         />
       </Card>
     </div>
@@ -985,77 +839,18 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const renderListTab = () => (
     <div>
       <Card title="元素筛选" className="mb-4">
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Input
-            placeholder="搜索元素..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <Space>
-            <label>
-              <input
-                type="checkbox"
-                checked={showOnlyClickable}
-                onChange={(e) => setShowOnlyClickable(e.target.checked)}
-              />
-              <span style={{ marginLeft: 8 }}>只显示可点击元素</span>
-            </label>
-          </Space>
-        </Space>
+        <FilterBar
+          searchText={searchText}
+          onSearchTextChange={setSearchText}
+          showOnlyClickable={showOnlyClickable}
+          onShowOnlyClickableChange={setShowOnlyClickable}
+        />
       </Card>
-
-      <Card
-        title={`元素列表 (${filteredElements.length}/${uiElements.length})`}
-        extra={
-          <Space>
-            <Tag color="blue">总数: {stats.total}</Tag>
-            <Tag color="green">可点击: {stats.clickable}</Tag>
-            <Tag color="orange">含文本: {stats.withText}</Tag>
-          </Space>
-        }
-      >
-        <List
-          dataSource={filteredElements}
-          renderItem={(element) => (
-            <List.Item
-              key={element.id}
-              actions={[
-                <Button
-                  key="select"
-                  type="primary"
-                  size="small"
-                  onClick={() => handleSmartElementSelect(element)}
-                  disabled={!element.is_clickable}
-                >
-                  选择
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                title={
-                  <Space>
-                    <Text strong>{element.text || element.element_type}</Text>
-                    {element.is_clickable && <Tag color="green">可点击</Tag>}
-                    {element.is_scrollable && <Tag color="blue">可滚动</Tag>}
-                  </Space>
-                }
-                description={
-                  <div>
-                    <Text type="secondary">
-                      {element.content_desc || "无描述"}
-                    </Text>
-                    <br />
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      位置: ({element.bounds.left}, {element.bounds.top}) 大小:{" "}
-                      {element.bounds.right - element.bounds.left} ×{" "}
-                      {element.bounds.bottom - element.bounds.top}
-                    </Text>
-                  </div>
-                }
-              />
-            </List.Item>
-          )}
+      <Card title={`元素列表 (${filteredElements.length}/${uiElements.length})`}>
+        <ResultList
+          elements={filteredElements}
+          totalStats={stats}
+          onSelect={handleSmartElementSelect}
         />
       </Card>
     </div>

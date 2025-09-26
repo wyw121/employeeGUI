@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRef, useLayoutEffect } from "react";
 import { Space, Typography } from "antd";
-import { AppstoreOutlined, SearchOutlined } from "@ant-design/icons";
 import { LeftControlPanel } from "./components/LeftControlPanel";
 import { PagePreview } from "./components/PagePreview";
 import { ElementList } from "./components/ElementList";
@@ -101,31 +100,7 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
 
   // categorizeElement 已抽离 utils/categorization.ts
 
-  // 获取元素重要性（完全还原旧版）
-  const getElementImportance = (node: any): "high" | "medium" | "low" => {
-    const contentDesc = node["content-desc"] || "";
-
-    if (
-      contentDesc.includes("首页") ||
-      contentDesc.includes("搜索") ||
-      contentDesc.includes("笔记") ||
-      contentDesc.includes("视频") ||
-      contentDesc.includes("发布")
-    ) {
-      return "high";
-    }
-
-    if (
-      contentDesc.includes("关注") ||
-      contentDesc.includes("发现") ||
-      contentDesc.includes("消息") ||
-      node.clickable === "true"
-    ) {
-      return "medium";
-    }
-
-    return "low";
-  };
+  // getElementImportance 已抽离 utils/appAnalysis.ts
 
   // analyzeAppAndPageInfo 已抽离 utils/appAnalysis.ts
 

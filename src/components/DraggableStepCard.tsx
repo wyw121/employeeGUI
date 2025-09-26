@@ -78,7 +78,6 @@ export const DraggableStepCard: React.FC<
         onToggle={onToggle}
         draggingStyle={style}
         StepTestButton={StepTestButton as any}
-        currentDeviceId={currentDeviceId}
       />
     </div>
   );

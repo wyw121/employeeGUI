@@ -6,8 +6,8 @@ export { ElementList } from "./components/ElementList";
 export * from "./utils/elementTransform";
 export * from "./utils/categorization";
 export * from "./utils/appAnalysis";
-// 注意：仅通过 .ts re-export 包裹层导出，避免 .ts/.tsx 同名解析歧义
-export { useParsedVisualElements } from "./hooks/useParsedVisualElements";
+// 注意：直接从 canonical 实现导出，避免 .ts/.tsx 同名解析歧义
+export { useParsedVisualElements } from "./hooks/canonical/useParsedVisualElementsCanonical";
 export * from "./hooks/useFilteredVisualElements";
 /**
  * 可视化视图模块入口

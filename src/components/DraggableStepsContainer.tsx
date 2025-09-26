@@ -5,8 +5,8 @@ import { Card, Typography, Button } from 'antd';
 import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { ScreenActionDropdownButton, TapActionDropdownButton } from './step-card';
 import { SystemKeyDropdownButton } from './step-card/system-actions/SystemKeyDropdownButton';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
 import { SmartScriptStep } from '../types/smartScript'; // 使用统一的类型定义
 
@@ -71,36 +71,9 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onCreateTapAction,
   onCreateSystemAction,
 }) => {
-  // 配置传感器
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // 移动8px后才激活拖拽
-      },
-    })
-  );
-
-  // 步骤ID列表（用于SortableContext）
-  const stepIds = useMemo(() => steps.map(step => step.id), [steps]);
-
-  // 处理拖拽结束
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (!over) {
-      return;
-    }
-
-    if (active.id !== over.id) {
-      const oldIndex = steps.findIndex(step => step.id === active.id);
-      const newIndex = steps.findIndex(step => step.id === over.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newSteps = arrayMove(steps, oldIndex, newIndex);
-        onStepsChange(newSteps);
-      }
-    }
-  };
+  // 使用抽离的拖拽 Hook
+  const { sensors, stepIds, handleDragEnd } = require('./universal-ui/script-builder/hooks/useStepDragAndDrop')
+    .useStepDragAndDrop({ steps, onStepsChange });
 
   if (steps.length === 0) {
     return (

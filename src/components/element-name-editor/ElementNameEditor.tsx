@@ -42,12 +42,16 @@ import ElementNameMapper, {
   DEFAULT_MATCHING_CONSTRAINTS,
   ElementNameMapping 
 } from '../../modules/ElementNameMapper';
+import BasicConfigTab from './tabs/BasicConfigTab';
+import ConstraintsTab from './tabs/ConstraintsTab';
+import HierarchyTab from './tabs/HierarchyTab';
 import { ConstraintFieldEditor } from './ConstraintFieldEditor';
 import { ExtendedUIElement, adaptToAndroidXMLFields } from './ElementDataAdapter';
 // 新增：抽离后的适配与逻辑
 import adaptElementToUniversalUIType from './toUniversalElement';
 import { CONSTRAINT_CONFIG } from './logic/constraints';
 import { calculateDisplayMatchScore } from './logic/score';
+import useDisplayNameSuggestions from './hooks/useDisplayNameSuggestions';
 import useElementNameEditorState from './hooks/useElementNameEditorState';
 import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
 import BatchRuleConfigPanel from './BatchRuleConfigPanel';
@@ -55,6 +59,7 @@ import ErrorBoundary from '../ErrorBoundary';
 import CachedElementXmlHierarchyTab from '../element-xml-hierarchy/CachedElementXmlHierarchyTab';
 import { AdbXmlInspector } from '../adb-xml-inspector';
 import type { UIElement as UniversalUIElement } from '../../api/universalUIAPI';
+import FieldDetailTab from './tabs/FieldDetailTab';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -105,47 +110,7 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
     form.setFieldsValue({ displayName, notes });
   }, [displayName, notes, element, visible, form]);
 
-  // ========== 初始化表单数据 ==========
-  const initializeFormData = () => {
-    if (!element) return;
-
-    // 获取当前显示名称
-    const currentDisplayName = ElementNameMapper.getDisplayName(element);
-    console.log('🏷️ 初始化显示名称:', currentDisplayName);
-    setPreviewName(currentDisplayName);
-
-    // 查找是否有现有映射
-    const mappings = ElementNameMapper.getAllMappings();
-    const existing = mappings.find(m => {
-      const score = calculateDisplayMatchScore(element, m);
-      return score >= 0.8;
-    });
-    
-    setExistingMapping(existing);
-
-    // 设置表单初值
-    if (existing) {
-      const formValues = {
-        displayName: existing.displayName,
-        notes: existing.notes || ''
-      };
-      form.setFieldsValue(formValues);
-      setConstraints(existing.fingerprint.constraints);
-      setPreviewName(existing.displayName); // 🆕 确保预览名称同步
-    } else {
-      const formValues = {
-        displayName: currentDisplayName,
-        notes: ''
-      };
-      form.setFieldsValue(formValues);
-      setConstraints(DEFAULT_MATCHING_CONSTRAINTS);
-      setPreviewName(currentDisplayName); // 🆕 确保预览名称同步
-    }
-
-    // 🆕 强制更新
-    setRefreshKey(prev => prev + 1);
-    console.log('✅ 表单初始化完成:', form.getFieldsValue());
-  };
+  // 旧 initializeFormData 已被 hook 接管，保留注释占位防止重复添加
 
   // （匹配度计算已抽离至 logic/score.ts）
 
@@ -186,707 +151,9 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
 
   // ========== 渲染辅助函数 ==========
 
-  const renderElementInfo = () => {
-    if (!element) return null;
+  // 已抽离出 ConstraintsTab / BasicConfigTab
 
-    const elementInfo = [
-      { label: '文本', value: element.text, show: !!element.text },
-      { label: '资源ID', value: element.resource_id, show: !!element.resource_id },
-      { label: '元素类型', value: element.element_type, show: !!element.element_type },
-      { label: '内容描述', value: element.content_desc, show: !!element.content_desc },
-      { label: '可点击', value: element.clickable ? '是' : '否', show: element.clickable !== undefined },
-    ].filter(item => item.show);
-
-    return (
-      <Card size="small" title={<Space><InfoCircleOutlined />元素信息</Space>}>
-        <div className="space-y-2">
-          {elementInfo.map((item, index) => (
-            <Row key={index}>
-              <Col span={6}>
-                <Text type="secondary">{item.label}:</Text>
-              </Col>
-              <Col span={18}>
-                <Text code copyable={{ text: item.value }}>{item.value}</Text>
-              </Col>
-            </Row>
-          ))}
-          {element.bounds && (
-            <Row>
-              <Col span={6}>
-                <Text type="secondary">坐标:</Text>
-              </Col>
-              <Col span={18}>
-                <Text code>
-                  ({element.bounds.left}, {element.bounds.top}) - 
-                  ({element.bounds.right}, {element.bounds.bottom})
-                </Text>
-              </Col>
-            </Row>
-          )}
-        </div>
-      </Card>
-    );
-  };
-
-  const renderConstraintsConfig = () => {
-    const enabledCount = Object.values(constraints).filter(Boolean).length;
-    const totalWeight = CONSTRAINT_CONFIG
-      .filter(config => constraints[config.key])
-      .reduce((sum, config) => sum + config.weight, 0);
-
-    return (
-      <Card 
-        size="small" 
-        title={
-          <Space>
-            <SettingOutlined />
-            匹配约束配置
-            <Tag color="blue">{enabledCount}/{CONSTRAINT_CONFIG.length}项启用</Tag>
-            <Tag color="green">总权重: {totalWeight}%</Tag>
-          </Space>
-        }
-        extra={
-          <Button 
-            size="small" 
-            icon={<ReloadOutlined />} 
-            onClick={handleResetConstraints}
-          >
-            重置
-          </Button>
-        }
-      >
-        <Alert 
-          message="匹配约束配置"
-          description="选择哪些元素属性用于匹配识别。启用的约束越多，匹配精度越高，但可能影响灵活性。"
-          type="info"
-          showIcon
-          className="mb-4"
-        />
-        
-        <div className="space-y-3">
-          {CONSTRAINT_CONFIG.map((config) => {
-            const configKey = String(config.key);
-            const fieldName = configKey.replace('enable', '').replace('Match', '').toLowerCase();
-            const currentValue = element?.[fieldName as keyof UIElement];
-            const hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
-            
-            return (
-              <Row key={configKey} align="middle" className="py-2">
-                <Col span={16}>
-                  <Space>
-                    <span>{config.icon}</span>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <Text strong>{config.label}</Text>
-                        <Tag color="blue" style={{ fontSize: '10px' }}>
-                          {config.englishLabel}
-                        </Tag>
-                        <Tag color="default" className="ml-2">权重{config.weight}%</Tag>
-                        {(config as any).recommended && (
-                          <Tag color="gold" style={{ fontSize: '10px' }}>推荐</Tag>
-                        )}
-                      </div>
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {config.description}
-                      </Text>
-                      {hasValue && (
-                        <div className="mt-1">
-                          <Text type="success" style={{ fontSize: '11px' }}>
-                            当前值: {String(currentValue).substring(0, 30)}
-                            {String(currentValue).length > 30 ? '...' : ''}
-                          </Text>
-                        </div>
-                      )}
-                      {/* 🆕 显示父元素信息 */}
-                      {config.key === 'enableParentMatch' && element?.parent && (
-                        <div className="mt-1">
-                          <Text type="success" style={{ fontSize: '11px' }}>
-                            父元素: {element.parent.element_type} 
-                            {element.parent.resource_id && ` (${element.parent.resource_id})`}
-                          </Text>
-                        </div>
-                      )}
-                      {/* 🆕 显示兄弟元素信息 */}
-                      {config.key === 'enableSiblingMatch' && element?.siblings && element.siblings.length > 0 && (
-                        <div className="mt-1">
-                          <Text type="success" style={{ fontSize: '11px' }}>
-                            兄弟元素: {element.siblings.length} 个
-                          </Text>
-                        </div>
-                      )}
-                    </div>
-                  </Space>
-                </Col>
-                <Col span={8} className="text-right">
-                  <Space>
-                    {!hasValue && config.key !== 'enableParentMatch' && config.key !== 'enableSiblingMatch' && (
-                      <Tooltip title="当前元素没有此属性值">
-                        <Tag color="orange">无值</Tag>
-                      </Tooltip>
-                    )}
-                    <Switch
-                      checked={constraints[config.key]}
-                      onChange={(checked) => handleConstraintChange(config.key, checked)}
-                      size="small"
-                    />
-                  </Space>
-                </Col>
-              </Row>
-            );
-          })}
-        </div>
-      </Card>
-    );
-  };
-
-  // ========== 字段详细配置渲染函数 ==========
-  
-  const renderFieldDetailConfig = () => {
-    if (!element) return null;
-
-    // 转换元素数据为Android XML格式
-    const xmlData = adaptToAndroidXMLFields(element as ExtendedUIElement);
-    
-    // 执行精准度分析
-    const precisionAnalysis = AdbPrecisionStrategy.evaluateElementPrecision(xmlData);
-    const fieldStability = AdbPrecisionStrategy.getAllFieldStability();
-    
-    // 缓存的映射值（如果存在）
-    const existingMapping = (ElementNameMapper as any).findBestMatch?.(element) || null;
-    const cachedValues = existingMapping ? {
-      displayName: existingMapping.displayName,
-      lastUpdated: new Date(existingMapping.lastUsedAt).toLocaleTimeString(),
-      usageCount: existingMapping.usageCount
-    } : null;
-
-    // 生成ADB命令
-    const adbCommands = AdbPrecisionStrategy.generateAdbCommands(xmlData);
-
-    // 按稳定性排序字段
-    const sortedFields = Object.entries(xmlData)
-      .filter(([_, value]) => value !== '' && value !== null && value !== undefined)
-      .map(([key, value]) => ({
-        key,
-        value,
-        stability: AdbPrecisionStrategy.getFieldStability(key)
-      }))
-      .sort((a, b) => (b.stability?.score || 0) - (a.stability?.score || 0));
-
-    return (
-      <div style={{ 
-        padding: '16px', 
-        background: '#1a1a1a', 
-        borderRadius: '8px',
-        color: '#fff'
-      }}>
-        {/* 精准度总览 - 暗黑风格 */}
-        <Alert
-          message={
-            <div style={{ color: '#fff' }}>
-              <strong>🎯 ADB 自动化精准度: {precisionAnalysis.overallScore}%</strong>
-            </div>
-          }
-          description={
-            <div style={{ marginTop: '8px', color: '#e6e6e6' }}>
-              <Text style={{ color: '#e6e6e6' }}>
-                最佳策略: {precisionAnalysis.bestStrategy?.name || '暂无可用策略'}
-              </Text>
-              {precisionAnalysis.overallScore >= 90 && (
-                <Tag color="success" style={{ marginLeft: '8px' }}>
-                  🟢 极高精准度 - 推荐生产使用
-                </Tag>
-              )}
-              {precisionAnalysis.overallScore >= 70 && precisionAnalysis.overallScore < 90 && (
-                <Tag color="warning" style={{ marginLeft: '8px' }}>
-                  🟡 中等精准度 - 建议添加重试
-                </Tag>
-              )}
-              {precisionAnalysis.overallScore < 70 && (
-                <Tag color="error" style={{ marginLeft: '8px' }}>
-                  🔴 较低精准度 - 需要优化策略
-                </Tag>
-              )}
-            </div>
-          }
-          type={precisionAnalysis.overallScore >= 70 ? 'success' : 'warning'}
-          showIcon
-          style={{ 
-            background: '#2d2d2d', 
-            border: '1px solid #404040',
-            color: '#fff'
-          }}
-        />
-
-        <div style={{ marginTop: '16px' }}>
-          <Row gutter={16}>
-            {/* 左侧：原始XML字段（用于匹配） */}
-            <Col span={14}>
-              <Card 
-                title={
-                  <Space style={{ color: '#fff' }}>
-                    <span>�</span>
-                    原始XML字段
-                    <Tag color="cyan">用于匹配识别</Tag>
-                    <Tag color="blue">{sortedFields.length} 个字段</Tag>
-                  </Space>
-                }
-                size="small"
-                style={{ 
-                  background: '#2d2d2d', 
-                  border: '1px solid #404040'
-                }}
-                headStyle={{ 
-                  background: '#1f1f1f', 
-                  borderBottom: '1px solid #404040',
-                  color: '#fff'
-                }}
-                bodyStyle={{ background: '#2d2d2d' }}
-              >
-                <Alert
-                  message={
-                    <Text style={{ color: '#fff' }}>
-                      <strong>📋 字段用途说明</strong>
-                    </Text>
-                  }
-                  description={
-                    <div style={{ color: '#e6e6e6', fontSize: '12px', marginTop: '4px' }}>
-                      <Text style={{ color: '#e6e6e6' }}>
-                        这些是从Android应用界面提取的<strong>原始XML属性</strong>，系统使用这些字段来<strong>识别和定位</strong>界面元素。
-                        字段稳定性越高，定位越准确。
-                      </Text>
-                    </div>
-                  }
-                  type="info"
-                  showIcon
-                  style={{ 
-                    marginBottom: '12px',
-                    background: '#0f3460', 
-                    border: '1px solid #1890ff'
-                  }}
-                />
-
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }} className="dark-scrollbar">
-                  {sortedFields.map(({ key, value, stability }, index) => (
-                    <div 
-                      key={key} 
-                      style={{ 
-                        marginBottom: '12px',
-                        padding: '12px',
-                        background: index < 3 ? '#0f3460' : '#333',
-                        border: `1px solid ${
-                          stability?.level === 'high' ? '#52c41a' :
-                          stability?.level === 'medium' ? '#faad14' : '#ff4d4f'
-                        }`,
-                        borderRadius: '6px'
-                      }}
-                    >
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
-                        marginBottom: '8px' 
-                      }}>
-                        <Space>
-                          <span style={{ 
-                            background: index < 3 ? '#1890ff' : '#666',
-                            color: '#fff',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 'bold'
-                          }}>
-                            #{index + 1}
-                          </span>
-                          <Text strong style={{ color: '#fff', fontSize: '14px' }}>
-                            {key}
-                          </Text>
-                          <Tag 
-                            color={
-                              stability?.level === 'high' ? 'green' : 
-                              stability?.level === 'medium' ? 'orange' : 'red'
-                            }
-                            style={{ fontSize: '10px' }}
-                          >
-                            {stability?.score || 0}% 稳定性
-                          </Tag>
-                        </Space>
-                      </div>
-                      
-                      {/* XML字段值展示 */}
-                      <div style={{ 
-                        background: '#1f1f1f', 
-                        padding: '8px 10px', 
-                        borderRadius: '4px',
-                        fontFamily: 'Monaco, Consolas, monospace',
-                        fontSize: '12px',
-                        wordBreak: 'break-all',
-                        marginBottom: '8px',
-                        border: '1px solid #404040'
-                      }}>
-                        <Text 
-                          copyable={{ text: String(value) }}
-                          style={{ color: '#a6e22e' }}
-                        >
-                          {String(value)}
-                        </Text>
-                      </div>
-
-                      {/* 字段特性标签 */}
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {stability?.level === 'high' && (
-                          <Tag color="success" style={{ fontSize: '10px' }}>
-                            🔥 高价值字段
-                          </Tag>
-                        )}
-                        {key === 'resource_id' && (
-                          <Tag color="purple" style={{ fontSize: '10px' }}>
-                            🎯 最佳定位
-                          </Tag>
-                        )}
-                        {key === 'text' && value && String(value).length < 10 && (
-                          <Tag color="cyan" style={{ fontSize: '10px' }}>
-                            📝 精简文本
-                          </Tag>
-                        )}
-                        {index < 3 && (
-                          <Tag color="gold" style={{ fontSize: '10px' }}>
-                            ⭐ 推荐优先级
-                          </Tag>
-                        )}
-                        <Tag style={{ fontSize: '9px', background: '#1f1f1f', color: '#999' }}>
-                          匹配字段
-                        </Tag>
-                      </div>
-
-                      {stability && stability.risks.length > 0 && (
-                        <div style={{ marginTop: '6px' }}>
-                          <Text type="secondary" style={{ fontSize: '10px', color: '#999' }}>
-                            ⚠️ 风险: {stability.risks.slice(0, 2).join(', ')}
-                          </Text>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </Col>
-
-            {/* 右侧：自定义名称配置（用于展示） */}
-            <Col span={10}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                
-                {/* 自定义显示名称配置 */}
-                <Card 
-                  key={`display-name-${refreshKey}`} // 🆕 添加key强制重新渲染
-                  title={
-                    <Space style={{ color: '#fff' }}>
-                      <span>✏️</span>
-                      自定义显示名称
-                      <Tag color="orange">用户定义</Tag>
-                    </Space>
-                  }
-                  size="small"
-                  style={{ 
-                    background: '#2d2d2d', 
-                    border: '1px solid #404040'
-                  }}
-                  headStyle={{ 
-                    background: '#1f1f1f', 
-                    borderBottom: '1px solid #404040'
-                  }}
-                  bodyStyle={{ background: '#2d2d2d' }}
-                >
-                  <Alert
-                    message={
-                      <Text style={{ color: '#fff' }}>
-                        <strong>🏷️ 名称用途说明</strong>
-                      </Text>
-                    }
-                    description={
-                      <div style={{ color: '#e6e6e6', fontSize: '12px', marginTop: '4px' }}>
-                        <Text style={{ color: '#e6e6e6' }}>
-                          自定义名称用于<strong>用户友好的显示</strong>，让复杂的XML元素有易懂的标识。
-                          系统会基于左侧原始字段进行匹配，但显示您定义的名称。
-                        </Text>
-                      </div>
-                    }
-                    type="warning"
-                    showIcon
-                    style={{ 
-                      marginBottom: '12px',
-                      background: '#4a3c00', 
-                      border: '1px solid #faad14'
-                    }}
-                  />
-
-                  {/* 显示当前自定义名称 */}
-                  <div style={{ 
-                    padding: '12px', 
-                    background: '#0f3460',
-                    borderRadius: '6px',
-                    border: '1px solid #1890ff',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{ marginBottom: '8px' }}>
-                      <Text type="secondary" style={{ color: '#ccc', fontSize: '11px' }}>
-                        当前显示名称
-                      </Text>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text strong style={{ color: '#fff', fontSize: '16px' }}>
-                        {getCurrentDisplayName()}
-                      </Text>
-                      <Tag color="blue" style={{ fontSize: '10px' }}>
-                        {existingMapping ? '已保存' : '临时生成'}
-                      </Tag>
-                    </div>
-                    {existingMapping && (
-                      <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                        <Text style={{ color: '#ccc', fontSize: '11px' }}>
-                          使用 {existingMapping.usageCount} 次
-                        </Text>
-                        <Text style={{ color: '#ccc', fontSize: '11px' }}>
-                          {new Date(existingMapping.lastUsedAt).toLocaleString()}
-                        </Text>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 映射规则概述 */}
-                  <div style={{
-                    padding: '10px',
-                    background: '#1f1f1f',
-                    borderRadius: '4px',
-                    border: '1px solid #404040'
-                  }}>
-                    <Text style={{ color: '#ccc', fontSize: '12px' }}>
-                      <strong>💡 工作原理：</strong><br/>
-                      1. 系统使用左侧XML字段匹配识别元素<br/>
-                      2. 用户看到的是右侧自定义显示名称<br/>
-                      3. 两者完全分离，互不干扰<br/>
-                      <br/>
-                      <strong>🔄 实时同步：</strong>当前显示名称 = "{getCurrentDisplayName()}"
-                    </Text>
-                  </div>
-                </Card>
-
-                {/* 缓存映射值详情 */}
-                {cachedValues && (
-                  <Card 
-                    title={
-                      <Space style={{ color: '#fff' }}>
-                        <span>💾</span>
-                        映射缓存详情
-                        <Tag color="purple">已存储</Tag>
-                      </Space>
-                    }
-                    size="small"
-                    style={{ 
-                      background: '#2d2d2d', 
-                      border: '1px solid #404040'
-                    }}
-                    headStyle={{ 
-                      background: '#1f1f1f', 
-                      borderBottom: '1px solid #404040'
-                    }}
-                    bodyStyle={{ background: '#2d2d2d' }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ 
-                        padding: '8px', 
-                        background: '#0f3460',
-                        borderRadius: '4px',
-                        border: '1px solid #1890ff'
-                      }}>
-                        <Text type="secondary" style={{ color: '#ccc', fontSize: '11px' }}>
-                          📝 存储的显示名称
-                        </Text>
-                        <div>
-                          <Text strong style={{ color: '#fff', fontSize: '14px' }}>
-                            {cachedValues.displayName}
-                          </Text>
-                        </div>
-                      </div>
-                      
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between',
-                        padding: '6px 8px',
-                        background: '#333',
-                        borderRadius: '4px'
-                      }}>
-                        <div>
-                          <Text style={{ color: '#ccc', fontSize: '11px' }}>
-                            📊 使用频次: {cachedValues.usageCount}
-                          </Text>
-                        </div>
-                        <div>
-                          <Text style={{ color: '#ccc', fontSize: '11px' }}>
-                            🕐 最后使用: {cachedValues.lastUpdated}
-                          </Text>
-                        </div>
-                      </div>
-
-                      <div style={{
-                        padding: '8px',
-                        background: '#1f1f1f',
-                        borderRadius: '4px',
-                        border: '1px solid #404040'
-                      }}>
-                        <Text style={{ color: '#ccc', fontSize: '10px' }}>
-                          💡 说明：此名称映射基于左侧XML字段特征进行匹配，
-                          当系统遇到相似特征的元素时会自动应用该显示名称。
-                        </Text>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* AI优化建议 */}
-                <Card 
-                  title={
-                    <Space style={{ color: '#fff' }}>
-                      <span>🤖</span>
-                      AI 优化建议
-                      <Tag color="green">智能分析</Tag>
-                    </Space>
-                  }
-                  size="small"
-                  style={{ 
-                    background: '#2d2d2d', 
-                    border: '1px solid #404040'
-                  }}
-                  headStyle={{ 
-                    background: '#1f1f1f', 
-                    borderBottom: '1px solid #404040'
-                  }}
-                  bodyStyle={{ background: '#2d2d2d' }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {precisionAnalysis.recommendations.map((rec, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          background: rec.includes('✅') ? '#0f4429' :
-                                     rec.includes('⚠️') ? '#4a3c00' :
-                                     rec.includes('❌') ? '#5c1c1c' : '#1f1f1f',
-                          border: `1px solid ${
-                            rec.includes('✅') ? '#52c41a' :
-                            rec.includes('⚠️') ? '#faad14' :
-                            rec.includes('❌') ? '#ff4d4f' : '#404040'
-                          }`,
-                          color: '#fff'
-                        }}
-                      >
-                        {rec}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                {/* 生成的ADB命令 */}
-                {adbCommands.length > 0 && (
-                  <Card 
-                    title={
-                      <Space style={{ color: '#fff' }}>
-                        <span>⚡</span>
-                        推荐 ADB 命令
-                        <Tag color="blue">{adbCommands.length} 条</Tag>
-                      </Space>
-                    }
-                    size="small"
-                    style={{ 
-                      background: '#2d2d2d', 
-                      border: '1px solid #404040'
-                    }}
-                    headStyle={{ 
-                      background: '#1f1f1f', 
-                      borderBottom: '1px solid #404040'
-                    }}
-                    bodyStyle={{ background: '#2d2d2d' }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {adbCommands.slice(0, 3).map((cmd, index) => (
-                        <div key={index} style={{ paddingBottom: '8px', borderBottom: '1px solid #404040' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                            <Tag color="blue">{cmd.type.toUpperCase()}</Tag>
-                            <Text type="secondary" style={{ fontSize: '11px', color: '#ccc' }}>
-                              成功率: {(cmd.reliability * 100).toFixed(0)}%
-                            </Text>
-                          </div>
-                          <div style={{ 
-                            background: '#1f1f1f', 
-                            padding: '4px 6px', 
-                            borderRadius: '3px',
-                            fontFamily: 'Monaco, Consolas, monospace',
-                            fontSize: '11px',
-                            wordBreak: 'break-all'
-                          }}>
-                            <Text 
-                              copyable={{ text: cmd.command }}
-                              style={{ color: '#a6e22e' }}
-                            >
-                              {cmd.command}
-                            </Text>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
-              </div>
-            </Col>
-          </Row>
-
-          {/* 实时编辑区域 */}
-          <Card 
-            title={
-              <Space style={{ color: '#fff' }}>
-                <EditOutlined />
-                实时优化编辑
-                <Tag color="orange">实验功能</Tag>
-              </Space>
-            }
-            size="small"
-            style={{ 
-              marginTop: '16px',
-              background: '#2d2d2d', 
-              border: '1px solid #404040'
-            }}
-            headStyle={{ 
-              background: '#1f1f1f', 
-              borderBottom: '1px solid #404040'
-            }}
-            bodyStyle={{ background: '#2d2d2d' }}
-          >
-            <Alert
-              message={
-                <Text style={{ color: '#fff' }}>实时编辑功能</Text>
-              }
-              description={
-                <Text style={{ color: '#e6e6e6' }}>
-                  修改下方字段值，系统将实时更新精准度评分和ADB命令建议。注意：这里的修改仅用于测试，不会保存到缓存中。
-                </Text>
-              }
-              type="info"
-              showIcon
-              style={{ 
-                marginBottom: '12px',
-                background: '#0f3460', 
-                border: '1px solid #1890ff'
-              }}
-            />
-            <Text type="secondary" style={{ fontSize: '12px', color: '#ccc' }}>
-              此功能正在开发中，将提供实时的字段编辑和精准度分析能力...
-            </Text>
-          </Card>
-        </div>
-      </div>
-    );
-  };
+  // 字段详配内容已迁移至 FieldDetailTab 组件
 
   // ========== 层级结构渲染函数 ==========
   
@@ -1004,7 +271,6 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
 
         {/* 名称预览 */}
         <Alert
-          key={`preview-${refreshKey}`} // 🆕 添加key强制重新渲染
           message={
             <Space>
               <EyeOutlined />
@@ -1082,14 +348,7 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
                   <Text type="secondary" style={{ fontSize: '12px' }}>
                     💡 建议名称：
                   </Text>
-                  {[
-                    element.text && element.text.trim() ? `${element.text}按钮` : null,
-                    element.resource_id ? element.resource_id.split('/').pop()?.replace('_', ' ') : null,
-                    element.content_desc || null
-                  ]
-                  .filter(Boolean)
-                  .slice(0, 3)
-                  .map((suggestion, index) => (
+                  {useDisplayNameSuggestions(element).map((suggestion, index) => (
                     <Tag 
                       key={index}
                       style={{ 
@@ -1100,10 +359,10 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
                       }}
                       onClick={() => {
                         form.setFieldsValue({ displayName: suggestion });
-                        handlePreviewUpdate(suggestion);
+                        handlePreviewUpdate(suggestion as string);
                       }}
                     >
-                      {suggestion}
+                      {suggestion as string}
                     </Tag>
                   ))}
                   
@@ -1179,30 +438,7 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
           </Form.Item>
         </Form>
 
-        {/* 折叠面板：高级配置 */}
-        <Collapse ghost>
-          <Panel 
-            header={
-              <Space>
-                <SettingOutlined />
-                高级匹配配置
-                <Tag color="blue">
-                  {Object.values(constraints).filter(Boolean).length} 项约束启用
-                </Tag>
-              </Space>
-            }
-            key="constraints"
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                {renderElementInfo()}
-              </div>
-              <div>
-                {renderConstraintsConfig()}
-              </div>
-            </div>
-          </Panel>
-        </Collapse>
+        {/* 高级匹配配置折叠面板已迁移到 BasicConfigTab + ConstraintsTab 组合 */}
       </div>
       </TabPane>
 
@@ -1227,15 +463,16 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
                 style={{ marginBottom: '16px', background: '#fff7e6', border: '1px solid #faad14' }}
               >
                 <Text style={{ fontSize: '11px', color: '#666' }}>
-                  表单值: {form.getFieldValue('displayName') || '(空)'} | 
-                  预览名称: {previewName} | 
-                  当前显示: {getCurrentDisplayName()} | 
-                  刷新Key: {refreshKey}
+                  表单值: {form.getFieldValue('displayName') || '(空)'} | 预览名称: {previewName} | 当前显示: {getCurrentDisplayName()}
                 </Text>
               </Card>
             )}
 
-            {renderFieldDetailConfig()}
+            <FieldDetailTab 
+              element={element}
+              getCurrentDisplayName={getCurrentDisplayName}
+              existingMapping={existingMapping}
+            />
           </div>
         )}
       </TabPane>

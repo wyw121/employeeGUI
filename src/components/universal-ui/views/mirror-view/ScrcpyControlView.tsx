@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip, Input, InputNumber, Switch, Form } from 'antd';
+import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip, Input, InputNumber, Switch, Form, Popconfirm, Radio } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { useAdb } from '../../../../application/hooks/useAdb';
+import EmbeddedScrcpyPlayer from './EmbeddedScrcpyPlayer';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -12,6 +13,7 @@ export const ScrcpyControlView: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [runningMap, setRunningMap] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<string[]>([]);
   // 参数设置
   const [sessionName, setSessionName] = useState<string>("");
   const [resolution, setResolution] = useState<string>(""); // 例如：1280 或 1280x720
@@ -20,6 +22,9 @@ export const ScrcpyControlView: React.FC = () => {
   const [windowTitle, setWindowTitle] = useState<string>("EmployeeGUI Mirror");
   const [stayAwake, setStayAwake] = useState<boolean>(true);
   const [turnScreenOff, setTurnScreenOff] = useState<boolean>(false);
+  const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(false);
+  const [borderless, setBorderless] = useState<boolean>(false);
+  const [renderMode, setRenderMode] = useState<'external' | 'embedded'>('external');
   // 默认选择：优先已选设备，否则第一个在线设备
   useEffect(() => {
     if (!selected) {
@@ -30,6 +35,15 @@ export const ScrcpyControlView: React.FC = () => {
 
   const startMirror = async () => {
     if (!selected) return;
+    // 简单校验分辨率格式：空 或 数字 或 数字x数字/数字:数字
+    const res = (resolution || '').trim();
+    if (res) {
+      const ok = /^\d+$/.test(res) || /^\d+[x:X:]\d+$/.test(res);
+      if (!ok) {
+        setError('分辨率格式不合法，请输入形如 1280 或 1280x720');
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -38,6 +52,8 @@ export const ScrcpyControlView: React.FC = () => {
         turnScreenOff,
         bitrate,
         windowTitle,
+        alwaysOnTop,
+        borderless,
       };
       if (resolution) options.resolution = resolution;
       if (maxFps && maxFps > 0) options.maxFps = maxFps;
@@ -45,6 +61,7 @@ export const ScrcpyControlView: React.FC = () => {
       const session: string = await invoke('start_device_mirror', { deviceId: selected, options });
       // 记录运行状态（按设备标记即可；如需细分会话可扩展成 Record<device, Record<session, boolean>>）
       setRunningMap((m) => ({ ...m, [selected]: true }));
+      refreshSessions();
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -69,6 +86,19 @@ export const ScrcpyControlView: React.FC = () => {
       setBusy(false);
     }
   };
+
+  const refreshSessions = async () => {
+    if (!selected) { setSessions([]); return; }
+    try {
+      const list: string[] = await invoke('list_device_mirror_sessions', { deviceId: selected });
+      setSessions(list);
+    } catch (e: any) {
+      // 忽略列出失败
+    }
+  };
+
+  // 切换设备/启动/停止后刷新会话列表
+  useEffect(() => { refreshSessions(); }, [selected]);
 
   return (
     <div className="p-4">
@@ -104,6 +134,13 @@ export const ScrcpyControlView: React.FC = () => {
             notFoundContent={<Text type="secondary">暂无在线设备</Text>}
           />
           <Button onClick={refreshDevices}>刷新</Button>
+          <Space size={8} align="center">
+            <Text type="secondary">渲染模式：</Text>
+            <Radio.Group value={renderMode} onChange={(e) => setRenderMode(e.target.value)}>
+              <Radio.Button value="external">外部窗口</Radio.Button>
+              <Radio.Button value="embedded">嵌入式</Radio.Button>
+            </Radio.Group>
+          </Space>
           <Tooltip title="在外部窗口打开 scrcpy（系统进程）">
             <Button type="primary" loading={busy} onClick={startMirror} disabled={!selected}>
               启动镜像
@@ -127,7 +164,14 @@ export const ScrcpyControlView: React.FC = () => {
               <Input placeholder="如 1280 或 1280x720" value={resolution} onChange={(e) => setResolution(e.target.value)} style={{ width: 220 }} />
             </Form.Item>
             <Form.Item label="码率">
-              <Input placeholder="如 8M" value={bitrate} onChange={(e) => setBitrate(e.target.value)} style={{ width: 160 }} />
+              <Space>
+                <Input placeholder="如 8M" value={bitrate} onChange={(e) => setBitrate(e.target.value)} style={{ width: 160 }} />
+                <Space size={4}>
+                  {["4M","8M","16M"].map(p => (
+                    <Button key={p} size="small" onClick={() => setBitrate(p)}>{p}</Button>
+                  ))}
+                </Space>
+              </Space>
             </Form.Item>
             <Form.Item label="最大 FPS">
               <InputNumber min={1} max={240} value={maxFps ?? undefined} onChange={(v) => setMaxFps((v ?? null) as any)} style={{ width: 120 }} />
@@ -141,18 +185,49 @@ export const ScrcpyControlView: React.FC = () => {
             <Form.Item label="关闭手机屏幕">
               <Switch checked={turnScreenOff} onChange={setTurnScreenOff} />
             </Form.Item>
+            <Form.Item label="置顶窗口">
+              <Switch checked={alwaysOnTop} onChange={setAlwaysOnTop} />
+            </Form.Item>
+            <Form.Item label="无边框窗口">
+              <Switch checked={borderless} onChange={setBorderless} />
+            </Form.Item>
           </Space>
         </Form>
       </Card>
 
       <Divider />
-      <Card>
-        <Title level={5}>嵌入式画布占位</Title>
-        <Paragraph type="secondary">
-          未来可替换为 ya-webadb 的 scrcpy 客户端（WebCodecs/Canvas 渲染），实现内嵌预览与操控。
-        </Paragraph>
-        <div style={{ width: '100%', height: 520, background: '#0b0f19', borderRadius: 8 }} />
+      <Card size="small" title="已运行会话">
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Button size="small" onClick={refreshSessions} disabled={!selected}>刷新会话列表</Button>
+          {sessions.length === 0 ? (
+            <Text type="secondary">暂无会话</Text>
+          ) : (
+            <Space wrap>
+              {sessions.map((s) => (
+                <Popconfirm
+                  key={s}
+                  title={`停止会话 ${s} ？`}
+                  onConfirm={async () => {
+                    try {
+                      await invoke('stop_device_mirror_session', { deviceId: selected, sessionName: s });
+                      refreshSessions();
+                    } catch (e) { /* ignore */ }
+                  }}
+                >
+                  <Tag color="geekblue" style={{ cursor: 'pointer' }}>{s}</Tag>
+                </Popconfirm>
+              ))}
+            </Space>
+          )}
+        </Space>
       </Card>
+
+      {renderMode === 'embedded' && (
+        <>
+          <Divider />
+          <EmbeddedScrcpyPlayer />
+        </>
+      )}
     </div>
   );
 };

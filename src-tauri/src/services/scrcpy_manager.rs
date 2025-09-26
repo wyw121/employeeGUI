@@ -4,7 +4,6 @@ use std::sync::{Mutex, Arc};
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
-use tauri::State;
 use tracing::{info, warn, error};
 
 #[derive(Default)]
@@ -16,8 +15,26 @@ pub struct ScrcpyState {
 pub static SCRCPY_STATE: Lazy<Arc<Mutex<ScrcpyState>>> = Lazy::new(|| Arc::new(Mutex::new(ScrcpyState::default())));
 
 fn scrcpy_path() -> String {
-    // Windows 默认依赖 PATH 中的 scrcpy.exe
-    // 可扩展：读取配置或与平台工具目录拼接
+    // 1) 环境变量优先
+    if let Ok(p) = std::env::var("SCRCPY_PATH") {
+        if !p.trim().is_empty() { return p; }
+    }
+    // 2) 本地 platform-tools 目录（相对工作目录）
+    #[cfg(windows)]
+    {
+        let local = std::path::Path::new(".\\platform-tools\\scrcpy.exe");
+        if local.exists() {
+            return local.to_string_lossy().to_string();
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let local = std::path::Path::new("./platform-tools/scrcpy");
+        if local.exists() {
+            return local.to_string_lossy().to_string();
+        }
+    }
+    // 3) 默认依赖 PATH
     "scrcpy".to_string()
 }
 
@@ -32,6 +49,8 @@ pub struct ScrcpyOptions {
     pub max_fps: Option<u32>,       // e.g. 60
     pub window_title: Option<String>,
     pub session_name: Option<String>, // 会话名，不传则使用默认 "default"
+    pub always_on_top: Option<bool>, // --always-on-top
+    pub borderless: Option<bool>,    // --window-borderless
 }
 
 fn build_args(device_id: &str, opts: &ScrcpyOptions) -> Vec<String> {
@@ -80,6 +99,14 @@ fn build_args(device_id: &str, opts: &ScrcpyOptions) -> Vec<String> {
             args.push("--window-title".into());
             args.push(title.trim().to_string());
         }
+    }
+
+    // 窗口标志
+    if opts.always_on_top.unwrap_or(false) {
+        args.push("--always-on-top".into());
+    }
+    if opts.borderless.unwrap_or(false) {
+        args.push("--window-borderless".into());
     }
 
     args
@@ -190,4 +217,14 @@ pub async fn stop_device_mirror(device_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn stop_device_mirror_session(device_id: String, session_name: String) -> Result<(), String> {
     stop_scrcpy_session(&device_id, &session_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_device_mirror_sessions(device_id: String) -> Result<Vec<String>, String> {
+    let state = SCRCPY_STATE.lock().unwrap();
+    if let Some(map) = state.children.get(&device_id) {
+        Ok(map.keys().cloned().collect())
+    } else {
+        Ok(Vec::new())
+    }
 }

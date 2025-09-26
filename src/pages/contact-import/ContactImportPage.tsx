@@ -1,13 +1,13 @@
 import React, { Suspense } from 'react';
 import { PageWrapper } from '../../components/layout';
 
-const ContactImportWizard = React.lazy(() => import('../../modules/contact-import/ui/ContactImportWizard').then(m => ({ default: m.ContactImportWizard })));
+const ContactImportWorkbench = React.lazy(() => import('../../modules/contact-import/ui/ContactImportWorkbench').then(m => ({ default: m.ContactImportWorkbench })));
 
 const ContactImportPage: React.FC = () => {
   return (
-    <PageWrapper title="联系人导入向导" subtitle="上传 VCF → 检测设备 → 配置策略 → 导入与验证">
+    <PageWrapper title="联系人导入工作台" subtitle="随时导入TXT到号码池 · 随时选择设备与生成VCF并导入">
       <Suspense fallback={<div style={{ padding: 16 }}>加载中...</div>}>
-        <ContactImportWizard />
+        <ContactImportWorkbench />
       </Suspense>
     </PageWrapper>
   );

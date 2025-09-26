@@ -3,13 +3,14 @@
  * 展示如何使用新的模块化架构
  */
 
-import { CheckCircleOutlined, FileTextOutlined, MobileOutlined, InboxOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, FileTextOutlined, MobileOutlined, InboxOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { Alert, Space, Steps, Typography, message } from 'antd';
 import React, { useCallback, useState } from 'react';
 import { useContactImport, useImportStats } from '../hooks/useUnifiedContactImport';
 import { ImportStrategyFactory } from '../strategies/ImportStrategies';
 import { Device, ImportPhase, ImportStrategyType } from '../types';
 import { StepUpload } from './steps/StepUpload';
+import { StepSourceSelect } from './steps/StepSourceSelect';
 import { StepDetectDevices } from './steps/StepDetectDevices';
 import { StepConfigure } from './steps/StepConfigure';
 import { StepProgress } from './steps/StepProgress';
@@ -76,6 +77,11 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   // 步骤定义
   const steps = [
     {
+      title: '选择数据源',
+      description: 'TXT 文件或文件夹写库',
+      icon: <FolderOpenOutlined />
+    },
+    {
       title: '选择文件',
       description: '上传VCF联系人文件',
       icon: <FileTextOutlined />
@@ -105,7 +111,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
       ensureFileContent(content);
       setFileContent(content);
       await parseContacts(content);
-      setCurrentStep(1);
+      setCurrentStep(2);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       message.error(msg);
@@ -117,7 +123,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
     try {
       const detected = await detectDevices();
       setAvailableDevices(detected); // ✅ 将检测结果存储到本地状态
-      setCurrentStep(2);
+      setCurrentStep(3);
     } catch (err) {
       console.error('设备检测失败:', err);
     }
@@ -130,7 +136,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
       const uniqDevices = dedupeDevices(selectedDevices);
       ensureDevicesSelected(uniqDevices);
       setSelectedDevices(uniqDevices);
-      setCurrentStep(3);
+      setCurrentStep(4);
       await importContacts(fileContent, uniqDevices);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -178,21 +184,25 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
       )}
 
       {currentStep === 0 && (
-        <StepUpload contactsCount={contacts.length} previewRows={previewRows} onFileParsed={handleFileParsed} />
+        <StepSourceSelect onCompleted={() => setCurrentStep(1)} />
       )}
 
       {currentStep === 1 && (
+        <StepUpload contactsCount={contacts.length} previewRows={previewRows} onFileParsed={handleFileParsed} />
+      )}
+
+      {currentStep === 2 && (
         <StepDetectDevices
           isBusy={isImporting}
           availableDevices={availableDevices}
           selectedDeviceIds={selectedDevices.map(d => d.id)}
           onDetect={handleDetectDevices}
           onSelect={(ids) => setSelectedDevices(availableDevices.filter(d => ids.includes(d.id)))}
-          onNext={() => setCurrentStep(2)}
+          onNext={() => setCurrentStep(3)}
         />
       )}
 
-      {currentStep === 2 && (
+      {currentStep === 3 && (
         <StepConfigure
           selectedStrategy={selectedStrategy}
           contactsCount={contacts.length}
@@ -203,7 +213,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
         />
       )}
 
-      {currentStep === 3 && (
+      {currentStep === 4 && (
         <StepProgress
           isImporting={isImporting}
           currentPhase={currentPhase}

@@ -1,3 +1,5 @@
+import type { StepType } from '../../../types/StepType';
+
 export interface StepTypeStyle {
   tagColor: string; // AntD Tag color token
   cardClass: string; // extra classes for Card root
@@ -20,15 +22,17 @@ const base: StepTypeStyle = {
   ringClass: 'ring-blue-300',
   hoverClass: 'hover:shadow-sm',
 };
+// 从 StepType 中剔除兜底 string，得到“已知类型”集合
+type KnownStepType = Exclude<StepType, string & {}>;
 
-export const stepTypeStyles: Record<string, StepTypeStyle> = {
+export const stepTypeStyles: Partial<Record<KnownStepType, StepTypeStyle>> = {
   loop_start: {
     ...base,
     tagColor: 'blue',
     // 贴近旧版的蓝色主题：渐变背景 + 粗边框 + 强调标题色
     cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
-    ringClass: 'ring-blue-500',
-    hoverClass: 'hover:shadow-lg',
+  ringClass: 'ring-blue-400',
+  hoverClass: 'hover:shadow-md',
     titleTextClass: 'text-blue-900',
     titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
     extraCardClass: 'loop-card',
@@ -43,8 +47,8 @@ export const stepTypeStyles: Record<string, StepTypeStyle> = {
     ...base,
     tagColor: 'blue',
     cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
-    ringClass: 'ring-blue-500',
-    hoverClass: 'hover:shadow-lg',
+  ringClass: 'ring-blue-400',
+  hoverClass: 'hover:shadow-md',
     titleTextClass: 'text-blue-900',
     titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
     extraCardClass: 'loop-card',
@@ -105,6 +109,6 @@ export const stepTypeStyles: Record<string, StepTypeStyle> = {
   },
 };
 
-export function getStepTypeStyle(stepType: string): StepTypeStyle {
-  return stepTypeStyles[stepType] || base;
+export function getStepTypeStyle(stepType: StepType | string): StepTypeStyle {
+  return (stepTypeStyles as Record<string, StepTypeStyle>)[stepType] || base;
 }

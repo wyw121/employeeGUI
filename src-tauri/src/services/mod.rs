@@ -14,6 +14,7 @@ pub mod page_analyzer_service;  // 新增：页面分析服务
 pub mod universal_ui_page_analyzer;  // 新增：Universal UI 页面分析器
 // pub mod simple_xml_parser;  // 已删除：简化XML解析器，统一使用智能解析器
 pub mod contact_service;
+pub mod contact_storage; // 新增：联系人号码存储（TXT导入到SQLite）
 pub mod crash_debugger;
 pub mod employee_service;
 pub mod ldplayer_vcf_opener;

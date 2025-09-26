@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
 import { ActionsToolbar } from './universal-ui/script-builder/components/ActionsToolbar/ActionsToolbar';
-import { DndContext, closestCenter } from '@dnd-kit/core';
+import { DndContext, closestCenter, DragOverlay, useDndMonitor } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
 import { SmartScriptStep } from '../types/smartScript'; // 使用统一的类型定义
@@ -50,6 +50,16 @@ export interface DraggableStepsContainerProps {
   onCreateSystemAction?: (template: any) => void;
 }
 
+// 内部拖拽监听器组件 - 必须在 DndContext 内部使用
+const DragMonitor: React.FC<{ onActiveIdChange: (id: string | null) => void }> = ({ onActiveIdChange }) => {
+  useDndMonitor({
+    onDragStart: (e) => onActiveIdChange(String(e.active.id)),
+    onDragCancel: () => onActiveIdChange(null),
+    onDragEnd: () => onActiveIdChange(null),
+  });
+  return null;
+};
+
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
   steps,
   onStepsChange,
@@ -71,7 +81,9 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onCreateSystemAction,
 }) => {
   // 使用抽离的拖拽 Hook（ESM 导入，兼容 Vite/Tauri）
-  const { sensors, stepIds, handleDragEnd } = useStepDragAndDrop({ steps, onStepsChange });
+  const { sensors, stepIds, handleDragEnd } = useStepDragAndDrop({ steps, onStepsChange, activationDelayMs: 120, activationTolerance: 6 });
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const activeStep = React.useMemo(() => steps.find(s => s.id === activeId) || null, [activeId, steps]);
 
   if (steps.length === 0) {
     return (
@@ -110,6 +122,9 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
+        {/* 拖拽监听器：必须在 DndContext 内部 */}
+        <DragMonitor onActiveIdChange={setActiveId} />
+        
         <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
             {steps.map((step, index) => (
@@ -145,6 +160,30 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
             )}
           </div>
         </SortableContext>
+
+        {/* 幽灵卡片：仅绘制最小内容，避免复杂嵌套导致掉帧 */}
+        <DragOverlay dropAnimation={null}>
+          {activeStep ? (
+            <div
+              style={{
+                width: '100%',
+                transform: 'translateZ(0)',
+                willChange: 'transform',
+                pointerEvents: 'none',
+              }}
+              className="select-none"
+            >
+              <div className="rounded-lg border bg-white shadow-lg px-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">≡</span>
+                  <span className="font-medium truncate max-w-[260px]" title={activeStep.name}>{activeStep.name}</span>
+                  <span className="text-xs text-gray-500">#{steps.findIndex(s => s.id === activeStep.id) + 1}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1 truncate max-w-[280px]" title={activeStep.description}>{activeStep.description}</div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </Card>
   );

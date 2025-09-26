@@ -4,12 +4,14 @@
 .loop-card {
   position: relative;
   overflow: hidden;
-  transition: box-shadow 0.25s ease, transform 0.04s linear;
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.2), 0 0 0 4px rgba(59, 130, 246, 0.3);
+  transition: box-shadow 0.2s ease, transform 0.04s linear;
+  /* 更轻的基础阴影，降低 GPU 负担 */
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.28), 0 0 0 1px rgba(59, 130, 246, 0.18), 0 0 0 3px rgba(59, 130, 246, 0.22);
 }
 
 .loop-card-dragging {
-  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.6), 0 0 0 2px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.3);
+  /* 拖拽时使用更轻的阴影，避免过度模糊造成掉帧 */
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35), 0 0 0 1px rgba(59, 130, 246, 0.28), 0 0 0 3px rgba(59, 130, 246, 0.22);
 }
 
 /* 标题栏左侧拖拽手柄的背景块 */
@@ -48,6 +50,19 @@
   background: linear-gradient(180deg, #60a5fa, #3b82f6, #1d4ed8);
   border-top-left-radius: 6px;
   border-bottom-left-radius: 6px;
+}
+
+/* 拖拽时减弱强调条视觉重量 */
+.loop-card-dragging .loop-top-accent,
+.loop-card-dragging .loop-left-accent {
+  opacity: 0.75;
+}
+
+/* 在系统偏好减少动画时，降低或取消过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .loop-card {
+    transition: none;
+  }
 }
 
 /* 标题中的“类型标签”强化可读性（深底浅字） */

@@ -34,6 +34,7 @@ use services::adb_service::AdbService;
 use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
+use services::contact_storage::*; // 导入号码存储命令
 use services::crash_debugger::*;
 use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
@@ -153,6 +154,11 @@ fn main() {
             change_password,
             parse_contact_file,
             get_contact_file_info,
+            // 联系人号码存储（TXT -> DB）
+            import_contact_numbers_from_file,
+            import_contact_numbers_from_folder,
+            list_contact_numbers,
+            fetch_contact_numbers,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入

@@ -178,11 +178,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
   const [currentXmlCacheId, setCurrentXmlCacheId] = useState<string>(""); // XML缓存ID
-  const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid">(
-    initialViewMode // 🆕 使用传入的初始视图模式
-    initialViewMode // 🆕 使用传入的初始视图模式
-  );
-  ); // 可视化分析Tab内部的四视图切换
+  const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid" | "mirror">(
+    initialViewMode // 🆕 使用传入的初始视图模式（包含 mirror）
+  ); // 可视化分析区内部的多视图切换
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -1157,7 +1155,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       title={
         <div className="flex items-center justify-between">
           <span>页面元素</span>
-          {(elements.length > 0 || uiElements.length > 0) && (
+          {
             <Space.Compact size="small">
               <Button
                 type={viewMode === "visual" ? "primary" : "default"}
@@ -1194,7 +1192,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 网格检查器
               </Button>
             </Space.Compact>
-          )}
+          }
         </div>
       }
       size="small"
@@ -1204,8 +1202,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           <Spin size="large" />
           <div style={{ marginTop: 16 }}>正在分析页面...</div>
         </div>
-      ) : elements.length > 0 || uiElements.length > 0 ? (
-          ) : elements.length > 0 || uiElements.length > 0 || viewMode === "mirror" ? (
+    ) : elements.length > 0 || uiElements.length > 0 || viewMode === "mirror" ? (
         <div>
           {viewMode === "tree" ? (
             <ErrorBoundary>

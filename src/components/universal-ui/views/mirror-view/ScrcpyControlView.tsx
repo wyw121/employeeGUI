@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip, Input, InputNumber, Switch, Form } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { useAdb } from '../../../../application/hooks/useAdb';
 
@@ -7,15 +7,23 @@ const { Text, Title, Paragraph } = Typography;
 
 export const ScrcpyControlView: React.FC = () => {
   // 使用统一的 useAdb() 获取设备与刷新能力
-  const { devices, onlineDevices, selectedDevice, selectDevice, refreshDevices } = useAdb();
+  const { onlineDevices, selectedDevice, selectDevice, refreshDevices } = useAdb();
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [runningMap, setRunningMap] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  // 参数设置
+  const [sessionName, setSessionName] = useState<string>("");
+  const [resolution, setResolution] = useState<string>(""); // 例如：1280 或 1280x720
+  const [bitrate, setBitrate] = useState<string>("8M");
+  const [maxFps, setMaxFps] = useState<number | null>(60);
+  const [windowTitle, setWindowTitle] = useState<string>("EmployeeGUI Mirror");
+  const [stayAwake, setStayAwake] = useState<boolean>(true);
+  const [turnScreenOff, setTurnScreenOff] = useState<boolean>(false);
   // 默认选择：优先已选设备，否则第一个在线设备
-  useMemo(() => {
+  useEffect(() => {
     if (!selected) {
-      if (selectedDevice) setSelected(selectedDevice);
+      if (selectedDevice) setSelected(selectedDevice.id);
       else if (onlineDevices.length > 0) setSelected(onlineDevices[0].id);
     }
   }, [selectedDevice, onlineDevices, selected]);
@@ -25,7 +33,17 @@ export const ScrcpyControlView: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      await invoke('start_device_mirror', { deviceId: selected, options: { stayAwake: true } });
+      const options: any = {
+        stayAwake,
+        turnScreenOff,
+        bitrate,
+        windowTitle,
+      };
+      if (resolution) options.resolution = resolution;
+      if (maxFps && maxFps > 0) options.maxFps = maxFps;
+      if (sessionName) options.sessionName = sessionName;
+      const session: string = await invoke('start_device_mirror', { deviceId: selected, options });
+      // 记录运行状态（按设备标记即可；如需细分会话可扩展成 Record<device, Record<session, boolean>>）
       setRunningMap((m) => ({ ...m, [selected]: true }));
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -39,7 +57,11 @@ export const ScrcpyControlView: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      await invoke('stop_device_mirror', { deviceId: selected });
+      if (sessionName) {
+        await invoke('stop_device_mirror_session', { deviceId: selected, sessionName });
+      } else {
+        await invoke('stop_device_mirror', { deviceId: selected });
+      }
       setRunningMap((m) => ({ ...m, [selected]: false }));
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -75,7 +97,6 @@ export const ScrcpyControlView: React.FC = () => {
               label: (
                 <Space>
                   <Text code>{d.id}</Text>
-                  {d.brand && <Tag>{d.brand}</Tag>}
                   {d.model && <Tag color="blue">{d.model}</Tag>}
                 </Space>
               ),
@@ -93,6 +114,35 @@ export const ScrcpyControlView: React.FC = () => {
           </Button>
           {selected && runningMap[selected] && <Tag color="green">运行中</Tag>}
         </Space>
+      </Card>
+
+      <Divider />
+      <Card size="small" title="镜像参数设置" className="mb-3">
+        <Form layout="vertical">
+          <Space size="large" wrap>
+            <Form.Item label="会话名称">
+              <Input placeholder="默认 default" value={sessionName} onChange={(e) => setSessionName(e.target.value)} style={{ width: 220 }} />
+            </Form.Item>
+            <Form.Item label="分辨率/最大边像素">
+              <Input placeholder="如 1280 或 1280x720" value={resolution} onChange={(e) => setResolution(e.target.value)} style={{ width: 220 }} />
+            </Form.Item>
+            <Form.Item label="码率">
+              <Input placeholder="如 8M" value={bitrate} onChange={(e) => setBitrate(e.target.value)} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item label="最大 FPS">
+              <InputNumber min={1} max={240} value={maxFps ?? undefined} onChange={(v) => setMaxFps((v ?? null) as any)} style={{ width: 120 }} />
+            </Form.Item>
+            <Form.Item label="窗口标题">
+              <Input value={windowTitle} onChange={(e) => setWindowTitle(e.target.value)} style={{ width: 260 }} />
+            </Form.Item>
+            <Form.Item label="保持常亮">
+              <Switch checked={stayAwake} onChange={setStayAwake} />
+            </Form.Item>
+            <Form.Item label="关闭手机屏幕">
+              <Switch checked={turnScreenOff} onChange={setTurnScreenOff} />
+            </Form.Item>
+          </Space>
+        </Form>
       </Card>
 
       <Divider />

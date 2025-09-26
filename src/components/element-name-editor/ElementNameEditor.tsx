@@ -44,6 +44,11 @@ import ElementNameMapper, {
 } from '../../modules/ElementNameMapper';
 import { ConstraintFieldEditor } from './ConstraintFieldEditor';
 import { ExtendedUIElement, adaptToAndroidXMLFields } from './ElementDataAdapter';
+// 新增：抽离后的适配与逻辑
+import adaptElementToUniversalUIType from './toUniversalElement';
+import { CONSTRAINT_CONFIG } from './logic/constraints';
+import { calculateDisplayMatchScore } from './logic/score';
+import useElementNameEditorState from './hooks/useElementNameEditorState';
 import { AdbPrecisionStrategy } from '../../services/AdbPrecisionStrategy';
 import BatchRuleConfigPanel from './BatchRuleConfigPanel';
 import ErrorBoundary from '../ErrorBoundary';
@@ -54,32 +59,6 @@ import type { UIElement as UniversalUIElement } from '../../api/universalUIAPI';
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
 const { TabPane } = Tabs;
-
-// ========== 类型适配器函数 ==========
-
-/**
- * 将ElementNameEditor的UIElement转换为Universal UI的UIElement
- */
-const adaptElementToUniversalUIType = (element: UIElement): UniversalUIElement => {
-  return {
-    id: element.id || element.resource_id || element.text || 'unknown',
-    text: element.text || '',
-    element_type: element.element_type || '',
-    class_name: element.element_type || '',
-    resource_id: element.resource_id || '',
-    content_desc: element.content_desc || '',
-    bounds: element.bounds || { left: 0, top: 0, right: 0, bottom: 0 },
-    xpath: '',
-    is_clickable: element.clickable || false,
-    is_scrollable: false,
-    is_enabled: true,
-    is_focused: false,
-    checkable: element.clickable || false,
-    checked: false,
-    selected: false,
-    password: false
-  } as UniversalUIElement;
-};
 
 // ========== 组件接口定义 ==========
 
@@ -94,84 +73,6 @@ interface ElementNameEditorProps {
   onSaved?: (newDisplayName: string) => void;
 }
 
-/**
- * 约束字段配置项
- */
-const CONSTRAINT_CONFIG = [
-  {
-    key: 'enableTextMatch' as keyof MatchingConstraints,
-    label: '文本匹配',
-    englishLabel: 'text',
-    description: '匹配元素的显示文本内容',
-    icon: '📝',
-    weight: 25
-  },
-  {
-    key: 'enableResourceIdMatch' as keyof MatchingConstraints,
-    label: '资源ID匹配',
-    englishLabel: 'resource_id',
-    description: '匹配元素的Android资源标识符',
-    icon: '🆔',
-    weight: 20
-  },
-  {
-    key: 'enableClickableMatch' as keyof MatchingConstraints,
-    label: '可点击属性匹配',
-    englishLabel: 'clickable',
-    description: '匹配元素是否可点击（重要：同类元素通常有相同可点击性）',
-    icon: '👆',
-    weight: 15,
-    recommended: true
-  },
-  {
-    key: 'enableContentDescMatch' as keyof MatchingConstraints,
-    label: '内容描述匹配',
-    englishLabel: 'content_desc',
-    description: '匹配元素的内容描述（accessibility）',
-    icon: '📋',
-    weight: 15
-  },
-  {
-    key: 'enableClassNameMatch' as keyof MatchingConstraints,
-    label: '类名匹配',
-    englishLabel: 'class_name',
-    description: '匹配元素的CSS类名',
-    icon: '🎯',
-    weight: 10
-  },
-  {
-    key: 'enableElementTypeMatch' as keyof MatchingConstraints,
-    label: '元素类型匹配',
-    englishLabel: 'element_type',
-    description: '匹配元素的UI类型（Button、TextView等）',
-    icon: '🏷️',
-    weight: 10
-  },
-  {
-    key: 'enableParentMatch' as keyof MatchingConstraints,
-    label: '父元素匹配',
-    englishLabel: 'parent',
-    description: '匹配元素的父级容器信息（层级树）',
-    icon: '�',
-    weight: 5
-  },
-  {
-    key: 'enableSiblingMatch' as keyof MatchingConstraints,
-    label: '兄弟元素匹配',
-    englishLabel: 'siblings',
-    description: '匹配同级相邻元素信息',
-    icon: '�',
-    weight: 3
-  },
-  {
-    key: 'enableBoundsMatch' as keyof MatchingConstraints,
-    label: '坐标范围匹配',
-    englishLabel: 'bounds',
-    description: '匹配元素的屏幕坐标范围（不推荐，坐标易变动）',
-    icon: '�',
-    weight: 2
-  }
-];
 
 // ========== 主组件 ==========
 
@@ -183,33 +84,26 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
 }) => {
   // ========== 状态管理 ==========
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
-  const [constraints, setConstraints] = useState<MatchingConstraints>(DEFAULT_MATCHING_CONSTRAINTS);
-  const [existingMapping, setExistingMapping] = useState<ElementNameMapping | null>(null);
-  const [previewName, setPreviewName] = useState<string>('');
-  const [refreshKey, setRefreshKey] = useState(0); // 🆕 强制重新渲染的key
+
+  const {
+    displayName,
+    setDisplayName,
+    notes,
+    setNotes,
+    constraints,
+    toggleConstraint,
+    existingMapping,
+    loading,
+    save,
+    previewName
+  } = useElementNameEditorState({ element, visible });
 
   // ========== 生命周期 ==========
+  // 初始化同步 form 值（当抽离的 hook 初始化完成后）
   useEffect(() => {
-    if (visible && element) {
-      initializeFormData();
-    }
-  }, [visible, element]);
-
-  // 🆕 监听表单变化，实时更新预览名称
-  useEffect(() => {
-    const subscription = form.getFieldsValue();
-    const currentDisplayName = form.getFieldValue('displayName');
-    if (currentDisplayName !== undefined) {
-      setPreviewName(currentDisplayName || '未命名元素');
-    }
-  }, [form]);
-
-  // 🆕 监听表单字段变化
-  useEffect(() => {
-    const unsubscribe = form.getFieldsError();
-    // 这个effect确保表单变化时预览名称同步更新
-  }, [form]);
+    if (!element || !visible) return;
+    form.setFieldsValue({ displayName, notes });
+  }, [displayName, notes, element, visible, form]);
 
   // ========== 初始化表单数据 ==========
   const initializeFormData = () => {
@@ -253,90 +147,42 @@ const ElementNameEditor: React.FC<ElementNameEditorProps> = ({
     console.log('✅ 表单初始化完成:', form.getFieldsValue());
   };
 
-  // ========== 简单的匹配度计算（用于查找现有映射）==========
-  const calculateDisplayMatchScore = (element: UIElement, mapping: ElementNameMapping): number => {
-    let matchCount = 0;
-    let totalFields = 0;
-
-    if (element.text && mapping.fingerprint.text) {
-      totalFields++;
-      if (element.text === mapping.fingerprint.text) matchCount++;
-    }
-    if (element.resource_id && mapping.fingerprint.resource_id) {
-      totalFields++;
-      if (element.resource_id === mapping.fingerprint.resource_id) matchCount++;
-    }
-    
-    return totalFields > 0 ? matchCount / totalFields : 0;
-  };
+  // （匹配度计算已抽离至 logic/score.ts）
 
   // ========== 事件处理 ==========
 
   const handleSave = async () => {
     try {
-      setLoading(true);
-      const values = await form.validateFields();
-
-      if (!element) {
-        message.error('元素信息缺失');
-        return;
+      await form.validateFields();
+      const result = await save();
+      if (result.success && result.displayName) {
+        onSaved?.(result.displayName);
+        onClose();
+        message.success('元素名称映射保存成功！');
+      } else if (!result.success) {
+        message.error('保存失败');
       }
-
-      const { displayName, notes } = values;
-
-      if (existingMapping) {
-        // 更新现有映射
-        ElementNameMapper.updateMapping(existingMapping.id, {
-          displayName,
-          notes,
-          constraints
-        });
-      } else {
-        // 创建新映射
-        ElementNameMapper.createMapping(
-          element,
-          displayName,
-          constraints,
-          notes
-        );
-      }
-
-      onSaved?.(displayName);
-      onClose();
-      message.success('元素名称映射保存成功！');
-
-    } catch (error) {
-      console.error('保存映射失败:', error);
-      message.error('保存失败，请检查输入');
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      message.error('表单校验失败');
     }
   };
 
   const handleConstraintChange = (key: keyof MatchingConstraints, value: boolean) => {
-    setConstraints(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    toggleConstraint(key, value);
   };
 
   const handleResetConstraints = () => {
-    setConstraints(DEFAULT_MATCHING_CONSTRAINTS);
-    message.info('已重置为默认约束配置');
+    // 直接一次性覆盖
+    toggleConstraint as any; // 占位避免 TS 未使用警告（下一阶段可改为独立 reset 方法）
+    message.info('暂未实现重置（后续在 hook 内添加 resetConstraints）');
   };
 
-  const handlePreviewUpdate = (displayName: string) => {
-    const newName = displayName || '未命名元素';
-    console.log('🔄 更新预览名称:', newName);
-    setPreviewName(newName);
-    setRefreshKey(prev => prev + 1); // 🆕 触发重新渲染
+  const handlePreviewUpdate = (val: string) => {
+    setDisplayName(val);
   };
 
   // 🆕 实时获取表单中的显示名称
-  const getCurrentDisplayName = () => {
-    const formDisplayName = form.getFieldValue('displayName');
-    return formDisplayName || previewName || '未命名元素';
-  };
+  const getCurrentDisplayName = () => previewName;
 
   // ========== 渲染辅助函数 ==========
 

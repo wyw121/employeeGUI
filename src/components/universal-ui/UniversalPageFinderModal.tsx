@@ -103,6 +103,7 @@ import {
   ElementListView,
   UIElementTree,
   GridElementView,
+  ScrcpyControlView,
 } from "./views";
 import { saveLatestMatching } from "./views/grid-view/matchingCache";
 import type { MatchCriteria as UIMatchCriteria } from "./views/grid-view/panels/node-detail/types";
@@ -131,7 +132,7 @@ interface UniversalPageFinderModalProps {
   ) => void; // 🆕 XML内容更新回调
   // 🆕 当任意来源加载XML后，统一回调已构建的 XmlSnapshot（保证父级随时可用）
   onSnapshotUpdated?: (snapshot: XmlSnapshot) => void;
-  initialViewMode?: "visual" | "tree" | "list" | "grid"; // 🆕 初始视图模式
+  initialViewMode?: "visual" | "tree" | "list" | "grid" | "mirror"; // 🆕 初始视图模式，新增镜像视图
   loadFromStepXml?: {
     // 🆕 从步骤XML源加载
     stepId: string;
@@ -179,6 +180,8 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const [currentXmlCacheId, setCurrentXmlCacheId] = useState<string>(""); // XML缓存ID
   const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid">(
     initialViewMode // 🆕 使用传入的初始视图模式
+    initialViewMode // 🆕 使用传入的初始视图模式
+  );
   ); // 可视化分析Tab内部的四视图切换
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -1164,6 +1167,12 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 可视化视图
               </Button>
               <Button
+                type={viewMode === "mirror" ? "primary" : "default"}
+                onClick={() => setViewMode("mirror")}
+              >
+                镜像视图
+              </Button>
+              <Button
                 type={viewMode === "tree" ? "primary" : "default"}
                 icon={<BranchesOutlined />}
                 onClick={() => setViewMode("tree")}
@@ -1196,6 +1205,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           <div style={{ marginTop: 16 }}>正在分析页面...</div>
         </div>
       ) : elements.length > 0 || uiElements.length > 0 ? (
+          ) : elements.length > 0 || uiElements.length > 0 || viewMode === "mirror" ? (
         <div>
           {viewMode === "tree" ? (
             <ErrorBoundary>
@@ -1215,6 +1225,8 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
               selectedElementId={selectedElementId}
               selectionManager={selectionManager}
             />
+              ) : viewMode === "mirror" ? (
+                <ScrcpyControlView />
           ) : viewMode === "grid" ? (
             <ErrorBoundary>
               <GridElementView

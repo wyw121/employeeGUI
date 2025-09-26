@@ -3,7 +3,9 @@ use tokio::sync::Mutex;
 use std::collections::HashMap;
 use crate::services::smart_app_manager::{SmartAppManager, AppInfo, AppLaunchResult};
 use tracing::{info, error};
+use serde::Serialize;
 use crate::services::smart_app::icon::{pull_apk_to_temp, extract_icon_from_apk};
+use crate::services::smart_app::icon_cache::IconDiskCache;
 
 /// 全局应用管理器状态
 pub struct SmartAppManagerState {
@@ -16,6 +18,15 @@ impl SmartAppManagerState {
             managers: Mutex::new(HashMap::new()),
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct PagedApps {
+    pub items: Vec<AppInfo>,
+    pub total: usize,
+    pub page: u32,
+    pub page_size: u32,
+    pub has_more: bool,
 }
 
 /// 获取设备应用列表
@@ -49,17 +60,75 @@ pub async fn get_device_apps(
     })
 }
 
+/// 分页获取应用列表
+#[command]
+pub async fn get_device_apps_paged(
+    device_id: String,
+    filter_mode: Option<String>,
+    refresh_strategy: Option<String>,
+    page: Option<u32>,
+    page_size: Option<u32>,
+    query: Option<String>,
+    state: State<'_, SmartAppManagerState>,
+) -> Result<PagedApps, String> {
+    info!("📱 分页获取设备 {} 的应用列表", device_id);
+    let mut managers = state.managers.lock().await;
+    let manager = managers
+        .entry(device_id.clone())
+        .or_insert_with(|| SmartAppManager::new(device_id.clone()));
+
+    let fm = filter_mode.unwrap_or_else(|| "only_user".into());
+    let rs = refresh_strategy.unwrap_or_else(|| "cache_first".into());
+    let current_page = page.unwrap_or(1).max(1);
+    let size = page_size.unwrap_or(60).max(1);
+
+    let mut apps = manager.get_installed_apps_with_modes(&fm, &rs)
+        .await
+        .map_err(|e| format!("获取应用列表失败: {}", e))?;
+
+    // 服务器端搜索过滤（跨全量列表）
+    if let Some(q) = query.as_ref().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()) {
+        apps = apps
+            .into_iter()
+            .filter(|a| {
+                a.app_name.to_lowercase().contains(&q) || a.package_name.to_lowercase().contains(&q)
+            })
+            .collect();
+    }
+
+    let total = apps.len();
+    let start = ((current_page - 1) as usize) * (size as usize);
+    let end = (start + size as usize).min(total);
+    let slice = if start < total { apps[start..end].to_vec() } else { Vec::new() };
+    let has_more = end < total;
+
+    Ok(PagedApps { items: slice, total, page: current_page, page_size: size, has_more })
+}
+
 /// 按需提取应用图标（PNG字节）
+/// force_refresh: 是否跳过磁盘缓存强制重取
 #[command]
 pub async fn get_app_icon(
     device_id: String,
     package_name: String,
+    force_refresh: Option<bool>,
 ) -> Result<Vec<u8>, String> {
     info!("🖼️ 提取应用图标: {} on {}", package_name, device_id);
+    let force = force_refresh.unwrap_or(false);
     tokio::task::block_in_place(|| {
-        pull_apk_to_temp(&device_id, &package_name)
-            .and_then(|apk| extract_icon_from_apk(&apk).map_err(|e| e))
-            .map_err(|e| format!("提取图标失败: {}", e))
+        let cache = IconDiskCache::new();
+        let cache_key = package_name.clone(); // 可扩展加入版本信息
+        if !force {
+            if let Some(bytes) = cache.get(&cache_key) {
+                return Ok(bytes);
+            }
+        }
+        let apk = pull_apk_to_temp(&device_id, &package_name)
+            .map_err(|e| format!("拉取APK失败: {}", e))?;
+        let bytes = extract_icon_from_apk(&apk)
+            .map_err(|e| format!("解析图标失败: {}", e))?;
+        let _ = cache.put(&cache_key, &bytes);
+        Ok(bytes)
     })
 }
 

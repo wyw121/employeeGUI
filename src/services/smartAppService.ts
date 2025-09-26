@@ -8,6 +8,7 @@ import type { AppInfo, AppLaunchResult } from '../types/smartComponents';
 export class SmartAppService {
   private cachedApps: Map<string, { apps: AppInfo[]; ts: number }> = new Map();
   private readonly cacheTimeout = 5 * 60 * 1000; // 5分钟缓存
+  private refreshStrategy: 'cache_first' | 'force_refresh' = 'cache_first';
 
   /**
    * 获取设备上的所有应用
@@ -37,7 +38,7 @@ export class SmartAppService {
         include_system_apps: includeSystemApps,
         force_refresh: forceRefresh,
         filter_mode: filterMode ?? (includeSystemApps ? 'all' : 'only_user'),
-        refresh_strategy: refreshStrategy ?? (forceRefresh ? 'force_refresh' : 'cache_first')
+        refresh_strategy: (refreshStrategy ?? this.refreshStrategy) ?? (forceRefresh ? 'force_refresh' : 'cache_first')
       });
       // 缓存结果（总是缓存全量，前端过滤系统/用户）
       this.cachedApps.set(deviceId, { apps, ts: now });
@@ -57,13 +58,44 @@ export class SmartAppService {
   }
 
   /**
+   * 分页获取设备应用列表
+   */
+  async getDeviceAppsPaged(
+    deviceId: string,
+    options?: {
+      filterMode?: 'all' | 'only_user' | 'only_system';
+      refreshStrategy?: 'cache_first' | 'force_refresh';
+      page?: number;
+      pageSize?: number;
+      query?: string;
+    }
+  ): Promise<{ items: AppInfo[]; total: number; page: number; page_size: number; has_more: boolean }>
+  {
+    const { filterMode, refreshStrategy, page = 1, pageSize = 60, query } = options || {};
+    return invoke('get_device_apps_paged', {
+      device_id: deviceId,
+      filter_mode: filterMode,
+      refresh_strategy: (refreshStrategy ?? this.refreshStrategy),
+      page,
+      page_size: pageSize,
+      query,
+    });
+  }
+
+  /** 显式设置刷新策略（全局影响本服务） */
+  setRefreshStrategy(strategy: 'cache_first' | 'force_refresh') {
+    this.refreshStrategy = strategy;
+  }
+
+  /**
    * 懒加载应用图标（PNG字节）
    */
-  async getAppIcon(deviceId: string, packageName: string): Promise<string | null> {
+  async getAppIcon(deviceId: string, packageName: string, forceRefresh = false): Promise<string | null> {
     try {
       const bytes = await invoke<number[]>('get_app_icon', {
         device_id: deviceId,
-        package_name: packageName
+        package_name: packageName,
+        force_refresh: forceRefresh
       });
       // 将 number[] 转为 Uint8Array -> Blob -> data URL
       const u8 = new Uint8Array(bytes);

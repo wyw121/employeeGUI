@@ -8,6 +8,7 @@
 
 pub mod wechat_detector;
 pub mod generic_detector;
+pub mod xiaohongshu_detector;
 
 // TODO: 添加更多应用的专用检测器
 // pub mod qq_detector;
@@ -15,6 +16,7 @@ pub mod generic_detector;
 // pub mod taobao_detector;
 // pub mod alipay_detector;
 
-// 重新导出检测器类型（已移除小红书专用检测器）
+// 重新导出检测器类型
 pub use wechat_detector::WechatDetector;
 pub use generic_detector::GenericDetector;
+pub use xiaohongshu_detector::XiaohongshuDetector;

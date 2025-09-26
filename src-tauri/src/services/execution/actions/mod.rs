@@ -6,7 +6,6 @@ use anyhow::Result;
 use crate::services::contact::{run_generate_vcf_step, run_import_contacts_step};
 use crate::services::execution::model::{SmartActionType, SmartScriptStep};
 use crate::services::smart_script_executor::SmartScriptExecutor;
-use crate::infra::adb::keyevent_helper::{keyevent_code_injector_first, keyevent_symbolic_injector_first};
 
 pub struct SmartActionDispatcher<'a> {
     executor: &'a SmartScriptExecutor,
@@ -53,22 +52,6 @@ impl<'a> SmartActionDispatcher<'a> {
             }
             SmartActionType::ContactGenerateVcf => run_generate_vcf_step(step, logs).await,
             SmartActionType::ContactImportToDevice => run_import_contacts_step(step, logs).await,
-            SmartActionType::KeyEvent => {
-                // 期望参数形态：{ code?: number, symbolic?: string }
-                let params = &step.parameters;
-                let device_id = &self.executor.device_id;
-                if let Some(code) = params.get("code").and_then(|v| v.as_i64()) {
-                    keyevent_code_injector_first(&self.executor.adb_path, device_id, code as i32).await?;
-                    logs.push(format!("🔑 发送系统按键（数值）: {}", code));
-                    Ok(format!("KeyEvent {} 已发送", code))
-                } else if let Some(sym) = params.get("symbolic").and_then(|v| v.as_str()) {
-                    keyevent_symbolic_injector_first(&self.executor.adb_path, device_id, sym).await?;
-                    logs.push(format!("🔑 发送系统按键（符号）: {}", sym));
-                    Ok(format!("KeyEvent {} 已发送", sym))
-                } else {
-                    anyhow::bail!("KeyEvent 缺少 code 或 symbolic 参数")
-                }
-            }
         }
     }
 }

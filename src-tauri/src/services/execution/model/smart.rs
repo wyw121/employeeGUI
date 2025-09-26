@@ -28,8 +28,6 @@ pub enum SmartActionType {
     // 通讯录自动化操作
     ContactGenerateVcf,
     ContactImportToDevice,
-    /// 系统按键事件（前端 step_type: "keyevent"）
-    KeyEvent,
 }
 
 /// 前端传入的原始智能脚本步骤结构。

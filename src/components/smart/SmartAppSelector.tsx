@@ -55,6 +55,10 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
   const [viewMode, setViewMode] = useState<'popular' | 'all' | 'search'>('popular');
   const [icons, setIcons] = useState<Record<string, string | null>>({});
   const [iconLoadingSet, setIconLoadingSet] = useState<Set<string>>(new Set());
+  const [refreshStrategy, setRefreshStrategy] = useState<'cache_first' | 'force_refresh'>('cache_first');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(60);
+  const [total, setTotal] = useState(0);
 
   // 加载设备应用
   const loadDeviceApps = async () => {
@@ -62,9 +66,18 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
 
     setLoading(true);
     try {
-      const includeSystemApps = categoryFilter !== 'user';
-      const deviceApps = await smartAppService.getDeviceApps(deviceId, includeSystemApps);
-      setApps(deviceApps);
+      smartAppService.setRefreshStrategy(refreshStrategy);
+      const filterMode: 'all' | 'only_user' | 'only_system' =
+        categoryFilter === 'all' ? 'all' : categoryFilter === 'user' ? 'only_user' : 'only_system';
+      const res = await smartAppService.getDeviceAppsPaged(deviceId, {
+        filterMode,
+        refreshStrategy,
+        page,
+        pageSize,
+        query: searchQuery,
+      });
+      setApps(res.items);
+      setTotal(res.total);
     } catch (error) {
       message.error('加载设备应用失败');
       console.error('加载设备应用失败:', error);
@@ -81,6 +94,14 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
     }
     // 仅在打开或设备变化时拉取
   }, [visible, deviceId]);
+
+  // 当过滤/策略/分页变化时刷新
+  useEffect(() => {
+    if (visible && deviceId) {
+      loadDeviceApps();
+    }
+    // 仅当会影响后端返回的数据时才重新加载
+  }, [categoryFilter, refreshStrategy, page, pageSize, deviceId, visible, searchQuery]);
 
   // 过滤和搜索应用
   const filteredApps = useMemo(() => {
@@ -240,6 +261,28 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
               <Option value="disabled">已禁用</Option>
             </Select>
           </Col>
+          <Col span={12}>
+            <Space>
+              <Select
+                style={{ width: 160 }}
+                value={refreshStrategy}
+                onChange={(v) => {
+                  setRefreshStrategy(v);
+                  setPage(1);
+                }}
+                placeholder="刷新策略"
+              >
+                <Option value="cache_first">缓存优先</Option>
+                <Option value="force_refresh">强制刷新</Option>
+              </Select>
+              <Select style={{ width: 120 }} value={pageSize} onChange={(v) => { setPageSize(v); setPage(1); }}>
+                <Option value={30}>每页30</Option>
+                <Option value={60}>每页60</Option>
+                <Option value={100}>每页100</Option>
+              </Select>
+              <Button onClick={() => { setPage(1); loadDeviceApps(); }}>刷新</Button>
+            </Space>
+          </Col>
         </Row>
       </div>
 
@@ -362,10 +405,16 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
         borderTop: '1px solid #f0f0f0',
         textAlign: 'center'
       }}>
-        <Text type="secondary" style={{ fontSize: '12px' }}>
-          共找到 {filteredApps.length} 个应用
-          {searchQuery && ` (搜索: "${searchQuery}")`}
-        </Text>
+        <Space direction="vertical" size={4}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            共 {total} 个应用，当前第 {page} / {Math.max(1, Math.ceil(total / pageSize))} 页，展示 {apps.length} 个
+            {searchQuery && ` (搜索: "${searchQuery}")`}
+          </Text>
+          <Space>
+            <Button size="small" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>上一页</Button>
+            <Button size="small" disabled={page >= Math.max(1, Math.ceil(total / pageSize))} onClick={() => setPage((p) => p + 1)}>下一页</Button>
+          </Space>
+        </Space>
       </div>
     </Modal>
   );

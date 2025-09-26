@@ -510,13 +510,6 @@ impl SmartScriptExecutor {
             SmartActionType::Swipe => self.execute_basic_swipe(step).await,
             SmartActionType::Input => self.execute_basic_input(step).await,
             SmartActionType::Wait => self.execute_basic_wait(step).await,
-            SmartActionType::KeyEvent => {
-                // 简化：通过统一执行器路径处理，复用 dispatcher 已实现的 KeyEvent
-                match self.dispatch_action(step).await {
-                    Ok(msg) => Ok((vec![], std::collections::HashMap::new())),
-                    Err(e) => Err(e),
-                }
-            }
             _ => Err(anyhow::anyhow!("不支持的操作类型: {:?}", step.step_type)),
         };
 

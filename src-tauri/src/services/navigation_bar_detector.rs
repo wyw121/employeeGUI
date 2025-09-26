@@ -717,7 +717,7 @@ pub async fn click_navigation_button(
 #[command] 
 pub fn get_navigation_configs() -> Vec<NavigationBarDetectionConfig> {
     vec![
-        NavigationBarDetector::create_xiaohongshu_navigation_config(),
+        create_xiaohongshu_navigation_config(),
         NavigationBarDetector::create_generic_bottom_navigation_config()
     ]
 }

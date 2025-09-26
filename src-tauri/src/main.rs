@@ -745,18 +745,9 @@ fn main() {
             get_contact_file_info,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
-            import_vcf_contacts,
-            import_vcf_contacts_async_safe,     // 新增异步安全版本
-            import_vcf_contacts_optimized,      // 现有优化版本
-            import_vcf_contacts_python_version, // Python移植版本
-            import_vcf_contacts_with_intent_fallback, // 新增Intent方法
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入
             import_vcf_contacts_huawei_enhanced, // 华为增强导入（基于Python成功经验）
-            verify_vcf_import,
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
-            // 雷电模拟器专用VCF打开功能
-            open_vcf_file_ldplayer,       // 打开已存在的VCF文件
-            import_and_open_vcf_ldplayer, // 完整的传输+打开流程
             // UI状态读取功能
             read_device_ui_state, // 实时读取设备UI状态
             // 智能VCF打开器
@@ -790,10 +781,12 @@ fn main() {
             match_element_by_criteria, // 按匹配条件查找元素
             // 智能应用管理功能
             get_device_apps,         // 获取设备应用列表
+            get_device_apps_paged,   // 分页获取设备应用列表
             search_device_apps,      // 搜索设备应用
             launch_device_app,       // 启动应用
             get_cached_device_apps,  // 获取缓存的应用列表
             get_popular_apps,        // 获取常用应用列表
+            get_app_icon,            // 获取应用图标
             // 导航栏检测功能
             detect_navigation_bar,   // 检测导航栏
             click_navigation_button, // 点击导航按钮

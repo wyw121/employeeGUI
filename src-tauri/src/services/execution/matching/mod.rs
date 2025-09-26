@@ -5,6 +5,7 @@ mod legacy_regex;
 pub mod enhanced_unified;
 mod strategies;
 mod xml_parser;
+mod hierarchy_matcher;
 
 pub use unified::{run_unified_match, LegacyUiActions};
 pub use enhanced_unified::run_enhanced_unified_match;
@@ -24,3 +25,6 @@ pub use strategies::{
     StrategyResult,
     ProcessingError,
 };
+
+// 导出层级匹配器
+pub use hierarchy_matcher::{HierarchyMatcher, HierarchyMatchConfig};

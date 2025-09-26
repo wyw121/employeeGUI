@@ -10,7 +10,7 @@ use crate::services::execution::model::{ExecStep, ExecStepKind, ExecStepMeta, Ex
 pub fn map_action_kind(action: &SmartActionType) -> ExecStepKind {
     use SmartActionType::*;
     match action {
-        Tap | Input | Wait | Swipe | SmartTap | KeyEvent => ExecStepKind::Action,
+        Tap | Input | Wait | Swipe | SmartTap => ExecStepKind::Action,
         SmartFindElement | BatchMatch | ExtractElement => ExecStepKind::Match,
         RecognizePage | VerifyAction | WaitForPageState => ExecStepKind::Match, // 归为匹配/判定类
         SmartNavigation => ExecStepKind::Action,

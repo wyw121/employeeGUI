@@ -12,7 +12,7 @@ import {
   EyeOutlined
 } from '@ant-design/icons';
 // import { MatchingStrategyTag } from './step-card';
-import { StepItem } from './universal-ui/script-builder/components/StepCardItem';
+import { ScriptStepItem } from './universal-ui/script-builder/components/ScriptStepItem';
 
 export interface SmartScriptStep {
   id: string;
@@ -72,20 +72,13 @@ export const DraggableStepCard: React.FC<
 
   return (
     <div ref={setNodeRef} {...attributes} {...listeners} className="w-full">
-      <StepItem
+      <ScriptStepItem
         step={step as any}
         index={index}
-        currentDeviceId={currentDeviceId}
-        devices={devices}
-        onEdit={onEdit as any}
-        onDelete={onDelete}
         onToggle={onToggle}
-        onBatchMatch={onBatchMatch}
-        onUpdateStepParameters={onUpdateStepParameters}
-        StepTestButton={StepTestButton as any}
-        ENABLE_BATCH_MATCH={ENABLE_BATCH_MATCH}
-        onEditStepParams={onEditStepParams as any}
         draggingStyle={style}
+        StepTestButton={StepTestButton as any}
+        currentDeviceId={currentDeviceId}
       />
     </div>
   );

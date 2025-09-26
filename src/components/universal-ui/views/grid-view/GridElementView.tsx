@@ -30,7 +30,7 @@ import type { VisualUIElement } from "../../types";
 import styles from './GridElementView.module.css';
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
 import type { NodeLocator } from '../../../../domain/inspector/entities/NodeLocator';
-import { attachParents, parseUiAutomatorXml, matchNode, matchNodeAdvanced, makeCombinedMatcher, findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath, parseBounds } from './utils';
+import { findByXPathRoot, findByPredicateXPath, findNearestClickableAncestor, findAllByPredicateXPath, parseBounds } from './utils';
 import { TreeRow } from './TreeRow';
 import { NodeDetail } from './NodeDetail';
 import { ScreenPreview } from './ScreenPreview';
@@ -63,6 +63,7 @@ import { useXmlParsing } from './hooks/useXmlParsing';
 import { useSearchAndMatch } from './hooks/useSearchAndMatch';
 import { useXPathNavigator } from './hooks/useXPathNavigator';
 import { useMatchingSelection } from './hooks/useMatchingSelection';
+import { usePanelSync } from './hooks/usePanelSync';
 
 // =============== 类型定义（见 ./types） ===============
 
@@ -141,10 +142,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
           const n = locatorResolve(tree, locator);
             if (n) {
               setSelected(n);
-              setPanelHighlightNode(n);
-              const prefs = loadPrefs();
-              if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
-              setPanelActivateKey(k => k + 1);
+              panelSync.setHighlightNode(n, { refresh: true, switchToResults: true });
             }
         } catch { /* ignore */ }
       }
@@ -164,31 +162,27 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     selected,
     onSelect: (n) => setSelected(n),
     onAutoLocate: (n) => {
-      setPanelHighlightNode(n);
-      const prefs = loadPrefs();
-      if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
-      setPanelActivateKey(k => k + 1);
+      panelSync.setHighlightNode(n, { refresh: true, switchToResults: true });
     }
   });
 
   // ================= Hook: XPath 导航 =================
+  const panelSync = usePanelSync({ autoSwitchTab: loadPrefs().autoSwitchTab !== false });
   const {
     xPathInput, setXPathInput, xpathTestNodes, locateXPath
   } = useXPathNavigator({
     root,
     onSelect: (n) => setSelected(n),
-    onPanelSwitch: (tab) => setPanelActivateTab(tab),
-    onHighlight: (n) => setPanelHighlightNode(n),
-    triggerPanelRefresh: () => setPanelActivateKey(k => k + 1)
+    onPanelSwitch: (tab) => panelSync.setPanelActivateTab(tab),
+    onHighlight: (n) => panelSync.setHighlightNode(n, { refresh: true }),
+    triggerPanelRefresh: () => panelSync.triggerPanelRefresh()
   });
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [favSearch, setFavSearch] = useState<string[]>([]);
   const [xpathHistory, setXpathHistory] = useState<string[]>([]);
   const [favXPath, setFavXPath] = useState<string[]>([]);
-  // 右侧面板联动控制
-  const [panelActivateKey, setPanelActivateKey] = useState<number>(0);
-  const [panelHighlightNode, setPanelHighlightNode] = useState<UiNode | null>(null);
-  const [panelActivateTab, setPanelActivateTab] = useState<'results' | 'xpath'>('results');
+  // 右侧面板联动控制（已抽离 usePanelSync）
+  const { panelActivateKey, panelHighlightNode, panelActivateTab } = panelSync;
   // 匹配策略/字段选择（含缓存）抽离
   const { currentStrategy, currentFields, updateStrategy, updateFields } = useMatchingSelection({
     onLatestMatchingChange,
@@ -196,10 +190,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   });
 
   // 悬停联动处理：树/结果列表/测试列表悬停时预览高亮
-  const handleHoverNode = (n: UiNode | null) => {
-    setPanelHighlightNode(n);
-    setPanelActivateKey(k => k + 1);
-  };
+  const handleHoverNode = panelSync.handleHoverNode;
 
   // 初始化首选项
   useEffect(() => {
@@ -220,11 +211,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
   useEffect(() => {
     try {
       const cached = loadLatestMatching();
-      if (cached) {
-        (window as any).__latestMatching__ = cached;
-        setCurrentStrategy(cached.strategy);
-        setCurrentFields(Array.isArray(cached.fields) ? cached.fields : []);
-      }
+      if (cached) (window as any).__latestMatching__ = cached; // useMatchingSelection 已自动加载
     } catch {
       // ignore
     }
@@ -291,10 +278,7 @@ export const GridElementView: React.FC<GridElementViewProps> = ({
     }
     if (target) {
       setSelected(target);
-      setPanelHighlightNode(target);
-      const prefs = loadPrefs();
-      if (prefs.autoSwitchTab !== false) setPanelActivateTab('results');
-      setPanelActivateKey(k => k + 1);
+      panelSync.setHighlightNode(target, { refresh: true, switchToResults: true });
     } else {
       alert('匹配成功，但未能在当前XML树中定位对应节点（可能界面已变化或XPath不兼容）。');
     }

@@ -1,8 +1,9 @@
 import {
-    AimOutlined,
+  AimOutlined,
     BarChartOutlined,
     EyeOutlined,
     FolderOutlined,
+  InboxOutlined,
     MobileOutlined,
     SecurityScanOutlined,
     SyncOutlined,
@@ -37,6 +38,9 @@ import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能�
 import RealTimeDeviceMonitorPage from '../pages/device-monitor/RealTimeDeviceMonitorPage';
 import SmartVcfImporter from './SmartVcfImporter';
 import TemplateLibrary from './template/TemplateLibrary'; // 模板库
+import { ContactImportWizard } from '../modules/contact-import';
+import { featureFlags } from '../config/featureFlags';
+import ContactImportPage from '../pages/contact-import/ContactImportPage';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -68,10 +72,14 @@ const DemoInner: React.FC = () => {
       label: '通讯录管理',
     },
     {
-      key: 'smart-vcf',
-      icon: <ThunderboltOutlined />,
-      label: '智能VCF导入',
+      key: 'contact-import',
+      icon: <InboxOutlined />,
+      label: '联系人导入向导',
     },
+    // 旧版入口：可通过特性开关开启/隐藏，避免与新向导产生歧义
+    ...(featureFlags.SHOW_LEGACY_VCF_IMPORT
+      ? [{ key: 'smart-vcf', icon: <ThunderboltOutlined />, label: 'VCF 导入（旧版）' } as const]
+      : []),
     {
       key: 'permission-test',
       icon: <SecurityScanOutlined />,
@@ -249,7 +257,11 @@ const DemoInner: React.FC = () => {
               <ContactManagementPage />
             )}
 
-            {selectedKey === 'smart-vcf' && (
+            {selectedKey === 'contact-import' && (
+              <ContactImportPage />
+            )}
+
+            {featureFlags.SHOW_LEGACY_VCF_IMPORT && selectedKey === 'smart-vcf' && (
               <SmartVcfImporter />
             )}
 

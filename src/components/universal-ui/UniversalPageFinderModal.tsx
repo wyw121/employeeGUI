@@ -111,6 +111,8 @@ import {
   useElementSelectionManager,
   ElementSelectionPopover,
 } from "./element-selection";
+// 抽离的属性匹配服务
+import { pickByAttributes } from './page-finder/services/pickByAttributes';
 // 🆕 使用专门的可视化页面分析组件
 // 移除基于 Tab 的外置可视化容器，改为旧版两列布局中的三视图切换
 
@@ -1309,30 +1311,6 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     </Card>
   );
 
-  // 🆕 属性匹配辅助：与 LocatorService.pickByAttributes 逻辑一致的轻量实现
-  function pickByAttributes(nodes: any[], locator: NodeLocator) {
-    if (!nodes || nodes.length === 0) return null;
-    const L = locator.attributes;
-    const wantBounds = (locator as any).bounds as string | undefined;
-    let best: any = null;
-    let bestScore = -1;
-    for (const n of nodes) {
-      const a = n?.attrs || {};
-      let s = 0;
-      if (L?.resourceId && a["resource-id"] === L.resourceId) s += 3;
-      if (L?.className && a["class"] === L.className) s += 2;
-      if (L?.text && (a["text"] || "").includes(L.text)) s += 1;
-      if (L?.contentDesc && (a["content-desc"] || "").includes(L.contentDesc))
-        s += 1;
-      if (L?.packageName && a["package"] === L.packageName) s += 1;
-      if (wantBounds && a["bounds"] === wantBounds) s += 4; // 边界高度权重，精准定位
-      if (s > bestScore) {
-        bestScore = s;
-        best = n;
-      }
-    }
-    return best;
-  }
 
   // 列表视图Tab
   const renderListTab = () => (

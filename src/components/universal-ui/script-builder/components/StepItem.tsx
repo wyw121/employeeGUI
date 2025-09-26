@@ -1,6 +1,6 @@
-// StepItem 组件（精简版，兼容 DraggableStepCard 传入的全部 props，以便后续逐步恢复功能）
+// StepItem Ultra Minimal Version (temporary) - remove all dynamic opacity / className logic to eliminate stale type errors
 import React from 'react';
-import { Card, Tooltip } from 'antd';
+import { Card } from 'antd';
 
 export interface StepItemData {
   id: string;
@@ -29,87 +29,46 @@ export interface StepItemProps {
   onEditStepParams?: (step: StepItemData) => void;
 }
 
-export const StepItem: React.FC<StepItemProps> = (props) => {
-  const {
-    step,
-    draggingStyle,
-    onToggle,
-    StepTestButton,
-    currentDeviceId,
-  } = props;
-
-  // 处理拖拽态样式（原实现中存在 opacity < 1 的判断，这里加入类型守卫）
-  const isDraggingLike = ((): boolean => {
-    if (!draggingStyle) return false;
-    const value = draggingStyle.opacity;
-    if (typeof value === 'number') return value < 1;
-    // 字符串情况（例如 '0.5'），尝试解析
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      if (!Number.isNaN(parsed)) return parsed < 1;
-    }
-    return false;
-  })();
-
-  const containerClass = `transition-all duration-200 ${isDraggingLike ? 'shadow-lg rotate-2 scale-105' : 'hover:shadow-md'} cursor-grab hover:cursor-grabbing`;
-
-  return (
-    <div style={draggingStyle} className={containerClass}>
-      <Card
-        size="small"
-        title={
-          <div className="flex items-center gap-2">
-            <span className={step.enabled ? '' : 'line-through opacity-60'}>{step.name}</span>
-            {!step.enabled && <span className="text-xs text-gray-400">(已禁用)</span>}
-          </div>
-        }
-        extra={
-          <div className="flex items-center gap-2">
-            {StepTestButton && (
-              <StepTestButton step={step} deviceId={currentDeviceId} disabled={!step.enabled} />
-            )}
-            <button
-              type="button"
-              onClick={() => onToggle(step.id)}
-              className="text-xs px-1 py-0.5 rounded border hover:bg-gray-50"
-            >
-              {step.enabled ? '禁用' : '启用'}
-            </button>
-          </div>
-        }
-        style={{ touchAction: 'none' }}
-        bodyStyle={{ padding: 8 }}
-      >
-        <div className="text-[12px] text-gray-600 leading-snug select-none">
-          {step.description ? (
-            <span>{step.description}</span>
-          ) : (
-            <span className="italic text-gray-400">(无描述)</span>
-          )}
+export const StepItem: React.FC<StepItemProps> = ({ step, draggingStyle, onToggle, StepTestButton, currentDeviceId }) => (
+  <div style={draggingStyle}>
+    <Card
+      size="small"
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={step.enabled ? {} : { textDecoration: 'line-through', opacity: 0.6 }}>{step.name}</span>
+          {!step.enabled && <span style={{ fontSize: 10, color: '#999' }}>(已禁用)</span>}
         </div>
-        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-gray-400">
-          <Tooltip title={`类型: ${step.step_type}`}>
-            <span className="px-1 py-0.5 bg-gray-100 rounded">{step.step_type}</span>
-          </Tooltip>
-          {step.parent_loop_id && (
-            <Tooltip title="所属循环">
-              <span className="px-1 py-0.5 bg-blue-50 text-blue-500 rounded">loop:{step.parent_loop_id}</span>
-            </Tooltip>
+      }
+      extra={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {StepTestButton && (
+            <StepTestButton step={step} deviceId={currentDeviceId} disabled={!step.enabled} />
           )}
+          <button
+            type="button"
+            onClick={() => onToggle(step.id)}
+            style={{ fontSize: 12, padding: '2px 6px', border: '1px solid #ddd', borderRadius: 4 }}
+          >
+            {step.enabled ? '禁用' : '启用'}
+          </button>
         </div>
-      </Card>
-    </div>
-  );
-};
+      }
+      style={{ touchAction: 'none' }}
+      bodyStyle={{ padding: 8 }}
+    >
+      <div style={{ fontSize: 12, color: '#555', lineHeight: 1.4 }}>
+        {step.description || <span style={{ fontStyle: 'italic', color: '#999' }}>(无描述)</span>}
+      </div>
+      <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 10, color: '#888' }}>
+        <span style={{ background: '#f5f5f5', padding: '2px 4px', borderRadius: 4 }}>{step.step_type}</span>
+        {step.parent_loop_id && (
+          <span style={{ background: '#e6f0ff', color: '#1d64c2', padding: '2px 4px', borderRadius: 4 }}>loop:{step.parent_loop_id}</span>
+        )}
+      </div>
+    </Card>
+  </div>
+);
 
 export default StepItem;
 
-/* NOTE:
- * 这是一个过渡版本：
- * - 仅保留最基本展示与启用/禁用切换按钮，满足现有调用点的类型需求，消除编译错误。
- * - 复杂逻辑（参数编辑 / 批量匹配 / 设备感知渲染等）将分阶段从旧巨型文件中按职责拆分为 hooks + 子组件再回填。
- * - 后续步骤：
- *   1. 提炼参数编辑面板 -> components/parameters/
- *   2. 批量匹配入口统一到 ActionBar -> components/actions/
- *   3. 交互副作用抽离 useStepItemInteractions.ts
- */
+/* NOTE: Ultra minimal transitional version. Will be enhanced stepwise after type baseline stabilizes. */

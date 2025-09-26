@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Select, Space, Tag, Typography, Alert, Divider, Tooltip, Input, InputNumber, Switch, Form, Popconfirm, Radio } from 'antd';
 import { scrcpyService, ScrcpyCapabilities } from '../../../../application/services/ScrcpyApplicationService';
 import { useAdb } from '../../../../application/hooks/useAdb';
 import EmbeddedScrcpyPlayer from './EmbeddedScrcpyPlayer';
+import CapabilityChips from './CapabilityChips';
+import { useScrcpySessions } from '../../../../application/hooks/useScrcpySessions';
+import { useScrcpyPresets } from './hooks/useScrcpyPresets';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -13,19 +16,24 @@ export const ScrcpyControlView: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [runningMap, setRunningMap] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<string[]>([]);
+  // 会话订阅（事件驱动）
+  const { sessions, lastEvent, refresh } = useScrcpySessions(selected);
   // 参数设置
-  const [sessionName, setSessionName] = useState<string>("");
-  const [resolution, setResolution] = useState<string>(""); // 例如：1280 或 1280x720
-  const [bitrate, setBitrate] = useState<string>("8M");
-  const [maxFps, setMaxFps] = useState<number | null>(60);
-  const [windowTitle, setWindowTitle] = useState<string>("EmployeeGUI Mirror");
-  const [stayAwake, setStayAwake] = useState<boolean>(true);
-  const [turnScreenOff, setTurnScreenOff] = useState<boolean>(false);
-  const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(false);
-  const [borderless, setBorderless] = useState<boolean>(false);
-  const [renderMode, setRenderMode] = useState<'external' | 'embedded'>('external');
+  const [sessionName, setSessionName] = useState<string>(localStorage.getItem('scrcpy.sessionName') || "");
+  const [resolution, setResolution] = useState<string>(localStorage.getItem('scrcpy.resolution') || ""); // 例如：1280 或 1280x720
+  const [bitrate, setBitrate] = useState<string>(localStorage.getItem('scrcpy.bitrate') || "8M");
+  const [maxFps, setMaxFps] = useState<number | null>(() => {
+    const v = localStorage.getItem('scrcpy.maxFps');
+    return v ? Number(v) : 60;
+  });
+  const [windowTitle, setWindowTitle] = useState<string>(localStorage.getItem('scrcpy.windowTitle') || "EmployeeGUI Mirror");
+  const [stayAwake, setStayAwake] = useState<boolean>(localStorage.getItem('scrcpy.stayAwake') !== 'false');
+  const [turnScreenOff, setTurnScreenOff] = useState<boolean>(localStorage.getItem('scrcpy.turnScreenOff') === 'true');
+  const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(localStorage.getItem('scrcpy.alwaysOnTop') === 'true');
+  const [borderless, setBorderless] = useState<boolean>(localStorage.getItem('scrcpy.borderless') === 'true');
+  const [renderMode, setRenderMode] = useState<'external' | 'embedded'>((localStorage.getItem('scrcpy.renderMode') as any) || 'external');
   const [caps, setCaps] = useState<ScrcpyCapabilities | null>(null);
+  const { presets, savePreset, removePreset } = useScrcpyPresets();
   // 默认选择：优先已选设备，否则第一个在线设备
   useEffect(() => {
     if (!selected) {
@@ -33,6 +41,18 @@ export const ScrcpyControlView: React.FC = () => {
       else if (onlineDevices.length > 0) setSelected(onlineDevices[0].id);
     }
   }, [selectedDevice, onlineDevices, selected]);
+
+  // 持久化参数
+  useEffect(() => { localStorage.setItem('scrcpy.sessionName', sessionName); }, [sessionName]);
+  useEffect(() => { localStorage.setItem('scrcpy.resolution', resolution); }, [resolution]);
+  useEffect(() => { if (maxFps != null) localStorage.setItem('scrcpy.maxFps', String(maxFps)); }, [maxFps]);
+  useEffect(() => { localStorage.setItem('scrcpy.bitrate', bitrate); }, [bitrate]);
+  useEffect(() => { localStorage.setItem('scrcpy.windowTitle', windowTitle); }, [windowTitle]);
+  useEffect(() => { localStorage.setItem('scrcpy.stayAwake', String(stayAwake)); }, [stayAwake]);
+  useEffect(() => { localStorage.setItem('scrcpy.turnScreenOff', String(turnScreenOff)); }, [turnScreenOff]);
+  useEffect(() => { localStorage.setItem('scrcpy.alwaysOnTop', String(alwaysOnTop)); }, [alwaysOnTop]);
+  useEffect(() => { localStorage.setItem('scrcpy.borderless', String(borderless)); }, [borderless]);
+  useEffect(() => { localStorage.setItem('scrcpy.renderMode', renderMode); }, [renderMode]);
 
   const startMirror = async () => {
     if (!selected) return;
@@ -53,8 +73,8 @@ export const ScrcpyControlView: React.FC = () => {
         turnScreenOff,
         bitrate,
         windowTitle,
-        alwaysOnTop,
-        borderless,
+        // 嵌入式渲染模式下，不传仅对外部窗口有效的参数
+        ...(renderMode === 'external' ? { alwaysOnTop, borderless } : {}),
       };
       if (resolution) options.resolution = resolution;
       if (maxFps && maxFps > 0) options.maxFps = maxFps;
@@ -62,7 +82,8 @@ export const ScrcpyControlView: React.FC = () => {
   const session: string = await scrcpyService.start(selected, options);
       // 记录运行状态（按设备标记即可；如需细分会话可扩展成 Record<device, Record<session, boolean>>）
       setRunningMap((m) => ({ ...m, [selected]: true }));
-      refreshSessions();
+      // 事件会带动刷新；此处兜底主动拉一次
+      refresh();
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -81,20 +102,11 @@ export const ScrcpyControlView: React.FC = () => {
         await scrcpyService.stopAll(selected);
       }
       setRunningMap((m) => ({ ...m, [selected]: false }));
+      refresh();
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
       setBusy(false);
-    }
-  };
-
-  const refreshSessions = async () => {
-    if (!selected) { setSessions([]); return; }
-    try {
-      const list: string[] = await scrcpyService.listSessions(selected);
-      setSessions(list);
-    } catch (e: any) {
-      // 忽略列出失败
     }
   };
 
@@ -121,8 +133,34 @@ export const ScrcpyControlView: React.FC = () => {
     })();
   }, []);
 
-  // 切换设备/启动/停止后刷新会话列表
-  useEffect(() => { refreshSessions(); }, [selected]);
+  // 事件提示信息（最近一次）
+  const lastEventAlert = useMemo(() => {
+    if (!lastEvent) return null;
+    if (lastEvent.error) {
+      return (
+        <Alert
+          className="mb-3"
+          type="warning"
+          showIcon
+          message={`会话异常（${lastEvent.deviceId}）`}
+          description={lastEvent.error}
+        />
+      );
+    }
+    if (lastEvent.sessionName) {
+      // 无法区分 started/stopped 的详细内容时，仅提示发生了状态变更
+      return (
+        <Alert
+          className="mb-3"
+          type="info"
+          showIcon
+          message={`会话事件：${lastEvent.sessionName}`}
+          description={`设备 ${lastEvent.deviceId} 的会话状态已更新。`}
+        />
+      );
+    }
+    return null;
+  }, [lastEvent]);
 
   return (
     <div className="p-4">
@@ -134,6 +172,7 @@ export const ScrcpyControlView: React.FC = () => {
       {error && (
         <Alert type="error" showIcon message="操作失败" description={error} className="mb-3" />
       )}
+      {lastEventAlert}
 
       <Card size="small">
         <Space align="center" wrap>
@@ -173,9 +212,69 @@ export const ScrcpyControlView: React.FC = () => {
           <Button danger loading={busy} onClick={stopMirror} disabled={!selected}>
             停止镜像
           </Button>
+          {/* 预设应用与管理 */}
+          <Select
+            style={{ minWidth: 240 }}
+            placeholder="选择参数预设"
+            options={presets.map(p => ({ value: p.id, label: p.name }))}
+            onChange={(id) => {
+              const p = presets.find(x => x.id === id);
+              if (!p) return;
+              const o = p.options || {} as any;
+              if (typeof o.resolution !== 'undefined') setResolution(String(o.resolution ?? ''));
+              if (typeof o.bitrate !== 'undefined') setBitrate(String(o.bitrate ?? ''));
+              if (typeof o.maxFps !== 'undefined') setMaxFps(Number(o.maxFps));
+              if (typeof o.windowTitle !== 'undefined') setWindowTitle(String(o.windowTitle ?? 'EmployeeGUI Mirror'));
+              if (typeof o.stayAwake !== 'undefined') setStayAwake(Boolean(o.stayAwake));
+              if (typeof o.turnScreenOff !== 'undefined') setTurnScreenOff(Boolean(o.turnScreenOff));
+              if (typeof o.alwaysOnTop !== 'undefined') setAlwaysOnTop(Boolean(o.alwaysOnTop));
+              if (typeof o.borderless !== 'undefined') setBorderless(Boolean(o.borderless));
+            }}
+            dropdownRender={(menu) => (
+              <div>
+                {menu}
+                <Divider style={{ margin: '4px 0' }} />
+                <div className="px-2 pb-2">
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const name = prompt('保存当前参数为预设，输入名称：', '自定义预设');
+                      if (!name) return;
+                      const opts: any = {
+                        resolution: resolution || undefined,
+                        bitrate: bitrate || undefined,
+                        maxFps: maxFps || undefined,
+                        windowTitle,
+                        stayAwake,
+                        turnScreenOff,
+                        alwaysOnTop,
+                        borderless,
+                      };
+                      savePreset(name, opts);
+                    }}
+                  >保存为预设</Button>
+                </div>
+              </div>
+            )}
+          />
           <Button onClick={checkEnv}>环境检查</Button>
+          <Button onClick={() => {
+            setSessionName("");
+            setResolution("");
+            setBitrate("8M");
+            setMaxFps(60);
+            setWindowTitle("EmployeeGUI Mirror");
+            setStayAwake(true);
+            setTurnScreenOff(false);
+            setAlwaysOnTop(false);
+            setBorderless(false);
+            setRenderMode('external');
+          }}>重置默认</Button>
           {selected && runningMap[selected] && <Tag color="green">运行中</Tag>}
         </Space>
+        <div className="mt-2">
+          <CapabilityChips caps={caps} />
+        </div>
       </Card>
 
       <Divider />
@@ -217,13 +316,25 @@ export const ScrcpyControlView: React.FC = () => {
               <Switch checked={turnScreenOff} onChange={setTurnScreenOff} />
             </Form.Item>
             <Form.Item label="置顶窗口">
-              <Tooltip title={caps && !caps.alwaysOnTop ? '当前 scrcpy 不支持 --always-on-top' : ''}>
-                <Switch checked={alwaysOnTop} onChange={setAlwaysOnTop} disabled={!!caps && !caps.alwaysOnTop} />
+              <Tooltip title={
+                renderMode === 'embedded' ? '嵌入式模式下不生效（仅外部窗口）' : (caps && !caps.alwaysOnTop ? '当前 scrcpy 不支持 --always-on-top' : '')
+              }>
+                <Switch
+                  checked={alwaysOnTop}
+                  onChange={setAlwaysOnTop}
+                  disabled={(!!caps && !caps.alwaysOnTop) || renderMode === 'embedded'}
+                />
               </Tooltip>
             </Form.Item>
             <Form.Item label="无边框窗口">
-              <Tooltip title={caps && !caps.windowBorderless ? '当前 scrcpy 不支持 --window-borderless' : ''}>
-                <Switch checked={borderless} onChange={setBorderless} disabled={!!caps && !caps.windowBorderless} />
+              <Tooltip title={
+                renderMode === 'embedded' ? '嵌入式模式下不生效（仅外部窗口）' : (caps && !caps.windowBorderless ? '当前 scrcpy 不支持 --window-borderless' : '')
+              }>
+                <Switch
+                  checked={borderless}
+                  onChange={setBorderless}
+                  disabled={(!!caps && !caps.windowBorderless) || renderMode === 'embedded'}
+                />
               </Tooltip>
             </Form.Item>
           </Space>
@@ -233,7 +344,18 @@ export const ScrcpyControlView: React.FC = () => {
       <Divider />
       <Card size="small" title="已运行会话">
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Button size="small" onClick={refreshSessions} disabled={!selected}>刷新会话列表</Button>
+          <Space>
+            <Button size="small" onClick={refresh} disabled={!selected}>刷新会话列表</Button>
+            {/* 允许删除自定义预设（不动内置） */}
+            <Select
+              size="small"
+              style={{ minWidth: 220 }}
+              placeholder="删除自定义预设"
+              options={presets.filter(p => !p.builtIn).map(p => ({ value: p.id, label: p.name }))}
+              onChange={(id) => { removePreset(id); }}
+              allowClear
+            />
+          </Space>
           {sessions.length === 0 ? (
             <Text type="secondary">暂无会话</Text>
           ) : (
@@ -245,7 +367,7 @@ export const ScrcpyControlView: React.FC = () => {
                   onConfirm={async () => {
                     try {
                       await scrcpyService.stopSession(selected!, s);
-                      refreshSessions();
+                      refresh();
                     } catch (e) { /* ignore */ }
                   }}
                 >

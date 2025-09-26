@@ -124,33 +124,6 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
 // 预定义脚本模板
 const PREDEFINED_TEMPLATES: ScriptTemplate[] = [
   {
-    id: 'xiaohongshu-follow',
-    name: '小红书批量关注',
-    description: '自动打开小红书，导入通讯录，批量关注联系人',
-    category: 'social',
-    author: '官方',
-    version: '1.0.0',
-    rating: 4.8,
-    downloads: 1234,
-    tags: ['小红书', '关注', '通讯录', '社交'],
-    createdAt: '2024-01-15',
-    updatedAt: '2024-01-20',
-    isOfficial: true,
-    isFavorite: false,
-    steps: [
-      { type: 'open_app', name: '打开小红书', parameters: { package_name: 'com.xingin.xhs' } },
-      { type: 'tap', name: '点击头像', parameters: { coordinate: '100,200' } },
-      { type: 'wait_for_element', name: '等待侧边栏', parameters: { condition_type: 'text', selector: '发现好友' } },
-      { type: 'tap', name: '点击发现好友', parameters: { coordinate: '200,300' } }
-    ],
-    metadata: {
-      targetApp: '小红书',
-      deviceType: ['Android', 'iOS'],
-      difficulty: 'beginner',
-      estimatedTime: '2-3分钟'
-    }
-  },
-  {
     id: 'wechat-group-message',
     name: '微信群发消息',
     description: '批量向多个微信群发送相同消息',

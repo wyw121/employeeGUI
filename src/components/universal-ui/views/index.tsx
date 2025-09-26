@@ -15,5 +15,8 @@ export { UIElementTree } from './tree-view';
 // 网格视图 (ADB XML 检查器)
 export { GridElementView } from './grid-view';
 
+// 镜像视图（Scrcpy 控制）
+export { ScrcpyControlView } from './mirror-view/ScrcpyControlView';
+
 // 默认导出
 export { VisualElementView as default } from './visual-view';

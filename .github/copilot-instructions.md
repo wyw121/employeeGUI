@@ -7,6 +7,7 @@
 本项目是一个基于 Tauri + React + TypeScript 的桌面应用程序，专门用于小红书自动化营销工具，包含员工管理、联系人导入、设备管理、ADB 自动化等功能。
 
 **核心技术栈：**
+
 - 前端：React 18 + TypeScript + Tailwind CSS + Ant Design
 - 后端：Tauri (Rust)
 - 状态管理：Zustand（基于 DDD 架构）
@@ -21,11 +22,13 @@
 #### ADB 相关功能开发约束：
 
 1. **强制使用统一接口**
+
    - ✅ 必须使用：`useAdb()` Hook
    - ❌ 禁止使用：`useAdbDevices`、`useDevices`、`useAdbDiagnostic` 等旧接口
    - ❌ 禁止直接调用：`adbService`、`AdbDiagnosticService` 等底层服务
 
 2. **架构分层严格遵守**
+
    ```
    src/
    ├── domain/adb/           # 域层（实体、仓储接口、域服务）
@@ -42,11 +45,13 @@
 #### 代码质量控制规则：
 
 **重复代码检测与合并：**
+
 - 开发任何功能前，必须检查是否存在相似逻辑
 - 发现重复代码必须立即重构合并，不允许保留多个版本
 - 所有 ADB 相关功能必须通过 `useAdb()` 统一接口实现
 
 **版本控制严格要求：**
+
 - 项目中只允许存在一套代码实现
 - 禁止保留已废弃的代码文件
 - 新功能开发必须基于最新的 DDD 架构
@@ -56,18 +61,20 @@
 为防止出现数千行的“巨石”文件，必须保持子目录 / 子文件的可组合、可演进模块化结构。
 
 #### 绝对硬性阈值（超过即需拆分 / 拒绝合并）
-| 类型 | 单文件建议上限 | 绝对上限（需立即拆分） | 说明 |
-|------|----------------|------------------------|------|
-| React 页面级组件 (`/pages/`) | 400 行 | 600 行 | 页面负责编排，不承载复杂业务逻辑 |
-| 通用可复用组件 (`/components/`) | 300 行 | 450 行 | 拆分子组件 / 提取 hooks / utils |
-| 自定义 Hook | 200 行 | 300 行 | 拆分为多个关注点更单一的 Hook |
-| 领域服务 / 应用服务 | 300 行 | 400 行 | 拆分为独立 domain service / helper |
-| Zustand Store 文件 | 250 行 | 350 行 | 超出时拆分 selector、actions、types、slices |
-| Rust 单模块业务文件 | 350 行 | 500 行 | 拆分为 mod + 子模块，或抽公共函数 |
+
+| 类型                            | 单文件建议上限 | 绝对上限（需立即拆分） | 说明                                        |
+| ------------------------------- | -------------- | ---------------------- | ------------------------------------------- |
+| React 页面级组件 (`/pages/`)    | 400 行         | 600 行                 | 页面负责编排，不承载复杂业务逻辑            |
+| 通用可复用组件 (`/components/`) | 300 行         | 450 行                 | 拆分子组件 / 提取 hooks / utils             |
+| 自定义 Hook                     | 200 行         | 300 行                 | 拆分为多个关注点更单一的 Hook               |
+| 领域服务 / 应用服务             | 300 行         | 400 行                 | 拆分为独立 domain service / helper          |
+| Zustand Store 文件              | 250 行         | 350 行                 | 超出时拆分 selector、actions、types、slices |
+| Rust 单模块业务文件             | 350 行         | 500 行                 | 拆分为 mod + 子模块，或抽公共函数           |
 
 > 说明：统计时不包含纯类型定义、注释与空行，但若类型块 > 200 行也应拆分 `types.ts` / `dto.ts` / `interfaces.ts` 等。
 
 #### 拆分策略指引
+
 1. 单一职责：若文件承担“渲染 + 复杂状态 + 业务流程 + 工具函数”多重角色，必须分解。
 2. 垂直切分优先：按照领域用语 / 业务动作划分，而不是纯“技术层”（例如：`useDeviceFilter.ts`、`useMatchCriteria.ts`）。
 3. 提取结构惯例（React）：
@@ -90,16 +97,19 @@
 5. 大量条件分支：优先策略模式 / 表驱动 / handler map，而不是长链 if-else / switch。
 
 #### 允许的少量例外（需在 PR 描述注明理由）
+
 - 自动生成文件（须标注“// AUTO-GENERATED”）
 - 外部协议 / 第三方类型汇总（如 OpenAPI 生成）
 - Barrel 文件（仅 re-export，不含逻辑）
 
 #### 代码评审必查项（新增）
+
 - 是否新增或修改导致文件超过“建议上限”并接近“绝对上限”
 - 是否存在可拆分但被“临时留存”的巨型函数（>80 行）
 - 是否可以用“子组件 + hooks + 业务适配层”替代超大组件
 
 #### AI 代理执行准则
+
 1. 当检测到编辑目标文件估算行数 > 建议上限 80% 时，必须：
    - 在回复中提出拆分建议结构
    - 避免继续无节制追加逻辑到同一文件
@@ -110,11 +120,13 @@
 4. 拆分时保持对外 API 不变（通过 `index.ts` 桶文件聚合）。
 
 #### 自动检测（建议后续接入 CI）
+
 - 可编写脚本扫描 `src/**/*.{ts,tsx,rs}` 输出行数 > 阈值列表
 - PR 模板加入“文件行数检查”勾选项
 - 触发警告时，要求提供“拆分计划 / 不拆分原因”
 
 #### 快速自检 Checklist
+
 ```
 □ 是否新增/修改文件超过类型建议上限？
 □ 是否存在 80+ 行函数？可否拆分语义块？
@@ -130,11 +142,13 @@
 ### 核心目录说明：
 
 - **`src/domain/adb/`**: ADB 领域核心
+
   - `entities/`: 设备、连接、诊断结果等实体
   - `repositories/`: 数据访问接口定义
   - `services/`: 领域业务逻辑
 
 - **`src/application/`**: 应用服务层
+
   - `adbStore.ts`: 统一状态管理
   - `AdbApplicationService.ts`: 应用服务门面
   - `ServiceFactory.ts`: 依赖注入容器
@@ -144,27 +158,30 @@
   - 外部服务适配器
 
 ### 页面分析器（Grid Inspector）子模块补充：
+
 - 位置：`src/components/universal-ui/views/grid-view/panels/node-detail/`
-   - `MatchingStrategySelector.tsx`：策略选择子组件（absolute/strict/relaxed/positionless/standard）
-   - `SelectedFieldsPreview.tsx`：选中字段与值的只读预览子组件
-   - 以上组件仅负责展示与选择，状态由上层 `NodeDetailPanel.tsx` 承载，符合模块化扩展原则
+  - `MatchingStrategySelector.tsx`：策略选择子组件（absolute/strict/relaxed/positionless/standard）
+  - `SelectedFieldsPreview.tsx`：选中字段与值的只读预览子组件
+  - 以上组件仅负责展示与选择，状态由上层 `NodeDetailPanel.tsx` 承载，符合模块化扩展原则
 
 补充说明（模块导出与用法）：
+
 - 新增 `index.ts` 桶文件：集中导出 `MatchPresetsRow`、`MatchingStrategySelector`、`SelectedFieldsPreview`、`SelectedFieldsChips` 与 `types`，便于上层按需导入。
 - 子模块自述文件：`node-detail/README.md` 描述职责边界、属性约束与最佳导入方式，方便团队协作与后续扩展。
 - 推荐导入示例：
-   ```ts
-   import {
-      MatchPresetsRow,
-      MatchingStrategySelector,
-      SelectedFieldsPreview,
-      // types
-      MatchStrategy,
-      MatchCriteria,
-   } from '@/components/universal-ui/views/grid-view/panels/node-detail';
-   ```
+  ```ts
+  import {
+    MatchPresetsRow,
+    MatchingStrategySelector,
+    SelectedFieldsPreview,
+    // types
+    MatchStrategy,
+    MatchCriteria,
+  } from "@/components/universal-ui/views/grid-view/panels/node-detail";
+  ```
 
 ### 关键配置文件：
+
 - `package.json`: 依赖管理和构建脚本
 - `src-tauri/tauri.conf.json`: Tauri 应用配置
 - `tailwind.config.js`: 样式配置
@@ -173,11 +190,13 @@
 ## 🛠️ 构建和开发命令
 
 ### 环境要求：
+
 - Node.js >= 16
 - Rust (由 Tauri 管理)
 - npm
 
 ### 开发命令：
+
 ```bash
 # 安装依赖（必须在所有操作前执行）
 npm install
@@ -193,6 +212,7 @@ npm run dev
 ```
 
 ### 测试和验证：
+
 ```bash
 # 运行测试
 npm test
@@ -207,25 +227,29 @@ npm run type-check
 ## 🎯 开发规范
 
 ### TypeScript 严格要求：
+
 - 必须提供完整的类型定义
 - 禁止使用 `any` 类型
 - 所有函数必须明确返回类型
 
 ### React 组件规范：
+
 - 优先使用函数组件和 Hooks
 - 组件名称使用 PascalCase
 - Props 接口必须明确定义
 
 ### 导入规范：
+
 ```typescript
 // 正确的导入方式
-import { useAdb } from '@/application/hooks/useAdb';
+import { useAdb } from "@/application/hooks/useAdb";
 
 // 错误的导入方式（已废弃）
-import { useAdbDevices } from '@/hooks/useAdbDevices';
+import { useAdbDevices } from "@/hooks/useAdbDevices";
 ```
 
 ### CSS 样式约定：
+
 - 使用 Tailwind CSS 实用类
 - 组件样式使用 CSS Modules 或 styled-components
 - 避免内联样式
@@ -233,21 +257,24 @@ import { useAdbDevices } from '@/hooks/useAdbDevices';
 ## 🚫 严格禁止事项
 
 1. **架构违反**
+
    - 禁止在表现层直接调用基础设施层
    - 禁止绕过应用层直接访问领域层
    - 禁止创建与现有架构冲突的代码
 
 2. **代码重复**
+
    - 禁止复制粘贴现有功能代码
    - 发现相似逻辑必须抽象为公共函数
    - 禁止保留多个版本的相同功能
 
-4. **巨型文件 / 非模块化结构**
+3. **巨型文件 / 非模块化结构**
+
    - 禁止新增或继续膨胀超过绝对上限的文件
    - 拆分缺失将被视为架构债务
    - 大型组件/服务未拆分且继续新增逻辑的 PR 需驳回
 
-3. **状态管理混乱**
+4. **状态管理混乱**
    - 禁止在多个地方管理相同的状态
    - 禁止创建新的状态管理解决方案
    - 必须使用项目统一的状态管理模式
@@ -278,6 +305,7 @@ import { useAdbDevices } from '@/hooks/useAdbDevices';
 8. **主动模块化守护**：发现文件超标或结构臃肿时优先建议/实施拆分，而非继续累积
 
 **禁止行为：**
+
 - 创建与现有功能重复的代码
 - 使用已废弃的接口或服务
 - 忽略现有的架构约束
@@ -288,8 +316,8 @@ import { useAdbDevices } from '@/hooks/useAdbDevices';
 
 ## 📚 相关文档
 
-- [项目README](../README.md)
-- [ADB架构统一报告](../ADB_ARCHITECTURE_UNIFICATION_REPORT.md)
+- [项目 README](../README.md)
+- [ADB 架构统一报告](../ADB_ARCHITECTURE_UNIFICATION_REPORT.md)
 - [架构检查脚本](../scripts/check-adb-architecture.js)
 
 ---

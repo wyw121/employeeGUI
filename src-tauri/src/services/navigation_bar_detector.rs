@@ -1,9 +1,9 @@
 use anyhow::Result;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::command;
 use tracing::{error, info, warn};
-use regex::Regex;
 
 use crate::services::adb_session_manager::get_device_session;
 
@@ -11,9 +11,9 @@ use crate::services::adb_session_manager::get_device_session;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum NavigationBarType {
-    Bottom,    // 底部导航栏
-    Top,       // 顶部导航栏
-    Side,      // 侧边导航栏
+    Bottom,         // 底部导航栏
+    Top,            // 顶部导航栏
+    Side,           // 侧边导航栏
     FloatingAction, // 悬浮操作按钮
 }
 
@@ -130,8 +130,10 @@ impl NavigationBarDetector {
         config: &NavigationBarDetectionConfig,
     ) -> Result<bool> {
         // 首先检测导航栏
-        let detection_result = self.detect_navigation_bar(config.clone(), device_id.to_string()).await?;
-        
+        let detection_result = self
+            .detect_navigation_bar(config.clone(), device_id.to_string())
+            .await?;
+
         // 查找指定按钮
         for bar in detection_result.detected_bars {
             for button in bar.buttons {
@@ -140,21 +142,23 @@ impl NavigationBarDetector {
                     let (left, top, right, bottom) = button.bounds;
                     let center_x = (left + right) / 2;
                     let center_y = (top + bottom) / 2;
-                    
-                    info!("点击导航按钮: {} 坐标: ({}, {})", button.name, center_x, center_y);
+
+                    info!(
+                        "点击导航按钮: {} 坐标: ({}, {})",
+                        button.name, center_x, center_y
+                    );
                     session.tap(center_x, center_y).await?;
-                    
+
                     // 等待页面切换
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    
+
                     return Ok(true);
                 }
             }
         }
-        
+
         Ok(false)
     }
-
 
     /// 创建通用底部导航配置
     pub fn create_generic_bottom_navigation_config() -> NavigationBarDetectionConfig {
@@ -182,11 +186,16 @@ impl NavigationBarDetector {
     ) -> Result<NavigationDetectionResult> {
         let start_time = std::time::Instant::now();
         let session = get_device_session(&self.device_id).await?;
-        
-        info!("开始检测导航栏，设备: {}, 目标按钮: {}", self.device_id, target_button_name);
+
+        info!(
+            "开始检测导航栏，设备: {}, 目标按钮: {}",
+            self.device_id, target_button_name
+        );
 
         // 获取UI结构
-        let ui_content = session.dump_ui().await
+        let ui_content = session
+            .dump_ui()
+            .await
             .map_err(|e| anyhow::anyhow!("获取UI结构失败: {}", e))?;
 
         // 获取屏幕尺寸
@@ -195,13 +204,10 @@ impl NavigationBarDetector {
 
         // 解析UI结构找到导航栏
         let detected_bars = self.find_navigation_bars(&ui_content, &config, screen_size)?;
-        
+
         // 在检测到的导航栏中查找目标按钮
-        let target_button = self.find_target_button(
-            &detected_bars, 
-            &config, 
-            &target_button_name
-        )?;
+        let target_button =
+            self.find_target_button(&detected_bars, &config, &target_button_name)?;
 
         let detection_time = start_time.elapsed().as_millis() as u64;
 
@@ -224,8 +230,7 @@ impl NavigationBarDetector {
 
     /// 提取屏幕尺寸
     fn extract_screen_size(&self, ui_content: &str) -> Result<(i32, i32)> {
-        if let Some(caps) = Regex::new(r#"bounds="\[0,0\]\[(\d+),(\d+)\]""#)?
-            .captures(ui_content) {
+        if let Some(caps) = Regex::new(r#"bounds="\[0,0\]\[(\d+),(\d+)\]""#)?.captures(ui_content) {
             let width: i32 = caps[1].parse()?;
             let height: i32 = caps[2].parse()?;
             Ok((width, height))
@@ -249,34 +254,34 @@ impl NavigationBarDetector {
         match config.bar_position.bar_type {
             NavigationBarType::Bottom => {
                 detected_bars.extend(self.find_bottom_navigation_bars(
-                    ui_content, 
-                    config, 
-                    screen_width, 
-                    screen_height
+                    ui_content,
+                    config,
+                    screen_width,
+                    screen_height,
                 )?);
             }
             NavigationBarType::Top => {
                 detected_bars.extend(self.find_top_navigation_bars(
-                    ui_content, 
-                    config, 
-                    screen_width, 
-                    screen_height
+                    ui_content,
+                    config,
+                    screen_width,
+                    screen_height,
                 )?);
             }
             NavigationBarType::Side => {
                 detected_bars.extend(self.find_side_navigation_bars(
-                    ui_content, 
-                    config, 
-                    screen_width, 
-                    screen_height
+                    ui_content,
+                    config,
+                    screen_width,
+                    screen_height,
                 )?);
             }
             NavigationBarType::FloatingAction => {
                 detected_bars.extend(self.find_floating_action_bars(
-                    ui_content, 
-                    config, 
-                    screen_width, 
-                    screen_height
+                    ui_content,
+                    config,
+                    screen_width,
+                    screen_height,
                 )?);
             }
         }
@@ -294,16 +299,19 @@ impl NavigationBarDetector {
     ) -> Result<Vec<DetectedNavigationBar>> {
         let mut bars = Vec::new();
         let position_config = &config.bar_position.position_ratio;
-        
+
         // 计算期望的导航栏Y坐标范围
         let expected_top = (screen_height as f64 * position_config.start) as i32;
         let expected_bottom = (screen_height as f64 * position_config.end) as i32;
-        
-        info!("查找底部导航栏，期望范围: Y({}-{})", expected_top, expected_bottom);
+
+        info!(
+            "查找底部导航栏，期望范围: Y({}-{})",
+            expected_top, expected_bottom
+        );
 
         // 使用正则表达式查找符合条件的ViewGroup
         let node_regex = Regex::new(
-            r#"<node[^>]*class="([^"]*(?:ViewGroup|LinearLayout|RelativeLayout|FrameLayout)[^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*package="([^"]*)"[^>]*>"#
+            r#"<node[^>]*class="([^"]*(?:ViewGroup|LinearLayout|RelativeLayout|FrameLayout)[^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*package="([^"]*)"[^>]*>"#,
         )?;
 
         for caps in node_regex.captures_iter(ui_content) {
@@ -323,31 +331,34 @@ impl NavigationBarDetector {
             if top >= expected_top && bottom <= expected_bottom {
                 let height = bottom - top;
                 let width = right - left;
-                
+
                 // 检查尺寸是否合理（宽度应该占屏幕大部分，高度相对较小）
-                if width > screen_width / 2 && 
-                   height > config.bar_position.min_size_threshold && 
-                   height < screen_height / 4 {
-                    
-                    info!("发现潜在底部导航栏: {} bounds=({},{},{},{})", 
-                          class_name, left, top, right, bottom);
-                    
+                if width > screen_width / 2
+                    && height > config.bar_position.min_size_threshold
+                    && height < screen_height / 4
+                {
+                    info!(
+                        "发现潜在底部导航栏: {} bounds=({},{},{},{})",
+                        class_name, left, top, right, bottom
+                    );
+
                     // 在这个区域内查找按钮
                     let buttons = self.find_navigation_buttons_in_area(
                         ui_content,
                         (left, top, right, bottom),
                         config,
                     )?;
-                    
-                    if buttons.len() >= 2 { // 至少要有2个按钮才认为是导航栏
+
+                    if buttons.len() >= 2 {
+                        // 至少要有2个按钮才认为是导航栏
                         bars.push(DetectedNavigationBar {
                             bounds: (left, top, right, bottom),
                             bar_type: NavigationBarType::Bottom,
                             buttons,
                             confidence: self.calculate_bar_confidence(
-                                &config.bar_position, 
-                                (left, top, right, bottom), 
-                                (screen_width, screen_height)
+                                &config.bar_position,
+                                (left, top, right, bottom),
+                                (screen_width, screen_height),
                             ),
                         });
                     }
@@ -370,7 +381,7 @@ impl NavigationBarDetector {
 
         // 查找区域内所有可能的按钮元素
         let button_regex = Regex::new(
-            r#"<node[^>]*(?:class="[^"]*(?:TextView|Button|ImageView|ViewGroup)[^"]*"[^>]*)?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*(?:clickable="([^"]*)"[^>]*)?(?:text="([^"]*)"[^>]*)?(?:content-desc="([^"]*)"[^>]*)?(?:resource-id="([^"]*)"[^>]*)?[^>]*/?>"#
+            r#"<node[^>]*(?:class="[^"]*(?:TextView|Button|ImageView|ViewGroup)[^"]*"[^>]*)?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*(?:clickable="([^"]*)"[^>]*)?(?:text="([^"]*)"[^>]*)?(?:content-desc="([^"]*)"[^>]*)?(?:resource-id="([^"]*)"[^>]*)?[^>]*/?>"#,
         )?;
 
         let mut button_index = 0;
@@ -380,15 +391,26 @@ impl NavigationBarDetector {
             let right: i32 = caps[3].parse().unwrap_or(0);
             let bottom: i32 = caps[4].parse().unwrap_or(0);
             let clickable = caps.get(5).map_or(false, |m| m.as_str() == "true");
-            let text = caps.get(6).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty());
-            let content_desc = caps.get(7).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty());
-            let resource_id = caps.get(8).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty());
+            let text = caps
+                .get(6)
+                .map(|m| m.as_str().to_string())
+                .filter(|s| !s.is_empty());
+            let content_desc = caps
+                .get(7)
+                .map(|m| m.as_str().to_string())
+                .filter(|s| !s.is_empty());
+            let resource_id = caps
+                .get(8)
+                .map(|m| m.as_str().to_string())
+                .filter(|s| !s.is_empty());
 
             // 检查是否在指定区域内
-            if left >= area_left && top >= area_top && right <= area_right && bottom <= area_bottom {
+            if left >= area_left && top >= area_top && right <= area_right && bottom <= area_bottom
+            {
                 // 检查是否有文本或content-desc（导航按钮通常有标识）
                 if text.is_some() || content_desc.is_some() {
-                    let button_name = text.as_ref()
+                    let button_name = text
+                        .as_ref()
                         .or(content_desc.as_ref())
                         .unwrap_or(&format!("button_{}", button_index))
                         .clone();
@@ -402,7 +424,7 @@ impl NavigationBarDetector {
                         position_index: button_index,
                         confidence: 0.8, // 基础置信度
                     });
-                    
+
                     button_index += 1;
                 }
             }
@@ -414,8 +436,14 @@ impl NavigationBarDetector {
             button.position_index = index;
         }
 
-        info!("在区域 ({},{},{},{}) 内找到 {} 个按钮", 
-              area_left, area_top, area_right, area_bottom, buttons.len());
+        info!(
+            "在区域 ({},{},{},{}) 内找到 {} 个按钮",
+            area_left,
+            area_top,
+            area_right,
+            area_bottom,
+            buttons.len()
+        );
 
         Ok(buttons)
     }
@@ -431,7 +459,10 @@ impl NavigationBarDetector {
             for bar in detected_bars {
                 for button in &bar.buttons {
                     if self.match_button_config(button, target_config) {
-                        info!("找到匹配的目标按钮: {} 位置: {:?}", target_button_name, button.bounds);
+                        info!(
+                            "找到匹配的目标按钮: {} 位置: {:?}",
+                            target_button_name, button.bounds
+                        );
                         return Ok(Some(button.clone()));
                     }
                 }
@@ -442,7 +473,10 @@ impl NavigationBarDetector {
         for bar in detected_bars {
             for button in &bar.buttons {
                 if self.fuzzy_match_button(button, target_button_name) {
-                    warn!("通过模糊匹配找到目标按钮: {} -> {}", target_button_name, button.name);
+                    warn!(
+                        "通过模糊匹配找到目标按钮: {} -> {}",
+                        target_button_name, button.name
+                    );
                     return Ok(Some(button.clone()));
                 }
             }
@@ -452,7 +486,11 @@ impl NavigationBarDetector {
     }
 
     /// 匹配按钮配置
-    fn match_button_config(&self, button: &DetectedNavigationButton, config: &NavigationButtonConfig) -> bool {
+    fn match_button_config(
+        &self,
+        button: &DetectedNavigationButton,
+        config: &NavigationButtonConfig,
+    ) -> bool {
         // 检查文本匹配
         if let Some(expected_text) = &config.text {
             if let Some(button_text) = &button.text {
@@ -500,20 +538,24 @@ impl NavigationBarDetector {
     ) -> f64 {
         let (left, top, right, bottom) = bounds;
         let (screen_width, screen_height) = screen_size;
-        
+
         match position_config.bar_type {
             NavigationBarType::Bottom => {
                 let expected_y = screen_height as f64 * position_config.position_ratio.start;
                 let actual_y = top as f64;
                 let y_diff = (expected_y - actual_y).abs();
                 let y_accuracy = 1.0 - (y_diff / screen_height as f64).min(1.0);
-                
+
                 let width_ratio = (right - left) as f64 / screen_width as f64;
-                let width_score = if width_ratio > 0.8 { 1.0 } else { width_ratio / 0.8 };
-                
+                let width_score = if width_ratio > 0.8 {
+                    1.0
+                } else {
+                    width_ratio / 0.8
+                };
+
                 (y_accuracy * 0.6 + width_score * 0.4).max(0.1)
             }
-            _ => 0.5 // 其他类型的基础置信度
+            _ => 0.5, // 其他类型的基础置信度
         }
     }
 
@@ -554,36 +596,42 @@ impl NavigationBarDetector {
 /// 预定义的应用导航栏配置
 pub fn create_xiaohongshu_navigation_config() -> NavigationBarDetectionConfig {
     let mut target_buttons = HashMap::new();
-    
+
     // 配置"我"按钮
-    target_buttons.insert("我".to_string(), NavigationButtonConfig {
-        text: Some("我".to_string()),
-        content_desc: Some("我".to_string()),
-        resource_id_pattern: None,
-        class_name: Some("android.widget.TextView".to_string()),
-        must_clickable: true,
-        position_in_bar: Some(0.8), // 在导航栏右侧位置
-    });
+    target_buttons.insert(
+        "我".to_string(),
+        NavigationButtonConfig {
+            text: Some("我".to_string()),
+            content_desc: Some("我".to_string()),
+            resource_id_pattern: None,
+            class_name: Some("android.widget.TextView".to_string()),
+            must_clickable: true,
+            position_in_bar: Some(0.8), // 在导航栏右侧位置
+        },
+    );
 
     // 配置"首页"按钮
-    target_buttons.insert("首页".to_string(), NavigationButtonConfig {
-        text: Some("首页".to_string()),
-        content_desc: Some("首页".to_string()),
-        resource_id_pattern: None,
-        class_name: Some("android.widget.TextView".to_string()),
-        must_clickable: true,
-        position_in_bar: Some(0.1), // 在导航栏左侧位置
-    });
+    target_buttons.insert(
+        "首页".to_string(),
+        NavigationButtonConfig {
+            text: Some("首页".to_string()),
+            content_desc: Some("首页".to_string()),
+            resource_id_pattern: None,
+            class_name: Some("android.widget.TextView".to_string()),
+            must_clickable: true,
+            position_in_bar: Some(0.1), // 在导航栏左侧位置
+        },
+    );
 
     NavigationBarDetectionConfig {
         package_name: "com.xingin.xhs".to_string(),
         bar_position: NavigationBarPosition {
             bar_type: NavigationBarType::Bottom,
             position_ratio: PositionRatio {
-                start: 0.9,  // 屏幕底部90%位置开始
-                end: 1.0,    // 到屏幕底部100%
+                start: 0.9, // 屏幕底部90%位置开始
+                end: 1.0,   // 到屏幕底部100%
             },
-            size_ratio: 0.07, // 高度占屏幕7%
+            size_ratio: 0.07,        // 高度占屏幕7%
             min_size_threshold: 100, // 最小高度100像素
         },
         target_buttons,
@@ -599,23 +647,29 @@ pub async fn detect_and_click_navigation_button(
     button_name: String,
     bar_type: String, // "bottom", "top", "side", "floating"
 ) -> Result<NavigationDetectionResult, String> {
-    info!("开始导航栏检测，设备: {}, 应用: {}, 按钮: {}", device_id, app_package, button_name);
-    
+    info!(
+        "开始导航栏检测，设备: {}, 应用: {}, 按钮: {}",
+        device_id, app_package, button_name
+    );
+
     let detector = NavigationBarDetector::new(device_id.clone());
-    
+
     // 根据应用包名创建配置
     let config = match app_package.as_str() {
         _ => {
             // 通用配置
             let mut target_buttons = HashMap::new();
-            target_buttons.insert(button_name.clone(), NavigationButtonConfig {
-                text: Some(button_name.clone()),
-                content_desc: Some(button_name.clone()),
-                resource_id_pattern: None,
-                class_name: None,
-                must_clickable: true,
-                position_in_bar: None,
-            });
+            target_buttons.insert(
+                button_name.clone(),
+                NavigationButtonConfig {
+                    text: Some(button_name.clone()),
+                    content_desc: Some(button_name.clone()),
+                    resource_id_pattern: None,
+                    class_name: None,
+                    must_clickable: true,
+                    position_in_bar: None,
+                },
+            );
 
             NavigationBarDetectionConfig {
                 package_name: app_package,
@@ -638,13 +692,19 @@ pub async fn detect_and_click_navigation_button(
             }
         }
     };
-    
+
     // 执行检测
-    match detector.detect_navigation_bar(config.clone(), button_name.clone()).await {
+    match detector
+        .detect_navigation_bar(config.clone(), button_name.clone())
+        .await
+    {
         Ok(mut result) => {
             // 如果找到目标按钮，尝试点击
             if let Some(ref target_button) = result.target_button {
-                match detector.click_navigation_button(&device_id, &target_button.name, &config).await {
+                match detector
+                    .click_navigation_button(&device_id, &target_button.name, &config)
+                    .await
+                {
                     Ok(_) => {
                         result.message = format!("成功点击导航按钮: {}", button_name);
                         info!("导航按钮点击成功: {}", button_name);
@@ -673,7 +733,7 @@ pub async fn detect_navigation_bar(
     bar_type: String,
 ) -> Result<NavigationDetectionResult, String> {
     let detector = NavigationBarDetector::new(device_id);
-    
+
     let config = NavigationBarDetectionConfig {
         package_name: app_package,
         bar_position: NavigationBarPosition {
@@ -693,10 +753,10 @@ pub async fn detect_navigation_bar(
         target_buttons: HashMap::new(),
         enable_smart_adaptation: true,
     };
-    
+
     match detector.detect_navigation_bar(config, String::new()).await {
         Ok(result) => Ok(result),
-        Err(e) => Err(format!("导航栏检测失败: {}", e))
+        Err(e) => Err(format!("导航栏检测失败: {}", e)),
     }
 }
 
@@ -707,17 +767,18 @@ pub async fn click_navigation_button(
     config: NavigationBarDetectionConfig,
 ) -> Result<bool, String> {
     info!("点击导航按钮 '{}' 在设备 '{}'", button_text, device_id);
-    
+
     let detector = NavigationBarDetector::new(device_id.clone());
-    detector.click_navigation_button(&device_id, &button_text, &config)
+    detector
+        .click_navigation_button(&device_id, &button_text, &config)
         .await
         .map_err(|e| e.to_string())
 }
 
-#[command] 
+#[command]
 pub fn get_navigation_configs() -> Vec<NavigationBarDetectionConfig> {
     vec![
         create_xiaohongshu_navigation_config(),
-        NavigationBarDetector::create_generic_bottom_navigation_config()
+        NavigationBarDetector::create_generic_bottom_navigation_config(),
     ]
 }

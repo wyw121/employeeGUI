@@ -32,7 +32,6 @@ import React, { useState } from 'react';
 import InspectorPage from '../pages/InspectorPage';
 import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
-import XiaohongshuFollowPage from '../pages/XiaohongshuFollowPage';
 import AdbCenterPage from '../pages/adb/AdbCenterPage';
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
 import RealTimeDeviceMonitorPage from '../pages/device-monitor/RealTimeDeviceMonitorPage';
@@ -67,11 +66,6 @@ const DemoInner: React.FC = () => {
       key: 'contacts',
       icon: <UserOutlined />,
       label: '通讯录管理',
-    },
-    {
-      key: 'xiaohongshu-follow',
-      icon: <UserOutlined />,
-      label: '小红书关注',
     },
     {
       key: 'smart-vcf',
@@ -253,10 +247,6 @@ const DemoInner: React.FC = () => {
 
             {selectedKey === 'contacts' && (
               <ContactManagementPage />
-            )}
-
-            {selectedKey === 'xiaohongshu-follow' && (
-              <XiaohongshuFollowPage />
             )}
 
             {selectedKey === 'smart-vcf' && (

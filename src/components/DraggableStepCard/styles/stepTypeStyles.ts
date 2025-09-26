@@ -1,0 +1,110 @@
+export interface StepTypeStyle {
+  tagColor: string; // AntD Tag color token
+  cardClass: string; // extra classes for Card root
+  ringClass: string; // ring color while dragging
+  hoverClass: string; // hover class when not dragging
+  titleTextClass?: string; // optional title text color
+  titleBarClass?: string; // optional header/title bar extra classes
+  extraCardClass?: string; // optional extra card classes (position/overflow/transition)
+  draggingCardClass?: string; // optional classes when dragging
+  headerHandleClass?: string; // drag handle pill on header
+  iconPillClass?: string; // icon circular pill on header
+  topAccentClass?: string; // thin accent bar at top
+  leftAccentClass?: string; // left side accent bar
+  titleTagClass?: string; // title tag pill style
+}
+
+const base: StepTypeStyle = {
+  tagColor: 'default',
+  cardClass: '',
+  ringClass: 'ring-blue-300',
+  hoverClass: 'hover:shadow-sm',
+};
+
+export const stepTypeStyles: Record<string, StepTypeStyle> = {
+  loop_start: {
+    ...base,
+    tagColor: 'blue',
+    // 贴近旧版的蓝色主题：渐变背景 + 粗边框 + 强调标题色
+    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
+    ringClass: 'ring-blue-500',
+    hoverClass: 'hover:shadow-lg',
+    titleTextClass: 'text-blue-900',
+    titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
+    extraCardClass: 'loop-card',
+    draggingCardClass: 'loop-card-dragging',
+    headerHandleClass: 'loop-header-handle',
+    iconPillClass: 'loop-icon-pill',
+    topAccentClass: 'loop-top-accent',
+    leftAccentClass: 'loop-left-accent',
+    titleTagClass: 'loop-title-tag',
+  },
+  loop_end: {
+    ...base,
+    tagColor: 'blue',
+    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
+    ringClass: 'ring-blue-500',
+    hoverClass: 'hover:shadow-lg',
+    titleTextClass: 'text-blue-900',
+    titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
+    extraCardClass: 'loop-card',
+    draggingCardClass: 'loop-card-dragging',
+    headerHandleClass: 'loop-header-handle',
+    iconPillClass: 'loop-icon-pill',
+    topAccentClass: 'loop-top-accent',
+    leftAccentClass: 'loop-left-accent',
+    titleTagClass: 'loop-title-tag',
+  },
+  smart_click: {
+    ...base,
+    tagColor: 'green',
+    cardClass: 'bg-green-50 border-l-4 border-green-400',
+    ringClass: 'ring-green-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-green-700',
+  },
+  smart_input: {
+    ...base,
+    tagColor: 'orange',
+    cardClass: 'bg-orange-50 border-l-4 border-orange-400',
+    ringClass: 'ring-orange-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-orange-700',
+  },
+  smart_scroll: {
+    ...base,
+    tagColor: 'purple',
+    cardClass: 'bg-purple-50 border-l-4 border-purple-400',
+    ringClass: 'ring-purple-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-purple-700',
+  },
+  smart_verify: {
+    ...base,
+    tagColor: 'geekblue',
+    cardClass: 'bg-blue-50 border-l-4 border-blue-400',
+    ringClass: 'ring-blue-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-blue-700',
+  },
+  smart_extract: {
+    ...base,
+    tagColor: 'red',
+    cardClass: 'bg-red-50 border-l-4 border-red-400',
+    ringClass: 'ring-red-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-red-700',
+  },
+  smart_wait: {
+    ...base,
+    tagColor: 'cyan',
+    cardClass: 'bg-cyan-50 border-l-4 border-cyan-400',
+    ringClass: 'ring-cyan-300',
+    hoverClass: 'hover:shadow',
+    titleTextClass: 'text-cyan-700',
+  },
+};
+
+export function getStepTypeStyle(stepType: string): StepTypeStyle {
+  return stepTypeStyles[stepType] || base;
+}

@@ -18,10 +18,25 @@ interface StrategyTestResult {
   error?: string;
 }
 
+/**
+ * useSingleStepTest
+ * - 单步测试会尊重 step.parameters.inline_loop_count（范围 1-50），顺序执行；
+ * - 失败将短路（停止后续执行）并聚合 loopSummary/iterations；
+ * - SmartFindElement（智能元素查找）仅走“策略匹配”验证，不执行点击/输入等动作；
+ * - 只有动作类步骤（tap/swipe/input/wait/...）才会调用后端 execute_single_step_test。
+ */
 export const useSingleStepTest = () => {
   const [testingSteps, setTestingSteps] = useState<Set<string>>(new Set());
   const [testResults, setTestResults] = useState<Record<string, SingleStepTestResult>>({});
   const { matchElementByCriteria } = useAdb();
+
+  // 统一判断：是否为“智能元素查找”步骤
+  // 兼容不同命名风格："smart_find_element" | "SmartFindElement" | "smartfindelement" | "smart_find"
+  const isSmartFindElementType = (stepType: string | undefined): boolean => {
+    if (!stepType) return false;
+    const norm = String(stepType).replace(/[-\s]/g, '_').toLowerCase();
+    return norm === 'smart_find_element' || norm === 'smartfindelement' || norm === 'smart_find';
+  };
 
   /**
    * 将步骤参数转换为匹配条件
@@ -87,8 +102,8 @@ export const useSingleStepTest = () => {
       values.package = params.package_name;
     }
 
-    // SmartFindElement 类型步骤才转换，并且需要有字段
-    if (step.step_type === 'SmartFindElement' && fields.length > 0) {
+  // 仅对智能元素查找步骤进行转换，且需要存在至少一个字段
+  if (isSmartFindElementType(step.step_type) && fields.length > 0) {
       
       // 组装默认正则（精确 ^词$）逻辑
       const matchMode: NonNullable<MatchCriteriaDTO['matchMode']> = {};
@@ -124,9 +139,9 @@ export const useSingleStepTest = () => {
     step: SmartScriptStep,
     deviceId: string
   ): Promise<StrategyTestResult> => {
-    const criteria = convertStepToMatchCriteria(step);
+    const rawCriteria = convertStepToMatchCriteria(step);
     
-    if (!criteria) {
+    if (!rawCriteria) {
       return {
         success: false,
         output: '❌ 无法从步骤参数构建匹配条件，步骤类型不支持或缺少必要参数',
@@ -134,8 +149,54 @@ export const useSingleStepTest = () => {
       };
     }
 
+    // 清洗匹配条件：移除值为空且无 includes/excludes/regex 的字段，避免无效约束导致失败
+    const sanitizeCriteria = (c: MatchCriteriaDTO): MatchCriteriaDTO => {
+      const fields = Array.isArray(c.fields) ? [...c.fields] : [];
+      const values = { ...(c.values || {}) } as Record<string, any>;
+      const includes = { ...(c.includes || {}) } as Record<string, string[]>;
+      const excludes = { ...(c.excludes || {}) } as Record<string, string[]>;
+      const matchMode = c.matchMode ? { ...c.matchMode } as Record<string, any> : undefined;
+      const regexIncludes = c.regexIncludes ? { ...c.regexIncludes } as Record<string, string[]> : undefined;
+      const regexExcludes = c.regexExcludes ? { ...c.regexExcludes } as Record<string, string[]> : undefined;
+
+      const isEmpty = (v: any) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+      const hasArray = (arr?: any[]) => Array.isArray(arr) && arr.length > 0;
+
+      const keep: string[] = [];
+      for (const f of fields) {
+        const hasValue = !isEmpty(values[f]);
+        const hasIncludes = hasArray(includes[f]) || hasArray(regexIncludes?.[f]);
+        const hasExcludes = hasArray(excludes[f]) || hasArray(regexExcludes?.[f]);
+        if (hasValue || hasIncludes || hasExcludes) {
+          keep.push(f);
+        } else {
+          // 同步清理相关键
+          delete (values as any)[f];
+          if (includes[f] !== undefined) delete includes[f];
+          if (excludes[f] !== undefined) delete excludes[f];
+          if (matchMode && matchMode[f] !== undefined) delete matchMode[f];
+          if (regexIncludes && regexIncludes[f] !== undefined) delete regexIncludes[f];
+          if (regexExcludes && regexExcludes[f] !== undefined) delete regexExcludes[f];
+        }
+      }
+
+      const sanitized: MatchCriteriaDTO = {
+        strategy: c.strategy,
+        fields: keep,
+        values,
+        includes,
+        excludes,
+        ...(matchMode && Object.keys(matchMode).length ? { matchMode } : {}),
+        ...(regexIncludes && Object.keys(regexIncludes).length ? { regexIncludes } : {}),
+        ...(regexExcludes && Object.keys(regexExcludes).length ? { regexExcludes } : {}),
+      } as any;
+      return sanitized;
+    };
+
+    const criteria = sanitizeCriteria(rawCriteria);
+
     try {
-      console.log('🎯 使用策略匹配测试:', criteria);
+  console.log('🎯 使用策略匹配测试:', criteria);
       const matchResult = await matchElementByCriteria(deviceId, criteria);
       
       const success = matchResult.ok;
@@ -170,76 +231,63 @@ export const useSingleStepTest = () => {
     }
   }, [matchElementByCriteria, convertStepToMatchCriteria]);
 
-  // 执行单个步骤测试
+  // 执行单个步骤测试（支持 inline_loop_count 循环展开）
   const executeSingleStep = useCallback(async (
     step: SmartScriptStep,
     deviceId: string
   ): Promise<SingleStepTestResult> => {
     const stepId = step.id;
-    
+
     console.log(`🧪 开始单步测试: ${step.name} (设备: ${deviceId})`);
     console.log(`🔧 步骤类型: ${step.step_type}`);
     console.log('📋 步骤参数:', step.parameters);
-    
+
     // 标记为测试中
     setTestingSteps(prev => new Set(prev).add(stepId));
 
-    try {
-      // 🎯 优先使用策略匹配测试 SmartFindElement 步骤
-      if (step.step_type === 'SmartFindElement') {
-        console.log('🎯 使用策略匹配模式测试元素查找');
+    // 工具: 夹取范围
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+    const inlineCount = clamp(Number((step.parameters as any)?.inline_loop_count ?? 1) || 1, 1, 50);
+
+    // 单次执行封装（SmartFindElement → 策略匹配；其他 → 调后端执行）
+    const runOnce = async (): Promise<SingleStepTestResult> => {
+      // 智能元素查找：走策略匹配（不下发到后端执行动作）
+      if (isSmartFindElementType(step.step_type)) {
+        console.log('🎯 使用策略匹配模式测试元素查找（单次）');
         const strategyResult = await executeStrategyTest(step, deviceId);
-        
-        const result: SingleStepTestResult = {
+        const once: SingleStepTestResult = {
           success: strategyResult.success,
           step_id: stepId,
           step_name: step.name,
           message: strategyResult.output,
-          duration_ms: 0, // 策略匹配测试不计时
+          duration_ms: 0,
           timestamp: Date.now(),
           ui_elements: strategyResult.matchResult?.preview ? [strategyResult.matchResult.preview] : [],
           logs: [`策略匹配测试: ${strategyResult.success ? '成功' : '失败'}`],
           error_details: strategyResult.error,
           extracted_data: strategyResult.criteria ? { matchCriteria: strategyResult.criteria } : {}
         };
-
-        // 保存测试结果
-        setTestResults(prev => ({ ...prev, [stepId]: result }));
-        
-        return result;
+        return once;
       }
 
-      // 检查是否在Tauri环境中
-      const isInTauri = await isTauri();
-      console.log('🔧 Tauri环境检测', { isInTauri, windowExists: typeof window !== 'undefined' });
-      
-      if (!isInTauri) {
-        console.log('🔄 非Tauri环境，使用模拟结果');
-        // 开发环境模拟结果
-        const mockResult = createMockResult(step);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟延迟
-        
-        setTestResults(prev => ({ ...prev, [stepId]: mockResult }));
-        console.log(`✅ 模拟测试完成: ${step.name}`, mockResult);
-        message.success(`步骤测试完成: ${step.name}`);
-        return mockResult;
+      // 非 SmartFindElement → 执行动作
+      const isInTauriEnv = await isTauri();
+      if (!isInTauriEnv) {
+        console.log('🔄 非Tauri环境，使用模拟结果（单次）');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return createMockResult(step);
       }
 
-      console.log(`🚀 调用后端单步测试API...`);
-
-      // 在下发前做类型标准化映射：
-      // 1) smart_scroll -> swipe（后端不识别 smart_scroll）
-      // 2) tap 若缺少坐标则降级为中心点击（保持开发可用）
+      // 在下发前做类型标准化映射：smart_scroll→swipe，tap 坐标兜底
       const normalizedStep: SmartScriptStep = (() => {
         try {
           if (String(step.step_type) === 'smart_scroll') {
             const p: any = step.parameters || {};
             const direction = p.direction || 'down';
             const distance = Number(p.distance ?? 600);
-            const speed = Number(p.speed_ms ?? 300); // 映射到 duration
-            const screen = { width: 1080, height: 1920 }; // 兜底屏幕尺寸（后续可从设备信息获取）
+            const speed = Number(p.speed_ms ?? 300);
+            const screen = { width: 1080, height: 1920 };
 
-            // 依据方向构造 swipe 起止坐标（相对屏幕中线）
             const cx = Math.floor(screen.width / 2);
             const cy = Math.floor(screen.height / 2);
             const delta = Math.max(100, Math.min(distance, Math.floor(screen.height * 0.8)));
@@ -262,7 +310,6 @@ export const useSingleStepTest = () => {
                 end_x = cx - Math.floor(delta / 2);
                 break;
               default:
-                // 未知方向，默认向下
                 start_y = cy + Math.floor(delta / 2);
                 end_y = cy - Math.floor(delta / 2);
             }
@@ -283,7 +330,6 @@ export const useSingleStepTest = () => {
           if (String(step.step_type) === 'tap') {
             const p: any = step.parameters || {};
             if ((p.x === undefined || p.y === undefined)) {
-              // 将中心点击映射为固定中心点（兜底）
               const screen = { width: 1080, height: 1920 };
               return {
                 ...step,
@@ -305,10 +351,7 @@ export const useSingleStepTest = () => {
       // --- 边界参数标准化工具 ---
       const ensureBoundsNormalized = (paramsIn: Record<string, any>) => {
         const params = { ...(paramsIn || {}) } as Record<string, any>;
-
-        // 如果已存在标准对象，补充 boundsRect 并尽量保留原始字符串
         const parseBoundsString = (s: string) => {
-          // 支持 "[l,t][r,b]" 或 "l,t,r,b"
           const bracket = /\[(\d+)\s*,\s*(\d+)\]\[(\d+)\s*,\s*(\d+)\]/;
           const plain = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/;
           let m = s.match(bracket);
@@ -322,7 +365,6 @@ export const useSingleStepTest = () => {
           }
           return null;
         };
-
         const fromAnyObject = (obj: any) => {
           if (!obj || typeof obj !== 'object') return null;
           const pick = (k: string[]) => k.find((key) => obj[key] !== undefined);
@@ -341,7 +383,6 @@ export const useSingleStepTest = () => {
           }
           return null;
         };
-
         const fromArray = (arr: any) => {
           if (Array.isArray(arr) && arr.length === 4 && arr.every((v) => Number.isFinite(Number(v)))) {
             const [left, top, right, bottom] = arr.map((v) => Number(v));
@@ -349,7 +390,6 @@ export const useSingleStepTest = () => {
           }
           return null;
         };
-
         const candidates = [
           params.bounds,
           params.boundsRect,
@@ -358,7 +398,6 @@ export const useSingleStepTest = () => {
           params.element_locator?.selectedBounds,
           params.elementLocator?.selectedBounds,
         ];
-
         let rect: { left: number; top: number; right: number; bottom: number } | null = null;
         for (const c of candidates) {
           if (!c) continue;
@@ -371,20 +410,15 @@ export const useSingleStepTest = () => {
           }
           if (rect) break;
         }
-
-        // 写回标准结构
         if (rect) {
-          // 保留原始 bounds 字段（若是字符串则继续保留）；补充一个对象形式 boundsRect
           if (!params.bounds || typeof params.bounds !== 'string') {
             params.bounds = `[${rect.left},${rect.top}][${rect.right},${rect.bottom}]`;
           }
           params.boundsRect = rect;
         }
-
         return params;
       };
 
-      // 规范化下发给后端的 step，补齐后端要求的字段（如 order）
       const payloadStep = {
         id: normalizedStep.id,
         step_type: normalizedStep.step_type,
@@ -393,7 +427,6 @@ export const useSingleStepTest = () => {
         parameters: ensureBoundsNormalized(normalizedStep.parameters ?? {}),
         enabled: true,
         order: typeof (normalizedStep as any).order === 'number' ? (normalizedStep as any).order : 0,
-        // 透传可选的扩展字段（若存在）
         find_condition: (normalizedStep as any).find_condition,
         verification: (normalizedStep as any).verification,
         retry_config: (normalizedStep as any).retry_config,
@@ -403,30 +436,92 @@ export const useSingleStepTest = () => {
       };
 
       console.log(`📋 传递参数:`, { deviceId, stepType: payloadStep.step_type, stepName: payloadStep.name, order: payloadStep.order });
-      // 调用Tauri后端单步测试API  
       const result = await invoke('execute_single_step_test', {
-        deviceId: deviceId,  // camelCase 兼容当前后端绑定
+        deviceId: deviceId,
         step: payloadStep,
       }) as SingleStepTestResult;
-
       console.log(`📊 后端测试结果:`, result);
+      return result;
+    };
 
-      // 保存测试结果
-      setTestResults(prev => ({ ...prev, [stepId]: result }));
+    try {
+      // 说明：单步测试会尊重 parameters.inline_loop_count，并在 1-50 范围内顺序执行；
+      // 失败将短路（后续不再继续），并在结果中提供 loopSummary 与 iterations 聚合信息。
+      // 若 inline_loop_count > 1，则按次数顺序执行并聚合结果
+      if (inlineCount > 1) {
+        console.log(`🔁 启用单步循环测试: ${inlineCount} 次`);
+        const iterations: Array<{ index: number; success: boolean; duration_ms: number; timestamp: number; message: string }> = [];
+        let successCount = 0;
+        let failureCount = 0;
+        let totalDuration = 0;
+        let lastResult: SingleStepTestResult | null = null;
+        // 智能元素查找用于“稳定性验证”，默认不短路；动作步骤为“可执行验证”，默认失败短路
+        const shouldShortCircuit = !isSmartFindElementType(step.step_type);
+        console.log(`🧭 循环短路策略: ${shouldShortCircuit ? '失败即短路' : '不短路（查找类）'}`);
 
-      if (result.success) {
-        console.log(`✅ 单步测试成功: ${step.name} (${result.duration_ms}ms)`);
-        message.success(`✅ ${step.name} - 测试成功 (${result.duration_ms}ms)`);
-      } else {
-        console.log(`❌ 单步测试失败: ${step.name}`, result.error_details);
-        message.error(`❌ ${step.name} - 测试失败: ${result.message}`);
+        for (let i = 1; i <= inlineCount; i++) {
+          console.log(`🔁 单步循环测试: 第 ${i}/${inlineCount} 次`);
+          const r = await runOnce();
+          iterations.push({ index: i, success: r.success, duration_ms: r.duration_ms, timestamp: r.timestamp, message: r.message });
+          if (r.success) successCount++; else failureCount++;
+          totalDuration += (r.duration_ms || 0);
+          lastResult = r;
+          if (!r.success && shouldShortCircuit) {
+            console.warn(`⛔ 循环第 ${i} 次失败，提前结束`);
+            break; // 动作步骤：失败即短路，避免无意义重复
+          }
+        }
+
+        const aggregated: SingleStepTestResult = {
+          success: failureCount === 0,
+          step_id: stepId,
+          step_name: step.name,
+          message: `循环测试 ${inlineCount} 次，成功 ${successCount}，失败 ${failureCount}。` + (lastResult ? ` 最后一次: ${lastResult.message}` : ''),
+          duration_ms: totalDuration,
+          timestamp: Date.now(),
+          page_state: lastResult?.page_state,
+          ui_elements: lastResult?.ui_elements || [],
+          logs: [
+            `请求次数: ${inlineCount}`,
+            `执行次数: ${successCount + failureCount}`,
+            `成功: ${successCount}, 失败: ${failureCount}`,
+          ],
+          error_details: failureCount > 0 ? (lastResult?.error_details || '循环中出现失败') : undefined,
+          extracted_data: {
+            loopSummary: {
+              requested: inlineCount,
+              executed: successCount + failureCount,
+              successCount,
+              failureCount,
+              totalDuration,
+            },
+            iterations,
+          },
+        };
+
+        setTestResults(prev => ({ ...prev, [stepId]: aggregated }));
+        if (aggregated.success) {
+          message.success(`✅ ${step.name} - 循环测试通过 (${successCount}/${inlineCount})`);
+        } else {
+          message.error(`❌ ${step.name} - 循环测试失败 (${failureCount}/${inlineCount})`);
+        }
+        return aggregated;
       }
 
-      return result;
+      // 单次执行
+      const single = await runOnce();
+      setTestResults(prev => ({ ...prev, [stepId]: single }));
+      if (single.success) {
+        console.log(`✅ 单步测试成功: ${step.name} (${single.duration_ms}ms)`);
+        message.success(`✅ ${step.name} - 测试成功 (${single.duration_ms}ms)`);
+      } else {
+        console.log(`❌ 单步测试失败: ${step.name}`, single.error_details);
+        message.error(`❌ ${step.name} - 测试失败: ${single.message}`);
+      }
+      return single;
     } catch (error) {
       const errorMessage = `测试执行失败: ${error}`;
       console.error(`❌ 单步测试异常: ${step.name}`, error);
-      
       const failureResult: SingleStepTestResult = {
         success: false,
         step_id: step.id,
@@ -439,20 +534,17 @@ export const useSingleStepTest = () => {
         extracted_data: {},
         error_details: String(error)
       };
-
       setTestResults(prev => ({ ...prev, [stepId]: failureResult }));
       message.error(`❌ ${step.name} - ${errorMessage}`);
-      
       return failureResult;
     } finally {
-      // 移除测试中标记
       setTestingSteps(prev => {
         const newSet = new Set(prev);
         newSet.delete(stepId);
         return newSet;
       });
     }
-  }, []);
+  }, [executeStrategyTest]);
 
   // 创建模拟测试结果
   const createMockResult = (step: SmartScriptStep): SingleStepTestResult => {

@@ -2,9 +2,6 @@
 
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
-import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { ScreenActionDropdownButton } from './step-card';
-import { SystemKeyDropdownButton } from './step-card/system-actions/SystemKeyDropdownButton';
 import { ActionsToolbar } from './universal-ui/script-builder/components/ActionsToolbar/ActionsToolbar';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -19,6 +16,8 @@ export interface DraggableStepsContainerProps {
   steps: SmartScriptStep[];
   /** 更新步骤列表回调 */
   onStepsChange: (steps: SmartScriptStep[]) => void;
+  /** 更新步骤元信息（名称/描述） */
+  onUpdateStepMeta?: (stepId: string, meta: { name?: string; description?: string }) => void;
   /** 当前设备ID */
   currentDeviceId?: string;
   /** 设备列表 */
@@ -54,6 +53,7 @@ export interface DraggableStepsContainerProps {
 export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = ({
   steps,
   onStepsChange,
+  onUpdateStepMeta,
   currentDeviceId,
   devices,
   onEditStep,
@@ -127,6 +127,7 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
                 StepTestButton={StepTestButton}
                 onUpdateStepParameters={onUpdateStepParameters}
                 onBatchMatch={onBatchMatch}
+                onUpdateStepMeta={onUpdateStepMeta}
               />
             ))}
             

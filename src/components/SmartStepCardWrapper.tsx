@@ -17,10 +17,12 @@ interface SmartStepCardWrapperProps extends Omit<DraggableCardProps, "step"> {
   onDelete: (id: string) => void;
   onToggle: (id: string) => void;
   onEditStepParams?: (step: any) => void;
+  // 更新元信息（名称/描述）
+  onUpdateStepMeta?: (stepId: string, meta: { name?: string; description?: string }) => void;
 }
 
 export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (props) => {
-  const { step, onOpenPageAnalyzer, onEdit, onDelete, onToggle, onEditStepParams, ...rest } = props;
+  const { step, onOpenPageAnalyzer, onEdit, onDelete, onToggle, onEditStepParams, onUpdateStepMeta, ...rest } = props;
 
   // 回退到原始可拖拽卡片（保持旧外观与操作）
   const draggableStep = {
@@ -39,6 +41,8 @@ export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (props)
       onEdit={onEdit}
       onDelete={onDelete}
       onToggle={onToggle}
+      onOpenPageAnalyzer={onOpenPageAnalyzer}
+      onUpdateStepMeta={onUpdateStepMeta}
     />
   );
 };

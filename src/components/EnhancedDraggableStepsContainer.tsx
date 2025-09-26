@@ -6,6 +6,7 @@ import { ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { DraggableStepsContainer } from './DraggableStepsContainer';
 import type { ExtendedSmartScriptStep, LoopConfig } from '../types/loopScript';
 import { useLoopPairing } from './universal-ui/script-builder/hooks/useLoopPairing';
+import { buildAutoName } from './universal-ui/script-builder/utils/stepNaming';
 
 export interface EnhancedDraggableStepsContainerProps {
   /** 扩展步骤列表 */
@@ -48,6 +49,8 @@ export interface EnhancedDraggableStepsContainerProps {
   onCreateScreenInteraction?: (template: any | any[]) => void;
   /** 创建系统按键步骤回调 */
   onCreateSystemAction?: (template: any) => void;
+  /** 更新步骤元信息（名称/描述） */
+  onUpdateStepMeta?: (stepId: string, meta: { name?: string; description?: string }) => void;
 }
 
 const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerProps> = ({
@@ -71,6 +74,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   onBatchMatch,
   onCreateScreenInteraction,
   onCreateSystemAction,
+  onUpdateStepMeta,
 }) => {
   
   // 暂时使用基础的DraggableStepsContainer，后续可以扩展
@@ -89,8 +93,23 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
 
   // 处理步骤参数更新
   const handleUpdateStepParameters = (stepId: string, parameters: any) => {
-    const next = syncLoopParameters(stepId, parameters, steps as any);
-    onStepsChange(next as any);
+    // 判断是否使用自动命名：若当前名称等于基于旧参数计算的自动名，则更新后同步重算
+    const prevStep = (steps as any as ExtendedSmartScriptStep[]).find(s => s.id === stepId);
+    const wasAutoNamed = prevStep ? (prevStep.name || '') === buildAutoName(prevStep as any) : false;
+
+    const next = syncLoopParameters(stepId, parameters, steps as any) as any as ExtendedSmartScriptStep[];
+
+    let updated = next;
+    if (wasAutoNamed) {
+      updated = next.map(s => {
+        if (s.id === stepId) {
+          const auto = buildAutoName(s as any);
+          return { ...s, name: auto } as ExtendedSmartScriptStep;
+        }
+        return s;
+      });
+    }
+    onStepsChange(updated as any);
   };
 
   return (
@@ -123,6 +142,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
       <DraggableStepsContainer
         steps={steps}
         onStepsChange={handleStepsChange}
+        onUpdateStepMeta={onUpdateStepMeta}
         currentDeviceId={currentDeviceId}
         devices={devices}
         onEditStep={onEditStep}

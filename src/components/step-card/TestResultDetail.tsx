@@ -119,6 +119,44 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
           </div>
         )}
 
+        {/* 循环汇总（若存在） */}
+        {result.extracted_data?.loopSummary && (
+          <div>
+            <Text type="secondary" className="text-xs">循环汇总:</Text>
+            <div className="text-xs mt-1">
+              <div>
+                <span className="font-medium">请求次数:</span> {result.extracted_data.loopSummary.requested}
+              </div>
+              <div>
+                <span className="font-medium">执行次数:</span> {result.extracted_data.loopSummary.executed}
+              </div>
+              <div>
+                <span className="font-medium">成功:</span> {result.extracted_data.loopSummary.successCount}
+              </div>
+              <div>
+                <span className="font-medium">失败:</span> {result.extracted_data.loopSummary.failureCount}
+              </div>
+              <div>
+                <span className="font-medium">总耗时:</span> {result.extracted_data.loopSummary.totalDuration}ms
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 循环每次执行明细（若存在） */}
+        {Array.isArray(result.extracted_data?.iterations) && result.extracted_data.iterations.length > 0 && (
+          <div>
+            <Text type="secondary" className="text-xs">循环明细:</Text>
+            <div className="max-h-32 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-2 rounded text-xs">
+              {result.extracted_data.iterations.map((it: any) => (
+                <div key={it.index} className="text-gray-600 dark:text-gray-300">
+                  第 {it.index} 次 - {it.success ? '成功' : '失败'} - {it.duration_ms}ms
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 错误详情 */}
         {!result.success && result.error_details && (
           <Alert

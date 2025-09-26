@@ -139,13 +139,27 @@ export function createHandleExecuteScript(ctx: Ctx) {
     };
 
     const normalizedEnabledSteps = enabledSteps.map(normalizeStepForBackend);
+    // 展开内置循环（inline_loop_count）：将单个步骤按次数复制，减少显式循环卡片
+    const expandedSteps: ExtendedSmartScriptStep[] = [];
+    for (const s of normalizedEnabledSteps) {
+      const countRaw = (s.parameters as any)?.inline_loop_count;
+      const count = Math.max(1, Math.min(50, Number(countRaw ?? 1)));
+      if (count <= 1) {
+        expandedSteps.push(s);
+      } else {
+        for (let i = 0; i < count; i++) {
+          // 浅拷贝，避免共享引用；保持 id 不变以便日志聚合（如需区分可追加后缀）
+          expandedSteps.push({ ...s });
+        }
+      }
+    }
     if (enabledSteps.length === 0) {
       message.warning("没有启用的步骤可执行");
       return;
     }
 
-    console.log("📋 启用的步骤数量:", enabledSteps.length);
-    console.log("📝 启用的步骤详情:", enabledSteps);
+  console.log("📋 启用的步骤数量:", enabledSteps.length, "→ 展开后:", expandedSteps.length);
+  console.log("📝 展开后的步骤详情:", expandedSteps);
 
     // 获取当前选中的设备
     const devices = ctx.getDevices();
@@ -216,13 +230,13 @@ export function createHandleExecuteScript(ctx: Ctx) {
         console.log("📤 发送Tauri调用:", {
           command: "execute_smart_automation_script",
           deviceId: selectedDevice,
-          stepsCount: enabledSteps.length,
+          stepsCount: expandedSteps.length,
           config: backendConfig,
         });
 
         const result = (await invoke("execute_smart_automation_script", {
           deviceId: selectedDevice,
-          steps: normalizedEnabledSteps,
+          steps: expandedSteps,
           config: backendConfig,
         })) as SmartExecutionResult;
 
@@ -244,12 +258,12 @@ export function createHandleExecuteScript(ctx: Ctx) {
 
         const mockResult: SmartExecutionResult = {
           success: true,
-          total_steps: enabledSteps.length,
-          executed_steps: enabledSteps.length,
+          total_steps: expandedSteps.length,
+          executed_steps: expandedSteps.length,
           failed_steps: 0,
           skipped_steps: 0,
           duration_ms: 2500,
-          logs: [`模拟执行 ${enabledSteps.length} 个步骤`, "所有步骤模拟成功"],
+          logs: [`模拟执行 ${expandedSteps.length} 个步骤`, "所有步骤模拟成功"],
           final_page_state: "Home",
           extracted_data: {},
           message: "使用模拟执行（Tauri API不可用）",

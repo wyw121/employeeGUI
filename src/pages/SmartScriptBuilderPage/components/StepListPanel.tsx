@@ -47,6 +47,11 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
     );
   };
 
+  // 更新步骤元信息（名称/描述）
+  const handleUpdateStepMeta = (stepId: string, meta: { name?: string; description?: string }) => {
+    setSteps(prev => prev.map(s => (s.id === stepId ? { ...s, ...meta } : s)));
+  };
+
     // 处理批量匹配操作
   const handleBatchMatch = (stepId: string) => {
     setSteps((prev) =>
@@ -242,33 +247,7 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
     }
   };
 
-  const onCreateTapAction = (tpl: any | any[]) => {
-    const baseOrder = steps.length;
-    const now = Date.now();
-    const ensureStep = (s: any, idx: number): ExtendedSmartScriptStep => {
-      const step = { ...(s || {}) } as ExtendedSmartScriptStep;
-      if (!step.id) step.id = `step_${now + idx}_tap`;
-      if (!step.step_type) step.step_type = 'tap';
-      if (!step.parameters) step.parameters = { position: 'center' } as any;
-      step.order = baseOrder + idx + 1;
-      return step;
-    };
-    const list = Array.isArray(tpl)
-      ? tpl.map(ensureStep)
-      : [ensureStep(tpl, 0)];
-    setSteps((prev) => [...prev, ...list]);
-    if (list.length === 1) {
-      const p: any = list[0].parameters || {};
-      const label = p.duration_ms ? `长按` : `轻点`;
-      const pos =
-        p.position === 'absolute' && p.x !== undefined
-          ? `(${p.x}, ${p.y})`
-          : '中心';
-      message.success(`已添加屏幕交互步骤：${label} ${pos}`);
-    } else {
-      message.success(`已添加轻点步骤 ${list.length} 个`);
-    }
-  };
+  // 轻点快捷添加已移入统一弹窗入口（SMART_ACTION_CONFIGS），不再保留单独入口
 
   const onCreateSystemAction = (tpl: any) => {
     const baseOrder = steps.length;
@@ -314,6 +293,7 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
         onBatchMatch={handleBatchMatch}
         onCreateScreenInteraction={onCreateScreenInteraction}
         onCreateSystemAction={onCreateSystemAction}
+        onUpdateStepMeta={handleUpdateStepMeta}
       />
     </div>
   );

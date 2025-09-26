@@ -1,0 +1,58 @@
+/* 循环卡片专用主题（模块化CSS，不影响非循环卡） */
+
+/* 卡片外观：强蓝色阴影 + 平滑过渡 */
+.loop-card {
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.25s ease, transform 0.04s linear;
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.2), 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+
+.loop-card-dragging {
+  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.6), 0 0 0 2px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+
+/* 标题栏左侧拖拽手柄的背景块 */
+.loop-header-handle {
+  padding: 8px;
+  background-color: rgba(37, 99, 235, 0.3);
+  border-radius: 8px;
+}
+
+/* 标题小圆形图标底色 */
+.loop-icon-pill {
+  padding: 6px;
+  background-color: #1d4ed8; /* 蓝700 */
+  color: #fff;
+  border-radius: 9999px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* 顶部渐变细装饰条 */
+.loop-top-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #60a5fa, #3b82f6, #2563eb);
+}
+
+/* 左侧竖条，增强层级感与辨识度 */
+.loop-left-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  background: linear-gradient(180deg, #60a5fa, #3b82f6, #1d4ed8);
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+/* 标题中的“类型标签”强化可读性（深底浅字） */
+.loop-title-tag {
+  background-color: #1d4ed8 !important; /* 蓝700 */
+  color: #e0f2fe !important;            /* 天蓝100 */
+  border-color: #60a5fa !important;     /* 蓝400 */
+}

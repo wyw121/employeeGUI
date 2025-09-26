@@ -1,13 +1,11 @@
 /**
  * 智能步骤卡片包装器
- * - 当步骤包含增强信息时，使用 EnhancedStepCard（带XML上下文、元素摘要等）
- * - 否则回退到原始 DraggableStepCard
+ * - 统一使用 DraggableStepCard 作为唯一样式实现（移除增强卡）
  */
 
 import React from "react";
 import { DraggableStepCard } from "./DraggableStepCard";
 import { SmartScriptStep } from "../types/smartScript"; // 使用统一的类型定义
-import { EnhancedStepCard } from "../modules/enhanced-step-card";
 
 type DraggableCardProps = React.ComponentProps<typeof DraggableStepCard>;
 
@@ -23,36 +21,6 @@ interface SmartStepCardWrapperProps extends Omit<DraggableCardProps, "step"> {
 
 export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (props) => {
   const { step, onOpenPageAnalyzer, onEdit, onDelete, onToggle, onEditStepParams, ...rest } = props;
-
-  // 兼容多种格式的增强信息检测
-  const hasEnhancedInfo = !!(
-    step.parameters?.isEnhanced ||
-    step.parameters?.xmlCacheId ||
-    step.parameters?.xmlContent ||
-    step.parameters?.xmlSnapshot ||
-    step.parameters?.elementBinding ||
-    step.parameters?.enhancedElement ||
-    step.parameters?.elementSummary
-  );
-
-  if (hasEnhancedInfo) {
-    // 使用增强样式卡片（自带拖拽手柄），仅透传必要操作
-    const handleEdit = () => {
-      if (onEditStepParams) return onEditStepParams(step as any);
-      return onEdit(step as any);
-    };
-    const handleDelete = () => onDelete(step.id);
-    const isDragging = (rest as any)?.isDragging as boolean | undefined;
-
-    return (
-      <EnhancedStepCard
-        step={step}
-        onEdit={handleEdit!}
-        onDelete={handleDelete}
-        isDragging={isDragging}
-      />
-    );
-  }
 
   // 回退到原始可拖拽卡片（保持旧外观与操作）
   const draggableStep = {

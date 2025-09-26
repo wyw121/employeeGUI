@@ -1,17 +1,17 @@
 import React from 'react';
-import { Modal, Switch, InputNumber, Divider, Typography } from 'antd';
+import { Modal, Divider, Switch, InputNumber, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
-interface LoopConfigModalProps {
+export interface LoopConfigModalProps {
   open: boolean;
-  stepType?: string;
+  stepType: string;
   loopCount: number;
   isInfiniteLoop: boolean;
-  onLoopCountChange: (value: number) => void;
-  onIsInfiniteLoopChange: (value: boolean) => void;
-  onSave: () => void;
+  onChangeLoopCount: (val: number) => void;
+  onChangeInfinite: (val: boolean) => void;
+  onOk: () => void;
   onCancel: () => void;
 }
 
@@ -20,9 +20,9 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
   stepType,
   loopCount,
   isInfiniteLoop,
-  onLoopCountChange,
-  onIsInfiniteLoopChange,
-  onSave,
+  onChangeLoopCount,
+  onChangeInfinite,
+  onOk,
   onCancel,
 }) => {
   return (
@@ -40,14 +40,13 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
         </div>
       }
       open={open}
-      onOk={onSave}
+      onOk={onOk}
       onCancel={onCancel}
       okText="保存"
       cancelText="取消"
       width={400}
     >
       <div style={{ padding: '20px 0' }}>
-        {/* 无限循环开关 */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -57,10 +56,8 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
             <Switch
               checked={isInfiniteLoop}
               onChange={(checked) => {
-                onIsInfiniteLoopChange(checked);
-                if (checked) {
-                  onLoopCountChange(3);
-                }
+                onChangeInfinite(checked);
+                if (checked) onChangeLoopCount(3);
               }}
               checkedChildren="开启"
               unCheckedChildren="关闭"
@@ -68,16 +65,13 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
           </div>
           {isInfiniteLoop && (
             <div style={{ padding: 12, backgroundColor: '#fff7ed', borderRadius: 6, border: '1px solid #fed7aa' }}>
-              <Text type="warning" style={{ fontSize: 12 }}>
-                ⚠️ 警告：无限循环将持续执行直到手动停止，请谨慎使用！
-              </Text>
+              <Text type="warning" style={{ fontSize: 12 }}>⚠️ 警告：无限循环将持续执行直到手动停止，请谨慎使用！</Text>
             </div>
           )}
         </div>
 
         <Divider />
 
-        {/* 循环次数设置 */}
         <div style={{ marginBottom: 16 }}>
           <Text strong>循环执行次数：</Text>
         </div>
@@ -86,7 +80,7 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
             min={1}
             max={100}
             value={loopCount}
-            onChange={(value) => onLoopCountChange(value || 1)}
+            onChange={(value) => onChangeLoopCount(value || 1)}
             style={{ width: 120 }}
             addonAfter="次"
             disabled={isInfiniteLoop}
@@ -98,8 +92,7 @@ export const LoopConfigModal: React.FC<LoopConfigModalProps> = ({
 
         <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f0f9ff', borderRadius: 6, border: '1px solid #bae6fd' }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            💡 提示：
-            {isInfiniteLoop
+            💡 提示：{isInfiniteLoop
               ? '无限循环模式下，循环体内的步骤将不断重复执行，直到手动停止或出现错误。'
               : stepType === 'loop_start'
               ? '循环体内的所有步骤将重复执行指定次数，类似多次点击"执行智能脚本"按钮。'

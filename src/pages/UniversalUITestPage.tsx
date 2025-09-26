@@ -7,7 +7,8 @@ import React, { useState } from 'react';
 import { Button, Card, Space, Typography, Divider, message } from 'antd';
 import { SearchOutlined, BugOutlined } from '@ant-design/icons';
 import { UniversalPageFinderModal } from '../components/universal-ui/UniversalPageFinderModal';
-import { EnhancedStepCard } from '../modules/enhanced-step-card/EnhancedStepCard';
+// 统一卡片渲染已采用 DraggableStepCard，通过 SmartStepCardWrapper 进行适配
+import { SmartStepCardWrapper } from '../components/SmartStepCardWrapper';
 import { XmlInspectorModal } from '../modules/xml-inspector/XmlInspectorModal';
 import { SmartScriptStep } from '../types/smartScript';
 
@@ -90,7 +91,6 @@ export const UniversalUITestPage: React.FC = () => {
           <li>🔍 XML检查器完整展示原始数据</li>
         </ul>
 
-        <Divider />
 
         <Space direction="vertical" style={{ width: '100%' }}>
           <Title level={3}>测试操作</Title>
@@ -113,23 +113,20 @@ export const UniversalUITestPage: React.FC = () => {
           </Space>
 
           <Divider />
-
-          <Title level={3}>生成的步骤卡片</Title>
-          {testSteps.length === 0 ? (
-            <Text type="secondary">暂无步骤，请通过页面查找器选择元素</Text>
-          ) : (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {testSteps.map((step, index) => (
-                <EnhancedStepCard
-                  key={step.id}
-                  step={step}
-                  onEdit={() => console.log('编辑步骤', step)}
-                  onDelete={() => setTestSteps(prev => prev.filter(s => s.id !== step.id))}
-                  onTest={() => console.log('测试步骤', step)}
-                />
-              ))}
-            </Space>
-          )}
+          <Title level={4}>步骤列表</Title>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {testSteps.map((step, index) => (
+              <SmartStepCardWrapper
+                key={step.id}
+                step={step}
+                index={index}
+                devices={[]}
+                onEdit={(s) => console.log('编辑步骤', s)}
+                onDelete={(id) => setTestSteps(prev => prev.filter(ss => ss.id !== id))}
+                onToggle={(id) => setTestSteps(prev => prev.map(ss => ss.id === id ? { ...ss, enabled: !ss.enabled } : ss))}
+              />
+            ))}
+          </Space>
         </Space>
       </Card>
 

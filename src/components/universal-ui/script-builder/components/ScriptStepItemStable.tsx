@@ -1,35 +1,27 @@
-// StepItem Ultra Minimal Version (temporary) - remove all dynamic opacity / className logic to eliminate stale type errors
+// Stable renamed version to flush stale TS diagnostics of old StepItem
 import React from 'react';
 import { Card } from 'antd';
 
-export interface StepItemData {
+export interface ScriptStepItemStableData {
   id: string;
   name: string;
   step_type: string;
   description: string;
-  parameters: any; // TODO: 后续细化具体参数类型
+  parameters: any;
   enabled: boolean;
   parent_loop_id?: string;
 }
 
-export interface StepItemProps {
-  step: StepItemData;
+export interface ScriptStepItemStableProps {
+  step: ScriptStepItemStableData;
   index: number;
   draggingStyle?: React.CSSProperties;
   onToggle: (id: string) => void;
-  // 以下为 DraggableStepCard 目前传入的扩展属性（均设为可选，暂不完全实现交互）
   currentDeviceId?: string;
-  devices?: any[];
-  onEdit?: (step: StepItemData) => void;
-  onDelete?: (id: string) => void;
-  onBatchMatch?: (id: string) => void;
-  onUpdateStepParameters?: (id: string, nextParams: any) => void;
-  StepTestButton?: React.ComponentType<{ step: StepItemData; deviceId?: string; disabled?: boolean }>;
-  ENABLE_BATCH_MATCH?: boolean;
-  onEditStepParams?: (step: StepItemData) => void;
+  StepTestButton?: React.ComponentType<{ step: ScriptStepItemStableData; deviceId?: string; disabled?: boolean }>;
 }
 
-export const StepItem: React.FC<StepItemProps> = ({ step, draggingStyle, onToggle, StepTestButton, currentDeviceId }) => {
+export const ScriptStepItemStable: React.FC<ScriptStepItemStableProps> = ({ step, draggingStyle, onToggle, StepTestButton, currentDeviceId }) => {
   const disabled = !step.enabled;
   return (
     <div style={draggingStyle}>
@@ -72,6 +64,4 @@ export const StepItem: React.FC<StepItemProps> = ({ step, draggingStyle, onToggl
   );
 };
 
-export default StepItem;
-
-/* NOTE: Ultra minimal transitional version. Will be enhanced stepwise after type baseline stabilizes. */
+export default ScriptStepItemStable;

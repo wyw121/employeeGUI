@@ -13,8 +13,8 @@ import { ElementList } from "./components/ElementList";
 import type { VisualElementCategory } from "../../types/";
 import type { VisualUIElement } from "../../types";
 import { convertVisualToUIElement } from "./utils/elementTransform";
-import { useParsedVisualElements } from './hooks/useParsedVisualElements';
-import { useFilteredVisualElements } from './hooks/useFilteredVisualElements';
+import { useParsedVisualElements } from ".";
+import { useFilteredVisualElements } from "./hooks/useFilteredVisualElements";
 import {
   useElementSelectionManager,
   ElementSelectionPopover,
@@ -53,7 +53,14 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
 
   // 将所有VisualUIElement转换为UIElement用于选择管理器
   const convertedElements = useMemo(
-    () => elements.map(el => convertVisualToUIElement(el, selectedElementId) as unknown as UIElement),
+    () =>
+      elements.map(
+        (el) =>
+          convertVisualToUIElement(
+            el,
+            selectedElementId
+          ) as unknown as UIElement
+      ),
     [elements, selectedElementId]
   );
 
@@ -81,10 +88,10 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
   // 🔍 添加调试：监听pendingSelection变化
   useEffect(() => {
     const isVisible = !!selectionManager.pendingSelection;
-    console.log('🎯 VisualElementView: pendingSelection 状态变化 =', {
+    console.log("🎯 VisualElementView: pendingSelection 状态变化 =", {
       visible: isVisible,
       hasSelection: !!selectionManager.pendingSelection,
-      elementId: selectionManager.pendingSelection?.element?.id
+      elementId: selectionManager.pendingSelection?.element?.id,
     });
   }, [selectionManager.pendingSelection]);
 
@@ -122,7 +129,10 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
 
   // analyzeAppAndPageInfo 已抽离 utils/appAnalysis.ts
 
-  const { parsedElements, categories } = useParsedVisualElements(xmlContent, elements);
+  const { parsedElements, categories } = useParsedVisualElements(
+    xmlContent,
+    elements
+  );
 
   // 使用解析出的元素或传入的元素
   const finalElements = parsedElements.length > 0 ? parsedElements : elements;
@@ -207,7 +217,7 @@ export const VisualElementView: React.FC<VisualElementViewProps> = ({
           categories={categories}
           hideCompletely={hideCompletely}
           xmlContent={xmlContent}
-            deviceFramePadding={DEVICE_FRAME_PADDING}
+          deviceFramePadding={DEVICE_FRAME_PADDING}
           selectionManager={selectionManager}
           selectedElementId={selectedElementId}
         />

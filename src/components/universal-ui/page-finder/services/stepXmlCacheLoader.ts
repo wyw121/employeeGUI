@@ -3,7 +3,7 @@ import UniversalUIAPI from '../../../../api/universalUIAPI';
 import { buildSnapshotIfPossible } from '../../../../modules/self-contained/XmlSnapshotAutoBuilder';
 import { parseXML } from '../../xml-parser';
 import { PageFinderLoadContext } from './loadContext';
-import { XmlCacheManager } from '../../../../modules/xml-cache/XmlCacheManager';
+import XmlCacheManager from '../../../../services/XmlCacheManager';
 
 export async function handleLoadFromStepXmlCache(
   xmlCacheId: string,

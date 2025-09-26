@@ -5,6 +5,7 @@ use std::sync::{Mutex, Arc};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use tracing::{info, warn, error};
+use tauri::Emitter;
 
 #[derive(Default)]
 pub struct ScrcpyState {
@@ -256,26 +257,6 @@ pub fn cleanup_all() {
 }
 
 #[tauri::command]
-pub async fn start_device_mirror(device_id: String, options: Option<serde_json::Value>) -> Result<String, String> {
-    // 兼容：如果 options 缺失，使用默认选项
-    let opts: ScrcpyOptions = match options {
-        Some(v) => serde_json::from_value(v).map_err(|e| format!("invalid options: {}", e))?,
-        None => ScrcpyOptions::default(),
-    };
-    start_scrcpy(&device_id, opts).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn stop_device_mirror(device_id: String) -> Result<(), String> {
-    stop_scrcpy(&device_id).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn stop_device_mirror_session(device_id: String, session_name: String) -> Result<(), String> {
-    stop_scrcpy_session(&device_id, &session_name).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn list_device_mirror_sessions(device_id: String) -> Result<Vec<String>, String> {
     let state = SCRCPY_STATE.lock().unwrap();
     if let Some(map) = state.children.get(&device_id) {
@@ -307,7 +288,7 @@ pub async fn start_device_mirror(app: tauri::AppHandle, device_id: String, optio
     match start_device_mirror_inner(&app, &device_id, options).await {
         Ok(sess) => Ok(sess),
         Err(e) => {
-            let _ = app.emit_all(
+            let _ = app.emit(
                 "scrcpy://session-error",
                 serde_json::json!({"deviceId": device_id, "error": e.to_string()}),
             );
@@ -317,63 +298,69 @@ pub async fn start_device_mirror(app: tauri::AppHandle, device_id: String, optio
 }
 
 async fn start_device_mirror_inner(app: &tauri::AppHandle, device_id: &str, options: Option<ScrcpyOptions>) -> Result<String> {
-    // This function should contain the original body of start_device_mirror
-    // Find original implementation below and adapt: spawn process, manage map, return session name
-    // For patch brevity, we call existing helper if present, else inline (assume existing function named start_device_mirror existed)
-    // BEGIN original body (simplified placeholder invoking existing CLI build):
-    let session_name = options.as_ref().and_then(|o| o.session_name.clone()).unwrap_or_else(|| "default".to_string());
-    // ensure availability
+    // 规范化选项与会话名
+    let opts = options.unwrap_or_default();
+    let session_name = opts
+        .session_name
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+
+    // 确认 scrcpy 可用
     ensure_scrcpy_available()?;
-    // build command
+
+    // 构建命令参数并启动进程
     let exe = scrcpy_path();
-    let mut cmd = Command::new(&exe);
-    cmd.arg("--serial").arg(device_id);
-    if let Some(opts) = options.clone() {
-        if let Some(max) = opts.resolution.as_ref() {
-            cmd.arg("--max-size").arg(format!("{}", max));
-        }
-        if let Some(br) = opts.bitrate.as_ref() {
-            cmd.arg("--bit-rate").arg(br);
-        }
-        if let Some(fps) = opts.max_fps.as_ref() { cmd.arg("--max-fps").arg(format!("{}", fps)); }
-        if let Some(title) = opts.window_title.as_ref() { cmd.arg("--window-title").arg(title); }
-        if opts.stay_awake.unwrap_or(false) { cmd.arg("--stay-awake"); }
-        if opts.turn_screen_off.unwrap_or(false) { cmd.arg("--turn-screen-off"); }
-        if opts.always_on_top.unwrap_or(false) { cmd.arg("--always-on-top"); }
-        if opts.borderless.unwrap_or(false) { cmd.arg("--window-borderless"); }
-    }
-    // spawn
-    let child = cmd.spawn().map_err(|e| anyhow!("failed to spawn scrcpy: {}", e))?;
+    let args = build_args(device_id, &opts);
+    info!("launching scrcpy: {} {:?} (device={}, session={})", exe, args, device_id, session_name);
+
+    let child = Command::new(&exe)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| anyhow!("failed to start scrcpy: {}", e))?;
+
+    // 记录会话，若同名会话存在则替换
     {
-        let mut map = SESSIONS.lock().unwrap();
-        let entry = map.entry(device_id.to_string()).or_default();
+        let mut state = SCRCPY_STATE.lock().unwrap();
+        let entry = state.children.entry(device_id.to_string()).or_insert_with(HashMap::new);
+        if let Some(mut old) = entry.remove(&session_name) {
+            let _ = old.kill();
+            let _ = old.wait();
+        }
         entry.insert(session_name.clone(), child);
     }
-    // emit started
-    let _ = app.emit_all(
+
+    // 事件：会话已启动
+    let _ = app.emit(
         "scrcpy://session-started",
         serde_json::json!({"deviceId": device_id, "sessionName": session_name}),
     );
-    Ok("started".to_string())
+    Ok(session_name)
 }
 
 #[tauri::command]
 pub async fn stop_device_mirror(app: tauri::AppHandle, device_id: String) -> Result<(), String> {
-    let mut stopped: Vec<String> = vec![];
-    {
-        let mut map = SESSIONS.lock().unwrap();
-        if let Some(sessions) = map.get_mut(&device_id) {
-            let names: Vec<String> = sessions.keys().cloned().collect();
-            for name in names {
-                if let Some(mut child) = sessions.remove(&name) {
-                    let _ = child.kill();
-                    stopped.push(name);
+    let stopped_names: Vec<String> = {
+        let mut state = SCRCPY_STATE.lock().unwrap();
+        if let Some(mut sessions) = state.children.remove(&device_id) {
+            let mut names: Vec<String> = Vec::with_capacity(sessions.len());
+            for (name, mut child) in sessions.drain() {
+                match child.kill() {
+                    Ok(_) => { let _ = child.wait(); info!("scrcpy stopped: device={}, session={}", device_id, name); }
+                    Err(e) => { error!("failed to kill scrcpy (device={}, session={}): {}", device_id, name, e); }
                 }
+                names.push(name);
             }
+            names
+        } else {
+            Vec::new()
         }
-    }
-    for name in stopped {
-        let _ = app.emit_all(
+    };
+
+    for name in stopped_names {
+        let _ = app.emit(
             "scrcpy://session-stopped",
             serde_json::json!({"deviceId": device_id, "sessionName": name}),
         );
@@ -384,16 +371,19 @@ pub async fn stop_device_mirror(app: tauri::AppHandle, device_id: String) -> Res
 #[tauri::command]
 pub async fn stop_device_mirror_session(app: tauri::AppHandle, device_id: String, session_name: String) -> Result<(), String> {
     let existed = {
-        let mut map = SESSIONS.lock().unwrap();
-        if let Some(sessions) = map.get_mut(&device_id) {
-            if let Some(mut child) = sessions.remove(&session_name) {
-                let _ = child.kill();
+        let mut state = SCRCPY_STATE.lock().unwrap();
+        if let Some(map) = state.children.get_mut(&device_id) {
+            if let Some(mut child) = map.remove(&session_name) {
+                match child.kill() {
+                    Ok(_) => { let _ = child.wait(); info!("scrcpy stopped: device={}, session={}", device_id, session_name); }
+                    Err(e) => { error!("failed to kill scrcpy (device={}, session={}): {}", device_id, session_name, e); }
+                }
                 true
             } else { false }
         } else { false }
     };
     if existed {
-        let _ = app.emit_all(
+        let _ = app.emit(
             "scrcpy://session-stopped",
             serde_json::json!({"deviceId": device_id, "sessionName": session_name}),
         );

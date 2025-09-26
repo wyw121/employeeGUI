@@ -36,6 +36,7 @@ import {
   EyeInvisibleOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
+import usePageFinderSearch from "./page-finder/hooks/usePageFinderSearch";
 import { useAdb } from "../../application/hooks/useAdb";
 import UniversalUIAPI, {
   UIElement,
@@ -62,8 +63,7 @@ import XmlCacheManager from "../../services/XmlCacheManager";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { LocalStepRepository } from "../../infrastructure/inspector/LocalStepRepository";
 // 🆕 导入分布式检查器服务
-import { DistributedInspectorService } from "../../application/services/DistributedInspectorService";
-import { distributedStepLookupService } from "../../application/services/DistributedStepLookupService";
+// 分布式加载已由服务封装并通过 usePageFinderSourceLoader 调用，这里无需直接依赖
 // 🆕 引入定位类型与工具，用于网格检查器的自动定位
 import type { NodeLocator } from "../../domain/inspector/entities/NodeLocator";
 import {
@@ -76,7 +76,11 @@ import type { XmlSnapshot } from "../../types/selfContainedScript";
 import { createXmlSnapshot } from "../../types/selfContainedScript";
 // 🆕 自动构建自包含快照（容错）
 import { buildSnapshotIfPossible } from "../../modules/self-contained/XmlSnapshotAutoBuilder";
-import { assessSnapshotHealth, hashXmlContent } from "../../modules/self-contained/XmlSnapshotHealth";
+import usePageFinderCategories from "./page-finder/hooks/usePageFinderCategories";
+import {
+  assessSnapshotHealth,
+  hashXmlContent,
+} from "../../modules/self-contained/XmlSnapshotHealth";
 
 // 🆕 使用新的模块化XML解析功能
 import {
@@ -112,11 +116,8 @@ import {
   ElementSelectionPopover,
 } from "./element-selection";
 // 抽离的属性匹配服务
-import { pickByAttributes } from './page-finder/services/pickByAttributes';
-import { handleLoadFromDirectXmlContent as serviceLoadDirectXml } from './page-finder/services/directXmlLoader';
-import { handleLoadFromDistributedStep as serviceLoadDistributedStep } from './page-finder/services/distributedStepLoader';
-import { handleLoadFromStepXmlCache as serviceLoadFromStepXmlCache } from './page-finder/services/stepXmlCacheLoader';
-import { handleLoadFromLocalStep as serviceLoadFromLocalStep } from './page-finder/services/localStepLoader';
+import { pickByAttributes } from "./page-finder/services/pickByAttributes";
+import usePageFinderSourceLoader from "./page-finder/hooks/usePageFinderSourceLoader";
 // 🆕 使用专门的可视化页面分析组件
 // 移除基于 Tab 的外置可视化容器，改为旧版两列布局中的三视图切换
 
@@ -150,14 +151,14 @@ interface UniversalPageFinderModalProps {
   // 🆕 修改参数时预选元素定位器（基于步骤指纹构建）
   preselectLocator?: NodeLocator;
   // 新增：当在“网格检查器/节点详情”里选择了匹配策略并点击“应用到步骤”时回调
-  onApplyCriteria?: (criteria: { 
-    strategy: string; 
-    fields: string[]; 
-    values: Record<string,string>; 
-    includes?: Record<string,string[]>; 
-    excludes?: Record<string,string[]>;
+  onApplyCriteria?: (criteria: {
+    strategy: string;
+    fields: string[];
+    values: Record<string, string>;
+    includes?: Record<string, string[]>;
+    excludes?: Record<string, string[]>;
     // 🆕 添加正则表达式相关参数
-    matchMode?: Record<string, 'equals' | 'contains' | 'regex'>;
+    matchMode?: Record<string, "equals" | "contains" | "regex">;
     regexIncludes?: Record<string, string[]>;
     regexExcludes?: Record<string, string[]>;
   }) => void;
@@ -184,21 +185,32 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [currentXmlContent, setCurrentXmlContent] = useState<string>("");
   const [currentXmlCacheId, setCurrentXmlCacheId] = useState<string>(""); // XML缓存ID
-  const [viewMode, setViewMode] = useState<"visual" | "tree" | "list" | "grid" | "mirror">(
+  const [viewMode, setViewMode] = useState<
+    "visual" | "tree" | "list" | "grid" | "mirror"
+  >(
     initialViewMode // 🆕 使用传入的初始视图模式（包含 mirror）
   ); // 可视化分析区内部的多视图切换
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
-  const [searchText, setSearchText] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [showOnlyClickable, setShowOnlyClickable] = useState(false);
+  // 🆕 使用新的模块化XML解析功能
+  const [elements, setElements] = useState<VisualUIElement[]>([]);
+  const [categories, setCategories] = useState<VisualElementCategory[]>([]);
+  // 分类筛选（与视觉解析 categories 协同）
+  const { selectedCategory, setSelectedCategory } = usePageFinderCategories(categories as any);
+  // 搜索 / 过滤逻辑抽离
+  const {
+    searchText,
+    setSearchText,
+    showOnlyClickable,
+    setShowOnlyClickable,
+    filteredElements,
+    stats,
+  } = usePageFinderSearch(uiElements);
   const [selectedElementId, setSelectedElementId] = useState<string>(""); // 选中的元素
 
   // ADB Hook
   const { devices, refreshDevices, isLoading: isConnecting } = useAdb();
 
-  // 🆕 使用新的模块化XML解析功能
-  const [elements, setElements] = useState<VisualUIElement[]>([]);
-  const [categories, setCategories] = useState<VisualElementCategory[]>([]);
+  // elements/categories 已上移
 
   // 使用新的元素选择管理器
   const selectionManager = useElementSelectionManager(
@@ -217,75 +229,26 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     }
   }, [visible, refreshDevices]);
 
-  // === 从步骤XML源加载处理 ===
-  useEffect(() => {
-    if (visible && loadFromStepXml?.stepId) {
-      // 🔧 防重复处理：检查是否已经加载了相同的XML内容
-      const currentXmlLength = currentXmlContent.length;
-      const targetXmlLength = loadFromStepXml.xmlContent?.length || 0;
-      
-      if (currentXmlLength > 0 && currentXmlLength === targetXmlLength) {
-        console.log("⏸️ 跳过重复的XML加载:", {
-          stepId: loadFromStepXml.stepId,
-          currentLength: currentXmlLength,
-          targetLength: targetXmlLength
-        });
-        return;
-      }
-
-      (async () => {
-        console.log("🔄 从步骤XML源加载数据:", loadFromStepXml);
-        let ok = false;
-
-        // 🆕 优先级0: 直接从传递的XML内容加载（最高优先级）
-        if (loadFromStepXml.xmlContent) {
-          ok = await handleLoadFromDirectXmlContent({
-            stepId: loadFromStepXml.stepId,
-            xmlContent: loadFromStepXml.xmlContent,
-            deviceId: loadFromStepXml.deviceId,
-            deviceName: loadFromStepXml.deviceName,
-          });
-        }
-
-        // 优先级1: 尝试从分布式脚本的嵌入式XML快照加载
-        if (!ok) {
-          ok = await handleLoadFromDistributedStep(loadFromStepXml.stepId);
-        }
-
-        // 优先级2: 从XML缓存加载
-        if (!ok && loadFromStepXml.xmlCacheId) {
-          ok = await handleLoadFromStepXml(loadFromStepXml.xmlCacheId);
-        }
-
-        // 优先级3: 从本地步骤仓储加载
-        if (!ok) {
-          await handleLoadFromStepByStepId(loadFromStepXml.stepId);
-        }
-      })();
-    }
-  }, [visible, loadFromStepXml?.stepId, loadFromStepXml?.xmlContent?.length]); // 🔧 使用更稳定的依赖项
-
-  // 🆕 统一的快照上报封装：健康检查 + 去重告警（按 xmlHash）
+  // 统一来源加载 Hook（替代原内联 effect + 封装函数）
   const shownHealthWarnsRef = React.useRef<Set<string>>(new Set());
   const emitSnapshotUpdated = (snapshot: XmlSnapshot) => {
     try {
-      // 健康检查
       const health = assessSnapshotHealth(snapshot);
-      const xmlHash = hashXmlContent(snapshot.xmlContent || '');
-      if (health.level === 'error') {
+      const xmlHash = hashXmlContent(snapshot.xmlContent || "");
+      if (health.level === "error") {
         if (!shownHealthWarnsRef.current.has(xmlHash)) {
           message.error({
             content: (
               <div>
                 <div style={{ fontWeight: 600 }}>XML 内容损坏，功能可能受限</div>
-                <div style={{ fontSize: 12, color: '#8c8c8c' }}>{health.messages[0]}</div>
+                <div style={{ fontSize: 12, color: "#8c8c8c" }}>{health.messages[0]}</div>
               </div>
             ),
             duration: 4,
           });
           shownHealthWarnsRef.current.add(xmlHash);
         }
-      } else if (health.level === 'warn') {
+      } else if (health.level === "warn") {
         if (!shownHealthWarnsRef.current.has(xmlHash)) {
           message.warning({
             content: (
@@ -293,7 +256,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 <div style={{ fontWeight: 600 }}>XML 可能不完整</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {health.messages.slice(0, 2).map((m, i) => (
-                    <li key={i} style={{ fontSize: 12, color: '#8c8c8c' }}>{m}</li>
+                    <li key={i} style={{ fontSize: 12, color: "#8c8c8c" }}>{m}</li>
                   ))}
                 </ul>
               </div>
@@ -303,17 +266,15 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           shownHealthWarnsRef.current.add(xmlHash);
         }
       }
-
       onSnapshotUpdated?.(snapshot);
     } catch (e) {
-      // 健康检查失败不影响主流程
       onSnapshotUpdated?.(snapshot);
     }
   };
-
-  // 重定向到抽离的 directXmlLoader 服务
-  const handleLoadFromDirectXmlContent = (info: { stepId: string; xmlContent: string; deviceId?: string; deviceName?: string; }) =>
-    serviceLoadDirectXml(info, {
+  usePageFinderSourceLoader({
+    visible,
+    loadFromStepXml,
+    ctx: {
       currentXmlContent,
       setCurrentXmlContent,
       setCurrentXmlCacheId,
@@ -323,58 +284,13 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       setCategories,
       setViewMode,
       onXmlContentUpdated,
-      emitSnapshotUpdated
-    });
+      emitSnapshotUpdated,
+    },
+  });
 
-  // 抽离后的封装：调用分布式步骤 XML 加载 service
-  const handleLoadFromDistributedStep = (stepId: string) =>
-    serviceLoadDistributedStep(stepId, {
-      currentXmlContent,
-      setCurrentXmlContent,
-      setCurrentXmlCacheId,
-      setSelectedDevice,
-      setUIElements,
-      setElements,
-      setCategories,
-      setViewMode,
-      onXmlContentUpdated,
-      emitSnapshotUpdated
-    }, { findDistributedStepById });
+  // 原位置的快照上报封装已上移至 usePageFinderSourceLoader 调用之前，避免重复定义
 
-  // 🆕 查找分布式步骤的辅助方法
-  const findDistributedStepById = async (stepId: string): Promise<any> => {
-    return await distributedStepLookupService.findDistributedStepById(stepId);
-  };
-
-  // 抽离后的封装：步骤 XML 缓存加载
-  const handleLoadFromStepXml = (xmlCacheId: string) =>
-    serviceLoadFromStepXmlCache(xmlCacheId, {
-      currentXmlContent,
-      setCurrentXmlContent,
-      setCurrentXmlCacheId,
-      setSelectedDevice,
-      setUIElements,
-      setElements,
-      setCategories,
-      setViewMode,
-      onXmlContentUpdated,
-      emitSnapshotUpdated
-    });
-
-  // 抽离后的封装：本地步骤仓储快照加载
-  const handleLoadFromStepByStepId = (stepId: string) =>
-    serviceLoadFromLocalStep(stepId, {
-      currentXmlContent,
-      setCurrentXmlContent,
-      setCurrentXmlCacheId,
-      setSelectedDevice,
-      setUIElements,
-      setElements,
-      setCategories,
-      setViewMode,
-      onXmlContentUpdated,
-      emitSnapshotUpdated
-    });
+  // 加载相关内联封装已移除，统一由 usePageFinderSourceLoader 处理
 
   // 获取页面UI结构
   const getPageUIElements = async (device: string) => {
@@ -406,7 +322,11 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
 
         // 🆕 预先构建一次快照（元素数量稍后更新，不影响核心）
         {
-          const snap = buildSnapshotIfPossible(xmlContent, deviceInfo, pageInfo as any);
+          const snap = buildSnapshotIfPossible(
+            xmlContent,
+            deviceInfo,
+            pageInfo as any
+          );
           if (snap) emitSnapshotUpdated(snap);
         }
       }
@@ -470,7 +390,11 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
               pageType: "分析页面",
               elementCount: parseResult.elements.length,
             } as any;
-            const snap = buildSnapshotIfPossible(xmlContent, deviceInfo, pageInfo);
+            const snap = buildSnapshotIfPossible(
+              xmlContent,
+              deviceInfo,
+              pageInfo
+            );
             if (snap) emitSnapshotUpdated(snap);
           }
         } catch (parseError) {
@@ -488,12 +412,12 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
             {
               deviceId: cacheEntry.deviceId,
               deviceName: cacheEntry.deviceName,
-              appPackage: cacheEntry.pageInfo?.appPackage || 'com.xingin.xhs',
-              activityName: cacheEntry.pageInfo?.activityName || 'unknown',
+              appPackage: cacheEntry.pageInfo?.appPackage || "com.xingin.xhs",
+              activityName: cacheEntry.pageInfo?.activityName || "unknown",
             },
             {
-              pageTitle: cacheEntry.pageInfo?.pageTitle || '未知页面',
-              pageType: cacheEntry.pageInfo?.pageType || 'unknown',
+              pageTitle: cacheEntry.pageInfo?.pageTitle || "未知页面",
+              pageType: cacheEntry.pageInfo?.pageType || "unknown",
               elementCount: elements.length,
             }
           );
@@ -715,25 +639,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     await handleSmartElementSelect(uiElement);
   };
 
-  // 过滤元素
-  const filteredElements = uiElements.filter((element) => {
-    const matchesSearch =
-      searchText === "" ||
-      element.text.toLowerCase().includes(searchText.toLowerCase()) ||
-      (element.content_desc &&
-        element.content_desc.toLowerCase().includes(searchText.toLowerCase()));
-
-    const matchesClickable = !showOnlyClickable || element.is_clickable;
-
-    return matchesSearch && matchesClickable;
-  });
-
-  // 📊 统计信息
-  const stats = {
-    total: uiElements.length,
-    clickable: uiElements.filter((e) => e.is_clickable).length,
-    withText: uiElements.filter((e) => e.text.trim() !== "").length,
-  };
+  // filteredElements / stats 已由 usePageFinderSearch 提供
 
   // === 渲染函数 ===
 
@@ -957,7 +863,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           <Spin size="large" />
           <div style={{ marginTop: 16 }}>正在分析页面...</div>
         </div>
-    ) : elements.length > 0 || uiElements.length > 0 || viewMode === "mirror" ? (
+      ) : elements.length > 0 ||
+        uiElements.length > 0 ||
+        viewMode === "mirror" ? (
         <div>
           {viewMode === "tree" ? (
             <ErrorBoundary>
@@ -977,8 +885,8 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
               selectedElementId={selectedElementId}
               selectionManager={selectionManager}
             />
-              ) : viewMode === "mirror" ? (
-                <ScrcpyControlView />
+          ) : viewMode === "mirror" ? (
+            <ScrcpyControlView />
           ) : viewMode === "grid" ? (
             <ErrorBoundary>
               <GridElementView
@@ -989,14 +897,18 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                 // 🆕 传入定位器以在解析后自动选中步骤元素
                 locator={preselectLocator}
                 locatorResolve={(root, locator) => {
-                  console.log('🔍 [UniversalPageFinderModal] locatorResolve 被调用:', { root: !!root, locator });
+                  console.log(
+                    "🔍 [UniversalPageFinderModal] locatorResolve 被调用:",
+                    { root: !!root, locator }
+                  );
                   try {
                     if (!root || !locator) return null;
                     // 0) 基于 bounds 的快速预选（如果提供）
                     try {
                       const anyLoc: any = locator;
                       const boundsStr: string | undefined =
-                        (anyLoc.additionalInfo && anyLoc.additionalInfo.bounds) ||
+                        (anyLoc.additionalInfo &&
+                          anyLoc.additionalInfo.bounds) ||
                         undefined;
                       const boundsFromSelected = (anyLoc.selectedBounds &&
                         `[${anyLoc.selectedBounds.left},${anyLoc.selectedBounds.top}][${anyLoc.selectedBounds.right},${anyLoc.selectedBounds.bottom}]`) as
@@ -1008,13 +920,16 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                         const stk: any[] = root ? [root] : [];
                         while (stk.length) {
                           const n = stk.pop();
-                          if (n?.attrs?.['bounds'] === wantBounds) {
+                          if (n?.attrs?.["bounds"] === wantBounds) {
                             return n;
                           }
-                          for (let i = n.children.length - 1; i >= 0; i--) stk.push(n.children[i]);
+                          for (let i = n.children.length - 1; i >= 0; i--)
+                            stk.push(n.children[i]);
                         }
                       }
-                    } catch { /* ignore bounds preselect failure */ }
+                    } catch {
+                      /* ignore bounds preselect failure */
+                    }
                     // 1) 绝对 XPath 优先
                     if (locator.absoluteXPath) {
                       const n = findByXPathRoot(root, locator.absoluteXPath);
@@ -1047,7 +962,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
                   }
                 }}
                 onApplyCriteria={handleApplyCriteria}
-                onLatestMatchingChange={(m) => { saveLatestMatching(m); }}
+                onLatestMatchingChange={(m) => {
+                  saveLatestMatching(m);
+                }}
                 initialMatching={initialMatching as any}
               />
             </ErrorBoundary>
@@ -1063,7 +980,6 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       )}
     </Card>
   );
-
 
   // 列表视图Tab
   const renderListTab = () => (
@@ -1146,16 +1062,26 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
   );
 
   // 🆕 统一封装：应用到步骤后自动关闭模态框
-  const handleApplyCriteria = (criteria: { strategy: string; fields: string[]; values: Record<string,string> }) => {
-    console.log('🎯 [UniversalPageFinderModal] handleApplyCriteria 被调用，criteria:', criteria);
+  const handleApplyCriteria = (criteria: {
+    strategy: string;
+    fields: string[];
+    values: Record<string, string>;
+  }) => {
+    console.log(
+      "🎯 [UniversalPageFinderModal] handleApplyCriteria 被调用，criteria:",
+      criteria
+    );
     try {
       onApplyCriteria?.(criteria);
-      console.log('🎯 [UniversalPageFinderModal] onApplyCriteria 调用成功');
+      console.log("🎯 [UniversalPageFinderModal] onApplyCriteria 调用成功");
     } catch (error) {
-      console.error('❌ [UniversalPageFinderModal] onApplyCriteria 调用失败:', error);
+      console.error(
+        "❌ [UniversalPageFinderModal] onApplyCriteria 调用失败:",
+        error
+      );
     } finally {
       // 成功或失败都关闭，以便用户回到步骤卡查看/继续
-      console.log('🎯 [UniversalPageFinderModal] 关闭模态框');
+      console.log("🎯 [UniversalPageFinderModal] 关闭模态框");
       onClose();
     }
   };

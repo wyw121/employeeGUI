@@ -4,7 +4,6 @@ import { parseXML } from "../../xml-parser";
 import { message } from "antd";
 import { PageFinderLoadContext } from "./loadContext";
 
-
 export interface DirectXmlLoadParams {
   stepId: string;
   xmlContent: string;

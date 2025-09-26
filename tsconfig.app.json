@@ -21,6 +21,7 @@
     "src"
   ],
   "exclude": [
+    "src/components/universal-ui/views/visual-view/hooks/useParsedVisualElements.tsx",
     "src/**/*_old.ts",
     "src/**/*_old.tsx",
     // 联系人相关（未纳入本轮工作）

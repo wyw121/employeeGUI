@@ -3,7 +3,7 @@ import UniversalUIAPI from '../../../../api/universalUIAPI';
 import { buildSnapshotIfPossible } from '../../../../modules/self-contained/XmlSnapshotAutoBuilder';
 import { parseXML } from '../../xml-parser';
 import { PageFinderLoadContext } from './loadContext';
-import { LocalStepRepository } from '../../../../modules/step-repository/LocalStepRepository';
+import { LocalStepRepository } from '../../../../infrastructure/inspector/LocalStepRepository';
 
 export async function handleLoadFromLocalStep(
   stepId: string,

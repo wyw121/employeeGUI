@@ -18,6 +18,7 @@ import {
   LoopConditionType,
   ExtendedStepActionType 
 } from '../types';
+import { noDragProps } from '../../../components/universal-ui/dnd/noDrag';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -133,60 +134,62 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
     }
 
     return (
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <div>
-          <label>循环类型:</label>
-          <Select
-            value={localConfig.type}
-            onChange={(value) => setLocalConfig({ ...localConfig, type: value })}
-            style={{ width: 120, marginLeft: 8 }}
-          >
-            <Select.Option value={LoopType.FOR}>固定次数</Select.Option>
-            <Select.Option value={LoopType.WHILE}>条件循环</Select.Option>
-            <Select.Option value={LoopType.INFINITE}>无限循环</Select.Option>
-          </Select>
-        </div>
-        
-        {localConfig.type === LoopType.FOR && (
+      <div {...noDragProps}>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
-            <label>循环次数:</label>
+            <label>循环类型:</label>
+            <Select
+              value={localConfig.type}
+              onChange={(value) => setLocalConfig({ ...localConfig, type: value })}
+              style={{ width: 120, marginLeft: 8 }}
+            >
+              <Select.Option value={LoopType.FOR}>固定次数</Select.Option>
+              <Select.Option value={LoopType.WHILE}>条件循环</Select.Option>
+              <Select.Option value={LoopType.INFINITE}>无限循环</Select.Option>
+            </Select>
+          </div>
+          
+          {localConfig.type === LoopType.FOR && (
+            <div>
+              <label>循环次数:</label>
+              <InputNumber
+                min={1}
+                max={1000}
+                value={localConfig.count}
+                onChange={(value) => setLocalConfig({ ...localConfig, count: value || 1 })}
+                style={{ marginLeft: 8 }}
+              />
+            </div>
+          )}
+          
+          <div>
+            <label>循环间隔(ms):</label>
             <InputNumber
-              min={1}
-              max={1000}
-              value={localConfig.count}
-              onChange={(value) => setLocalConfig({ ...localConfig, count: value || 1 })}
+              min={0}
+              max={10000}
+              value={localConfig.intervalMs}
+              onChange={(value) => setLocalConfig({ ...localConfig, intervalMs: value || 0 })}
               style={{ marginLeft: 8 }}
             />
           </div>
-        )}
-        
-        <div>
-          <label>循环间隔(ms):</label>
-          <InputNumber
-            min={0}
-            max={10000}
-            value={localConfig.intervalMs}
-            onChange={(value) => setLocalConfig({ ...localConfig, intervalMs: value || 0 })}
-            style={{ marginLeft: 8 }}
-          />
-        </div>
-        
-        <Space>
-          <Button size="small" type="primary" onClick={handleSaveConfig}>
-            保存
-          </Button>
-          <Button size="small" onClick={() => setEditMode(false)}>
-            取消
-          </Button>
+          
+          <Space>
+            <Button size="small" type="primary" onClick={handleSaveConfig}>
+              保存
+            </Button>
+            <Button size="small" onClick={() => setEditMode(false)}>
+              取消
+            </Button>
+          </Space>
         </Space>
-      </Space>
+      </div>
     );
   };
 
   return (
     <Card
       size="small"
-      className={`loop-step-card ${executing ? 'executing' : ''} ${collapsed ? 'collapsed' : ''}`}
+      className={`loop-step-card loop-surface ${executing ? 'executing' : ''} ${collapsed ? 'collapsed' : ''}`}
       title={
         <Space>
           <RedoOutlined style={{ color: '#1890ff' }} />
@@ -195,7 +198,7 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
         </Space>
       }
       extra={
-        <Space>
+        <Space {...noDragProps}>
           <Tooltip title="循环配置">
             <Button
               type="text"

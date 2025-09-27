@@ -135,6 +135,27 @@ export const ContactImportWorkbench: React.FC = () => {
       Object.fromEntries(Object.entries(assignment).map(([id, a]) => [id, { idStart: a.idStart, idEnd: a.idEnd }]))
     );
   }, [assignment]);
+  const conflictDeviceIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of rangeConflicts) { s.add(c.deviceA); s.add(c.deviceB); }
+    return Array.from(s);
+  }, [rangeConflicts]);
+  const conflictPeersByDevice = useMemo(() => {
+    const map: Record<string, Array<{ peerId: string; start: number; end: number }>> = {};
+    for (const c of rangeConflicts) {
+      (map[c.deviceA] ||= []).push({ peerId: c.deviceB, start: c.rangeB.start, end: c.rangeB.end });
+      (map[c.deviceB] ||= []).push({ peerId: c.deviceA, start: c.rangeA.start, end: c.rangeA.end });
+    }
+    return map;
+  }, [rangeConflicts]);
+
+  const handleJumpToDevice = useCallback((deviceId: string) => {
+    // antd Table 行上会带 data-row-key
+    const el = document.querySelector(`[data-row-key="${deviceId}"]`);
+    if (el && 'scrollIntoView' in el) {
+      (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
 
   const handleGenerateBatches = async () => {
     try {
@@ -244,7 +265,7 @@ export const ContactImportWorkbench: React.FC = () => {
             </Button>
           </Space>
           <Divider />
-          <DeviceAssignmentTable value={assignment} onChange={setAssignment} />
+          <DeviceAssignmentTable value={assignment} onChange={setAssignment} conflictingDeviceIds={conflictDeviceIds} conflictPeersByDevice={conflictPeersByDevice} onJumpToDevice={handleJumpToDevice} />
           <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
             <Button type="primary" onClick={handleGenerateBatches} disabled={hasInvalidRanges || allRangesEmpty}>
               根据分配生成VCF批次
@@ -268,6 +289,7 @@ export const ContactImportWorkbench: React.FC = () => {
         open={resultOpen}
         result={lastResult}
         onClose={() => setResultOpen(false)}
+        assignmentSnapshot={assignment}
         onRetryFailed={async () => {
           if (!lastResult) return;
           const failedIds = lastResult.deviceResults.filter(d => !d.success).map(d => d.deviceId);

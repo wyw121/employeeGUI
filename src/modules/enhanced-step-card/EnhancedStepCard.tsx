@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { noDragProps } from '../../components/universal-ui/dnd/noDrag';
 import { 
   Card, 
   Tag, 
@@ -270,41 +271,45 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
   );
 
   const cardActions = [
-    <Button 
-      key="edit" 
-      icon={<EditOutlined />} 
-      type="text" 
-      onClick={onEdit}
-    >
-      编辑
-    </Button>
+    <div key="edit" {...noDragProps}>
+      <Button 
+        icon={<EditOutlined />} 
+        type="text" 
+        onClick={onEdit}
+      >
+        编辑
+      </Button>
+    </div>
   ];
 
   // 如果有增强信息，添加XML检查器按钮
   if (hasEnhancedInfo) {
     cardActions.unshift(
-      <Tooltip key="xml" title="查看XML节点详情">
-        <Button 
-          icon={<BranchesOutlined />} 
-          type="text"
-          onClick={() => setShowXmlInspector(true)}
-        >
-          修改元素参数
-        </Button>
-      </Tooltip>
+      <div key="xml" {...noDragProps}>
+        <Tooltip title="查看XML节点详情">
+          <Button 
+            icon={<BranchesOutlined />} 
+            type="text"
+            onClick={() => setShowXmlInspector(true)}
+          >
+            修改元素参数
+          </Button>
+        </Tooltip>
+      </div>
     );
   }
 
   if (onTest) {
     cardActions.push(
-      <Button 
-        key="test" 
-        icon={<BugOutlined />} 
-        type="text" 
-        onClick={onTest}
-      >
-        测试
-      </Button>
+      <div key="test" {...noDragProps}>
+        <Button 
+          icon={<BugOutlined />} 
+          type="text" 
+          onClick={onTest}
+        >
+          测试
+        </Button>
+      </div>
     );
   }
 
@@ -320,7 +325,7 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
             cursor: dragging ? 'grabbing' : 'grab'
           }}
           extra={
-            <Space>
+            <Space {...noDragProps}>
               {renderXmlContextPopover()}
               <Tag color="processing">
                 #{step.order + 1}

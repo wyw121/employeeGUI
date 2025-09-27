@@ -11,6 +11,7 @@ import { DragResult, DroppableArea, DraggableItem } from '../types';
 import DragSensorsProvider from '../../../components/universal-ui/dnd/DragSensorsProvider';
 import { SortableItem } from '../../../components/universal-ui/dnd/SortableItem';
 import { DragOverlayGhost } from '../../../components/universal-ui/dnd/DragOverlayGhost';
+import { useDnDUIConfig } from '../../../components/universal-ui/dnd/DnDUIConfigContext';
 
 export interface DragSortContainerProps {
   /** 可拖拽项目列表 */
@@ -44,6 +45,7 @@ export const DragSortContainer: React.FC<DragSortContainerProps> = ({
   className,
   disabled = false
 }) => {
+  const { config } = useDnDUIConfig();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [itemsState, setItemsState] = useState(items);
 
@@ -175,15 +177,17 @@ export const DragSortContainer: React.FC<DragSortContainerProps> = ({
       </div>
 
       {/* 拖拽预览层 */}
-      <DragOverlay>
-        {activeItem ? (
-          <DragOverlayGhost
-            title={(activeItem.data as any)?.actionName || (activeItem.data as any)?.name || activeItem.id}
-            subtitle={typeof (activeItem.data as any)?.description === 'string' ? (activeItem.data as any).description : undefined}
-            index={activeItem.position}
-          />
-        ) : null}
-      </DragOverlay>
+      {config.useGhostOverlay && (
+        <DragOverlay>
+          {activeItem ? (
+            <DragOverlayGhost
+              title={(activeItem.data as any)?.actionName || (activeItem.data as any)?.name || activeItem.id}
+              subtitle={typeof (activeItem.data as any)?.description === 'string' ? (activeItem.data as any).description : undefined}
+              index={activeItem.position}
+            />
+          ) : null}
+        </DragOverlay>
+      )}
     </DragSensorsProvider>
   );
 };

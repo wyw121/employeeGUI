@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input, Typography } from 'antd';
+import { noDragProps } from '../../universal-ui/dnd/noDrag';
 
 const { Text } = Typography;
 
@@ -10,9 +11,10 @@ interface TitleEditorProps {
   onChange: (v: string) => void;
   onSave: () => void;
   onCancel: () => void;
+  className?: string;
 }
 
-export const TitleEditor: React.FC<TitleEditorProps> = ({ value, editing, onBeginEdit, onChange, onSave, onCancel }) => {
+export const TitleEditor: React.FC<TitleEditorProps> = ({ value, editing, onBeginEdit, onChange, onSave, onCancel, className }) => {
   if (editing) {
     return (
       <Input
@@ -20,6 +22,7 @@ export const TitleEditor: React.FC<TitleEditorProps> = ({ value, editing, onBegi
         value={value}
         autoFocus
         onClick={(e) => e.stopPropagation()}
+        {...noDragProps}
         onChange={(e) => onChange(e.target.value)}
         onPressEnter={(e) => { e.stopPropagation(); onSave(); }}
         onBlur={onSave}
@@ -30,7 +33,7 @@ export const TitleEditor: React.FC<TitleEditorProps> = ({ value, editing, onBegi
   }
 
   return (
-    <Text strong onDoubleClick={onBeginEdit} title="双击编辑标题">
+    <Text strong onDoubleClick={onBeginEdit} title="双击编辑标题" className={className}>
       {value}
     </Text>
   );

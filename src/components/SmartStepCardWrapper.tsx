@@ -32,6 +32,11 @@ export const SmartStepCardWrapper: React.FC<SmartStepCardWrapperProps> = (props)
     description: step.description,
     parameters: step.parameters,
     enabled: step.enabled,
+    // 透传循环归属字段，确保子卡片可识别并应用 loop-surface 基线样式
+    // 说明：DraggableStepCard 内部通过 (s.parent_loop_id || s.parentLoopId) 判断是否在循环体内
+    // 这里保持双写以兼容不同来源的数据结构
+    ...(step as any).parent_loop_id ? { parent_loop_id: (step as any).parent_loop_id } : {},
+    ...(step as any).parentLoopId ? { parentLoopId: (step as any).parentLoopId } : {},
   };
   // 确保必需的处理器传递给 DraggableStepCard
   return (

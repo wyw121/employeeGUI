@@ -143,6 +143,7 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
           placement="topLeft"
           open={showResultPopover}
           onOpenChange={setShowResultPopover}
+          getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
         >
           <Badge 
             dot 
@@ -174,6 +175,7 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
             : `点击测试步骤: ${step.name}`
         }
         placement="top"
+        getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
       >
         {testButton}
       </Tooltip>

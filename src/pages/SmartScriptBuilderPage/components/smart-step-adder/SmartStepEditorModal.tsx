@@ -21,6 +21,7 @@ import { SMART_ACTION_CONFIGS } from "../../helpers/constants";
 import { SmartActionType } from "../../../../types/smartComponents";
 import type { LaunchAppComponentParams } from "../../../../types/smartComponents";
 import type { SmartScriptStep } from "../../../../types/smartScript";
+import { noDragProps } from "../../../../components/universal-ui/dnd/noDrag";
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -143,6 +144,7 @@ export const SmartStepEditorModal: React.FC<SmartStepEditorModalProps> = ({
       maskClosable={false}
       zIndex={1000}
     >
+      <div {...noDragProps}>
       <Form
         form={form}
         layout="vertical"
@@ -320,6 +322,7 @@ export const SmartStepEditorModal: React.FC<SmartStepEditorModalProps> = ({
           </Form.Item>
         ))}
       </Form>
+      </div>
     </Modal>
   );
 };

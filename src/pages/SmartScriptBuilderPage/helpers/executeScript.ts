@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "antd";
+import { normalizeScriptStepsForBackend } from "../helpers/normalizeSteps";
+import type { ExtendedSmartScriptStep } from "../../../types/loopScript";
 
 // 轻量设备类型，满足本模块使用
 interface SimpleDevice {
@@ -20,17 +22,6 @@ interface SmartExecutionResult {
   final_page_state?: string;
   extracted_data: Record<string, any>;
   message: string;
-}
-
-export interface ExtendedSmartScriptStep {
-  id: string;
-  step_type: string;
-  name?: string;
-  description?: string;
-  parameters?: Record<string, any>;
-  enabled?: boolean;
-  order?: number;
-  [key: string]: any;
 }
 
 type Ctx = {
@@ -56,109 +47,13 @@ export function createHandleExecuteScript(ctx: Ctx) {
       return;
     }
 
-    const enabledSteps = allSteps.filter((s) => s.enabled);
-
-    // 后端不识别 smart_scroll，这里统一映射为 swipe；并为 tap 缺省坐标兜底
-    const normalizeStepForBackend = (
-      step: ExtendedSmartScriptStep
-    ): ExtendedSmartScriptStep => {
-      try {
-        if (String(step.step_type) === "smart_scroll") {
-          const p: any = step.parameters || {};
-          const direction = p.direction || "down";
-          const distance = Number(p.distance ?? 600);
-          const speed = Number(p.speed_ms ?? 300);
-          const screen = { width: 1080, height: 1920 };
-          const cx = Math.floor(screen.width / 2);
-          const cy = Math.floor(screen.height / 2);
-          const delta = Math.max(
-            100,
-            Math.min(distance, Math.floor(screen.height * 0.8))
-          );
-          let start_x = cx,
-            start_y = cy,
-            end_x = cx,
-            end_y = cy;
-          switch (direction) {
-            case "up":
-              start_y = cy - Math.floor(delta / 2);
-              end_y = cy + Math.floor(delta / 2);
-              break;
-            case "down":
-              start_y = cy + Math.floor(delta / 2);
-              end_y = cy - Math.floor(delta / 2);
-              break;
-            case "left":
-              start_x = cx - Math.floor(delta / 2);
-              end_x = cx + Math.floor(delta / 2);
-              break;
-            case "right":
-              start_x = cx + Math.floor(delta / 2);
-              end_x = cx - Math.floor(delta / 2);
-              break;
-            default:
-              start_y = cy + Math.floor(delta / 2);
-              end_y = cy - Math.floor(delta / 2);
-          }
-
-          return {
-            ...step,
-            step_type: "swipe" as any,
-            name: step.name || "滑动",
-            description: step.description || `标准化滚动映射为滑动(${direction})`,
-            parameters: {
-              ...p,
-              start_x,
-              start_y,
-              end_x,
-              end_y,
-              duration: speed > 0 ? speed : 300,
-            },
-          } as ExtendedSmartScriptStep;
-        }
-
-        if (String(step.step_type) === "tap") {
-          const p: any = step.parameters || {};
-          if (p.x === undefined || p.y === undefined) {
-            const screen = { width: 1080, height: 1920 };
-            return {
-              ...step,
-              parameters: {
-                ...p,
-                x: p.x ?? Math.floor(screen.width / 2),
-                y: p.y ?? Math.floor(screen.height / 2),
-                hold_duration_ms: p.duration_ms ?? p.hold_duration_ms ?? 100,
-              },
-            } as ExtendedSmartScriptStep;
-          }
-        }
-      } catch (e) {
-        console.warn("标准化步骤失败（执行前）：", e);
-      }
-      return step;
-    };
-
-    const normalizedEnabledSteps = enabledSteps.map(normalizeStepForBackend);
-    // 展开内置循环（inline_loop_count）：将单个步骤按次数复制，减少显式循环卡片
-    const expandedSteps: ExtendedSmartScriptStep[] = [];
-    for (const s of normalizedEnabledSteps) {
-      const countRaw = (s.parameters as any)?.inline_loop_count;
-      const count = Math.max(1, Math.min(50, Number(countRaw ?? 1)));
-      if (count <= 1) {
-        expandedSteps.push(s);
-      } else {
-        for (let i = 0; i < count; i++) {
-          // 浅拷贝，避免共享引用；保持 id 不变以便日志聚合（如需区分可追加后缀）
-          expandedSteps.push({ ...s });
-        }
-      }
-    }
-    if (enabledSteps.length === 0) {
+    const expandedSteps = normalizeScriptStepsForBackend(allSteps);
+    if (expandedSteps.length === 0) {
       message.warning("没有启用的步骤可执行");
       return;
     }
 
-  console.log("📋 启用的步骤数量:", enabledSteps.length, "→ 展开后:", expandedSteps.length);
+  console.log("📋 展开后的步骤数量:", expandedSteps.length);
   console.log("📝 展开后的步骤详情:", expandedSteps);
 
     // 获取当前选中的设备
@@ -196,8 +91,8 @@ export function createHandleExecuteScript(ctx: Ctx) {
         console.log("🎭 使用模拟执行...");
         const mockResult: SmartExecutionResult = {
           success: true,
-          total_steps: enabledSteps.length,
-          executed_steps: enabledSteps.length,
+          total_steps: expandedSteps.length,
+          executed_steps: expandedSteps.length,
           failed_steps: 0,
           skipped_steps: 0,
           duration_ms: 2500,

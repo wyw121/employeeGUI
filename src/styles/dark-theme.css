@@ -1,3 +1,4 @@
+@layer dark {
 /* 暗黑主题统一样式配置 */
 
 /* ========== CSS Variables - 暗黑主题色彩系统 ========== */
@@ -259,6 +260,7 @@
     padding: 10px;
     margin-bottom: 10px;
   }
+}
 }
 
 @media (max-width: 768px) {

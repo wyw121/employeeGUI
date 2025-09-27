@@ -102,6 +102,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
           onChange={onChangeNameDraft}
           onSave={onSaveName}
           onCancel={onCancelName}
+          className={typeStyle.titleTextClass}
         />
 
         <Tag
@@ -111,7 +112,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
           {config.name}
         </Tag>
         {!step.enabled && <Tag>已禁用</Tag>}
-        {(step as any).parent_loop_id && (
+        {(() => { const s:any = step; return s.parent_loop_id || s.parentLoopId; })() && (
           <Tag color="blue" className="bg-blue-100 text-blue-700 border-blue-300">
             🔄 循环体内
           </Tag>

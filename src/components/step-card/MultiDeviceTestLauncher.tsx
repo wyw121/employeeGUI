@@ -65,6 +65,7 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
         }}
         width={720}
         className="light-surface"
+        rootClassName="light-surface"
       >
         {!result ? (
           <div className="light-surface">

@@ -12,6 +12,7 @@ import DragSensorsProvider from './universal-ui/dnd/DragSensorsProvider';
 import { SortableList } from './universal-ui/dnd/SortableList';
 import { SortableItem } from './universal-ui/dnd/SortableItem';
 import { DragOverlayGhost } from './universal-ui/dnd/DragOverlayGhost';
+import { DnDUIConfigProvider, useDnDUIConfig, DnDUIConfigPersistence } from './universal-ui/dnd/DnDUIConfigContext';
 
 const { Title } = Typography;
 
@@ -104,30 +105,51 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
 
   if (steps.length === 0) {
     return (
-      <Card title={title}>
-        <div className="text-center p-8">
-          <div className="mt-4 text-gray-500">
-            还没有添加智能步骤，点击上方按钮开始构建智能脚本
+      <DnDUIConfigProvider>
+        <DnDUIConfigPersistence />
+        <Card title={title}>
+          <div className="text-center p-8">
+            <div className="mt-4 text-gray-500">
+              还没有添加智能步骤，点击上方按钮开始构建智能脚本
+            </div>
           </div>
-        </div>
-        
-        {/* 智能页面分析器快捷按钮 - 无步骤时也显示 */}
-        {onOpenPageAnalyzer && (
-          <div className="mt-4">
-            <ActionsToolbar
-              onOpenPageAnalyzer={onOpenPageAnalyzer}
-              onCreateLoop={onCreateLoop}
-              onCreateContactImport={onCreateContactImport}
-              onCreateScreenInteraction={onCreateScreenInteraction}
-              onCreateSystemAction={onCreateSystemAction}
-            />
-          </div>
-        )}
-      </Card>
+          
+          {/* 智能页面分析器快捷按钮 - 无步骤时也显示 */}
+          {onOpenPageAnalyzer && (
+            <div className="mt-4">
+              <ActionsToolbar
+                onOpenPageAnalyzer={onOpenPageAnalyzer}
+                onCreateLoop={onCreateLoop}
+                onCreateContactImport={onCreateContactImport}
+                onCreateScreenInteraction={onCreateScreenInteraction}
+                onCreateSystemAction={onCreateSystemAction}
+              />
+            </div>
+          )}
+        </Card>
+      </DnDUIConfigProvider>
     );
   }
 
+  const OverlayRenderer: React.FC = () => {
+    const { config } = useDnDUIConfig();
+    if (!config.useGhostOverlay) return null;
+    return (
+      <DragOverlay dropAnimation={null}>
+        {activeStep ? (
+          <DragOverlayGhost
+            title={activeStep.name}
+            subtitle={activeStep.description}
+            index={steps.findIndex(s => s.id === activeStep.id)}
+          />
+        ) : null}
+      </DragOverlay>
+    );
+  };
+
   return (
+  <DnDUIConfigProvider>
+  <DnDUIConfigPersistence />
     <Card title={
       <div className="flex items-center space-x-2">
         <span>{title}</span>
@@ -174,17 +196,10 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
           </div>
         </SortableList>
 
-        {/* 幽灵卡片：仅绘制最小内容，避免复杂嵌套导致掉帧 */}
-        <DragOverlay dropAnimation={null}>
-          {activeStep ? (
-            <DragOverlayGhost
-              title={activeStep.name}
-              subtitle={activeStep.description}
-              index={steps.findIndex(s => s.id === activeStep.id)}
-            />
-          ) : null}
-        </DragOverlay>
+        {/* 幽灵卡片（按配置开关）：仅绘制最小内容，避免复杂嵌套导致掉帧 */}
+        <OverlayRenderer />
       </DragSensorsProvider>
     </Card>
+    </DnDUIConfigProvider>
   );
 };

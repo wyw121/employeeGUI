@@ -14,6 +14,7 @@ import { parseBoundsString, rectToBoundsString } from "../../../components/unive
 import buildXmlSnapshotFromContext from "./xmlSnapshotHelper";
 import React from "react";
 import { SmartActionType } from "../../../types/smartComponents";
+import { createBindingFromSnapshotAndXPath } from '../../../components/step-card/element-binding/helpers';
 
 export interface ExtendedSmartScriptStep {
   id: string;
@@ -336,6 +337,27 @@ export function createHandleSaveStep(ctx: Ctx) {
 
             selfContainedParams.xmlSnapshot = xmlSnapshot;
             selfContainedParams.elementLocator = elementLocator;
+
+            // 🆕 兜底：保存时根据 xmlSnapshot + xpath 生成 elementBinding，确保三件套
+            try {
+              const xpath: string | undefined =
+                (elementLocator as any)?.additionalInfo?.xpath || (newStep.parameters as any).xpath || (newStep.parameters as any).element_path;
+              if (xpath && typeof xpath === 'string' && xpath.trim()) {
+                const bindingSnapshot = {
+                  source: 'memory' as const,
+                  text: xmlSnapshot.xmlContent,
+                  sha1: xmlSnapshot.xmlHash,
+                  capturedAt: xmlSnapshot.timestamp || Date.now(),
+                  deviceId: xmlSnapshot.deviceInfo?.deviceId,
+                };
+                const binding = createBindingFromSnapshotAndXPath(bindingSnapshot as any, xpath);
+                if (binding && !(selfContainedParams as any).elementBinding) {
+                  (selfContainedParams as any).elementBinding = binding;
+                }
+              }
+            } catch (e) {
+              console.warn('保存时生成 elementBinding 失败（允许跳过）：', e);
+            }
 
             newStep.parameters = selfContainedParams;
 

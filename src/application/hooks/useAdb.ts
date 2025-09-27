@@ -319,28 +319,65 @@ export const useAdb = () => {
   ) => {
     // 发送前统一处理：
     // - custom → 映射为 absolute 或 standard
-    // - 移除空值字段
+    // - 移除空值 value，但保留仅依赖 includes/regexIncludes/excludes/regexExcludes 的字段
     // - includes/excludes 仅保留已选字段且去重
-    const backendStrategy = toBackendStrategy(criteria.strategy, criteria.fields || [], criteria.values || {});
-    const { fields, values } = normalizeFieldsAndValues(criteria.fields || [], criteria.values || {});
-    const includes = normalizeIncludes(criteria.includes || {}, fields);
-    const excludes = normalizeExcludes(criteria.excludes || {}, fields);
+    const originalFields = Array.from(new Set(criteria.fields || []));
+    const backendStrategy = toBackendStrategy(criteria.strategy, originalFields, criteria.values || {});
 
-    // 透传并转换 camelCase → snake_case（后端采用 match_mode/regex_includes/regex_excludes）
-    const match_mode = criteria.matchMode ? Object.fromEntries(Object.entries(criteria.matchMode)) : undefined;
-    const regex_includes = criteria.regexIncludes ? Object.fromEntries(Object.entries(criteria.regexIncludes)) : undefined;
-    const regex_excludes = criteria.regexExcludes ? Object.fromEntries(Object.entries(criteria.regexExcludes)) : undefined;
+    const valuesIn = criteria.values || {};
+    const isNonEmpty = (v: any) => typeof v === 'string' ? v.trim().length > 0 : v !== undefined && v !== null;
+    const nonEmptyValues: Record<string, string> = {};
+    for (const f of originalFields) {
+      const v = (valuesIn as any)[f];
+      if (isNonEmpty(v)) nonEmptyValues[f] = String(v).trim();
+    }
 
-    return await applicationService.matchElementByCriteria(deviceId, {
+    const hasNonEmptyArray = (arr?: string[]) => Array.isArray(arr) && arr.some(s => typeof s === 'string' && s.trim().length > 0);
+    const includesIn = criteria.includes || {};
+    const excludesIn = criteria.excludes || {};
+    const regexIncludesIn = criteria.regexIncludes || {};
+    const regexExcludesIn = criteria.regexExcludes || {};
+
+    const includeOnlyFields = Object.keys(includesIn).filter(k => originalFields.includes(k) && hasNonEmptyArray(includesIn[k]));
+    const excludeOnlyFields = Object.keys(excludesIn).filter(k => originalFields.includes(k) && hasNonEmptyArray(excludesIn[k]));
+    const regexIncludeOnlyFields = Object.keys(regexIncludesIn).filter(k => originalFields.includes(k) && hasNonEmptyArray(regexIncludesIn[k]));
+    const regexExcludeOnlyFields = Object.keys(regexExcludesIn).filter(k => originalFields.includes(k) && hasNonEmptyArray(regexExcludesIn[k]));
+
+    const keepFields = Array.from(new Set([
+      ...Object.keys(nonEmptyValues),
+      ...includeOnlyFields,
+      ...excludeOnlyFields,
+      ...regexIncludeOnlyFields,
+      ...regexExcludeOnlyFields,
+    ])).filter(f => originalFields.includes(f));
+
+    // 正常化 includes/excludes（按照保留字段）
+    const includes = normalizeIncludes(includesIn, keepFields);
+    const excludes = normalizeExcludes(excludesIn, keepFields);
+
+    // 透传并转换 camelCase → snake_case（后端采用 match_mode/regex_includes/regex_excludes），并裁剪到 keepFields
+    const match_mode = criteria.matchMode
+      ? Object.fromEntries(Object.entries(criteria.matchMode).filter(([k]) => keepFields.includes(k)))
+      : undefined;
+    const regex_includes = criteria.regexIncludes
+      ? Object.fromEntries(Object.entries(criteria.regexIncludes).filter(([k, v]) => keepFields.includes(k) && hasNonEmptyArray(v)))
+      : undefined;
+    const regex_excludes = criteria.regexExcludes
+      ? Object.fromEntries(Object.entries(criteria.regexExcludes).filter(([k, v]) => keepFields.includes(k) && hasNonEmptyArray(v)))
+      : undefined;
+
+    const payload = {
       strategy: backendStrategy,
-      fields,
-      values,
+      fields: keepFields,
+      values: nonEmptyValues,
       includes,
       excludes,
       ...(match_mode ? { match_mode } : {}),
       ...(regex_includes ? { regex_includes } : {}),
       ...(regex_excludes ? { regex_excludes } : {}),
-    } as any);
+    } as any;
+    try { console.debug('[useAdb.matchElementByCriteria] payload:', { deviceId, payload }); } catch {}
+    return await applicationService.matchElementByCriteria(deviceId, payload);
   }, []);
 
   // ===== 智能脚本执行（统一出口） =====

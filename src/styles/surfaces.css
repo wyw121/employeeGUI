@@ -1,31 +1,223 @@
+@layer surfaces {
+/* 循环体主题变量（默认值）：可被具体皮肤类覆盖 */
+.loop-surface {
+  --loop-text: #111827; /* slate-900 */
+  --loop-text-strong: #0f172a; /* 更深一点 */
+  --loop-muted: #374151; /* gray-700 */
+  --loop-btn-bg: rgba(15, 23, 42, 0.04);
+  --loop-btn-bg-hover: rgba(15, 23, 42, 0.06);
+  --loop-btn-border: rgba(15, 23, 42, 0.25);
+}
+
 /* 轻色表面：在白/浅色背景下保证文本深色，避免被暗黑主题覆盖为白字 */
-.light-surface {
-  color: #111827 !important; /* slate-900 */
+.light-surface,
+.loop-surface {
+  color: var(--loop-text, #111827) !important; /* slate-900 */
+}
+
+/* AntD Card 标题/正文在浅色表面下的文本色修正（覆盖暗黑主题白字）*/
+.light-surface .ant-card-head-title,
+.loop-surface .ant-card-head-title {
+  color: var(--loop-text, #111827) !important;
+}
+
+.light-surface .ant-card-body,
+.loop-surface .ant-card-body {
+  color: var(--loop-text, #111827) !important;
 }
 
 .light-surface .ant-typography,
+.loop-surface .ant-typography,
 .light-surface .ant-typography-title,
+.loop-surface .ant-typography-title,
 .light-surface .ant-typography-caption,
-.light-surface .ant-typography-secondary {
-  color: #111827 !important;
+.loop-surface .ant-typography-caption,
+.light-surface .ant-typography-secondary,
+.loop-surface .ant-typography-secondary {
+  color: var(--loop-text, #111827) !important;
 }
 
-.light-surface .ant-tag {
-  color: #111827 !important;
+.light-surface .ant-tag,
+.loop-surface .ant-tag {
+  color: var(--loop-text, #111827) !important;
 }
 
 .light-surface .ant-badge,
-.light-surface .ant-badge-status-text {
-  color: #111827 !important;
+.loop-surface .ant-badge,
+.light-surface .ant-badge-status-text,
+.loop-surface .ant-badge-status-text {
+  color: var(--loop-text, #111827) !important;
 }
 
 .light-surface .text-gray-500,
+.loop-surface .text-gray-500,
 .light-surface .text-gray-600,
-.light-surface .text-gray-700 {
-  color: #374151 !important; /* gray-700 */
+.loop-surface .text-gray-600,
+.light-surface .text-gray-700,
+.loop-surface .text-gray-700 {
+  color: var(--loop-muted, #374151) !important; /* gray-700 */
 }
 
 .light-surface code,
-.light-surface pre {
-  color: #0f172a !important; /* slate-900 */
+.loop-surface code,
+.light-surface pre,
+.loop-surface pre {
+  color: var(--loop-text-strong, #0f172a) !important; /* slate-900 */
+}
+
+/* 覆盖默认/文字/链接按钮颜色为深色（不影响 primary/danger 等强样式） */
+.light-surface .ant-btn-default,
+.loop-surface .ant-btn-default,
+.light-surface .ant-btn-text,
+.loop-surface .ant-btn-text,
+.light-surface .ant-btn-link,
+.loop-surface .ant-btn-link {
+  color: var(--loop-text, #111827) !important;
+}
+
+/* 确保按钮内部文字也继承深色（AntD 按钮文本通常渲染在 span 内）*/
+.light-surface .ant-btn > span,
+.loop-surface .ant-btn > span {
+  color: inherit !important;
+}
+
+/* 图标跟随文本色 */
+.light-surface .anticon,
+.loop-surface .anticon {
+  color: inherit !important;
+}
+
+/* === 循环体内步骤卡片的“独一无二”样式基线 === */
+/* 目标：相对普通浅色表面，再加强可读性与区分度 */
+.in-loop-step.ant-card,
+.in-loop-step .ant-card-head,
+.in-loop-step .ant-card-body {
+  color: var(--loop-text-strong, #0f172a) !important; /* 更深一点的 slate-900 */
+}
+
+/* 标题（Typography.Text）、标签、按钮再加强对比 */
+.in-loop-step .ant-typography,
+.in-loop-step .ant-typography-title,
+.in-loop-step .ant-typography-caption,
+.in-loop-step .ant-tag,
+.in-loop-step .ant-badge,
+.in-loop-step .ant-badge-status-text,
+.in-loop-step .ant-btn,
+.in-loop-step .ant-btn > span,
+.in-loop-step .anticon {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+
+/* 让 loop 内的几个关键按钮在视觉上更“自己”，便于识别 */
+.in-loop-step .ant-btn-text {
+  /* 轻微的背景和边框，避免白字/低对比问题 */
+  background-color: var(--loop-btn-bg, rgba(15, 23, 42, 0.04)) !important; /* slate-900 @ 4% */
+  border-radius: 6px !important;
+}
+.in-loop-step .ant-btn-default {
+  border-color: var(--loop-btn-border, rgba(15, 23, 42, 0.25)) !important;
+}
+.in-loop-step .ant-btn:hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15, 23, 42, 0.06)) !important;
+}
+
+/* 多设备/信息/编辑等小按钮的尺寸微调，保证可读性 */
+.in-loop-step .ant-btn[title],
+.in-loop-step .ant-btn .anticon {
+  filter: none !important;
+}
+
+/* 循环锚点（开始/结束）卡片的可读性：梯度背景上强制深色文本与按钮 */
+.loop-anchor.ant-card .ant-card-head,
+.loop-anchor .ant-card-head,
+.loop-anchor .ant-card-head-title,
+.loop-anchor .ant-card-body,
+.loop-anchor .ant-typography,
+.loop-anchor .ant-btn,
+.loop-anchor .ant-btn > span,
+.loop-anchor .anticon,
+.loop-anchor .ant-tag {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+.loop-anchor .ant-btn-text {
+  background-color: var(--loop-btn-bg, rgba(15, 23, 42, 0.05)) !important;
+  border-radius: 6px !important;
+}
+.loop-anchor .ant-btn-default {
+  border-color: var(--loop-btn-border, rgba(15, 23, 42, 0.25)) !important;
+}
+.loop-anchor .ant-btn:hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15, 23, 42, 0.07)) !important;
+}
+
+/* === 浮层组件（Popover/Tooltip/Modal）在浅色/循环表面内的配色修正 === */
+/* Popover 内部背景与文字：避免被全局暗黑覆盖为黑底白字，统一走浅色方案 */
+.light-surface .ant-popover .ant-popover-inner,
+.loop-surface .ant-popover .ant-popover-inner {
+  background-color: #ffffff !important;
+  color: var(--loop-text, #111827) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Popover 箭头颜色与边框 */
+.light-surface .ant-popover .ant-popover-arrow::before,
+.loop-surface .ant-popover .ant-popover-arrow::before {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Tooltip 内部背景与文字 */
+.light-surface .ant-tooltip .ant-tooltip-inner,
+.loop-surface .ant-tooltip .ant-tooltip-inner {
+  background-color: #ffffff !important;
+  color: var(--loop-text, #111827) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-surface .ant-tooltip .ant-tooltip-arrow::before,
+.loop-surface .ant-tooltip .ant-tooltip-arrow::before {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Modal 浅色内容/标题/文本（适用于对话框容器加了 .light-surface 或 .loop-surface 的情况）*/
+.light-surface .ant-modal-content,
+.loop-surface .ant-modal-content {
+  background-color: #ffffff !important;
+  color: var(--loop-text, #111827) !important;
+}
+
+.light-surface .ant-modal-header,
+.loop-surface .ant-modal-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-surface .ant-modal-title,
+.loop-surface .ant-modal-title,
+.light-surface .ant-modal-body,
+.loop-surface .ant-modal-body {
+  color: var(--loop-text, #111827) !important;
+}
+
+/* 示例主题：玫瑰与晴空（可自由扩展） */
+.loop-theme-rose.loop-surface,
+.loop-theme-rose.light-surface {
+  --loop-text: #4a0e2e;
+  --loop-text-strong: #3a0a24;
+  --loop-muted: #7a2f4a;
+  --loop-btn-bg: rgba(74, 14, 46, 0.06);
+  --loop-btn-bg-hover: rgba(74, 14, 46, 0.1);
+  --loop-btn-border: rgba(74, 14, 46, 0.3);
+}
+
+.loop-theme-sky.loop-surface,
+.loop-theme-sky.light-surface {
+  --loop-text: #0c4a6e;
+  --loop-text-strong: #08354f;
+  --loop-muted: #1e6091;
+  --loop-btn-bg: rgba(12, 74, 110, 0.06);
+  --loop-btn-bg-hover: rgba(12, 74, 110, 0.1);
+  --loop-btn-border: rgba(12, 74, 110, 0.3);
+}
 }

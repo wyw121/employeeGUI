@@ -73,6 +73,19 @@ npm run tauri dev
 ```bash
 # 构建应用
 npm run tauri build
+## 旧“通讯录管理”清理与防回归
+
+本项目已统一至“联系人导入向导（新）”路径。若需要物理清理历史残留或做回归检查：
+
+- 物理清理（硬删除旧文件与空目录，安全容错）：
+	- Windows PowerShell
+	- npm run clean:legacy-contacts
+
+- 检查是否存在旧引用（CI/本地均可）：
+	- npm run check:legacy-contacts
+
+注意：清理脚本具备权限容错（忽略 EPERM/EACCES/ENOENT），可重复执行，幂等。
+
 ```
 
 ## 新后端灰度开关（后端替换不改前端）

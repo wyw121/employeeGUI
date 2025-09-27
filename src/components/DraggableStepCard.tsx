@@ -165,6 +165,23 @@ const DraggableStepCardInner: React.FC<
 
   // 卡片 actions 与 Header 中的操作重复，故移除，统一放在 Header 区域
 
+  // 皮肤主题：当在循环体或循环起止卡片时，支持通过 step.parameters.loopTheme 指定主题
+  const isAnchor = step.step_type === 'loop_start' || step.step_type === 'loop_end';
+  const isInLoop = (() => { const s:any = step; return !!(s.parent_loop_id || s.parentLoopId); })();
+  const loopThemeToken: string | undefined = (() => {
+    const t = (step.parameters as any)?.loopTheme;
+    if (!t || typeof t !== 'string') return undefined;
+    return t.trim();
+  })();
+  const cardThemeToken: string | undefined = (() => {
+    const t = (step.parameters as any)?.cardTheme;
+    if (!t || typeof t !== 'string') return undefined;
+    return t.trim();
+  })();
+  const loopThemeClass = (isAnchor || isInLoop) && loopThemeToken ? `loop-theme-${loopThemeToken}` : '';
+  const nonLoopThemeClass = (!isAnchor && !isInLoop && cardThemeToken) ? `loop-theme-${cardThemeToken}` : '';
+  const nonLoopLightSurface = (!isAnchor && !isInLoop && !!cardThemeToken) ? 'light-surface' : '';
+
   return (
     <div className="w-full" style={{ touchAction: 'none' }}>
       {/* 轻微旋转/缩放的视觉反馈（尊重 reduced-motion） */}
@@ -184,6 +201,16 @@ const DraggableStepCardInner: React.FC<
           data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
             'select-none transition-shadow cursor-grab active:cursor-grabbing',
+            // 循环体内：添加 loop-surface + in-loop-step 两个类，便于独有样式和更强覆盖
+            (() => { const s:any = step; return (s.parent_loop_id || s.parentLoopId) ? 'loop-surface in-loop-step' : ''; })(),
+            // 循环锚点（开始/结束）卡片：同样应用 loop-surface，确保标题区按钮/文本为深色且清晰可读
+            (step.step_type === 'loop_start' || step.step_type === 'loop_end') ? 'loop-surface loop-anchor' : '',
+            // 循环皮肤主题类（与 loop-surface 同层附加，实现变量化换肤）
+            loopThemeClass,
+            // 非循环步骤的皮肤主题类（使用相同变量体系）
+            nonLoopThemeClass,
+            // 非循环主题时，挂载 light-surface 以启用可读性与变量驱动
+            nonLoopLightSurface,
             typeStyle.cardClass,
             typeStyle.extraCardClass || '',
             dragging

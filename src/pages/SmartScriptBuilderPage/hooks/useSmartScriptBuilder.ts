@@ -46,6 +46,10 @@ export function useSmartScriptBuilder() {
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [isScriptValid, setIsScriptValid] = useState(true);
 
+  // 皮肤选择：循环体与非循环步骤
+  const [loopTheme, setLoopTheme] = useState<string | null>(null);
+  const [nonLoopTheme, setNonLoopTheme] = useState<string | null>(null);
+
   const handleSaveStepRef = useRef<() => Promise<void>>(async () => {});
   const showAddModalRef = useRef<(options?: { resetFields?: boolean }) => void>(() => {});
   const setEditingStepRef = useRef<Dispatch<SetStateAction<LoopScriptStep | null>>>(() => {});
@@ -152,6 +156,43 @@ export function useSmartScriptBuilder() {
     DistributedStepLookupService.setGlobalScriptSteps(buildDistributedSteps(steps));
   }, [steps]);
 
+  // === 主题应用：批量写入步骤参数 ===
+  const applyLoopTheme = useCallback((theme: string | null) => {
+    setLoopTheme(theme);
+    setSteps(prev => prev.map(s => {
+      const isAnchor = s.step_type === 'loop_start' || s.step_type === 'loop_end';
+      const isInLoop = !!(s.parent_loop_id || (s as any).parentLoopId);
+      if (isAnchor || isInLoop) {
+        const nextParams = { ...(s.parameters || {}) } as any;
+        if (theme && theme.trim()) {
+          nextParams.loopTheme = theme.trim();
+        } else {
+          delete nextParams.loopTheme;
+        }
+        return { ...s, parameters: nextParams };
+      }
+      return s;
+    }));
+  }, []);
+
+  const applyNonLoopTheme = useCallback((theme: string | null) => {
+    setNonLoopTheme(theme);
+    setSteps(prev => prev.map(s => {
+      const isAnchor = s.step_type === 'loop_start' || s.step_type === 'loop_end';
+      const isInLoop = !!(s.parent_loop_id || (s as any).parentLoopId);
+      if (!isAnchor && !isInLoop) {
+        const nextParams = { ...(s.parameters || {}) } as any;
+        if (theme && theme.trim()) {
+          nextParams.cardTheme = theme.trim();
+        } else {
+          delete nextParams.cardTheme;
+        }
+        return { ...s, parameters: nextParams };
+      }
+      return s;
+    }));
+  }, []);
+
   return {
     headerProps: {
       devices,
@@ -195,6 +236,11 @@ export function useSmartScriptBuilder() {
       onShowQualityPanel: () => setShowQualityPanel(true),
       onTestElementMapping: workflowIntegrations.handleTestElementMapping,
       onTestSmartStepGenerator: workflowIntegrations.handleTestSmartStepGenerator,
+      // 皮肤设置
+      loopTheme,
+      nonLoopTheme,
+      onApplyLoopTheme: applyLoopTheme,
+      onApplyNonLoopTheme: applyNonLoopTheme,
     },
     stepEditModalProps: {
   open: isModalVisible,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, InputNumber, Select, Button, Space, Typography, Tooltip, Divider, Checkbox } from 'antd';
+import { Table, InputNumber, Select, Button, Space, Typography, Tooltip, Divider, Checkbox, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useAdb } from '../../../../application/hooks/useAdb';
 
@@ -18,6 +18,9 @@ export interface DeviceAssignmentTableProps {
   value?: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>;
   onChange?: (value: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>) => void;
   industries?: string[];
+  conflictingDeviceIds?: string[];
+  conflictPeersByDevice?: Record<string, Array<{ peerId: string; start: number; end: number }>>;
+  onJumpToDevice?: (deviceId: string) => void;
 }
 
 const DEFAULT_INDUSTRIES = ['不限', '电商', '教育', '医疗', '金融', '本地生活', '其他'];
@@ -26,6 +29,9 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
   value,
   onChange,
   industries = DEFAULT_INDUSTRIES,
+  conflictingDeviceIds = [],
+  conflictPeersByDevice = {},
+  onJumpToDevice,
 }) => {
   const { devices, refreshDevices, getDeviceContactCount } = useAdb();
 
@@ -130,7 +136,10 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
       key: 'device',
       render: (_: any, row: DeviceAssignmentRow) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{row.deviceName}</Text>
+          <Space>
+            <Text strong>{row.deviceName}</Text>
+            {conflictingDeviceIds.includes(row.deviceId) && <Tag color="red">冲突</Tag>}
+          </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>{row.deviceId}</Text>
         </Space>
       )
@@ -154,25 +163,49 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
       dataIndex: 'range',
       key: 'range',
       width: 280,
-      render: (_: any, row: DeviceAssignmentRow) => (
-        <Space>
-          <InputNumber
-            status={typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd) ? 'error' : undefined}
-            min={0}
-            value={row.idStart}
-            placeholder="起"
-            onChange={(v) => updateRow(row.deviceId, { idStart: typeof v === 'number' ? v : undefined })}
-          />
-          <span>~</span>
-          <InputNumber
-            status={typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd) ? 'error' : undefined}
-            min={0}
-            value={row.idEnd}
-            placeholder="止"
-            onChange={(v) => updateRow(row.deviceId, { idEnd: typeof v === 'number' ? v : undefined })}
-          />
-        </Space>
-      )
+      render: (_: any, row: DeviceAssignmentRow) => {
+        const peers = conflictPeersByDevice[row.deviceId] || [];
+        const hasSelfError = typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd);
+        const hasConflict = peers.length > 0;
+        const status = (hasSelfError || hasConflict) ? 'error' : undefined;
+        const content = (
+          <Space>
+            <InputNumber
+              status={status as any}
+              min={0}
+              value={row.idStart}
+              placeholder="起"
+              onChange={(v) => updateRow(row.deviceId, { idStart: typeof v === 'number' ? v : undefined })}
+            />
+            <span>~</span>
+            <InputNumber
+              status={status as any}
+              min={0}
+              value={row.idEnd}
+              placeholder="止"
+              onChange={(v) => updateRow(row.deviceId, { idEnd: typeof v === 'number' ? v : undefined })}
+            />
+          </Space>
+        );
+        if (!hasConflict) return content;
+        return (
+          <Tooltip
+            title={
+              <div>
+                {peers.slice(0, 5).map((p, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span>与设备 {p.peerId} [{p.start}-{p.end}] 重叠</span>
+                    <Button type="link" size="small" onClick={() => onJumpToDevice?.(p.peerId)}>跳至</Button>
+                  </div>
+                ))}
+                {peers.length > 5 && <div style={{ opacity: 0.7 }}>仅显示前5条</div>}
+              </div>
+            }
+          >
+            {content}
+          </Tooltip>
+        );
+      }
     },
     {
       title: '设备联系人数',
@@ -218,6 +251,7 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
         dataSource={data}
         size="middle"
         pagination={false}
+        rowClassName={(record: DeviceAssignmentRow) => conflictingDeviceIds.includes(record.deviceId) ? 'bg-red-50' : ''}
         rowSelection={{
           selectedRowKeys: selectedDeviceIds,
           onChange: (keys) => setSelectedDeviceIds(keys as string[]),

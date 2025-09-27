@@ -3,9 +3,12 @@
  * 检查是否存在对“通讯录管理（旧）”相关文件的引用。
  * 检测到即退出码 1，用于本地或 CI 拦截回归。
  */
-const { globby } = require('globby');
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const workspace = path.resolve(__dirname, '..');
 const srcDir = path.join(workspace, 'src');
@@ -26,12 +29,34 @@ const forbiddenPatterns = [
   'components/contact/ContactTaskForm',
 ];
 
+async function walk(dir) {
+  let entries;
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    // 忽略无法访问的目录（如 EPERM），避免中断整个扫描
+    if (err && (err.code === 'EPERM' || err.code === 'EACCES' || err.code === 'ENOENT')) {
+      return [];
+    }
+    throw err;
+  }
+  const files = await Promise.all(entries.map(async (entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return walk(fullPath);
+    }
+    return fullPath;
+  }));
+  return files.flat();
+}
+
 (async () => {
   try {
-    const files = await globby(['src/**/*.{ts,tsx}'], { cwd: workspace, absolute: true });
+    const all = await walk(srcDir);
+    const files = all.filter(f => /\.(ts|tsx)$/i.test(f));
     const hits = [];
     for (const file of files) {
-      const content = fs.readFileSync(file, 'utf8');
+      const content = await fs.promises.readFile(file, 'utf8');
       for (const pat of forbiddenPatterns) {
         if (content.includes(pat)) {
           hits.push({ file: path.relative(workspace, file), pattern: pat });

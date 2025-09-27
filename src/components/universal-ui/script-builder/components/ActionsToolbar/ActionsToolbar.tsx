@@ -3,6 +3,7 @@ import { Button } from 'antd';
 import { EyeOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { ScreenActionDropdownButton } from '../../../../step-card';
 import { SystemKeyDropdownButton } from '../../../../step-card/system-actions/SystemKeyDropdownButton';
+import { GhostOverlayToggle } from '../../../dnd/components/GhostOverlayToggle';
 
 export interface ActionsToolbarProps {
   onOpenPageAnalyzer?: () => void;
@@ -69,6 +70,11 @@ export const ActionsToolbar: React.FC<ActionsToolbarProps> = ({
           <SystemKeyDropdownButton onSelectTemplate={(tpl) => onCreateSystemAction(tpl)} />
         </div>
       )}
+
+      {/* 拖拽 UI：幽灵模式 开关 */}
+      <div style={{ marginLeft: 'auto' }}>
+        <GhostOverlayToggle />
+      </div>
     </div>
   );
 };

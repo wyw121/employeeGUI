@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button, message } from 'antd';
+import { noDragProps } from '../../../universal-ui/dnd/noDrag';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 
 interface ContactActionsProps {
@@ -11,7 +12,7 @@ export const ContactActions: React.FC<ContactActionsProps> = ({ step, devices })
   if (step.step_type === 'contact_generate_vcf') {
     const src = step.parameters?.source_file_path as string | undefined;
     return (
-      <div className="mt-2">
+      <div className="mt-2" {...noDragProps}>
         <Button
           size="small"
           type="dashed"
@@ -35,7 +36,7 @@ export const ContactActions: React.FC<ContactActionsProps> = ({ step, devices })
     const selected = step.parameters?.selected_device_id as string | undefined;
     const hasOnline = devices.filter((d) => d.status === 'online').length > 0;
     return (
-      <div className="mt-2">
+      <div className="mt-2" {...noDragProps}>
         <Button
           size="small"
           type="dashed"

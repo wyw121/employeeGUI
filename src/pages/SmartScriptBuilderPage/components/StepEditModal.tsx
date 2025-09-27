@@ -24,6 +24,7 @@ import { SMART_ACTION_CONFIGS } from "../helpers/constants";
 import { LaunchAppSmartComponent } from "../../../components/smart/LaunchAppSmartComponent";
 import type { LaunchAppComponentParams } from "../../../types/smartComponents";
 import { renderParameterInput } from "../helpers/parameterRenderers";
+import { noDragProps } from "../../../components/universal-ui/dnd/noDrag";
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -60,6 +61,7 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
       maskClosable={false}
       zIndex={1000} // 设置基础z-index，确保子模态框可以显示在其上方
     >
+      <div {...noDragProps}>
       <Form
         form={form}
         layout="vertical"
@@ -427,6 +429,7 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
           <Input />
         </Form.Item>
       </Form>
+      </div>
     </Modal>
   );
 };

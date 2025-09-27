@@ -5,6 +5,8 @@ import {
   Space,
   Collapse,
   message,
+  Select,
+  Divider,
 } from "antd";
 import {
   ThunderboltOutlined,
@@ -32,6 +34,11 @@ interface ControlPanelProps {
   onShowQualityPanel: () => void;
   onTestElementMapping?: () => void;
   onTestSmartStepGenerator?: () => void;
+  // 皮肤设置
+  loopTheme?: string | null;
+  nonLoopTheme?: string | null;
+  onApplyLoopTheme?: (theme: string | null) => void;
+  onApplyNonLoopTheme?: (theme: string | null) => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -45,6 +52,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onShowQualityPanel,
   onTestElementMapping,
   onTestSmartStepGenerator,
+  loopTheme,
+  nonLoopTheme,
+  onApplyLoopTheme,
+  onApplyNonLoopTheme,
 }) => {
   return (
     <Space direction="vertical" size="middle" className="w-full">
@@ -125,6 +136,37 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <span>复杂工作流程支持</span>
           </div>
         </div>
+      </Card>
+
+      {/* 外观换肤 */}
+      <Card title="🎨 外观换肤" size="small">
+        <Space direction="vertical" className="w-full">
+          <div className="text-xs text-gray-500">循环体皮肤</div>
+          <Select
+            size="small"
+            value={loopTheme ?? ''}
+            placeholder="默认皮肤"
+            onChange={(v) => onApplyLoopTheme?.(v || null)}
+            options={[
+              { label: '默认', value: '' },
+              { label: '玫瑰（rose）', value: 'rose' },
+              { label: '晴空（sky）', value: 'sky' },
+            ]}
+          />
+          <Divider style={{ margin: '8px 0' }} />
+          <div className="text-xs text-gray-500">非循环步骤皮肤</div>
+          <Select
+            size="small"
+            value={nonLoopTheme ?? ''}
+            placeholder="默认皮肤"
+            onChange={(v) => onApplyNonLoopTheme?.(v || null)}
+            options={[
+              { label: '默认', value: '' },
+              { label: '玫瑰（rose）', value: 'rose' },
+              { label: '晴空（sky）', value: 'sky' },
+            ]}
+          />
+        </Space>
       </Card>
 
       {/* 操作类型说明 */}

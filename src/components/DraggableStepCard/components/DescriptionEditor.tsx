@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from 'antd';
+import { noDragProps } from '../../universal-ui/dnd/noDrag';
 
 interface DescriptionEditorProps {
   value: string;
@@ -19,6 +20,7 @@ export const DescriptionEditor: React.FC<DescriptionEditorProps> = ({ value, edi
         autoSize={{ minRows: 2, maxRows: 4 }}
         autoFocus
         onClick={(e) => e.stopPropagation()}
+        {...noDragProps}
         onChange={(e) => onChange(e.target.value)}
         onPressEnter={(e) => { e.stopPropagation(); onSave(); }}
         onBlur={onSave}

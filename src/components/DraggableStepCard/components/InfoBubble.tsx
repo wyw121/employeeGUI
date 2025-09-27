@@ -71,6 +71,18 @@ export const InfoBubble: React.FC<InfoBubbleProps> = ({ step, boundNode, snapsho
             </div>
           )}
         </Descriptions.Item>
+        <Descriptions.Item label="上下文">
+          <div className="text-xs space-y-1">
+            <div>
+              父节点类名：
+              <span className="text-neutral-700">{boundNode?.parent?.attrs?.['class'] || '—'}</span>
+            </div>
+            <div>
+              子节点数量：
+              <span className="text-neutral-700">{Array.isArray(boundNode?.children) ? boundNode.children.length : (typeof boundNode?.childCount === 'number' ? boundNode.childCount : 0)}</span>
+            </div>
+          </div>
+        </Descriptions.Item>
         <Descriptions.Item label="XML 快照">
           <div className="flex items-center gap-2 text-xs">
             <Tag color={snapshotAvailable ? 'green' : 'red'}>{snapshotAvailable ? '可用' : '缺失'}</Tag>
@@ -90,7 +102,13 @@ export const InfoBubble: React.FC<InfoBubbleProps> = ({ step, boundNode, snapsho
   );
 
   return (
-    <Popover placement="bottomRight" trigger={["click"]} overlayInnerStyle={{ padding: 8 }} content={content}>
+    <Popover
+      placement="bottomRight"
+      trigger={["click"]}
+      overlayInnerStyle={{ padding: 8 }}
+      content={content}
+      getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
+    >
       <Button
         size="small"
         type="text"

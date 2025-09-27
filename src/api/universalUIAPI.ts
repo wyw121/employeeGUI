@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import invokeCompat from './core/tauriInvoke';
 
 // 类型定义
 export interface UIElement {
@@ -142,9 +143,18 @@ export class UniversalUIAPI {
    */
   static async analyzeUniversalUIPage(deviceId: string): Promise<string> {
     try {
-      // 注意：Tauri 命令参数名称需与 Rust 端保持一致（snake_case）
-      // Rust: pub async fn analyze_universal_ui_page(device_id: String)
-      return await invoke<string>('analyze_universal_ui_page', { device_id: deviceId });
+      try {
+        // 优先按后端约定使用 snake_case
+        return await invokeCompat<string>('analyze_universal_ui_page', { deviceId }, { forceSnake: true });
+      } catch (e) {
+        const msg = String(e ?? '');
+        // 若后端报缺少 camelCase key（deviceId），则改用 camelCase 再试一次
+        if (msg.includes('missing required key deviceId') || msg.includes('invalid args `deviceId`')) {
+          console.warn('[UniversalUIAPI] analyze_universal_ui_page: 检测到 camelCase 形参要求，回退 forceCamel 重试…', msg);
+          return await invokeCompat<string>('analyze_universal_ui_page', { deviceId }, { forceCamel: true });
+        }
+        throw e;
+      }
     } catch (error) {
       console.error('Failed to analyze universal UI page:', error);
       throw new Error(`Universal UI页面分析失败: ${error}`);
@@ -158,7 +168,18 @@ export class UniversalUIAPI {
     try {
       // 优先使用后端统一解析器
       try {
-        return await invoke<UIElement[]>('extract_page_elements', { xml_content: xmlContent });
+        try {
+          // 优先按后端约定使用 snake_case
+          return await invokeCompat<UIElement[]>('extract_page_elements', { xmlContent }, { forceSnake: true });
+        } catch (e) {
+          const msg = String(e ?? '');
+          // 若后端报缺少 camelCase key（xmlContent），则改用 camelCase 再试一次
+          if (msg.includes('missing required key xmlContent') || msg.includes('invalid args `xmlContent`')) {
+            console.warn('[UniversalUIAPI] extract_page_elements: 检测到 camelCase 形参要求，回退 forceCamel 重试…', msg);
+            return await invokeCompat<UIElement[]>('extract_page_elements', { xmlContent }, { forceCamel: true });
+          }
+          throw e;
+        }
       } catch (backendError) {
         console.warn('后端解析失败，使用前端上下文感知解析:', backendError);
         // 后端失败时使用前端上下文感知解析
@@ -178,9 +199,18 @@ export class UniversalUIAPI {
     const elementMap = new Map<Element, UIElement>(); // XML节点到UIElement的映射
     
     try {
+      // 轻量清洗：去除非XML头信息，提取第一个 '<' 到最后一个 '>' 之间的内容
+      let content = xmlContent;
+      if (content) {
+        const firstLt = content.indexOf('<');
+        const lastGt = content.lastIndexOf('>');
+        if (firstLt > 0 && lastGt > firstLt) {
+          content = content.slice(firstLt, lastGt + 1);
+        }
+      }
       // 创建DOM解析器
       const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      const xmlDoc = parser.parseFromString(content, 'text/xml');
       
       // 检查解析错误
       const parseError = xmlDoc.querySelector('parsererror');

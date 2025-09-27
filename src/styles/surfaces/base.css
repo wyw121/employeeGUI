@@ -1,0 +1,53 @@
+@layer surfaces {
+/* 基线变量与通用文本/图标颜色修正 */
+.light-surface,
+.loop-surface {
+  --loop-text: #111827; /* slate-900 */
+  --loop-text-strong: #0f172a; /* 更深一点 */
+  --loop-muted: #374151; /* gray-700 */
+  --loop-btn-bg: rgba(15, 23, 42, 0.04);
+  --loop-btn-bg-hover: rgba(15, 23, 42, 0.06);
+  --loop-btn-border: rgba(15, 23, 42, 0.25);
+  color: var(--loop-text) !important;
+}
+
+.light-surface .ant-typography,
+.loop-surface .ant-typography,
+.light-surface .ant-typography-title,
+.loop-surface .ant-typography-title,
+.light-surface .ant-typography-caption,
+.loop-surface .ant-typography-caption,
+.light-surface .ant-typography-secondary,
+.loop-surface .ant-typography-secondary,
+.light-surface .ant-badge,
+.loop-surface .ant-badge,
+.light-surface .ant-badge-status-text,
+.loop-surface .ant-badge-status-text,
+.light-surface .ant-tag,
+.loop-surface .ant-tag {
+  color: var(--loop-text) !important;
+}
+
+.light-surface .text-gray-500,
+.loop-surface .text-gray-500,
+.light-surface .text-gray-600,
+.loop-surface .text-gray-600,
+.light-surface .text-gray-700,
+.loop-surface .text-gray-700 {
+  color: var(--loop-muted) !important;
+}
+
+.light-surface code,
+.loop-surface code,
+.light-surface pre,
+.loop-surface pre {
+  color: var(--loop-text-strong) !important;
+}
+
+.light-surface .anticon,
+.loop-surface .anticon,
+.light-surface .ant-btn > span,
+.loop-surface .ant-btn > span {
+  color: inherit !important;
+}
+}

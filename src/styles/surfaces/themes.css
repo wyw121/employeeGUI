@@ -1,0 +1,22 @@
+@layer surfaces {
+/* 示例主题变量：rose/sky（在 loop-surface 或 light-surface 上叠加） */
+.loop-theme-rose.loop-surface,
+.loop-theme-rose.light-surface {
+  --loop-text: #4a0e2e;
+  --loop-text-strong: #3a0a24;
+  --loop-muted: #7a2f4a;
+  --loop-btn-bg: rgba(74, 14, 46, 0.06);
+  --loop-btn-bg-hover: rgba(74, 14, 46, 0.1);
+  --loop-btn-border: rgba(74, 14, 46, 0.3);
+}
+
+.loop-theme-sky.loop-surface,
+.loop-theme-sky.light-surface {
+  --loop-text: #0c4a6e;
+  --loop-text-strong: #08354f;
+  --loop-muted: #1e6091;
+  --loop-btn-bg: rgba(12, 74, 110, 0.06);
+  --loop-btn-bg-hover: rgba(12, 74, 110, 0.1);
+  --loop-btn-border: rgba(12, 74, 110, 0.3);
+}
+}

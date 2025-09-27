@@ -133,6 +133,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
 
         {step.step_type === 'smart_find_element' && (
           <Button
+            className="step-action-btn"
             size="small"
             type="link"
             icon={<EyeOutlined />}
@@ -152,6 +153,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
 
         {(step.step_type === 'loop_start' || step.step_type === 'loop_end') && (
           <Button
+            className="step-action-btn"
             size="small"
             type="text"
             icon={<ReloadOutlined />}
@@ -192,6 +194,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
         />
 
         <Button
+          className="step-action-btn"
           type="text"
           size="small"
           icon={<EditOutlined />}

@@ -16,6 +16,7 @@ import {
   BuiltMatchingResult 
 } from '../../../pages/SmartScriptBuilderPage/helpers/matchingHelpers';
 import { saveLatestMatching } from '../../../components/universal-ui/views/grid-view/matchingCache';
+import { cleanXmlContent } from '../../../components/universal-ui/xml-parser/cleanXml';
 
 export interface EnhancedElementLike {
   resource_id?: string;
@@ -133,9 +134,9 @@ export class EnhancedMatchingHelper {
     optimizationOptions?: Partial<MatchingOptimizationOptions>,
     debug?: boolean
   ): BuiltMatchingResult | null {
-    // 解析XML上下文
+    // 解析XML上下文（先清洗，避免 BOM/前缀噪声）
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlContext, 'text/xml');
+    const xmlDoc = parser.parseFromString(cleanXmlContent(xmlContext), 'text/xml');
     
     if (xmlDoc.documentElement.tagName === 'parsererror') {
       throw new Error('XML解析失败');
@@ -190,16 +191,46 @@ export class EnhancedMatchingHelper {
       const xpath = element.xpath || element.element_path;
       try {
         const result = xmlDoc.evaluate(xpath!, xmlDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-        if (result.singleNodeValue && result.singleNodeValue instanceof Element) {
-          return result.singleNodeValue;
+        const node = result.singleNodeValue as Node | null;
+        if (node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            return node as Element;
+          }
+          // 有些实现可能返回属性/文本节点，取其父元素
+          const parent = (node as any).parentElement || (node as any).parentNode;
+          if (parent && parent.nodeType === Node.ELEMENT_NODE) {
+            return parent as Element;
+          }
         }
       } catch (error) {
         console.warn('XPath查找失败:', error);
       }
     }
 
-    // 2. 使用属性匹配查找
+    // 2. 使用属性匹配查找（优先使用 bounds 精确匹配）
     const allElements = xmlDoc.querySelectorAll('*');
+    // 2.1 bounds 精确匹配（当提供时）
+    let boundsStr: string | null = null;
+    if (element && element.bounds) {
+      if (typeof element.bounds === 'string') {
+        boundsStr = element.bounds;
+      } else if (
+        typeof element.bounds === 'object' &&
+        ['left','top','right','bottom'].every(k => k in (element.bounds as any))
+      ) {
+        const b = element.bounds as any;
+        boundsStr = `[${b.left},${b.top}][${b.right},${b.bottom}]`;
+      }
+    }
+    if (boundsStr) {
+      for (const el of Array.from(allElements)) {
+        if ((el as Element).getAttribute('bounds') === boundsStr) {
+          return el as Element;
+        }
+      }
+    }
+
+    // 2.2 其他关键字段匹配
     for (const el of Array.from(allElements)) {
       if (this.isElementMatch(el, element)) {
         return el;
@@ -238,6 +269,23 @@ export class EnhancedMatchingHelper {
     }
     if (targetElement.class_name) {
       checkField('class', targetElement.class_name);
+    }
+
+    // bounds 精确匹配（若提供）
+    if (targetElement.bounds) {
+      let boundsStr: string | undefined;
+      if (typeof targetElement.bounds === 'string') {
+        boundsStr = targetElement.bounds;
+      } else if (
+        typeof targetElement.bounds === 'object' &&
+        ['left','top','right','bottom'].every(k => k in (targetElement.bounds as any))
+      ) {
+        const b = targetElement.bounds as any;
+        boundsStr = `[${b.left},${b.top}][${b.right},${b.bottom}]`;
+      }
+      if (boundsStr) {
+        checkField('bounds', boundsStr);
+      }
     }
 
     // 需要至少50%的字段匹配

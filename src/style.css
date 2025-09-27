@@ -7,6 +7,8 @@
 
 /* 导入暗黑主题样式（位于 dark 层）与浅色/循环皮肤（位于 surfaces 层） */
 @import './styles/dark-theme.css';
+/* 先导入循环卡片皮肤（品牌色与装饰），再导入 surfaces 覆盖可读性，确保 surfaces 优先生效 */
+@import './components/DraggableStepCard/styles/loopTheme.css';
 @import './styles/surfaces.css';
 
 @tailwind base;

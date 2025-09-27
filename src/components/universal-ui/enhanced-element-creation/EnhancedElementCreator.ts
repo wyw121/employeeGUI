@@ -18,6 +18,7 @@ import {
   ElementAnalysisResult
 } from '../UniversalElementAnalyzer';
 import { ElementContextCreator } from '../data-transform/ElementContextCreator';
+import { cleanXmlContent } from '../xml-parser/cleanXml';
 
 export interface EnhancedElementCreationOptions {
   /** 完整的XML源码内容 */
@@ -337,8 +338,9 @@ export class EnhancedElementCreator {
    * XML 解析辅助
    */
   private static parseXml(xml: string): Document {
+    // 统一清洗，避免前缀噪声/BOM 导致解析失败
     const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, 'text/xml');
+    const doc = parser.parseFromString(cleanXmlContent(xml), 'text/xml');
     // 在某些环境中，解析错误会返回带有 parsererror 标签的文档
     if (doc.getElementsByTagName('parsererror').length > 0) {
       throw new Error('XML 解析失败');

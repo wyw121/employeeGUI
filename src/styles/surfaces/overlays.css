@@ -1,0 +1,57 @@
+@layer surfaces {
+/* 覆盖层统一浅色方案（白底深字 + 抬高 z-index） */
+.overlay-surface .ant-popover,
+.overlay-surface .ant-tooltip,
+.overlay-surface .ant-modal {
+  color: #111827 !important;
+}
+.overlay-surface .ant-popover-inner,
+.overlay-surface .ant-tooltip-inner,
+.overlay-surface .ant-modal-content {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+.overlay-surface .ant-popover-title,
+.overlay-surface .ant-modal-header {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+.overlay-elevated { z-index: 2100 !important; }
+
+/* Popover/Tooltip 箭头与边框 */
+.overlay-surface .ant-popover .ant-popover-inner {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+.overlay-surface .ant-popover .ant-popover-arrow::before {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+.overlay-surface .ant-tooltip .ant-tooltip-inner {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+.overlay-surface .ant-tooltip .ant-tooltip-arrow::before {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+.overlay-surface .ant-modal-content { background-color: #ffffff !important; }
+.overlay-surface .ant-modal-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid rgba(0,0,0,0.08) !important;
+}
+.overlay-surface .ant-modal-title,
+.overlay-surface .ant-modal-body { color: #111827 !important; }
+
+/* 内部按钮/图标颜色修正 */
+.overlay-surface .ant-popover .ant-btn,
+.overlay-surface .ant-tooltip .ant-btn,
+.overlay-surface .ant-modal .ant-btn,
+.overlay-surface .ant-popover .anticon,
+.overlay-surface .ant-tooltip .anticon,
+.overlay-surface .ant-modal .anticon {
+  color: #0f172a !important;
+}
+}

@@ -11,6 +11,7 @@ import {
 import { BoundsParser } from "./BoundsParser";
 import { ElementCategorizer } from "./ElementCategorizer";
 import { AppPageAnalyzer } from "./AppPageAnalyzer";
+import { cleanXmlContent } from "./cleanXml";
 
 export class XmlParser {
   /**
@@ -28,8 +29,10 @@ export class XmlParser {
     }
 
     try {
+      const content = cleanXmlContent(xmlString);
+
       const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+      const xmlDoc = parser.parseFromString(content, "text/xml");
 
       // 检查XML是否解析成功
       const parserError = xmlDoc.querySelector("parsererror");
@@ -56,7 +59,7 @@ export class XmlParser {
       });
 
       // 分析应用和页面信息
-      const appInfo = AppPageAnalyzer.getSimpleAppAndPageInfo(xmlString);
+  const appInfo = AppPageAnalyzer.getSimpleAppAndPageInfo(content);
 
       // 过滤掉空的类别
       const filteredCategories = Object.values(elementCategories).filter(

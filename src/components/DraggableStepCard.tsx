@@ -5,7 +5,6 @@ import { Card } from "antd";
 import { useBoundNode } from "./DraggableStepCard/hooks/useBoundNode";
 import LoopConfigModal from "./DraggableStepCard/components/LoopConfigModal";
 import { getStepTypeStyle } from "./DraggableStepCard/styles/stepTypeStyles";
-import "./DraggableStepCard/styles/loopTheme.css";
 import { XmlInspectorModal } from "../modules/xml-inspector/XmlInspectorModal";
 import { useCardDraggingStyle } from "./DraggableStepCard/hooks/useCardDraggingStyle";
 import { usePrefersReducedMotion } from "./DraggableStepCard/hooks/usePrefersReducedMotion";

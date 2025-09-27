@@ -1,4 +1,5 @@
 import { UiNode, AdvancedFilter, SearchOptions } from './types';
+import { cleanXmlContent } from '../../xml-parser/cleanXml';
 
 export function parseBounds(bounds?: string) {
   if (!bounds) return null as any;
@@ -40,7 +41,7 @@ export function buildXPath(n: UiNode | null | undefined): string {
 export function parseUiAutomatorXml(xmlText: string): UiNode | null {
   try {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const doc = parser.parseFromString(cleanXmlContent(xmlText), 'text/xml');
     const err = doc.querySelector('parsererror');
     if (err) throw new Error(err.textContent || 'XML 解析失败');
 

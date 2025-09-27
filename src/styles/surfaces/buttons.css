@@ -1,0 +1,19 @@
+@layer surfaces {
+/* 本体触发按钮：不影响危险态 */
+.step-action-btn.ant-btn-text:not(.ant-btn-dangerous),
+.step-action-btn.ant-btn-link:not(.ant-btn-dangerous) {
+  color: var(--loop-text-strong, #0f172a) !important;
+  background-color: var(--loop-btn-bg, rgba(15,23,42,0.04)) !important;
+  border-radius: 6px !important;
+}
+.step-action-btn.ant-btn-text:not(.ant-btn-dangerous):hover,
+.step-action-btn.ant-btn-link:not(.ant-btn-dangerous):hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15,23,42,0.06)) !important;
+}
+
+/* 默认按钮文字在浅色表面下统一深色，跳过 step-action-btn */
+.light-surface .ant-btn-default:not(.step-action-btn),
+.loop-surface .ant-btn-default:not(.step-action-btn) {
+  color: var(--loop-text, #111827) !important;
+}
+}

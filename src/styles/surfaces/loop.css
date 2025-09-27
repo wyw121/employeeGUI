@@ -1,0 +1,94 @@
+@layer surfaces {
+/* 循环内部可读性强化 */
+.in-loop-step.ant-card,
+.in-loop-step .ant-card-head,
+.in-loop-step .ant-card-body {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+
+.in-loop-step .ant-typography,
+.in-loop-step .ant-typography-title,
+.in-loop-step .ant-typography-caption,
+.in-loop-step .ant-tag,
+.in-loop-step .ant-badge,
+.in-loop-step .ant-badge-status-text,
+.in-loop-step .anticon {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+
+.in-loop-step .ant-btn-text,
+.in-loop-step .ant-btn-link {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+
+.in-loop-step .ant-btn-text {
+  background-color: var(--loop-btn-bg, rgba(15,23,42,0.04)) !important;
+  border-radius: 6px !important;
+}
+.in-loop-step .ant-btn-default {
+  border-color: var(--loop-btn-border, rgba(15,23,42,0.25)) !important;
+}
+.in-loop-step .ant-btn:hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15,23,42,0.06)) !important;
+}
+
+/* 循环锚点（开始/结束）可读性 + 白色标题条 */
+.loop-anchor.ant-card .ant-card-head,
+.loop-anchor .ant-card-head,
+.loop-anchor .ant-card-head-title,
+.loop-anchor .ant-card-body,
+.loop-anchor .ant-typography,
+.loop-anchor .anticon,
+.loop-anchor .ant-tag {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+.loop-anchor .ant-btn-text,
+.loop-anchor .ant-btn-link {
+  background-color: var(--loop-btn-bg, rgba(15,23,42,0.05)) !important;
+  border-radius: 6px !important;
+}
+.loop-anchor .ant-btn-default {
+  border-color: var(--loop-btn-border, rgba(15,23,42,0.25)) !important;
+}
+.loop-anchor .ant-btn:hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15,23,42,0.07)) !important;
+}
+
+.loop-anchor .ant-card-head-title > .flex,
+/* 提升特异性，确保覆盖 Tailwind bg-*/
+.loop-anchor.ant-card .ant-card-head .ant-card-head-title > .flex {
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  background-color: #ffffff !important;
+  border-radius: 12px 12px 0 0 !important;
+  border-bottom: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04) inset !important;
+}
+
+/* 暗黑容器下兜底透明化 */
+.dark-theme .loop-anchor .ant-card-head,
+.dark-theme .loop-anchor .ant-card-head-title,
+.dark-theme .loop-anchor .ant-card-body {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* 锚点主操作按钮增强 */
+.loop-anchor .step-action-btn.ant-btn-text,
+.loop-anchor .step-action-btn.ant-btn-link,
+.loop-anchor .step-action-btn.ant-btn-default {
+  color: var(--loop-text-strong,#0f172a) !important;
+  background-color: rgba(255,255,255,0.88) !important;
+  border-color: rgba(15,23,42,0.2) !important;
+}
+.loop-anchor .step-action-btn.ant-btn-text:hover,
+.loop-anchor .step-action-btn.ant-btn-link:hover,
+.loop-anchor .step-action-btn.ant-btn-default:hover {
+  background-color: rgba(255,255,255,0.96) !important;
+  border-color: rgba(15,23,42,0.28) !important;
+}
+.loop-anchor .step-action-btn[disabled] {
+  opacity: 0.85 !important;
+  color: #334155 !important;
+}
+}

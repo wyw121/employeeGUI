@@ -4,6 +4,7 @@
  */
 
 import { UiNode, ElementBounds } from './types';
+import { cleanXmlContent } from '../universal-ui/xml-parser/cleanXml';
 
 /**
  * 解析 UiAutomator 的 bounds 字符串
@@ -72,7 +73,7 @@ export function buildXPath(n: UiNode | null | undefined): string {
 export function parseUiAutomatorXml(xmlText: string): UiNode | null {
   try {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
+    const doc = parser.parseFromString(cleanXmlContent(xmlText), "text/xml");
     const err = doc.querySelector("parsererror");
     if (err) throw new Error(err.textContent || "XML 解析失败");
 

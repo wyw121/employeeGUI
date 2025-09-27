@@ -1,0 +1,30 @@
+@layer surfaces {
+/* 仅对“循环锚点（开始/结束）”透明化，确保自定义渐变皮肤可见 */
+.loop-anchor.ant-card,
+.loop-anchor .ant-card,
+.loop-anchor .ant-card-head,
+.loop-anchor .ant-card-body {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* 对带主题的 light-surface 卡片透明化（让主题皮肤/底图可见）
+   说明：仅当卡片根元素同时具有 light-surface 与 loop-theme-* 类时生效，
+        避免误伤未使用皮肤的普通卡片与循环体子步骤 */
+.light-surface.ant-card[class*="loop-theme-"],
+.light-surface[class*="loop-theme-"] .ant-card,
+.light-surface[class*="loop-theme-"] .ant-card-head,
+.light-surface[class*="loop-theme-"] .ant-card-body {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* 暗黑容器下进一步加固，仅针对循环锚点，防止 .dark-theme 使用 !important 覆盖 */
+.dark-theme .loop-anchor.ant-card,
+.dark-theme .loop-anchor .ant-card,
+.dark-theme .loop-anchor .ant-card-head,
+.dark-theme .loop-anchor .ant-card-body {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+}

@@ -106,6 +106,7 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
   const testButton = (
     <Button
       {...buttonProps}
+      className={(buttonProps as any).className ? `${(buttonProps as any).className} step-action-btn` : 'step-action-btn'}
       size={size}
       disabled={disabled || isTesting || !effectiveDeviceId}
       onClick={handleTest}
@@ -143,7 +144,10 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
           placement="topLeft"
           open={showResultPopover}
           onOpenChange={setShowResultPopover}
-          getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
+          overlayClassName="overlay-surface overlay-elevated"
+          zIndex={2100}
+          destroyTooltipOnHide
+          autoAdjustOverflow
         >
           <Badge 
             dot 
@@ -175,7 +179,10 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
             : `点击测试步骤: ${step.name}`
         }
         placement="top"
-        getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
+        overlayClassName="overlay-surface overlay-elevated"
+        zIndex={2100}
+        destroyTooltipOnHide
+        autoAdjustOverflow
       >
         {testButton}
       </Tooltip>

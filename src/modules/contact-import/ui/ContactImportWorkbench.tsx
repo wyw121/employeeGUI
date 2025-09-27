@@ -12,6 +12,7 @@ import { DeviceAssignmentTable } from './components/DeviceAssignmentTable';
 import ServiceFactory from '../../../application/services/ServiceFactory';
 import { findRangeConflicts } from '../utils/assignmentValidation';
 import BatchResultModal from './components/BatchResultModal';
+import ConflictNavigator from './components/ConflictNavigator';
 import type { BatchExecuteResult } from './services/batchExecutor';
 
 const { Title, Text } = Typography;
@@ -149,12 +150,14 @@ export const ContactImportWorkbench: React.FC = () => {
     return map;
   }, [rangeConflicts]);
 
+  const [currentJumpId, setCurrentJumpId] = useState<string | null>(null);
   const handleJumpToDevice = useCallback((deviceId: string) => {
     // antd Table 行上会带 data-row-key
     const el = document.querySelector(`[data-row-key="${deviceId}"]`);
     if (el && 'scrollIntoView' in el) {
       (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    setCurrentJumpId(deviceId);
   }, []);
 
   const handleGenerateBatches = async () => {
@@ -182,8 +185,15 @@ export const ContactImportWorkbench: React.FC = () => {
         markConsumed: async (batchId: string) => {
           // 使用应用层统一入口进行区间消费标记
           await contactImportApp.markConsumed(assignment, batchId);
-        }
-      } : undefined);
+        },
+        perDeviceMaxRetries: 2,
+        perDeviceRetryDelayMs: 500,
+        interDeviceDelayMs: 150,
+      } : {
+        perDeviceMaxRetries: 2,
+        perDeviceRetryDelayMs: 500,
+        interDeviceDelayMs: 150,
+      });
       message.success(`导入完成：成功 ${res.successDevices}/${res.totalDevices}`);
       setPreviewOpen(false);
       setLastResult(res);
@@ -265,6 +275,7 @@ export const ContactImportWorkbench: React.FC = () => {
             </Button>
           </Space>
           <Divider />
+          <ConflictNavigator conflictIds={conflictDeviceIds} currentTargetId={currentJumpId} onJump={handleJumpToDevice} />
           <DeviceAssignmentTable value={assignment} onChange={setAssignment} conflictingDeviceIds={conflictDeviceIds} conflictPeersByDevice={conflictPeersByDevice} onJumpToDevice={handleJumpToDevice} />
           <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
             <Button type="primary" onClick={handleGenerateBatches} disabled={hasInvalidRanges || allRangesEmpty}>
@@ -299,7 +310,11 @@ export const ContactImportWorkbench: React.FC = () => {
           }
           try {
             const retryBatches = previewBatches.filter(b => failedIds.includes(b.deviceId));
-            const res = await executeBatches(retryBatches as any, undefined);
+            const res = await executeBatches(retryBatches as any, {
+              perDeviceMaxRetries: 2,
+              perDeviceRetryDelayMs: 500,
+              interDeviceDelayMs: 150,
+            });
             setLastResult(res);
             message.success(`重试完成：成功 ${res.successDevices}/${res.totalDevices}`);
           } catch (e) {

@@ -51,7 +51,7 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
 
   return (
     <>
-      <Button size="small" type="text" icon={<ClusterOutlined />} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
+      <Button size="small" type="text" className="step-action-btn" icon={<ClusterOutlined />} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
         多设备
       </Button>
       <Modal
@@ -64,11 +64,14 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
           if (result) { setOpen(false); setResult(null); } else { onRun(); }
         }}
         width={720}
-        className="light-surface"
-        rootClassName="light-surface"
+        className="overlay-surface"
+        rootClassName="overlay-surface overlay-elevated"
+        maskStyle={{ backdropFilter: 'blur(1px)' }}
+        zIndex={2100}
+        destroyOnClose
       >
         {!result ? (
-          <div className="light-surface">
+          <div className="overlay-surface">
             <div className="mb-2">选择需要测试的设备：</div>
             <Checkbox.Group
               options={options.map(o => ({ label: <span style={{ opacity: o.online ? 1 : 0.6 }}>{o.label}</span>, value: o.value }))}
@@ -78,7 +81,7 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
             <div className="mt-2 text-xs text-gray-500">可多选，默认并发 2</div>
           </div>
         ) : (
-          <div className="light-surface">
+          <div className="overlay-surface">
             <MultiDeviceResultPanel results={result.results} summary={result.summary} deviceNameMap={deviceNameMap} />
           </div>
         )}

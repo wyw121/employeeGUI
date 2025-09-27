@@ -65,9 +65,7 @@
   color: var(--loop-text-strong, #0f172a) !important; /* slate-900 */
 }
 
-/* 覆盖默认/文字/链接按钮颜色为深色（不影响 primary/danger 等强样式） */
-.light-surface .ant-btn-default,
-.loop-surface .ant-btn-default,
+/* 仅修正 文字/链接 按钮为深色，避免覆盖 default 的自定义配色（例如蓝/绿/红状态） */
 .light-surface .ant-btn-text,
 .loop-surface .ant-btn-text,
 .light-surface .ant-btn-link,
@@ -95,16 +93,20 @@
   color: var(--loop-text-strong, #0f172a) !important; /* 更深一点的 slate-900 */
 }
 
-/* 标题（Typography.Text）、标签、按钮再加强对比 */
+/* 标题（Typography.Text）、标签再加强对比（避免影响按钮自定义色） */
 .in-loop-step .ant-typography,
 .in-loop-step .ant-typography-title,
 .in-loop-step .ant-typography-caption,
 .in-loop-step .ant-tag,
 .in-loop-step .ant-badge,
 .in-loop-step .ant-badge-status-text,
-.in-loop-step .ant-btn,
-.in-loop-step .ant-btn > span,
 .in-loop-step .anticon {
+  color: var(--loop-text-strong, #0f172a) !important;
+}
+
+/* 仅针对 loop 内的 文字/链接 按钮做可读性增强，不影响 default/primary 等 */
+.in-loop-step .ant-btn-text,
+.in-loop-step .ant-btn-link {
   color: var(--loop-text-strong, #0f172a) !important;
 }
 
@@ -133,13 +135,12 @@
 .loop-anchor .ant-card-head-title,
 .loop-anchor .ant-card-body,
 .loop-anchor .ant-typography,
-.loop-anchor .ant-btn,
-.loop-anchor .ant-btn > span,
 .loop-anchor .anticon,
 .loop-anchor .ant-tag {
   color: var(--loop-text-strong, #0f172a) !important;
 }
-.loop-anchor .ant-btn-text {
+.loop-anchor .ant-btn-text,
+.loop-anchor .ant-btn-link {
   background-color: var(--loop-btn-bg, rgba(15, 23, 42, 0.05)) !important;
   border-radius: 6px !important;
 }
@@ -151,53 +152,92 @@
 }
 
 /* === 浮层组件（Popover/Tooltip/Modal）在浅色/循环表面内的配色修正 === */
+
+/* ============ 覆盖层（Popover/Tooltip/Modal）浅色基线（仅限 .overlay-surface） ============ */
+.overlay-surface .ant-popover,
+.overlay-surface .ant-tooltip,
+.overlay-surface .ant-modal {
+  color: #111827 !important;
+}
+
+.overlay-surface .ant-popover-inner,
+.overlay-surface .ant-tooltip-inner,
+.overlay-surface .ant-modal-content {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.overlay-surface .ant-popover-title,
+.overlay-surface .ant-modal-header {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* 提升覆盖层的层叠上下文，避免被卡片遮挡 */
+.overlay-elevated {
+  z-index: 2100 !important;
+}
+
+/* 修正覆盖层内部链接/按钮/图标颜色（仅 overlay-surface） */
+.overlay-surface .ant-popover .ant-btn,
+.overlay-surface .ant-tooltip .ant-btn,
+.overlay-surface .ant-modal .ant-btn,
+.overlay-surface .ant-popover .anticon,
+.overlay-surface .ant-tooltip .anticon,
+.overlay-surface .ant-modal .anticon {
+  color: #0f172a !important;
+}
 /* Popover 内部背景与文字：避免被全局暗黑覆盖为黑底白字，统一走浅色方案 */
-.light-surface .ant-popover .ant-popover-inner,
-.loop-surface .ant-popover .ant-popover-inner {
+.overlay-surface .ant-popover .ant-popover-inner {
   background-color: #ffffff !important;
   color: var(--loop-text, #111827) !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 /* Popover 箭头颜色与边框 */
-.light-surface .ant-popover .ant-popover-arrow::before,
-.loop-surface .ant-popover .ant-popover-arrow::before {
+.overlay-surface .ant-popover .ant-popover-arrow::before {
   background: #ffffff !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 /* Tooltip 内部背景与文字 */
-.light-surface .ant-tooltip .ant-tooltip-inner,
-.loop-surface .ant-tooltip .ant-tooltip-inner {
+.overlay-surface .ant-tooltip .ant-tooltip-inner {
   background-color: #ffffff !important;
   color: var(--loop-text, #111827) !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
-.light-surface .ant-tooltip .ant-tooltip-arrow::before,
-.loop-surface .ant-tooltip .ant-tooltip-arrow::before {
+.overlay-surface .ant-tooltip .ant-tooltip-arrow::before {
   background: #ffffff !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 /* Modal 浅色内容/标题/文本（适用于对话框容器加了 .light-surface 或 .loop-surface 的情况）*/
-.light-surface .ant-modal-content,
-.loop-surface .ant-modal-content {
+.overlay-surface .ant-modal-content {
   background-color: #ffffff !important;
   color: var(--loop-text, #111827) !important;
 }
 
-.light-surface .ant-modal-header,
-.loop-surface .ant-modal-header {
+.overlay-surface .ant-modal-header {
   background-color: #ffffff !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
-.light-surface .ant-modal-title,
-.loop-surface .ant-modal-title,
-.light-surface .ant-modal-body,
-.loop-surface .ant-modal-body {
+.overlay-surface .ant-modal-title,
+.overlay-surface .ant-modal-body {
   color: var(--loop-text, #111827) !important;
+}
+
+/* === 弹层触发按钮（本体）专用：不影响 default/primary 的自定义色 === */
+.step-action-btn.ant-btn-text,
+.step-action-btn.ant-btn-link {
+  color: var(--loop-text-strong, #0f172a) !important;
+  background-color: var(--loop-btn-bg, rgba(15, 23, 42, 0.04)) !important;
+  border-radius: 6px !important;
+}
+.step-action-btn.ant-btn-text:hover,
+.step-action-btn.ant-btn-link:hover {
+  background-color: var(--loop-btn-bg-hover, rgba(15, 23, 42, 0.06)) !important;
 }
 
 /* 示例主题：玫瑰与晴空（可自由扩展） */

@@ -142,7 +142,9 @@ export class UniversalUIAPI {
    */
   static async analyzeUniversalUIPage(deviceId: string): Promise<string> {
     try {
-      return await invoke<string>('analyze_universal_ui_page', { deviceId });
+      // 注意：Tauri 命令参数名称需与 Rust 端保持一致（snake_case）
+      // Rust: pub async fn analyze_universal_ui_page(device_id: String)
+      return await invoke<string>('analyze_universal_ui_page', { device_id: deviceId });
     } catch (error) {
       console.error('Failed to analyze universal UI page:', error);
       throw new Error(`Universal UI页面分析失败: ${error}`);

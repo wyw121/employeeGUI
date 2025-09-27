@@ -107,9 +107,13 @@ export const InfoBubble: React.FC<InfoBubbleProps> = ({ step, boundNode, snapsho
       trigger={["click"]}
       overlayInnerStyle={{ padding: 8 }}
       content={content}
-      getPopupContainer={(triggerNode) => (triggerNode?.parentNode as HTMLElement) || document.body}
+      overlayClassName="overlay-surface overlay-elevated"
+      zIndex={2100}
+      destroyTooltipOnHide
+      autoAdjustOverflow
     >
       <Button
+        className="step-action-btn"
         size="small"
         type="text"
         icon={<InfoCircleOutlined />}

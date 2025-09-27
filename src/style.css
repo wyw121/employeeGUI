@@ -82,7 +82,8 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
-  overflow: hidden;
+  /* 允许页面出现滚动条，避免覆盖层溢出屏幕时无法滚动 */
+  overflow: auto;
 }
 
 /* Sindre风格渐变文字效果 */

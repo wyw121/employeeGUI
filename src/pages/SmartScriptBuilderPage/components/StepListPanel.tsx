@@ -3,7 +3,7 @@ import { EnhancedDraggableStepsContainer } from '../../../components/EnhancedDra
 import StepTestButton from '../../../components/StepTestButton';
 import { ExtendedSmartScriptStep, LoopConfig } from '../../../types/loopScript';
 import { Device } from '../../../domain/adb/entities/Device';
-import { message, Modal } from 'antd';
+import { App } from 'antd';
 import { SmartActionType } from '../../../types/smartComponents';
 import { generateContactImportWorkflowSteps } from '../../../modules/contact-automation';
 
@@ -21,6 +21,7 @@ interface StepListPanelProps {
 }
 
 const StepListPanel: React.FC<StepListPanelProps> = (props) => {
+  const { message, modal } = App.useApp();
   const {
     steps,
     setSteps,
@@ -180,7 +181,7 @@ const StepListPanel: React.FC<StepListPanelProps> = (props) => {
 
   // 删除循环
   const handleDeleteLoop = (loopId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: "确认删除循环",
       content:
         "确定要删除整个循环吗？这将删除循环开始和结束标记，循环内的步骤会保留。",

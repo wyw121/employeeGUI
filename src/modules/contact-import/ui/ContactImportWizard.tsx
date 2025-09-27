@@ -158,10 +158,10 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   const previewRows = contacts.slice(0, PREVIEW_ROWS_COUNT);
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="p-4 md:p-6 max-w-full w-full h-full overflow-auto">
       <Title level={2}>联系人导入向导</Title>
       
-      <Steps current={currentStep} style={{ marginBottom: '24px' }}>
+      <Steps current={currentStep} size="small" style={{ marginBottom: '16px' }}>
         {steps.map((step, index) => (
           <Step
             key={index}

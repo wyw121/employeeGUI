@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Modal, Checkbox, Space, Typography, message } from 'antd';
+import { Button, Modal, Checkbox, Space, Typography, App } from 'antd';
 import { ClusterOutlined } from '@ant-design/icons';
 import { useAdb } from '../../application/hooks/useAdb';
 import type { SmartScriptStep } from '../../types/smartScript';
@@ -14,6 +14,7 @@ interface MultiDeviceTestLauncherProps {
 }
 
 export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = ({ step }) => {
+  const { message } = App.useApp();
   const { devices } = useAdb();
   const { executeSingleStep } = useSingleStepTest();
   const [open, setOpen] = useState(false);
@@ -66,9 +67,9 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
         width={720}
         className="overlay-surface"
         rootClassName="overlay-surface overlay-elevated"
-        maskStyle={{ backdropFilter: 'blur(1px)' }}
+        styles={{ mask: { backdropFilter: 'blur(1px)' } }}
         zIndex={2100}
-        destroyOnClose
+        destroyOnHidden
       >
         {!result ? (
           <div className="overlay-surface">

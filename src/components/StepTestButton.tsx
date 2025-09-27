@@ -144,9 +144,9 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
           placement="topLeft"
           open={showResultPopover}
           onOpenChange={setShowResultPopover}
-          overlayClassName="overlay-surface overlay-elevated"
+          classNames={{ root: "overlay-surface overlay-elevated" }}
           zIndex={2100}
-          destroyTooltipOnHide
+          destroyOnHidden
           autoAdjustOverflow
         >
           <Badge 
@@ -179,9 +179,9 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
             : `点击测试步骤: ${step.name}`
         }
         placement="top"
-        overlayClassName="overlay-surface overlay-elevated"
+        classNames={{ root: "overlay-surface overlay-elevated" }}
         zIndex={2100}
-        destroyTooltipOnHide
+        destroyOnHidden
         autoAdjustOverflow
       >
         {testButton}

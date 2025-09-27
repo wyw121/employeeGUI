@@ -525,7 +525,7 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
     return (
       <Modal
         title="XML检查器"
-        visible={visible}
+        open={visible}
         onCancel={onClose}
         width={600}
         footer={[
@@ -562,7 +562,7 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
           )}
         </Space>
       }
-      visible={visible}
+      open={visible}
       onCancel={onClose}
       width={1200}
       height={800}

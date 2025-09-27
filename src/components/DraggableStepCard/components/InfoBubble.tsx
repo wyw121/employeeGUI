@@ -105,11 +105,11 @@ export const InfoBubble: React.FC<InfoBubbleProps> = ({ step, boundNode, snapsho
     <Popover
       placement="bottomRight"
       trigger={["click"]}
-      overlayInnerStyle={{ padding: 8 }}
+      styles={{ body: { padding: 8 } }}
       content={content}
       overlayClassName="overlay-surface overlay-elevated"
       zIndex={2100}
-      destroyTooltipOnHide
+      destroyOnHidden
       autoAdjustOverflow
     >
       <Button

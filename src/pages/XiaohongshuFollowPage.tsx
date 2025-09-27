@@ -23,7 +23,7 @@ import {
     Switch,
     Tag,
     Typography,
-    message,
+    App,
     Radio
 } from 'antd';
 import React, { useEffect, useState } from 'react';

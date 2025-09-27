@@ -28,14 +28,14 @@ const SmartScriptBuilderPage: React.FC = () => {
   } = useSmartScriptBuilder();
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 h-full overflow-auto">
       <PageHeader {...headerProps} />
 
-      <Row gutter={16}>
-        <Col span={16}>
+      <Row gutter={[12, 16]}>
+        <Col xs={24} lg={16}>
           <StepListPanel {...stepListProps} />
         </Col>
-        <Col span={8}>
+        <Col xs={24} lg={8}>
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <ScriptControlPanel {...scriptControlPanelProps} />
             <ControlPanel {...controlPanelProps} />

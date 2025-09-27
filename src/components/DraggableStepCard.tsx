@@ -208,7 +208,7 @@ const DraggableStepCardInner: React.FC<
         }
       >
         <Card
-          bordered={!(step.step_type === 'loop_start' || step.step_type === 'loop_end')}
+          variant={(step.step_type === 'loop_start' || step.step_type === 'loop_end') ? 'outlined' : 'outlined'}
           data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
             'select-none transition-shadow cursor-grab active:cursor-grabbing',
@@ -232,7 +232,7 @@ const DraggableStepCardInner: React.FC<
               ? `ring-2 ${typeStyle.ringClass} shadow-md ${typeStyle.draggingCardClass || ''}`
         : typeStyle.hoverClass,
           ].join(' ')}
-          bodyStyle={{ padding: 12 }}
+          styles={{ body: { padding: 12 } }}
           title={
             <StepCardHeader
               step={step}

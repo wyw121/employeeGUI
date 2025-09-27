@@ -1,15 +1,12 @@
-/* 字体系统升级 - Sindre风格 */
+/* 所有 @import 语句必须在最前面 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap');
+@import './styles/dark-theme.css';
+@import './components/DraggableStepCard/styles/loopTheme.css';
+@import './styles/surfaces.css';
 
 /* 声明样式层级顺序：先 dark 再 surfaces，确保浅色皮肤稳定覆盖暗黑覆盖 */
 @layer dark, surfaces;
-
-/* 导入暗黑主题样式（位于 dark 层）与浅色/循环皮肤（位于 surfaces 层） */
-@import './styles/dark-theme.css';
-/* 先导入循环卡片皮肤（品牌色与装饰），再导入 surfaces 覆盖可读性，确保 surfaces 优先生效 */
-@import './components/DraggableStepCard/styles/loopTheme.css';
-@import './styles/surfaces.css';
 
 @tailwind base;
 @tailwind components;

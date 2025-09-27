@@ -4,7 +4,7 @@ import {
   Button,
   Space,
   Collapse,
-  message,
+  App,
   Select,
   Divider,
 } from "antd";
@@ -57,6 +57,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onApplyLoopTheme,
   onApplyNonLoopTheme,
 }) => {
+  const { message } = App.useApp();
   return (
     <Space direction="vertical" size="middle" className="w-full">
       {/* 脚本控制 */}

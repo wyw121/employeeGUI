@@ -5,7 +5,16 @@ use rusqlite::Connection;
 
 use super::models::{ContactNumberList, ImportNumbersResult};
 use super::parser::extract_numbers_from_text;
-use super::repo::{fetch_numbers, get_contacts_db_path, init_db, insert_numbers, list_numbers};
+use super::repo::{
+    fetch_numbers,
+    fetch_numbers_by_id_range,
+    fetch_numbers_by_id_range_unconsumed,
+    mark_numbers_used_by_id_range,
+    get_contacts_db_path,
+    init_db,
+    insert_numbers,
+    list_numbers,
+};
 
 #[tauri::command]
 pub async fn import_contact_numbers_from_file(file_path: String) -> Result<ImportNumbersResult, String> {
@@ -100,4 +109,32 @@ pub async fn fetch_contact_numbers(count: i64) -> Result<Vec<super::models::Cont
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
 
     fetch_numbers(&conn, count).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn fetch_contact_numbers_by_id_range(start_id: i64, end_id: i64) -> Result<Vec<super::models::ContactNumberDto>, String> {
+    if end_id < start_id { return Err("end_id must be >= start_id".to_string()); }
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+
+    fetch_numbers_by_id_range(&conn, start_id, end_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn fetch_contact_numbers_by_id_range_unconsumed(start_id: i64, end_id: i64) -> Result<Vec<super::models::ContactNumberDto>, String> {
+    if end_id < start_id { return Err("end_id must be >= start_id".to_string()); }
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    fetch_numbers_by_id_range_unconsumed(&conn, start_id, end_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn mark_contact_numbers_used_by_id_range(start_id: i64, end_id: i64, batch_id: String) -> Result<i64, String> {
+    if end_id < start_id { return Err("end_id must be >= start_id".to_string()); }
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    mark_numbers_used_by_id_range(&conn, start_id, end_id, &batch_id).map_err(|e| e.to_string())
 }

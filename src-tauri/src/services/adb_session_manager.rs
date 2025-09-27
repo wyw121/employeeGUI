@@ -13,6 +13,8 @@ pub struct AdbSessionManager {
     sessions: Arc<Mutex<HashMap<String, Arc<AdbShellSession>>>>,
     /// ADB路径
     adb_path: String,
+    /// 健康检查时间戳缓存（节流）
+    last_health_check: Arc<Mutex<HashMap<String, std::time::Instant>>>,
 }
 
 impl AdbSessionManager {
@@ -22,6 +24,7 @@ impl AdbSessionManager {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             adb_path,
+            last_health_check: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -61,6 +64,21 @@ impl AdbSessionManager {
 
     /// 检查会话是否仍然活跃
     async fn is_session_alive(&self, session: &Arc<AdbShellSession>) -> bool {
+        // 基于设备ID做轻量节流，避免频繁 echo
+        let device_id = session.get_device_id().to_string();
+        let ttl_ms: u64 = std::env::var("ADB_SESSION_HEALTH_TTL_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(2000);
+        let mut map = self.last_health_check.lock().await;
+        if let Some(last) = map.get(&device_id) {
+            if last.elapsed() < std::time::Duration::from_millis(ttl_ms) {
+                // TTL 内认为仍然健康，避免重复探测
+                return true;
+            }
+        }
+        drop(map);
+
         // 执行简单的echo命令测试会话
         match session.execute_command("echo test").await {
             Ok(output) => {
@@ -68,6 +86,8 @@ impl AdbSessionManager {
                 if !result {
                     warn!("🔍 会话健康检查失败: 预期'test'，实际'{}'", output);
                 }
+                let mut map = self.last_health_check.lock().await;
+                map.insert(device_id, std::time::Instant::now());
                 result
             }
             Err(e) => {

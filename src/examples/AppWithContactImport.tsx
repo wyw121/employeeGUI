@@ -1,5 +1,5 @@
 import React from 'react';
-import { ContactImportPage } from '../pages/ContactImportPage';
+import ContactImportPage from '../pages/contact-import/ContactImportPage';
 
 /**
  * 应用主组件示例 - 集成通讯录导入功能

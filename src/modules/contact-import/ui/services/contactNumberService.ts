@@ -38,3 +38,18 @@ export async function listContactNumbers(params: { limit?: number; offset?: numb
 export async function fetchContactNumbers(count: number): Promise<ContactNumberDto[]> {
   return invoke<ContactNumberDto[]>('fetch_contact_numbers', { count });
 }
+
+export async function fetchContactNumbersByIdRange(startId: number, endId: number): Promise<ContactNumberDto[]> {
+  if (endId < startId) return [];
+  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range', { start_id: startId, end_id: endId });
+}
+
+export async function fetchContactNumbersByIdRangeUnconsumed(startId: number, endId: number): Promise<ContactNumberDto[]> {
+  if (endId < startId) return [];
+  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range_unconsumed', { start_id: startId, end_id: endId });
+}
+
+export async function markContactNumbersUsedByIdRange(startId: number, endId: number, batchId: string): Promise<number> {
+  if (endId < startId) return 0;
+  return invoke<number>('mark_contact_numbers_used_by_id_range', { start_id: startId, end_id: endId, batch_id: batchId });
+}

@@ -195,7 +195,8 @@ const DraggableStepCardInner: React.FC<
         }
       >
         <Card
-          bordered
+          bordered={!(step.step_type === 'loop_start' || step.step_type === 'loop_end')}
+          data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
             'select-none transition-shadow',
             typeStyle.cardClass,

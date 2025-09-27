@@ -11,6 +11,7 @@ import { DiagnosticService } from '../../domain/adb/services/DiagnosticService';
 import { AdbApplicationService } from './AdbApplicationService';
 import { IUiMatcherRepository } from '../../domain/page-analysis/repositories/IUiMatcherRepository';
 import { TauriUiMatcherRepository } from '../../infrastructure/repositories/TauriUiMatcherRepository';
+import ContactImportApplicationService from './contact-import/ContactImportApplicationService';
 
 /**
  * 服务容器
@@ -95,6 +96,10 @@ class ServiceContainer {
       const uiMatcherRepository = this.get<IUiMatcherRepository>('uiMatcherRepository');
       return new AdbApplicationService(deviceManager, connectionService, diagnosticService, uiMatcherRepository);
     });
+
+    this.register('contactImportApplicationService', () => {
+      return new ContactImportApplicationService();
+    });
   }
 }
 
@@ -132,6 +137,11 @@ export const ServiceFactory = {
    */
   getDiagnosticService(): DiagnosticService {
     return container.get<DiagnosticService>('diagnosticService');
+  },
+
+  /** 获取联系人导入应用服务 */
+  getContactImportApplicationService(): ContactImportApplicationService {
+    return container.get<ContactImportApplicationService>('contactImportApplicationService');
   },
 
   /**

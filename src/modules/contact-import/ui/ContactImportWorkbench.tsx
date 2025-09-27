@@ -6,6 +6,7 @@ import { selectFolder, selectTxtFile } from './utils/dialog';
 import { fetchContactNumbers, importNumbersFromFolder, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
 import { VcfImportService } from '../../../services/VcfImportService';
 import { DeviceAssignmentTable } from './components/DeviceAssignmentTable';
+import ServiceFactory from '../../../application/services/ServiceFactory';
 
 const { Title, Text } = Typography;
 
@@ -37,6 +38,7 @@ export const ContactImportWorkbench: React.FC = () => {
   const [items, setItems] = useState<ContactNumberDto[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [assignment, setAssignment] = useState<Record<string, { industry?: string; idStart?: number; idEnd?: number }>>({});
+  const contactImportApp = useMemo(() => ServiceFactory.getContactImportApplicationService(), []);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -116,6 +118,32 @@ export const ContactImportWorkbench: React.FC = () => {
     { title: '时间', dataIndex: 'created_at', width: 200 },
   ];
 
+  const hasInvalidRanges = useMemo(() => {
+    return Object.values(assignment).some(cfg => {
+      if (typeof cfg.idStart === 'number' && typeof cfg.idEnd === 'number') {
+        return cfg.idStart > cfg.idEnd;
+      }
+      return false;
+    });
+  }, [assignment]);
+
+  const allRangesEmpty = useMemo(() => {
+    return Object.values(assignment).every(cfg => (typeof cfg.idStart !== 'number' || typeof cfg.idEnd !== 'number'));
+  }, [assignment]);
+
+  const [onlyUnconsumed, setOnlyUnconsumed] = useState<boolean>(true);
+
+  const handleGenerateBatches = async () => {
+    try {
+      const batches = await contactImportApp.generateVcfBatches(assignment, { onlyUnconsumed });
+      const total = batches.reduce((acc, b) => acc + (b.numbers?.length || 0), 0);
+      message.info(`生成批次：${batches.length}，总计号码：${total}`);
+      // TODO: 在此处进一步展示批次详情、允许逐台生成并导入VCF
+    } catch (e) {
+      message.error(`生成批次失败：${e}`);
+    }
+  };
+
   return (
     <Row gutter={[16, 16]}>
       {/* 面板1：导入TXT到号码池 */}
@@ -173,6 +201,17 @@ export const ContactImportWorkbench: React.FC = () => {
           </Space>
           <Divider />
           <DeviceAssignmentTable value={assignment} onChange={setAssignment} />
+          <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Button type="primary" onClick={handleGenerateBatches} disabled={hasInvalidRanges || allRangesEmpty}>
+              根据分配生成VCF批次
+            </Button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={onlyUnconsumed} onChange={e => setOnlyUnconsumed(e.target.checked)} />
+              仅使用未消费号码
+            </label>
+            {hasInvalidRanges && <Text type="danger">存在非法区间（起始大于结束）</Text>}
+            {allRangesEmpty && <Text type="secondary">请为至少一台设备设置有效区间</Text>}
+          </div>
         </Card>
       </Col>
     </Row>

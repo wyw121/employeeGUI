@@ -25,6 +25,10 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         )",
         [],
     )?;
+    // 尝试为消费策略添加列（如果已存在则忽略错误）
+    let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used INTEGER DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used_at TEXT", []);
+    let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used_batch TEXT", []);
     Ok(())
 }
 
@@ -119,4 +123,52 @@ pub fn fetch_numbers(conn: &Connection, count: i64) -> SqlResult<Vec<ContactNumb
         });
     }
     Ok(items)
+}
+
+/// 按ID区间获取号码（闭区间）
+pub fn fetch_numbers_by_id_range(conn: &Connection, start_id: i64, end_id: i64) -> SqlResult<Vec<ContactNumberDto>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, phone, name, source_file, created_at FROM contact_numbers WHERE id >= ?1 AND id <= ?2 ORDER BY id ASC",
+    )?;
+    let mut rows = stmt.query(params![start_id, end_id])?;
+    let mut items: Vec<ContactNumberDto> = Vec::new();
+    while let Some(row) = rows.next()? {
+        items.push(ContactNumberDto {
+            id: row.get(0)?,
+            phone: row.get(1)?,
+            name: row.get(2)?,
+            source_file: row.get(3)?,
+            created_at: row.get(4)?,
+        });
+    }
+    Ok(items)
+}
+
+/// 仅获取未使用的号码（按ID区间）
+pub fn fetch_numbers_by_id_range_unconsumed(conn: &Connection, start_id: i64, end_id: i64) -> SqlResult<Vec<ContactNumberDto>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, phone, name, source_file, created_at FROM contact_numbers WHERE id >= ?1 AND id <= ?2 AND (used IS NULL OR used = 0) ORDER BY id ASC",
+    )?;
+    let mut rows = stmt.query(params![start_id, end_id])?;
+    let mut items: Vec<ContactNumberDto> = Vec::new();
+    while let Some(row) = rows.next()? {
+        items.push(ContactNumberDto {
+            id: row.get(0)?,
+            phone: row.get(1)?,
+            name: row.get(2)?,
+            source_file: row.get(3)?,
+            created_at: row.get(4)?,
+        });
+    }
+    Ok(items)
+}
+
+/// 标记某个ID区间为已使用
+pub fn mark_numbers_used_by_id_range(conn: &Connection, start_id: i64, end_id: i64, batch_id: &str) -> SqlResult<i64> {
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let affected = conn.execute(
+        "UPDATE contact_numbers SET used = 1, used_at = ?1, used_batch = ?2 WHERE id >= ?3 AND id <= ?4",
+        params![now, batch_id, start_id, end_id],
+    )?;
+    Ok(affected as i64)
 }

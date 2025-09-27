@@ -160,6 +160,9 @@ fn main() {
             import_contact_numbers_from_folder,
             list_contact_numbers,
             fetch_contact_numbers,
+            fetch_contact_numbers_by_id_range,
+            fetch_contact_numbers_by_id_range_unconsumed,
+            mark_contact_numbers_used_by_id_range,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入

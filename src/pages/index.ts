@@ -24,7 +24,6 @@ export { default as NavigationDetectorTestPage } from "./NavigationDetectorTestP
 
 // 新的业务页面
 export * from "./auth";
-export * from "./contact-management";
 export * from "./device-management";
 export * from "./precise-acquisition";
 export * from "./statistics";

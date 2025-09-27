@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, InputNumber, Select, Button, Space, Typography, Tooltip } from 'antd';
+import { Table, InputNumber, Select, Button, Space, Typography, Tooltip, Divider, Checkbox } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useAdb } from '../../../../application/hooks/useAdb';
 
@@ -33,6 +33,11 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
   const [rowState, setRowState] = useState<Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>>(value || {});
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loadingIds, setLoadingIds] = useState<Record<string, boolean>>({});
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+  const [bulkIndustry, setBulkIndustry] = useState<string | undefined>(undefined);
+  const [bulkStart, setBulkStart] = useState<number | undefined>(undefined);
+  const [bulkEnd, setBulkEnd] = useState<number | undefined>(undefined);
+  const [applyToAll, setApplyToAll] = useState<boolean>(false);
 
   useEffect(() => {
     if (value) setRowState(value);
@@ -64,14 +69,55 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
   // 批量刷新所有在线设备数量
   const refreshAllCounts = async () => {
     const list = devices || [];
-    for (const d of list) {
-      await refreshCount(d.id);
+    // 并发刷新，限制同时进行数量以避免ADB拥塞
+    const concurrency = 3;
+    const queue = [...list.map(d => d.id)];
+    const workers: Promise<void>[] = [];
+    const run = async () => {
+      while (queue.length > 0) {
+        const id = queue.shift();
+        if (!id) break;
+        await refreshCount(id);
+      }
+    };
+    for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
+      workers.push(run());
     }
+    await Promise.all(workers);
   };
 
   const updateRow = (deviceId: string, patch: Partial<Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>) => {
     setRowState(prev => {
       const next = { ...prev, [deviceId]: { ...prev[deviceId], ...patch } };
+      onChange?.(next);
+      return next;
+    });
+  };
+
+  // 挂载或设备列表变化时，自动刷新所有设备联系人数量（轻量并发）
+  useEffect(() => {
+    if ((devices || []).length === 0) return;
+    // 避免频繁触发，简单节流：在设备变更后延迟刷新
+    const handle = setTimeout(() => {
+      refreshAllCounts();
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [devices]);
+
+  // 批量设置逻辑
+  const applyBulk = () => {
+    const targetIds = applyToAll ? (devices || []).map(d => d.id) : selectedDeviceIds;
+    if (!targetIds || targetIds.length === 0) return;
+    setRowState(prev => {
+      const next = { ...prev };
+      for (const id of targetIds) {
+        next[id] = {
+          ...(next[id] || {}),
+          ...(bulkIndustry !== undefined ? { industry: bulkIndustry } : {}),
+          ...(typeof bulkStart === 'number' ? { idStart: bulkStart } : {}),
+          ...(typeof bulkEnd === 'number' ? { idEnd: bulkEnd } : {}),
+        };
+      }
       onChange?.(next);
       return next;
     });
@@ -110,9 +156,21 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
       width: 280,
       render: (_: any, row: DeviceAssignmentRow) => (
         <Space>
-          <InputNumber min={0} value={row.idStart} placeholder="起" onChange={(v) => updateRow(row.deviceId, { idStart: typeof v === 'number' ? v : undefined })} />
+          <InputNumber
+            status={typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd) ? 'error' : undefined}
+            min={0}
+            value={row.idStart}
+            placeholder="起"
+            onChange={(v) => updateRow(row.deviceId, { idStart: typeof v === 'number' ? v : undefined })}
+          />
           <span>~</span>
-          <InputNumber min={0} value={row.idEnd} placeholder="止" onChange={(v) => updateRow(row.deviceId, { idEnd: typeof v === 'number' ? v : undefined })} />
+          <InputNumber
+            status={typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd) ? 'error' : undefined}
+            min={0}
+            value={row.idEnd}
+            placeholder="止"
+            onChange={(v) => updateRow(row.deviceId, { idEnd: typeof v === 'number' ? v : undefined })}
+          />
         </Space>
       )
     },
@@ -138,12 +196,32 @@ export const DeviceAssignmentTable: React.FC<DeviceAssignmentTableProps> = ({
         <Button onClick={() => refreshDevices?.()}>刷新设备列表</Button>
         <Button icon={<ReloadOutlined />} onClick={refreshAllCounts}>刷新所有联系人数量</Button>
       </Space>
+      <Space wrap style={{ marginBottom: 8 }}>
+        <Checkbox checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)}>对全部设备应用</Checkbox>
+        <Select
+          placeholder="批量设置行业"
+          allowClear
+          style={{ width: 160 }}
+          value={bulkIndustry}
+          options={industries.map(i => ({ label: i, value: i }))}
+          onChange={setBulkIndustry}
+        />
+        <InputNumber placeholder="批量起始ID" min={0} value={bulkStart} onChange={v => setBulkStart(typeof v === 'number' ? v : undefined)} />
+        <span>~</span>
+        <InputNumber placeholder="批量结束ID" min={0} value={bulkEnd} onChange={v => setBulkEnd(typeof v === 'number' ? v : undefined)} />
+        <Button type="primary" onClick={applyBulk}>应用批量设置</Button>
+      </Space>
+      <Divider style={{ margin: '8px 0' }} />
       <Table
         rowKey={(r) => r.deviceId}
         columns={columns as any}
         dataSource={data}
         size="middle"
         pagination={false}
+        rowSelection={{
+          selectedRowKeys: selectedDeviceIds,
+          onChange: (keys) => setSelectedDeviceIds(keys as string[]),
+        }}
       />
     </div>
   );

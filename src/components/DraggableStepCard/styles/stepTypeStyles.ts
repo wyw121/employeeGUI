@@ -26,16 +26,15 @@ const base: StepTypeStyle = {
 type KnownStepType = Exclude<StepType, string & {}>;
 
 export const stepTypeStyles: Partial<Record<KnownStepType, StepTypeStyle>> = {
+  // 循环开始：不依赖 base，显式定义全部关键字段，并加入专属类 loop-start
   loop_start: {
-    ...base,
     tagColor: 'blue',
-    // 贴近旧版的蓝色主题：渐变背景 + 粗边框 + 强调标题色
-    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
-  ringClass: 'ring-blue-400',
-  hoverClass: 'hover:shadow-md',
+    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl',
+    ringClass: 'ring-blue-500',
+    hoverClass: 'hover:shadow-lg',
     titleTextClass: 'text-blue-900',
     titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
-    extraCardClass: 'loop-card',
+    extraCardClass: 'loop-card loop-start',
     draggingCardClass: 'loop-card-dragging',
     headerHandleClass: 'loop-header-handle',
     iconPillClass: 'loop-icon-pill',
@@ -43,15 +42,15 @@ export const stepTypeStyles: Partial<Record<KnownStepType, StepTypeStyle>> = {
     leftAccentClass: 'loop-left-accent',
     titleTagClass: 'loop-title-tag',
   },
+  // 循环结束：不依赖 base，显式定义全部关键字段，并加入专属类 loop-end（与 start 做细微差异）
   loop_end: {
-    ...base,
     tagColor: 'blue',
-    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl',
-  ringClass: 'ring-blue-400',
-  hoverClass: 'hover:shadow-md',
+    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl',
+    ringClass: 'ring-blue-600',
+    hoverClass: 'hover:shadow-lg',
     titleTextClass: 'text-blue-900',
     titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
-    extraCardClass: 'loop-card',
+    extraCardClass: 'loop-card loop-end',
     draggingCardClass: 'loop-card-dragging',
     headerHandleClass: 'loop-header-handle',
     iconPillClass: 'loop-icon-pill',

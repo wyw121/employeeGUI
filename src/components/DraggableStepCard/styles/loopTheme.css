@@ -7,6 +7,11 @@
   transition: box-shadow 0.2s ease, transform 0.04s linear;
   /* 更轻的基础阴影，降低 GPU 负担 */
   box-shadow: 0 6px 18px rgba(59, 130, 246, 0.28), 0 0 0 1px rgba(59, 130, 246, 0.18), 0 0 0 3px rgba(59, 130, 246, 0.22);
+  /* 自定义渐变边框（通过双重背景实现） */
+  border: 2px solid transparent;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-image: linear-gradient(white, white), linear-gradient(135deg, #93c5fd, #3b82f6, #1d4ed8);
 }
 
 .loop-card-dragging {
@@ -14,17 +19,33 @@
   box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35), 0 0 0 1px rgba(59, 130, 246, 0.28), 0 0 0 3px rgba(59, 130, 246, 0.22);
 }
 
+/* hover/focus 显示更明显的边缘与外发光，start/end 略有差别 */
+.loop-card.loop-start:hover {
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.35), 0 0 0 2px rgba(16, 185, 129, 0.4), 0 0 0 4px rgba(59, 130, 246, 0.25);
+}
+.loop-card.loop-end:hover {
+  box-shadow: 0 8px 22px rgba(239, 68, 68, 0.35), 0 0 0 2px rgba(239, 68, 68, 0.4), 0 0 0 4px rgba(59, 130, 246, 0.25);
+}
+.loop-card.loop-start:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.55), 0 0 0 6px rgba(59, 130, 246, 0.25);
+}
+.loop-card.loop-end:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.55), 0 0 0 6px rgba(59, 130, 246, 0.25);
+}
+
 /* 标题栏左侧拖拽手柄的背景块 */
 .loop-header-handle {
   padding: 8px;
-  background-color: rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.35));
   border-radius: 8px;
 }
 
 /* 标题小圆形图标底色 */
 .loop-icon-pill {
   padding: 6px;
-  background-color: #1d4ed8; /* 蓝700 */
+  background: radial-gradient( circle at 30% 30%, #60a5fa, #1d4ed8 );
   color: #fff;
   border-radius: 9999px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -52,6 +73,12 @@
   border-bottom-left-radius: 6px;
 }
 
+/* start/end 在强调条上的轻微差异 */
+.loop-start .loop-top-accent { background: linear-gradient(90deg, #34d399, #60a5fa); }
+.loop-end .loop-top-accent { background: linear-gradient(90deg, #f87171, #60a5fa); }
+.loop-start .loop-left-accent { background: linear-gradient(180deg, #34d399, #3b82f6); }
+.loop-end .loop-left-accent { background: linear-gradient(180deg, #f87171, #3b82f6); }
+
 /* 拖拽时减弱强调条视觉重量 */
 .loop-card-dragging .loop-top-accent,
 .loop-card-dragging .loop-left-accent {
@@ -71,3 +98,37 @@
   color: #e0f2fe !important;            /* 天蓝100 */
   border-color: #60a5fa !important;     /* 蓝400 */
 }
+
+/* 角标（区分 start 与 end） */
+.loop-start::after,
+.loop-end::after {
+  content: attr(data-loop-badge);
+  position: absolute;
+  top: 8px;
+  right: -18px;
+  transform: rotate(35deg);
+  background: rgba(29, 78, 216, 0.9);
+  color: #e0f2fe;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 2px 26px;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  pointer-events: none;
+}
+.loop-start::after { background: rgba(16, 185, 129, 0.9); } /* 绿色偏移，代表开始 */
+.loop-end::after { background: rgba(239, 68, 68, 0.9); }   /* 红色偏移，代表结束 */
+
+/* 水印底纹（仅循环卡） */
+.loop-card::before {
+  content: 'LOOP';
+  position: absolute;
+  bottom: -6px;
+  left: 12px;
+  font-weight: 800;
+  font-size: 42px;
+  color: rgba(29, 78, 216, 0.08);
+  letter-spacing: 6px;
+  pointer-events: none;
+}
+.loop-end::before { content: 'END'; }

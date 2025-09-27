@@ -31,7 +31,6 @@ import { AppThemeProvider, useTheme } from '../theme';
 import '../styles/theme.css';
 import React, { useState } from 'react';
 import InspectorPage from '../pages/InspectorPage';
-import ContactManagementPage from '../pages/ContactManagementPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import AdbCenterPage from '../pages/adb/AdbCenterPage';
 import SmartScriptBuilderPage from '../pages/SmartScriptBuilderPage'; // 智能脚本构建器
@@ -65,11 +64,6 @@ const DemoInner: React.FC = () => {
       key: 'adb-center',
       icon: <MobileOutlined />,
       label: 'ADB 中心',
-    },
-    {
-      key: 'contacts',
-      icon: <UserOutlined />,
-      label: '通讯录管理',
     },
     {
       key: 'contact-import',
@@ -253,9 +247,6 @@ const DemoInner: React.FC = () => {
               <AdbCenterPage />
             )}
 
-            {selectedKey === 'contacts' && (
-              <ContactManagementPage />
-            )}
 
             {selectedKey === 'contact-import' && (
               <ContactImportPage />

@@ -60,6 +60,8 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
       width={600}
       maskClosable={false}
       zIndex={1000} // 设置基础z-index，确保子模态框可以显示在其上方
+      className="overlay-surface"
+      rootClassName="overlay-surface overlay-elevated"
     >
       <div {...noDragProps}>
       <Form

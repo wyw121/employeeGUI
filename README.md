@@ -144,6 +144,18 @@ npm run tauri dev
  - 架构统一：旧“通讯录管理”页面与配套组件已下线，统一使用 `src/pages/contact-import/ContactImportPage.tsx` 与 `src/modules/contact-import/*` 模块。
  - 防回归检查：可运行 `npm run check:legacy-contacts` 检查是否存在对旧页面/组件的引用。
 
+#### 号码池批次/会话筛选（新）
+- 入口按钮：联系人导入工作台 → “导入 TXT 到号码池”卡片右上角 → “按批次/设备筛选”。
+- 视图：抽屉式 Batch Manager，支持：
+	- 筛选模式：全部号码、按批次、未生成VCF。
+	- 批次选择：展示最近批次并可搜索。
+	- 会话列表：按设备ID/批次过滤查看导入成功/失败记录。
+	- 号码列表：
+		- 按批次（可切换仅显示该批次使用过的号码）
+		- 未生成VCF（used_batch 为空）
+		- 全部（支持关键词搜索）
+- 模块路径：`src/modules/contact-import/ui/batch-manager/*`（纯展示与筛选逻辑，后续“再生成/再导入”在此接入）。
+
 ## 项目特点
 
 ### 分层架构

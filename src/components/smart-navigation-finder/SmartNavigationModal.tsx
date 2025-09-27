@@ -176,6 +176,8 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
       }
       open={visible}
       onCancel={handleModalClose}
+      className="overlay-surface"
+      rootClassName="overlay-surface overlay-elevated"
       footer={
         <Space>
           <Button 

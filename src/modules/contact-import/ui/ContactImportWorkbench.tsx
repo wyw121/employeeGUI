@@ -14,6 +14,7 @@ import { findRangeConflicts } from '../utils/assignmentValidation';
 import BatchResultModal from './components/BatchResultModal';
 import ConflictNavigator from './components/ConflictNavigator';
 import type { BatchExecuteResult } from './services/batchExecutor';
+import { BatchManagerDrawer } from './batch-manager';
 
 const { Title, Text } = Typography;
 
@@ -151,6 +152,7 @@ export const ContactImportWorkbench: React.FC = () => {
   }, [rangeConflicts]);
 
   const [currentJumpId, setCurrentJumpId] = useState<string | null>(null);
+  const [batchDrawerOpen, setBatchDrawerOpen] = useState(false);
   const handleJumpToDevice = useCallback((deviceId: string) => {
     // antd Table 行上会带 data-row-key
     const el = document.querySelector(`[data-row-key="${deviceId}"]`);
@@ -207,7 +209,7 @@ export const ContactImportWorkbench: React.FC = () => {
     <Row gutter={[16, 16]}>
       {/* 面板1：导入TXT到号码池 */}
       <Col span={8}>
-        <Card title={<Space><DatabaseOutlined />导入 TXT 到号码池</Space>}>
+  <Card title={<Space><DatabaseOutlined />导入 TXT 到号码池</Space>} extra={<Button onClick={() => setBatchDrawerOpen(true)}>按批次/设备筛选</Button>}>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Text type="secondary">支持单个 TXT 或TXT文件夹，自动提取手机号码并去重入库</Text>
             <Space>
@@ -322,6 +324,7 @@ export const ContactImportWorkbench: React.FC = () => {
           }
         }}
       />
+  <BatchManagerDrawer open={batchDrawerOpen} onClose={() => setBatchDrawerOpen(false)} />
     </Row>
   );
 };

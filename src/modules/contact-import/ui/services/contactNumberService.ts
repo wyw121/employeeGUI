@@ -53,3 +53,73 @@ export async function markContactNumbersUsedByIdRange(startId: number, endId: nu
   if (endId < startId) return 0;
   return invoke<number>('mark_contact_numbers_used_by_id_range', { start_id: startId, end_id: endId, batch_id: batchId });
 }
+
+// -------- 批次与导入会话：前端服务封装 --------
+
+export interface VcfBatchDto {
+  batch_id: string;
+  created_at: string;
+  vcf_file_path: string;
+  source_start_id?: number | null;
+  source_end_id?: number | null;
+}
+
+export interface VcfBatchList {
+  total: number;
+  items: VcfBatchDto[];
+}
+
+export interface ImportSessionDto {
+  id: number;
+  batch_id: string;
+  device_id: string;
+  status: 'pending' | 'success' | 'failed';
+  imported_count: number;
+  failed_count: number;
+  started_at: string;
+  finished_at?: string | null;
+  error_message?: string | null;
+}
+
+export interface ImportSessionList {
+  total: number;
+  items: ImportSessionDto[];
+}
+
+export async function createVcfBatchRecord(params: { batchId: string; vcfFilePath: string; sourceStartId?: number; sourceEndId?: number; }): Promise<void> {
+  const { batchId, vcfFilePath, sourceStartId, sourceEndId } = params;
+  return invoke<void>('create_vcf_batch_record', { batch_id: batchId, vcf_file_path: vcfFilePath, source_start_id: sourceStartId, source_end_id: sourceEndId });
+}
+
+export async function listVcfBatchRecords(params: { limit?: number; offset?: number } = {}): Promise<VcfBatchList> {
+  const { limit, offset } = params;
+  return invoke<VcfBatchList>('list_vcf_batch_records', { limit, offset });
+}
+
+export async function getVcfBatchRecord(batchId: string): Promise<VcfBatchDto | null> {
+  const res = await invoke<VcfBatchDto | null>('get_vcf_batch_record', { batch_id: batchId });
+  return res;
+}
+
+export async function listNumbersByVcfBatch(batchId: string, onlyUsed?: boolean, params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
+  const { limit, offset } = params;
+  return invoke<ContactNumberList>('list_numbers_by_vcf_batch', { batch_id: batchId, only_used: onlyUsed, limit, offset });
+}
+
+export async function listNumbersWithoutVcfBatch(params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
+  const { limit, offset } = params;
+  return invoke<ContactNumberList>('list_numbers_without_vcf_batch', { limit, offset });
+}
+
+export async function createImportSessionRecord(batchId: string, deviceId: string): Promise<number> {
+  return invoke<number>('create_import_session_record', { batch_id: batchId, device_id: deviceId });
+}
+
+export async function finishImportSessionRecord(sessionId: number, status: 'success' | 'failed', importedCount: number, failedCount: number, errorMessage?: string): Promise<void> {
+  return invoke<void>('finish_import_session_record', { session_id: sessionId, status, imported_count: importedCount, failed_count: failedCount, error_message: errorMessage });
+}
+
+export async function listImportSessionRecords(params: { deviceId?: string; batchId?: string; limit?: number; offset?: number } = {}): Promise<ImportSessionList> {
+  const { deviceId, batchId, limit, offset } = params;
+  return invoke<ImportSessionList>('list_import_session_records', { device_id: deviceId, batch_id: batchId, limit, offset });
+}

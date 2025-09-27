@@ -185,7 +185,8 @@ const DraggableStepCardInner: React.FC<
   
   const loopThemeClass = (isAnchor || isInLoop) && loopThemeToken ? `loop-theme-${loopThemeToken}` : '';
   const nonLoopThemeClass = (!isAnchor && !isInLoop && cardThemeToken) ? `loop-theme-${cardThemeToken}` : '';
-  const nonLoopLightSurface = (!isAnchor && !isInLoop && !!cardThemeToken) ? 'light-surface' : '';
+  // 非循环卡片默认走深色基线，不自动挂载 light-surface；如需浅色化，请由调用方或主题开关显式添加
+  const nonLoopLightSurface = '';
   
   // 测试白色主题类
   const testWhiteClass = isTestWhiteLoop ? 'test-white-loop' : '';

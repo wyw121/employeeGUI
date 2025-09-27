@@ -23,7 +23,8 @@ import {
     Switch,
     Tag,
     Typography,
-    App,
+  App,
+  message,
     Radio
 } from 'antd';
 import React, { useEffect, useState } from 'react';
@@ -58,6 +59,7 @@ interface SimpleFollowResult {
 type ConnectionMode = 'single' | 'long';
 
 const XiaohongshuFollowPage: React.FC = () => {
+  const { message: msgApi } = App.useApp();
   // 使用新的统一ADB状态
   const { 
     devices, 
@@ -104,7 +106,7 @@ const XiaohongshuFollowPage: React.FC = () => {
 
   const startAutoFollow = async () => {
     if (!selectedDevice) {
-      message.error('请先选择设备');
+  msgApi.error('请先选择设备');
       return;
     }
 
@@ -142,7 +144,7 @@ const XiaohongshuFollowPage: React.FC = () => {
           const timeSaved = result.performance_stats?.estimated_time_saved_ms 
             ? `，节省时间 ~${Math.round(result.performance_stats.estimated_time_saved_ms / 1000)}秒` 
             : '';
-          message.success(`长连接模式关注成功! 共关注了 ${result.follow_result.total_followed} 个用户${timeSaved}`);
+          msgApi.success(`长连接模式关注成功! 共关注了 ${result.follow_result.total_followed} 个用户${timeSaved}`);
         } else {
           setFollowResult({
             success: false,
@@ -152,7 +154,7 @@ const XiaohongshuFollowPage: React.FC = () => {
             connectionMode: 'long'
           });
           setStatusMessage('长连接自动关注失败');
-          message.error('长连接自动关注失败: ' + result.message);
+          msgApi.error('长连接自动关注失败: ' + result.message);
         }
       } else {
         // 使用原有的独立命令模式
@@ -171,7 +173,7 @@ const XiaohongshuFollowPage: React.FC = () => {
           });
           setStatusMessage('独立命令自动关注完成!');
           setProgress(100);
-          message.success(`独立命令模式关注成功! 共关注了 ${legacyResult.follow_result.total_followed} 个用户`);
+          msgApi.success(`独立命令模式关注成功! 共关注了 ${legacyResult.follow_result.total_followed} 个用户`);
         } else {
           setFollowResult({
             success: false,
@@ -181,12 +183,12 @@ const XiaohongshuFollowPage: React.FC = () => {
             connectionMode: 'single'
           });
           setStatusMessage('独立命令自动关注失败');
-          message.error('独立命令自动关注失败: ' + legacyResult.follow_result.message);
+          msgApi.error('独立命令自动关注失败: ' + legacyResult.follow_result.message);
         }
       }
     } catch (error) {
       setStatusMessage('操作失败: ' + error);
-      message.error('自动关注失败: ' + error);
+  msgApi.error('自动关注失败: ' + error);
     } finally {
       setIsFollowing(false);
     }
@@ -197,9 +199,9 @@ const XiaohongshuFollowPage: React.FC = () => {
       // 简单的停止逻辑，设置状态
       setIsFollowing(false);
       setStatusMessage('用户手动停止了自动关注');
-      message.info('已停止自动关注');
+  msgApi.info('已停止自动关注');
     } catch (error) {
-      message.error('停止操作失败: ' + error);
+  msgApi.error('停止操作失败: ' + error);
     }
   };
 

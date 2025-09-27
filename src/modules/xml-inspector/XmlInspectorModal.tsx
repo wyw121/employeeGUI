@@ -528,6 +528,8 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
         open={visible}
         onCancel={onClose}
         width={600}
+        className="overlay-surface"
+        rootClassName="overlay-surface overlay-elevated"
         footer={[
           <Button key="close" onClick={onClose}>
             关闭
@@ -566,6 +568,8 @@ export const XmlInspectorModal: React.FC<XmlInspectorProps> = ({
       onCancel={onClose}
       width={1200}
       height={800}
+      className="overlay-surface"
+      rootClassName="overlay-surface overlay-elevated"
       footer={[
         <Button key="close" onClick={onClose}>
           关闭

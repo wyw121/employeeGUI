@@ -50,6 +50,7 @@ use services::scrcpy_manager::{start_device_mirror, stop_device_mirror, stop_dev
 // 直接使用的其他命令函数（未在 commands::* re-export 中覆盖的服务命令）
 use services::ui_reader_service::read_device_ui_state;
 use services::smart_vcf_opener::smart_vcf_opener;
+use services::util_fs::{write_file, delete_file, reveal_in_file_manager};
 use xml_judgment_service::{
     get_device_ui_xml,
     find_xml_ui_elements,
@@ -137,8 +138,6 @@ fn main() {
             start_adb_server_simple,
             kill_adb_server_simple,
             execute_adb_command_simple,
-            write_file,
-            delete_file,
             clear_adb_keys,
             // 日志桥接命令
             get_logs,                 // 来自 commands::logging
@@ -163,11 +162,24 @@ fn main() {
             fetch_contact_numbers_by_id_range,
             fetch_contact_numbers_by_id_range_unconsumed,
             mark_contact_numbers_used_by_id_range,
+            // 号码批次与导入追踪
+            create_vcf_batch_record,
+            list_vcf_batch_records,
+            get_vcf_batch_record,
+            create_import_session_record,
+            finish_import_session_record,
+            list_import_session_records,
+            list_numbers_by_vcf_batch,
+            list_numbers_without_vcf_batch,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入
             import_vcf_contacts_huawei_enhanced, // 华为增强导入（基于Python成功经验）
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
+            // 通用文件操作
+            write_file,
+            reveal_in_file_manager,
+            delete_file,
             // 联系人度量
             get_device_contact_count,
             // UI状态读取功能

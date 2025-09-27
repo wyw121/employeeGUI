@@ -30,8 +30,8 @@ export class VcfImportService {
       console.log("✅ 参数验证通过，调用Tauri命令...");
 
       // 使用带自动化功能的导入方法
-      const importPromise = invoke<VcfImportResult>(
-        "import_vcf_contacts_with_intent_fallback",
+      const importPromise = invoke<any>(
+        "import_vcf_contacts_multi_brand",
         {
           deviceId: deviceId,
           contactsFilePath: vcfFilePath,
@@ -42,9 +42,16 @@ export class VcfImportService {
         setTimeout(() => reject(new Error("导入操作超时（60秒）")), 60000);
       });
 
-      const result = await Promise.race([importPromise, timeoutPromise]);
-
-      console.log("🎉 VCF导入完成（带应用选择器自动化）:", result);
+      const res = await Promise.race([importPromise, timeoutPromise]);
+      const result: VcfImportResult = {
+        success: !!res?.success,
+        totalContacts: Number(res?.total_contacts ?? 0),
+        importedContacts: Number(res?.imported_contacts ?? 0),
+        failedContacts: Number(res?.failed_contacts ?? 0),
+        message: res?.message ?? "",
+        details: undefined,
+      };
+      console.log("🎉 VCF导入完成（多品牌）:", result);
       return result;
     } catch (error) {
       console.error("💥 VCF导入执行失败（带应用选择器自动化）:", error);
@@ -91,13 +98,20 @@ export class VcfImportService {
     try {
       console.log("开始VCF导入（带应用选择器自动化）:", { vcfFilePath, deviceId });
 
-      // 调用Tauri后端执行VCF导入 - 使用带自动化功能的方法
-      const result = await invoke<VcfImportResult>("import_vcf_contacts_with_intent_fallback", {
+      // 调用Tauri后端执行VCF导入 - 使用多品牌导入
+      const res = await invoke<any>("import_vcf_contacts_multi_brand", {
         deviceId: deviceId,
         contactsFilePath: vcfFilePath,
       });
-
-      console.log("VCF导入完成（带应用选择器自动化）:", result);
+      const result: VcfImportResult = {
+        success: !!res?.success,
+        totalContacts: Number(res?.total_contacts ?? 0),
+        importedContacts: Number(res?.imported_contacts ?? 0),
+        failedContacts: Number(res?.failed_contacts ?? 0),
+        message: res?.message ?? "",
+        details: undefined,
+      };
+      console.log("VCF导入完成（多品牌）:", result);
       return result;
     } catch (error) {
       console.error("VCF导入执行失败:", error);

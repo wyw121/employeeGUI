@@ -14,6 +14,14 @@ use super::repo::{
     init_db,
     insert_numbers,
     list_numbers,
+    create_vcf_batch,
+    list_vcf_batches,
+    get_vcf_batch,
+    create_import_session,
+    finish_import_session,
+    list_import_sessions,
+    list_numbers_by_batch,
+    list_numbers_without_batch,
 };
 
 #[tauri::command]
@@ -137,4 +145,78 @@ pub async fn mark_contact_numbers_used_by_id_range(start_id: i64, end_id: i64, b
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     mark_numbers_used_by_id_range(&conn, start_id, end_id, &batch_id).map_err(|e| e.to_string())
+}
+
+// -------- 新增：批次与导入会话 API --------
+
+#[tauri::command]
+pub async fn create_vcf_batch_record(batch_id: String, vcf_file_path: String, source_start_id: Option<i64>, source_end_id: Option<i64>) -> Result<(), String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    create_vcf_batch(&conn, &batch_id, &vcf_file_path, source_start_id, source_end_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_vcf_batch_records(limit: Option<i64>, offset: Option<i64>) -> Result<super::models::VcfBatchList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    list_vcf_batches(&conn, limit, offset).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_vcf_batch_record(batch_id: String) -> Result<Option<super::models::VcfBatchDto>, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    get_vcf_batch(&conn, &batch_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_import_session_record(batch_id: String, device_id: String) -> Result<i64, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    create_import_session(&conn, &batch_id, &device_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn finish_import_session_record(session_id: i64, status: String, imported_count: i64, failed_count: i64, error_message: Option<String>) -> Result<(), String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    finish_import_session(&conn, session_id, &status, imported_count, failed_count, error_message.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_import_session_records(device_id: Option<String>, batch_id: Option<String>, limit: Option<i64>, offset: Option<i64>) -> Result<super::models::ImportSessionList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    list_import_sessions(&conn, device_id.as_deref(), batch_id.as_deref(), limit, offset).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_numbers_by_vcf_batch(batch_id: String, only_used: Option<bool>, limit: Option<i64>, offset: Option<i64>) -> Result<ContactNumberList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    list_numbers_by_batch(&conn, &batch_id, only_used, limit, offset).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_numbers_without_vcf_batch(limit: Option<i64>, offset: Option<i64>) -> Result<ContactNumberList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    list_numbers_without_batch(&conn, limit, offset).map_err(|e| e.to_string())
 }

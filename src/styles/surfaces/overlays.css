@@ -2,17 +2,34 @@
 /* 覆盖层统一浅色方案（白底深字 + 抬高 z-index） */
 .overlay-surface .ant-popover,
 .overlay-surface .ant-tooltip,
-.overlay-surface .ant-modal {
+.overlay-surface .ant-modal,
+.overlay-surface .ant-drawer,
+.overlay-surface .ant-dropdown,
+.overlay-surface .ant-select-dropdown,
+.overlay-surface .ant-cascader-dropdown,
+.overlay-surface .ant-picker-dropdown,
+.overlay-surface .ant-popconfirm,
+.overlay-surface .ant-notification,
+.overlay-surface .ant-message {
   color: #111827 !important;
 }
 .overlay-surface .ant-popover-inner,
 .overlay-surface .ant-tooltip-inner,
-.overlay-surface .ant-modal-content {
+.overlay-surface .ant-modal-content,
+.overlay-surface .ant-drawer-content,
+.overlay-surface .ant-dropdown-menu,
+.overlay-surface .ant-select-dropdown .ant-select-item,
+.overlay-surface .ant-cascader-menu,
+.overlay-surface .ant-picker-panel,
+.overlay-surface .ant-popconfirm-inner-content,
+.overlay-surface .ant-notification-notice,
+.overlay-surface .ant-message-notice {
   background: #ffffff !important;
   color: #111827 !important;
 }
 .overlay-surface .ant-popover-title,
-.overlay-surface .ant-modal-header {
+.overlay-surface .ant-modal-header,
+.overlay-surface .ant-drawer-header {
   background: #f8fafc !important;
   color: #0f172a !important;
 }
@@ -38,6 +55,13 @@
   border: 1px solid rgba(0,0,0,0.08) !important;
 }
 .overlay-surface .ant-modal-content { background-color: #ffffff !important; }
+.overlay-surface .ant-drawer-content { background-color: #ffffff !important; }
+.overlay-surface .ant-dropdown-menu { background-color: #ffffff !important; }
+.overlay-surface .ant-select-dropdown { background-color: #ffffff !important; }
+.overlay-surface .ant-cascader-dropdown { background-color: #ffffff !important; }
+.overlay-surface .ant-picker-dropdown { background-color: #ffffff !important; }
+.overlay-surface .ant-notification-notice { background-color: #ffffff !important; }
+.overlay-surface .ant-message-notice { background-color: #ffffff !important; }
 .overlay-surface .ant-modal-header {
   background-color: #ffffff !important;
   border-bottom: 1px solid rgba(0,0,0,0.08) !important;
@@ -49,9 +73,19 @@
 .overlay-surface .ant-popover .ant-btn,
 .overlay-surface .ant-tooltip .ant-btn,
 .overlay-surface .ant-modal .ant-btn,
+.overlay-surface .ant-drawer .ant-btn,
+.overlay-surface .ant-dropdown .ant-btn,
+.overlay-surface .ant-popconfirm .ant-btn,
+.overlay-surface .ant-notification .ant-btn,
+.overlay-surface .ant-message .ant-btn,
 .overlay-surface .ant-popover .anticon,
 .overlay-surface .ant-tooltip .anticon,
-.overlay-surface .ant-modal .anticon {
+.overlay-surface .ant-modal .anticon,
+.overlay-surface .ant-drawer .anticon,
+.overlay-surface .ant-dropdown .anticon,
+.overlay-surface .ant-popconfirm .anticon,
+.overlay-surface .ant-notification .anticon,
+.overlay-surface .ant-message .anticon {
   color: #0f172a !important;
 }
 }

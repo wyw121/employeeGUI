@@ -32,6 +32,15 @@
   background-color: var(--loop-btn-bg-hover, rgba(15,23,42,0.06)) !important;
 }
 
+/* 循环体子步骤卡片：统一浅色卡面，压过暗黑主题的深底背景 */
+.in-loop-step.ant-card,
+.in-loop-step .ant-card,
+.in-loop-step .ant-card-head,
+.in-loop-step .ant-card-body {
+  background-color: #ffffff !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
 /* 循环锚点（开始/结束）可读性 + 白色标题条 */
 .loop-anchor.ant-card .ant-card-head,
 .loop-anchor .ant-card-head,
@@ -42,15 +51,15 @@
 .loop-anchor .ant-tag {
   color: var(--loop-text-strong, #0f172a) !important;
 }
-.loop-anchor .ant-btn-text,
-.loop-anchor .ant-btn-link {
+.loop-anchor .ant-card-head .ant-btn-text,
+.loop-anchor .ant-card-head .ant-btn-link {
   background-color: var(--loop-btn-bg, rgba(15,23,42,0.05)) !important;
   border-radius: 6px !important;
 }
-.loop-anchor .ant-btn-default {
+.loop-anchor .ant-card-head .ant-btn-default {
   border-color: var(--loop-btn-border, rgba(15,23,42,0.25)) !important;
 }
-.loop-anchor .ant-btn:hover {
+.loop-anchor .ant-card-head .ant-btn:hover {
   background-color: var(--loop-btn-bg-hover, rgba(15,23,42,0.07)) !important;
 }
 
@@ -74,21 +83,26 @@
 }
 
 /* 锚点主操作按钮增强 */
-.loop-anchor .step-action-btn.ant-btn-text,
-.loop-anchor .step-action-btn.ant-btn-link,
-.loop-anchor .step-action-btn.ant-btn-default {
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-text,
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-link,
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-default {
   color: var(--loop-text-strong,#0f172a) !important;
   background-color: rgba(255,255,255,0.88) !important;
   border-color: rgba(15,23,42,0.2) !important;
 }
-.loop-anchor .step-action-btn.ant-btn-text:hover,
-.loop-anchor .step-action-btn.ant-btn-link:hover,
-.loop-anchor .step-action-btn.ant-btn-default:hover {
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-text:hover,
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-link:hover,
+.loop-anchor .ant-card-head .step-action-btn.ant-btn-default:hover {
   background-color: rgba(255,255,255,0.96) !important;
   border-color: rgba(15,23,42,0.28) !important;
 }
-.loop-anchor .step-action-btn[disabled] {
+.loop-anchor .ant-card-head .step-action-btn[disabled] {
   opacity: 0.85 !important;
   color: #334155 !important;
+}
+
+/* 避免头部出现暗色主题的底部分割线（双边线） */
+.loop-surface.loop-anchor.ant-card .ant-card-head {
+  border-bottom-color: transparent !important;
 }
 }

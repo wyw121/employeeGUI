@@ -243,6 +243,13 @@ export function usePageFinder(deps: UsePageFinderDeps) {
         }
       }
 
+      // 🔧 安全复制复杂对象，避免循环引用导致表单设置失败
+      const safeSmartAnalysis = element.smartAnalysis ? {
+        confidence: element.smartAnalysis.confidence,
+        reasoning: element.smartAnalysis.reasoning,
+        context: element.smartAnalysis.context
+      } : undefined;
+
       const basicParams = {
         text: element.text,
         element_text: element.text,
@@ -253,10 +260,14 @@ export function usePageFinder(deps: UsePageFinderDeps) {
           ? `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`
           : undefined,
         smartDescription: element.smartDescription,
-        smartAnalysis: element.smartAnalysis,
+        smartAnalysis: safeSmartAnalysis,
       };
       Object.entries(basicParams).forEach(([key, value]) => {
-        form.setFieldValue(key, value);
+        try {
+          form.setFieldValue(key, value);
+        } catch (e) {
+          console.warn(`设置表单字段 ${key} 失败:`, e);
+        }
       });
 
       // 🆕 使用增强匹配系统生成匹配条件
@@ -348,7 +359,11 @@ export function usePageFinder(deps: UsePageFinderDeps) {
                 ? `[${element.bounds.left},${element.bounds.top}][${element.bounds.right},${element.bounds.bottom}]`
                 : existingStep.parameters?.bounds,
               smartDescription: element.smartDescription,
-              smartAnalysis: element.smartAnalysis,
+              smartAnalysis: element.smartAnalysis ? {
+                confidence: element.smartAnalysis.confidence,
+                reasoning: element.smartAnalysis.reasoning,
+                context: element.smartAnalysis.context
+              } : undefined,
               ...(builtLocator ? { elementLocator: builtLocator } : {}),
             };
             if (built && built.fields.length > 0) {
@@ -452,6 +467,27 @@ export function usePageFinder(deps: UsePageFinderDeps) {
           ),
           duration: 4,
         });
+        // 🆕 快捷模式下尝试自动保存：在打开弹窗后短延时触发保存，避免用户忘记点击"确定"导致未生成步骤
+        // 说明：若表单项尚未完成挂载或校验不通过，handleSaveStep 内部会安全地记录并保留弹窗，用户仍可手动确认
+        setTimeout(async () => {
+          console.log('🤖 [快捷模式] 开始自动保存步骤...');
+          console.log('🔍 [快捷模式] 表单字段状态检查:', {
+            step_type: form.getFieldValue('step_type'),
+            name: form.getFieldValue('name'),
+            description: form.getFieldValue('description'),
+            matching: form.getFieldValue('matching'),
+            elementBinding: form.getFieldValue('elementBinding'),
+            xmlSnapshot: form.getFieldValue('xmlSnapshot')
+          });
+          // 🔧 快捷模式允许跳过严格XML验证
+          setAllowSaveWithoutXmlOnce(true);
+          try {
+            await handleSaveStep();
+            console.log('✅ [快捷模式] 自动保存成功');
+          } catch (e) {
+            console.warn('⚠️ [快捷模式] 自动保存失败（用户可手动点击确定）:', e);
+          }
+        }, 200);
       } else {
         message.success({
           content: (

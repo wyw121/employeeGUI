@@ -29,11 +29,11 @@ export const stepTypeStyles: Partial<Record<KnownStepType, StepTypeStyle>> = {
   // 循环开始：不依赖 base，显式定义全部关键字段，并加入专属类 loop-start
   loop_start: {
     tagColor: 'blue',
-    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl',
+    cardClass: 'rounded-2xl',
     ringClass: 'ring-blue-500',
     hoverClass: 'hover:shadow-lg',
     titleTextClass: 'text-blue-900',
-    titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
+    titleBarClass: '-m-2 p-3 rounded-t border-b-2 border-blue-200',
     extraCardClass: 'loop-card loop-start',
     draggingCardClass: 'loop-card-dragging',
     headerHandleClass: 'loop-header-handle',
@@ -45,11 +45,11 @@ export const stepTypeStyles: Partial<Record<KnownStepType, StepTypeStyle>> = {
   // 循环结束：不依赖 base，显式定义全部关键字段，并加入专属类 loop-end（与 start 做细微差异）
   loop_end: {
     tagColor: 'blue',
-    cardClass: 'bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl',
+    cardClass: 'rounded-2xl',
     ringClass: 'ring-blue-600',
     hoverClass: 'hover:shadow-lg',
     titleTextClass: 'text-blue-900',
-    titleBarClass: 'bg-blue-50 bg-opacity-80 -m-2 p-3 rounded-t border-b-2 border-blue-200',
+    titleBarClass: '-m-2 p-3 rounded-t border-b-2 border-blue-200',
     extraCardClass: 'loop-card loop-end',
     draggingCardClass: 'loop-card-dragging',
     headerHandleClass: 'loop-header-handle',

@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { Card, Table, Typography, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import { readFileAsText } from '../utils/file';
+import styles from './StepUpload.module.css';
 
 const { Dragger } = Upload;
 const { Text } = Typography;
@@ -37,14 +38,14 @@ export const StepUpload: React.FC<StepUploadProps> = ({ contactsCount, previewRo
       </Dragger>
 
       {contactsCount > 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div className={styles.previewWrap}>
           <Text strong>已解析 {contactsCount} 个联系人</Text>
           <Table
             dataSource={previewRows}
             columns={contactColumns}
             pagination={false}
             size="small"
-            style={{ marginTop: 8 }}
+            className={styles.table}
             scroll={{ x: true }}
           />
           {contactsCount > 5 && <Text type="secondary">仅显示前5个联系人...</Text>}

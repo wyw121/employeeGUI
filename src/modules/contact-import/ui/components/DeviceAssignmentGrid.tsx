@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, InputNumber, Select, Button, Space, Typography, Tooltip, Tag, Row, Col, Badge, Checkbox, message } from 'antd';
 import { MobileOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAdb } from '../../../../application/hooks/useAdb';
+import styles from './DeviceAssignmentGrid.module.css';
+import { getBindings, subscribe } from '../services/deviceBatchBinding';
 
 const { Text } = Typography;
 
@@ -32,18 +34,9 @@ const DEFAULT_INDUSTRIES = ['不限', '电商', '教育', '医疗', '金融', '�
 // 简单的机型图标渲染（可扩展为按 manufacturer/model 加载图片）
 function PhoneVisual({ manufacturer, model }: { manufacturer?: string; model?: string }) {
   return (
-    <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+    <div className={styles.phoneVisualWrap}>
       <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 10,
-          background: '#f5f5f5',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '1px solid #eee',
-        }}
+        className={styles.phoneVisualIcon}
         aria-label={(manufacturer || model) ? `${manufacturer ?? ''} ${model ?? ''}` : 'mobile'}
       >
         <MobileOutlined style={{ fontSize: 24, color: '#1677ff' }} />
@@ -165,6 +158,13 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
     return () => clearTimeout(timer);
   }, [devices]);
 
+  // 订阅设备-批次绑定变化，以便刷新 UI（显示“待导入/已导入”计数）
+  const [, forceRender] = useState(0);
+  useEffect(() => {
+    const unsub = subscribe(() => forceRender(v => v + 1));
+    return () => { unsub && unsub(); };
+  }, []);
+
   // 自动分配 100 区间：基于当前所有设备的 idEnd 最大值
   const autoAssignRange = useCallback((deviceId: string, count: number) => {
     const n = Math.max(1, Math.floor(count || 0));
@@ -271,7 +271,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
 
   return (
     <div>
-      <Space style={{ marginBottom: 8 }} wrap>
+      <Space className={styles.toolbar} wrap>
         <Button onClick={() => refreshDevices?.()}>刷新设备列表</Button>
         <Button icon={<ReloadOutlined />} onClick={refreshAllCounts}>刷新所有联系人数量</Button>
         <Checkbox
@@ -317,8 +317,8 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                 }
               >
                 <PhoneVisual manufacturer={metaInfo.manufacturer} model={metaInfo.model} />
-                <div style={{ marginBottom: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>{row.deviceId}</Text>
+                <div className={styles.deviceIdText}>
+                  <Text type="secondary">{row.deviceId}</Text>
                 </div>
                 {/* 已导入行业（占位：待接入历史数据统计）*/}
                 <div style={{ marginBottom: 8 }}>
@@ -328,7 +328,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                   </Space>
                 </div>
                 {/* 行业选择 + ID 区间 + 自动 100 分配 */}
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space direction="vertical" className={styles.assignRow}>
                   <Select
                     style={{ width: '100%' }}
                     value={row.industry ?? industries[0]}
@@ -356,7 +356,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                       onChange={(v) => updateRow(row.deviceId, { idEnd: typeof v === 'number' ? v : undefined })}
                     />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className={styles.autoBtnRow}>
                     <InputNumber
                       size="small"
                       min={1}
@@ -370,7 +370,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                   </div>
                 </Space>
                 {/* 联系人数（总数；按行业细分待接入）*/}
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className={styles.contactsRow}>
                   <Space>
                     <Text>已有联系人：</Text>
                     <Text strong>{typeof row.contactCount === 'number' ? row.contactCount : '-'}</Text>
@@ -396,10 +396,28 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                     导入
                   </Button>
                 </div>
+                {/* 绑定状态：待导入 / 已导入 批次数 */}
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(() => {
+                    const b = getBindings(row.deviceId);
+                    const pending = b.pending.length;
+                    const imported = b.imported.length;
+                    return (
+                      <>
+                        <Tag color={pending > 0 ? 'gold' : undefined} data-no-card-toggle>
+                          待导入: <Text strong>{pending}</Text>
+                        </Tag>
+                        <Tag color={imported > 0 ? 'green' : undefined} data-no-card-toggle>
+                          已导入: <Text strong>{imported}</Text>
+                        </Tag>
+                      </>
+                    );
+                  })()}
+                </div>
                 {/* 冲突提示/跳转 */}
                 {peers.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <Text type="danger" style={{ fontSize: 12 }}>与 {peers.length} 台设备区间重叠</Text>
+                  <div className={styles.conflictWarn}>
+                    <Text type="danger">与 {peers.length} 台设备区间重叠</Text>
                   </div>
                 )}
               </Card>

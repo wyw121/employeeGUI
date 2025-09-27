@@ -17,6 +17,28 @@ export async function importNumbersFromFolder(folderPath: string): Promise<Impor
   return invoke<ImportNumbersResult>('import_contact_numbers_from_folder', { folderPath });
 }
 
+export async function importNumbersFromFolders(folderPaths: string[]): Promise<ImportNumbersResult> {
+  // 顺序执行并聚合结果，避免并发导致数据库锁竞争（如使用SQLite）
+  const aggregate: ImportNumbersResult = { success: true, total_files: 0, total_numbers: 0, inserted: 0, duplicates: 0, errors: [] };
+  for (const dir of folderPaths) {
+    try {
+      const res = await importNumbersFromFolder(dir);
+      aggregate.total_files += res.total_files;
+      aggregate.total_numbers += res.total_numbers;
+      aggregate.inserted += res.inserted;
+      aggregate.duplicates += res.duplicates;
+      if (!res.success) {
+        aggregate.success = false;
+        aggregate.errors.push(...(res.errors || []));
+      }
+    } catch (e: any) {
+      aggregate.success = false;
+      aggregate.errors.push(String(e?.message || e));
+    }
+  }
+  return aggregate;
+}
+
 export interface ContactNumberDto {
   id: number;
   phone: string;

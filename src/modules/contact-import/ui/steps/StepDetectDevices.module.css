@@ -1,0 +1,19 @@
+.wrap {
+  width: 100%;
+}
+
+.statusConnected {
+  color: green;
+}
+
+.statusUnauthorized {
+  color: orange;
+}
+
+.statusOffline {
+  color: red;
+}
+
+.table {
+  margin-top: 8px;
+}

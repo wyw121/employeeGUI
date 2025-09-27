@@ -30,6 +30,8 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
     let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used INTEGER DEFAULT 0", []);
     let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used_at TEXT", []);
     let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN used_batch TEXT", []);
+    // 新增：行业分类（可为空）
+    let _ = conn.execute("ALTER TABLE contact_numbers ADD COLUMN industry TEXT", []);
 
     // 追踪：批次与导入会话
     conn.execute(
@@ -54,6 +56,15 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
             started_at TEXT,
             finished_at TEXT,
             error_message TEXT
+        )",
+        [],
+    )?;
+    // 维护批次与号码的映射表（生成VCF时显式记录包含哪些号码）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS vcf_batch_numbers (
+            batch_id TEXT,
+            number_id INTEGER,
+            PRIMARY KEY (batch_id, number_id)
         )",
         [],
     )?;
@@ -141,6 +152,38 @@ pub fn fetch_numbers(conn: &Connection, count: i64) -> SqlResult<Vec<ContactNumb
     )?;
     let mut rows = stmt.query(params![count])?;
     let mut items: Vec<ContactNumberDto> = Vec::new();
+    while let Some(row) = rows.next()? {
+        items.push(ContactNumberDto {
+            id: row.get(0)?,
+            phone: row.get(1)?,
+            name: row.get(2)?,
+            source_file: row.get(3)?,
+            created_at: row.get(4)?,
+        });
+    }
+    Ok(items)
+}
+
+/// 获取未分类号码，支持仅选择未消费的（按ID升序）
+pub fn fetch_unclassified_numbers(conn: &Connection, count: i64, only_unconsumed: bool) -> SqlResult<Vec<ContactNumberDto>> {
+    let mut items: Vec<ContactNumberDto> = Vec::new();
+    let (sql, params_slice): (&str, Vec<&dyn rusqlite::ToSql>) = if only_unconsumed {
+        (
+            "SELECT id, phone, name, source_file, created_at FROM contact_numbers \
+             WHERE (industry IS NULL OR TRIM(industry) = '') AND (used IS NULL OR used = 0) \
+             ORDER BY id ASC LIMIT ?1",
+            vec![&count],
+        )
+    } else {
+        (
+            "SELECT id, phone, name, source_file, created_at FROM contact_numbers \
+             WHERE (industry IS NULL OR TRIM(industry) = '') \
+             ORDER BY id ASC LIMIT ?1",
+            vec![&count],
+        )
+    };
+    let mut stmt = conn.prepare(sql)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(params_slice))?;
     while let Some(row) = rows.next()? {
         items.push(ContactNumberDto {
             id: row.get(0)?,
@@ -410,6 +453,52 @@ pub fn list_numbers_by_batch(conn: &Connection, batch_id: &str, only_used: Optio
     Ok(ContactNumberList { total, items })
 }
 
+/// 统计号码池数据：各行业计数、未分类计数、未导入计数、总数
+pub struct ContactNumberStatsRaw {
+    pub total: i64,
+    pub unclassified: i64,
+    pub not_imported: i64,
+    pub per_industry: Vec<(String, i64)>,
+}
+
+pub fn get_contact_number_stats(conn: &Connection) -> SqlResult<ContactNumberStatsRaw> {
+    // 总数
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM contact_numbers", [], |row| row.get(0))?;
+    // 未分类（NULL 或 空字符串）
+    let unclassified: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM contact_numbers WHERE industry IS NULL OR TRIM(industry) = ''",
+        [],
+        |row| row.get(0),
+    )?;
+    // 未导入（未消费）
+    let not_imported: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM contact_numbers WHERE used IS NULL OR used = 0",
+        [],
+        |row| row.get(0),
+    )?;
+    // 各行业计数（排除空值）
+    let mut per_industry: Vec<(String, i64)> = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT industry, COUNT(*) AS cnt FROM contact_numbers WHERE industry IS NOT NULL AND TRIM(industry) != '' GROUP BY industry ORDER BY cnt DESC",
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let ind: String = row.get(0)?;
+        let cnt: i64 = row.get(1)?;
+        per_industry.push((ind, cnt));
+    }
+    Ok(ContactNumberStatsRaw { total, unclassified, not_imported, per_industry })
+}
+
+/// 设置指定ID区间内号码的行业标签（闭区间）
+pub fn set_numbers_industry_by_id_range(conn: &Connection, start_id: i64, end_id: i64, industry: &str) -> SqlResult<i64> {
+    let affected = conn.execute(
+        "UPDATE contact_numbers SET industry = ?1 WHERE id >= ?2 AND id <= ?3",
+        params![industry, start_id, end_id],
+    )?;
+    Ok(affected as i64)
+}
+
 /// 获取未生成 VCF 批次（未关联 used_batch）的号码
 pub fn list_numbers_without_batch(conn: &Connection, limit: i64, offset: i64) -> SqlResult<ContactNumberList> {
     let total: i64 = conn.query_row(
@@ -432,4 +521,56 @@ pub fn list_numbers_without_batch(conn: &Connection, limit: i64, offset: i64) ->
         });
     }
     Ok(ContactNumberList { total, items })
+}
+
+/// 创建批次并记录号码映射（若批次已存在则覆盖基本信息并增量插入映射）
+pub fn create_vcf_batch_with_numbers(conn: &Connection, batch_id: &str, vcf_file_path: &str, source_start_id: Option<i64>, source_end_id: Option<i64>, number_ids: &[i64]) -> SqlResult<usize> {
+    // 1) 批次记录（覆盖写入）
+    create_vcf_batch(conn, batch_id, vcf_file_path, source_start_id, source_end_id)?;
+    // 2) 批量插入映射（忽略重复）
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare("INSERT OR IGNORE INTO vcf_batch_numbers (batch_id, number_id) VALUES (?1, ?2)")?;
+        for nid in number_ids {
+            let _ = stmt.execute(params![batch_id, nid]);
+        }
+    }
+    tx.commit()?;
+    Ok(number_ids.len())
+}
+
+/// 按映射表列出某批次包含的号码
+pub fn list_numbers_for_vcf_batch(conn: &Connection, batch_id: &str, limit: i64, offset: i64) -> SqlResult<ContactNumberList> {
+    let total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM vcf_batch_numbers WHERE batch_id = ?1",
+        params![batch_id],
+        |row| row.get(0),
+    )?;
+    let mut items: Vec<ContactNumberDto> = Vec::new();
+    let sql = "SELECT c.id, c.phone, c.name, c.source_file, c.created_at\
+               FROM contact_numbers c\
+               JOIN vcf_batch_numbers m ON c.id = m.number_id\
+               WHERE m.batch_id = ?1\
+               ORDER BY c.id ASC LIMIT ?2 OFFSET ?3";
+    let mut stmt = conn.prepare(sql)?;
+    let mut rows = stmt.query(params![batch_id, limit, offset])?;
+    while let Some(row) = rows.next()? {
+        items.push(ContactNumberDto {
+            id: row.get(0)?,
+            phone: row.get(1)?,
+            name: row.get(2)?,
+            source_file: row.get(3)?,
+            created_at: row.get(4)?,
+        });
+    }
+    Ok(ContactNumberList { total, items })
+}
+
+/// 按批次为其包含的号码打上行业标签
+pub fn tag_numbers_industry_by_vcf_batch(conn: &Connection, batch_id: &str, industry: &str) -> SqlResult<i64> {
+    let affected = conn.execute(
+        "UPDATE contact_numbers SET industry = ?1 WHERE id IN (SELECT number_id FROM vcf_batch_numbers WHERE batch_id = ?2)",
+        params![industry, batch_id],
+    )?;
+    Ok(affected as i64)
 }

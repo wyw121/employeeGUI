@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Button, Card, Descriptions, Space, Typography, Alert, Divider, message } from 'antd';
-import { FileTextOutlined, FolderOpenOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { selectTxtFile, selectFolder } from '../utils/dialog';
-import { importNumbersFromFolder, importNumbersFromTxtFile, ImportNumbersResult } from '../services/contactNumberService';
+import { FileTextOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { selectTxtFile } from '../utils/dialog';
+import { importNumbersFromFolder, importNumbersFromFolders, importNumbersFromTxtFile, ImportNumbersResult } from '../services/contactNumberService';
+import { useSourceFolders } from '../hooks/useSourceFolders';
+import { SourceFolderAddButton } from '../components/SourceFolderAddButton';
+import { SourceFoldersList } from '../components/SourceFoldersList';
 
 const { Text, Paragraph } = Typography;
 
@@ -11,10 +14,12 @@ interface StepSourceSelectProps {
 }
 
 export const StepSourceSelect: React.FC<StepSourceSelectProps> = ({ onCompleted }) => {
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null); // 单次选择的TXT或临时文件夹
   const [isFolder, setIsFolder] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [lastResult, setLastResult] = useState<ImportNumbersResult | null>(null);
+  // 持久化的文件夹集合
+  const { folders, addFolder, removeFolder, clearAll, hasItems } = useSourceFolders();
 
   const handleChooseFile = async () => {
     const file = await selectTxtFile();
@@ -24,24 +29,30 @@ export const StepSourceSelect: React.FC<StepSourceSelectProps> = ({ onCompleted 
     }
   };
 
-  const handleChooseFolder = async () => {
-    const folder = await selectFolder();
-    if (folder) {
-      setSelectedPath(folder);
-      setIsFolder(true);
-    }
-  };
+  // 文件夹选择已通过独立的 SourceFolderAddButton 处理
 
   const handleImport = async () => {
-    if (!selectedPath) {
-      message.warning('请先选择TXT文件或文件夹');
+    // 支持三种导入来源：
+    // 1) 选择的单个TXT文件
+    // 2) 选择的单个文件夹（临时）
+    // 3) 已保存的多个文件夹（批量）
+    if (!selectedPath && !hasItems) {
+      message.warning('请先选择TXT文件，或添加至少一个文件夹路径');
       return;
     }
     setLoading(true);
     try {
-      const result = isFolder
-        ? await importNumbersFromFolder(selectedPath)
-        : await importNumbersFromTxtFile(selectedPath);
+      let result: ImportNumbersResult;
+      if (selectedPath && !isFolder) {
+        result = await importNumbersFromTxtFile(selectedPath);
+      } else if (selectedPath && isFolder && folders.length === 0) {
+        result = await importNumbersFromFolder(selectedPath);
+      } else if (folders.length > 0) {
+        result = await importNumbersFromFolders(folders);
+      } else {
+        message.warning('没有可导入的来源');
+        return;
+      }
       setLastResult(result);
       if (result.success) {
         message.success(`已写入 ${result.inserted} 条号码，重复 ${result.duplicates} 条`);
@@ -77,21 +88,22 @@ export const StepSourceSelect: React.FC<StepSourceSelectProps> = ({ onCompleted 
           <Button icon={<FileTextOutlined />} onClick={handleChooseFile}>
             选择TXT文件
           </Button>
-          <Button icon={<FolderOpenOutlined />} onClick={handleChooseFolder}>
-            选择文件夹
-          </Button>
+          <SourceFolderAddButton onAdded={addFolder} />
           <Button type="primary" icon={<DatabaseOutlined />} loading={loading} onClick={handleImport}>
             提取号码并写入数据库
           </Button>
         </Space>
 
-        {selectedPath && (
+        {selectedPath && !isFolder && (
           <Descriptions bordered size="small" column={1} style={{ marginTop: 8 }}>
-            <Descriptions.Item label={isFolder ? '已选文件夹' : '已选文件'}>
+            <Descriptions.Item label={'已选文件'}>
               <Text code>{selectedPath}</Text>
             </Descriptions.Item>
           </Descriptions>
         )}
+
+        {/* 展示已添加的“文件夹路径列表”，支持删除与清空 */}
+        <SourceFoldersList folders={folders} onRemove={removeFolder} onClearAll={clearAll} />
 
         {lastResult && (
           <>

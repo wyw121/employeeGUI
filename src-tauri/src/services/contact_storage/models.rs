@@ -25,6 +25,20 @@ pub struct ContactNumberList {
     pub items: Vec<ContactNumberDto>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IndustryCountDto {
+    pub industry: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ContactNumberStatsDto {
+    pub total: i64,
+    pub unclassified: i64,
+    pub not_imported: i64,
+    pub per_industry: Vec<IndustryCountDto>,
+}
+
 // ----- 批次与导入追踪模型 -----
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

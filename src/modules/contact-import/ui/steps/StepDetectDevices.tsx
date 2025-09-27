@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Card, Space, Table, Typography } from 'antd';
 import type { Device } from '../../types';
+import styles from './StepDetectDevices.module.css';
 
 const { Text } = Typography;
 
@@ -19,17 +20,17 @@ export const StepDetectDevices: React.FC<StepDetectDevicesProps> = ({ isBusy, av
     { title: '设备ID', dataIndex: 'id', key: 'id' },
     {
       title: '状态', dataIndex: 'status', key: 'status',
-      render: (status: string) => (
-        <span style={{ color: status === 'connected' ? 'green' : status === 'unauthorized' ? 'orange' : 'red' }}>
-          {status === 'connected' ? '已连接' : status === 'unauthorized' ? '未授权' : status === 'offline' ? '离线' : '未知'}
-        </span>
-      )
+      render: (status: string) => {
+        const cls = status === 'connected' ? styles.statusConnected : status === 'unauthorized' ? styles.statusUnauthorized : styles.statusOffline;
+        const text = status === 'connected' ? '已连接' : status === 'unauthorized' ? '未授权' : status === 'offline' ? '离线' : '未知';
+        return <span className={cls}>{text}</span>;
+      }
     }
   ];
 
   return (
     <Card title="检测Android设备">
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space direction="vertical" className={styles.wrap}>
         <Button type="primary" onClick={onDetect} loading={isBusy}>检测设备</Button>
         {availableDevices.length > 0 && (
           <div>
@@ -39,7 +40,7 @@ export const StepDetectDevices: React.FC<StepDetectDevicesProps> = ({ isBusy, av
               columns={deviceColumns}
               pagination={false}
               size="small"
-              style={{ marginTop: 8 }}
+              className={styles.table}
               scroll={{ x: true }}
               rowSelection={{ selectedRowKeys: selectedDeviceIds, onChange: (keys) => onSelect(keys as string[]) }}
             />

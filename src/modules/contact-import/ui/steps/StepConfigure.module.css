@@ -1,0 +1,13 @@
+.wrap {
+  width: 100%;
+}
+
+.strategyRow {
+  display: flex;
+  align-items: center;
+}
+
+.strategySelect {
+  width: 300px;
+  margin-left: 8px;
+}

@@ -4,11 +4,13 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use super::models::{ContactNumberList, ImportNumbersResult};
+use super::models::{ContactNumberStatsDto, IndustryCountDto};
 use super::parser::extract_numbers_from_text;
 use super::repo::{
     fetch_numbers,
     fetch_numbers_by_id_range,
     fetch_numbers_by_id_range_unconsumed,
+    fetch_unclassified_numbers,
     mark_numbers_used_by_id_range,
     get_contacts_db_path,
     init_db,
@@ -22,6 +24,11 @@ use super::repo::{
     list_import_sessions,
     list_numbers_by_batch,
     list_numbers_without_batch,
+    get_contact_number_stats,
+    set_numbers_industry_by_id_range,
+    create_vcf_batch_with_numbers,
+    list_numbers_for_vcf_batch,
+    tag_numbers_industry_by_vcf_batch,
 };
 
 #[tauri::command]
@@ -117,6 +124,16 @@ pub async fn fetch_contact_numbers(count: i64) -> Result<Vec<super::models::Cont
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
 
     fetch_numbers(&conn, count).map_err(|e| e.to_string())
+}
+
+/// 获取未分类号码
+#[tauri::command]
+pub async fn fetch_unclassified_contact_numbers(count: i64, only_unconsumed: Option<bool>) -> Result<Vec<super::models::ContactNumberDto>, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let only = only_unconsumed.unwrap_or(true);
+    fetch_unclassified_numbers(&conn, count, only).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -219,4 +236,60 @@ pub async fn list_numbers_without_vcf_batch(limit: Option<i64>, offset: Option<i
     let limit = limit.unwrap_or(50);
     let offset = offset.unwrap_or(0);
     list_numbers_without_batch(&conn, limit, offset).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_contact_number_stats_cmd() -> Result<ContactNumberStatsDto, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let raw = get_contact_number_stats(&conn).map_err(|e| e.to_string())?;
+    Ok(ContactNumberStatsDto {
+        total: raw.total,
+        unclassified: raw.unclassified,
+        not_imported: raw.not_imported,
+        per_industry: raw
+            .per_industry
+            .into_iter()
+            .map(|(industry, count)| IndustryCountDto { industry, count })
+            .collect(),
+    })
+}
+
+#[tauri::command]
+pub async fn set_contact_numbers_industry_by_id_range(start_id: i64, end_id: i64, industry: String) -> Result<i64, String> {
+    if end_id < start_id { return Err("end_id must be >= start_id".to_string()); }
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    set_numbers_industry_by_id_range(&conn, start_id, end_id, &industry).map_err(|e| e.to_string())
+}
+
+/// 创建批次并记录号码映射
+#[tauri::command]
+pub async fn create_vcf_batch_with_numbers_cmd(batch_id: String, vcf_file_path: String, source_start_id: Option<i64>, source_end_id: Option<i64>, number_ids: Vec<i64>) -> Result<usize, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    create_vcf_batch_with_numbers(&conn, &batch_id, &vcf_file_path, source_start_id, source_end_id, &number_ids).map_err(|e| e.to_string())
+}
+
+/// 通过映射表列出某批次包含的号码
+#[tauri::command]
+pub async fn list_numbers_for_vcf_batch_cmd(batch_id: String, limit: Option<i64>, offset: Option<i64>) -> Result<ContactNumberList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    list_numbers_for_vcf_batch(&conn, &batch_id, limit, offset).map_err(|e| e.to_string())
+}
+
+/// 按批次为其包含的号码打上行业标签
+#[tauri::command]
+pub async fn tag_numbers_industry_by_vcf_batch_cmd(batch_id: String, industry: String) -> Result<i64, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    tag_numbers_industry_by_vcf_batch(&conn, &batch_id, &industry).map_err(|e| e.to_string())
 }

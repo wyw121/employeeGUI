@@ -7,6 +7,7 @@ import ActionsBar from './components/ActionsBar';
 import { useBatchData } from './hooks/useBatchData';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import type { BatchFilterState } from './types';
+import styles from './BatchManagerDrawer.module.css';
 
 interface Props {
   open: boolean;
@@ -27,7 +28,12 @@ const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
   });
 
   return (
-    <Drawer open={open} onClose={onClose} width={880} title="按批次/设备筛选号码池">
+    <Drawer
+      open={open}
+      onClose={onClose}
+      className={styles.drawer}
+      title="按批次/设备筛选号码池"
+    >
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <FiltersBar value={filter} onChange={setFilter} batches={batches} />
         <ActionsBar

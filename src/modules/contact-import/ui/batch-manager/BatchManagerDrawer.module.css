@@ -1,0 +1,8 @@
+.drawer :global(.ant-drawer-content-wrapper) {
+  width: min(880px, 96vw) !important;
+}
+
+.drawer :global(.ant-drawer-body) {
+  max-height: 80vh;
+  overflow: auto;
+}

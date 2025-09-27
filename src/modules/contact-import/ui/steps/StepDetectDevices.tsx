@@ -40,6 +40,7 @@ export const StepDetectDevices: React.FC<StepDetectDevicesProps> = ({ isBusy, av
               pagination={false}
               size="small"
               style={{ marginTop: 8 }}
+              scroll={{ x: true }}
               rowSelection={{ selectedRowKeys: selectedDeviceIds, onChange: (keys) => onSelect(keys as string[]) }}
             />
           </div>

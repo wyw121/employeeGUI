@@ -158,6 +158,7 @@ export const ContactImportWizard: React.FC<ContactImportWizardProps> = ({
   const previewRows = contacts.slice(0, PREVIEW_ROWS_COUNT);
 
   return (
+    // 让外层容器可伸缩并在较小窗口时滚动
     <div className="p-4 md:p-6 max-w-full w-full h-full overflow-auto">
       <Title level={2}>联系人导入向导</Title>
       

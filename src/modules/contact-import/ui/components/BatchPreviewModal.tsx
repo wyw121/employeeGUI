@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Table, Typography, Space, Button, Checkbox, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import styles from './BatchPreviewModal.module.css';
 
 const { Text } = Typography;
 
@@ -62,7 +63,7 @@ export const BatchPreviewModal: React.FC<BatchPreviewModalProps> = ({ open, batc
       title="VCF 批次详情"
       open={open}
       onCancel={onCancel}
-      width={820}
+      className={styles.modal}
       footer={(
         <Space>
           <Checkbox checked={markConsumed} onChange={e => setMarkConsumed(e.target.checked)}>导入后标记已使用</Checkbox>
@@ -77,6 +78,7 @@ export const BatchPreviewModal: React.FC<BatchPreviewModalProps> = ({ open, batc
         columns={columns}
         size="small"
         pagination={false}
+        scroll={{ x: true, y: 360 }}
         rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
       />
     </Modal>

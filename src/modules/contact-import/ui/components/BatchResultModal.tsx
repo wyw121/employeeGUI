@@ -8,6 +8,7 @@ import { useExportOptions } from '../hooks/useExportOptions';
 import ExportSettingsButton from './export/ExportSettingsButton';
 import ExportPreviewModal from './export/ExportPreviewModal';
 import { FailReasonChips, ViewStatsBar } from './result';
+import styles from './BatchResultModal.module.css';
 
 interface Props {
   open: boolean;
@@ -106,7 +107,7 @@ const BatchResultModal: React.FC<Props> = ({ open, result, onClose, onRetryFaile
     <Modal
       open={open}
       onCancel={onClose}
-      width={720}
+      className={styles.modal}
       title={
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <span>{`批次结果：成功 ${result?.successDevices ?? 0}/${result?.totalDevices ?? 0}`}</span>
@@ -207,6 +208,7 @@ const BatchResultModal: React.FC<Props> = ({ open, result, onClose, onRetryFaile
         columns={columns as any}
         dataSource={viewData}
         pagination={false}
+        scroll={{ x: true, y: 360 }}
       />
     </Modal>
   );

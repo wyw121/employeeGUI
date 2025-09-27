@@ -1,0 +1,8 @@
+.modal :global(.ant-modal) {
+  width: min(820px, 96vw) !important;
+}
+
+.modal :global(.ant-modal-body) {
+  max-height: 72vh;
+  overflow: auto;
+}

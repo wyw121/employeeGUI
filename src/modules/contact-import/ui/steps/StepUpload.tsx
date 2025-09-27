@@ -39,7 +39,14 @@ export const StepUpload: React.FC<StepUploadProps> = ({ contactsCount, previewRo
       {contactsCount > 0 && (
         <div style={{ marginTop: 16 }}>
           <Text strong>已解析 {contactsCount} 个联系人</Text>
-          <Table dataSource={previewRows} columns={contactColumns} pagination={false} size="small" style={{ marginTop: 8 }} />
+          <Table
+            dataSource={previewRows}
+            columns={contactColumns}
+            pagination={false}
+            size="small"
+            style={{ marginTop: 8 }}
+            scroll={{ x: true }}
+          />
           {contactsCount > 5 && <Text type="secondary">仅显示前5个联系人...</Text>}
         </div>
       )}

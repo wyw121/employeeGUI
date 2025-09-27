@@ -25,6 +25,7 @@ import { LaunchAppSmartComponent } from "../../../components/smart/LaunchAppSmar
 import type { LaunchAppComponentParams } from "../../../types/smartComponents";
 import { renderParameterInput } from "../helpers/parameterRenderers";
 import { noDragProps } from "../../../components/universal-ui/dnd/noDrag";
+import { OverlayThemeSwitch, useOverlayTheme } from "../../../components/ui/overlay";
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -51,17 +52,26 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
   onShowNavigationModal,
   onShowPageAnalyzer,
 }) => {
+  // 使用通用 Overlay 主题 Hook（默认 inherit：跟随 GUI 全局主题）
+  const { theme, setTheme, classes, popupProps } = useOverlayTheme('inherit');
+
+  const titleNode = (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span>{editingStep ? "编辑智能步骤" : "添加智能步骤"}</span>
+      <OverlayThemeSwitch value={theme} onChange={setTheme} />
+    </div>
+  );
   return (
     <Modal
-      title={editingStep ? "编辑智能步骤" : "添加智能步骤"}
+      title={titleNode}
       open={open}
       onOk={onOk}
       onCancel={onCancel}
       width={600}
       maskClosable={false}
       zIndex={1000} // 设置基础z-index，确保子模态框可以显示在其上方
-      className="overlay-surface"
-      rootClassName="overlay-surface overlay-elevated"
+      className={classes.className}
+      rootClassName={classes.rootClassName}
     >
       <div {...noDragProps}>
       <Form
@@ -78,7 +88,10 @@ const StepEditModal: React.FC<StepEditModalProps> = ({
           label="操作类型"
           rules={[{ required: true, message: "请选择操作类型" }]}
         >
-          <Select placeholder="请选择智能操作类型">
+          <Select
+            placeholder="请选择智能操作类型"
+            {...popupProps}
+          >
             {Object.entries(SMART_ACTION_CONFIGS).map(([key, config]) => (
               <Option key={key} value={key}>
                 <Space>

@@ -88,4 +88,122 @@
 .overlay-surface .ant-message .anticon {
   color: #0f172a !important;
 }
+
+/* 覆盖层暗色变体（黑底浅字）——在需要黑底白字的模态/抽屉上同时添加 overlay-surface overlay-dark */
+.overlay-surface.overlay-dark { color: #e5e7eb !important; }
+
+/* Modal */
+.overlay-surface.overlay-dark .ant-modal,
+.overlay-surface.overlay-dark .ant-modal-content {
+  background-color: #0f172a !important; /* slate-900 */
+  color: #f1f5f9 !important; /* slate-100 */
+}
+.overlay-surface.overlay-dark .ant-modal-header {
+  background-color: #0f172a !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-modal-title { color: #f8fafc !important; }
+.overlay-surface.overlay-dark .ant-modal-body { color: #e2e8f0 !important; }
+.overlay-surface.overlay-dark .ant-modal-footer {
+  background-color: #0f172a !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-modal-close,
+.overlay-surface.overlay-dark .ant-modal-close-x,
+.overlay-surface.overlay-dark .ant-modal-close .anticon { color: #94a3b8 !important; }
+.overlay-surface.overlay-dark .ant-modal-close:hover .anticon { color: #cbd5e1 !important; }
+
+/* Drawer */
+.overlay-surface.overlay-dark .ant-drawer-content,
+.overlay-surface.overlay-dark .ant-drawer-header {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+.overlay-surface.overlay-dark .ant-drawer-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-drawer-title { color: #f8fafc !important; }
+.overlay-surface.overlay-dark .ant-drawer-footer {
+  background-color: #0f172a !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-drawer-close,
+.overlay-surface.overlay-dark .ant-drawer-close .anticon { color: #94a3b8 !important; }
+.overlay-surface.overlay-dark .ant-drawer-close:hover .anticon { color: #cbd5e1 !important; }
+
+/* 表单与输入控件 */
+.overlay-surface.overlay-dark .ant-form-item-label > label { color: #e5e7eb !important; }
+.overlay-surface.overlay-dark .ant-input,
+.overlay-surface.overlay-dark .ant-input-affix-wrapper,
+.overlay-surface.overlay-dark .ant-input-number,
+.overlay-surface.overlay-dark .ant-input-number-input,
+.overlay-surface.overlay-dark .ant-select-selector,
+.overlay-surface.overlay-dark .ant-picker,
+.overlay-surface.overlay-dark .ant-cascader-picker {
+  background-color: #111827 !important; /* gray-900 */
+  color: #e5e7eb !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-input::placeholder,
+.overlay-surface.overlay-dark .ant-select-selection-placeholder,
+.overlay-surface.overlay-dark .ant-picker-input > input::placeholder { color: #94a3b8 !important; }
+.overlay-surface.overlay-dark .ant-input:focus,
+.overlay-surface.overlay-dark .ant-input-affix-wrapper-focused,
+.overlay-surface.overlay-dark .ant-select-focused .ant-select-selector,
+.overlay-surface.overlay-dark .ant-picker-focused,
+.overlay-surface.overlay-dark .ant-cascader-picker:focus {
+  border-color: rgba(96, 165, 250, 0.6) !important; /* blue-400 */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important; /* ring */
+}
+
+/* 按钮与图标 */
+.overlay-surface.overlay-dark .ant-btn > span,
+.overlay-surface.overlay-dark .ant-btn .anticon { color: inherit !important; }
+.overlay-surface.overlay-dark .ant-btn-default {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.overlay-surface.overlay-dark .ant-btn-default:hover {
+  background-color: #111827 !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+.overlay-surface.overlay-dark .ant-btn-primary:not([disabled]) {
+  /* 保持主题主色，但提高对比度文字 */
+  color: #ffffff !important;
+}
+
+/* 卡片、警告、分割线 */
+.overlay-surface.overlay-dark .ant-card,
+.overlay-surface.overlay-dark .ant-card-bordered {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-card-head { border-bottom-color: rgba(255,255,255,0.08) !important; }
+.overlay-surface.overlay-dark .ant-alert-info {
+  background-color: #0b1220 !important;
+  color: #e5e7eb !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.overlay-surface.overlay-dark .ant-divider,
+.overlay-surface.overlay-dark .ant-divider-plain { border-block-start-color: rgba(255,255,255,0.08) !important; }
+
+/* 链接与轻文本 */
+.overlay-surface.overlay-dark a { color: #93c5fd !important; }
+.overlay-surface.overlay-dark a:hover { color: #bfdbfe !important; }
+
+/* Popover/Tooltip 如果挂载在相同容器下 */
+.overlay-surface.overlay-dark .ant-popover-inner,
+.overlay-surface.overlay-dark .ant-tooltip-inner {
+  background-color: #0b1220 !important;
+  color: #e5e7eb !important;
+}
+.overlay-surface.overlay-dark .ant-popover-inner-content { color: #e5e7eb !important; }
+.overlay-surface.overlay-dark .ant-popover-arrow::before,
+.overlay-surface.overlay-dark .ant-tooltip-arrow::before { background: #0b1220 !important; }
+
+/* 说明：Select/Dropdown 等通常作为独立 portal 渲染。若需同步暗色：
+   1) 为其设置 getPopupContainer，将下拉容器挂到当前 Modal 内；或
+   2) 使用 overlay helper 给其根容器注入 overlay-dark 类。 */
 }

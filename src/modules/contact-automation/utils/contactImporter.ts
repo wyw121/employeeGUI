@@ -105,8 +105,10 @@ export async function backupExistingContacts(
  */
 export async function getDeviceContactCount(deviceId: string): Promise<number> {
   try {
-    const count = await invoke<number>('get_device_contact_count', { device_id: deviceId });
-    return count;
+    const payload = { device_id: deviceId, deviceId } as any;
+    try { console.debug('[contactImporter.getDeviceContactCount] invoke payload:', payload); } catch {}
+    const count = await invoke<number>('get_device_contact_count', payload);
+    return Math.max(0, Number(count || 0));
   } catch (error) {
     console.error('获取设备联系人数量失败:', error);
     return 0;

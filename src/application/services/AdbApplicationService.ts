@@ -530,7 +530,10 @@ export class AdbApplicationService {
     try {
       const { isTauri, invoke } = await import('@tauri-apps/api/core');
       if (!isTauri()) return 0;
-      const count = await invoke<number>('get_device_contact_count', { device_id: deviceId });
+      // 兼容性：同时传递 snake_case 与 camelCase，后端优先取 device_id
+      const payload = { device_id: deviceId, deviceId } as any;
+      try { console.debug('[AdbApplicationService.getDeviceContactCount] invoke payload:', payload); } catch {}
+      const count = await invoke<number>('get_device_contact_count', payload);
       return Math.max(0, Number(count || 0));
     } catch (error) {
       console.error('getDeviceContactCount failed:', error);

@@ -74,11 +74,24 @@ async fn try_query_contact_count(device_id: &str) -> Result<i32, String> {
     }
 }
 
-/// 获取设备内联系人数量
+/// 获取设备内联系人数量（兼容 `{ device_id }` 与 `{ deviceId }` 两种写法）
 #[command]
-pub async fn get_device_contact_count(device_id: String) -> Result<i32, String> {
-    info!("📇 查询设备联系人数量: {}", device_id);
-    match try_query_contact_count(&device_id).await {
+#[allow(non_snake_case)]
+pub async fn get_device_contact_count(
+    device_id: Option<String>,
+    deviceId: Option<String>,
+) -> Result<i32, String> {
+    let id = match (device_id.clone(), deviceId.clone()) {
+        (Some(id), _) => id,
+        (None, Some(id)) => id,
+        (None, None) => {
+            warn!("❌ get_device_contact_count 缺少参数: device_id/deviceId 皆为 None");
+            return Err("缺少参数：device_id / deviceId".to_string());
+        },
+    };
+
+    info!("📇 查询设备联系人数量: {} (raw inputs: device_id={:?}, deviceId={:?})", id, device_id, deviceId);
+    match try_query_contact_count(&id).await {
         Ok(count) => Ok(count),
         Err(e) => Err(e),
     }

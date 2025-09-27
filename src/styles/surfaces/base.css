@@ -50,4 +50,32 @@
 .loop-surface .ant-btn > span {
   color: inherit !important;
 }
+
+/* 暗色表面基线：黑底白字（用于非循环步骤卡片整卡） */
+.dark-surface {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.dark-surface .ant-typography,
+.dark-surface .ant-typography-title,
+.dark-surface .ant-typography-caption,
+.dark-surface .ant-typography-secondary,
+.dark-surface .ant-badge,
+.dark-surface .ant-badge-status-text,
+.dark-surface .ant-tag,
+.dark-surface .anticon {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.dark-surface .text-gray-500,
+.dark-surface .text-gray-600,
+.dark-surface .text-gray-700 {
+  color: var(--color-text-secondary, var(--dark-text-secondary)) !important;
+}
+.dark-surface code,
+.dark-surface pre {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.dark-surface .ant-btn > span,
+.dark-surface .anticon {
+  color: inherit !important;
+}
 }

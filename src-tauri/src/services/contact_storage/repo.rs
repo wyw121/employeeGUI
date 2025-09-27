@@ -264,39 +264,105 @@ pub fn finish_import_session(conn: &Connection, session_id: i64, status: &str, i
 }
 
 pub fn list_import_sessions(conn: &Connection, device_id: Option<&str>, batch_id: Option<&str>, limit: i64, offset: i64) -> SqlResult<ImportSessionList> {
-    let mut where_clause = String::from("WHERE 1=1");
-    let mut args: Vec<(usize, String)> = Vec::new();
-    if let Some(d) = device_id { where_clause.push_str(" AND device_id = ?1"); args.push((1, d.to_string())); }
-    if let Some(b) = batch_id { where_clause.push_str(" AND batch_id = ?2"); args.push((2, b.to_string())); }
-    let total_sql = format!("SELECT COUNT(*) FROM import_sessions {}", where_clause);
+    // 构建总数查询（根据过滤条件拼接占位符编号）
     let total: i64 = match (device_id, batch_id) {
-        (Some(d), Some(b)) => conn.query_row(&total_sql, params![d, b], |row| row.get(0))?,
-        (Some(d), None) => conn.query_row(&total_sql, params![d], |row| row.get(0))?,
-        (None, Some(b)) => conn.query_row(&total_sql, params![b], |row| row.get(0))?,
-        (None, None) => conn.query_row(&total_sql, [], |row| row.get(0))?,
+        (Some(d), Some(b)) => {
+            let sql = "SELECT COUNT(*) FROM import_sessions WHERE device_id = ?1 AND batch_id = ?2";
+            conn.query_row(sql, params![d, b], |row| row.get(0))?
+        }
+        (Some(d), None) => {
+            let sql = "SELECT COUNT(*) FROM import_sessions WHERE device_id = ?1";
+            conn.query_row(sql, params![d], |row| row.get(0))?
+        }
+        (None, Some(b)) => {
+            let sql = "SELECT COUNT(*) FROM import_sessions WHERE batch_id = ?1";
+            conn.query_row(sql, params![b], |row| row.get(0))?
+        }
+        (None, None) => {
+            let sql = "SELECT COUNT(*) FROM import_sessions";
+            conn.query_row(sql, [], |row| row.get(0))?
+        }
     };
 
-    let list_sql = format!("SELECT id, batch_id, device_id, status, imported_count, failed_count, started_at, finished_at, error_message FROM import_sessions {} ORDER BY id DESC LIMIT ?3 OFFSET ?4", where_clause);
+    // 列表查询（按分支分别 prepare/query，保证占位符编号与参数匹配且生命周期安全）
     let mut items: Vec<ImportSessionDto> = Vec::new();
-    let mut stmt = conn.prepare(&list_sql)?;
-    let mut rows = match (device_id, batch_id) {
-        (Some(d), Some(b)) => stmt.query(params![d, b, limit, offset])?,
-        (Some(d), None) => stmt.query(params![d, limit, offset])?,
-        (None, Some(b)) => stmt.query(params![b, limit, offset])?,
-        (None, None) => stmt.query(params![limit, offset])?,
-    };
-    while let Some(row) = rows.next()? {
-        items.push(ImportSessionDto {
-            id: row.get(0)?,
-            batch_id: row.get(1)?,
-            device_id: row.get(2)?,
-            status: row.get(3)?,
-            imported_count: row.get(4)?,
-            failed_count: row.get(5)?,
-            started_at: row.get(6)?,
-            finished_at: row.get(7)?,
-            error_message: row.get(8)?,
-        });
+    match (device_id, batch_id) {
+        (Some(d), Some(b)) => {
+            let sql = "SELECT id, batch_id, device_id, status, imported_count, failed_count, started_at, finished_at, error_message \
+                       FROM import_sessions WHERE device_id = ?1 AND batch_id = ?2 ORDER BY id DESC LIMIT ?3 OFFSET ?4";
+            let mut stmt = conn.prepare(sql)?;
+            let mut rows = stmt.query(params![d, b, limit, offset])?;
+            while let Some(row) = rows.next()? {
+                items.push(ImportSessionDto {
+                    id: row.get(0)?,
+                    batch_id: row.get(1)?,
+                    device_id: row.get(2)?,
+                    status: row.get(3)?,
+                    imported_count: row.get(4)?,
+                    failed_count: row.get(5)?,
+                    started_at: row.get(6)?,
+                    finished_at: row.get(7)?,
+                    error_message: row.get(8)?,
+                });
+            }
+        }
+        (Some(d), None) => {
+            let sql = "SELECT id, batch_id, device_id, status, imported_count, failed_count, started_at, finished_at, error_message \
+                       FROM import_sessions WHERE device_id = ?1 ORDER BY id DESC LIMIT ?2 OFFSET ?3";
+            let mut stmt = conn.prepare(sql)?;
+            let mut rows = stmt.query(params![d, limit, offset])?;
+            while let Some(row) = rows.next()? {
+                items.push(ImportSessionDto {
+                    id: row.get(0)?,
+                    batch_id: row.get(1)?,
+                    device_id: row.get(2)?,
+                    status: row.get(3)?,
+                    imported_count: row.get(4)?,
+                    failed_count: row.get(5)?,
+                    started_at: row.get(6)?,
+                    finished_at: row.get(7)?,
+                    error_message: row.get(8)?,
+                });
+            }
+        }
+        (None, Some(b)) => {
+            let sql = "SELECT id, batch_id, device_id, status, imported_count, failed_count, started_at, finished_at, error_message \
+                       FROM import_sessions WHERE batch_id = ?1 ORDER BY id DESC LIMIT ?2 OFFSET ?3";
+            let mut stmt = conn.prepare(sql)?;
+            let mut rows = stmt.query(params![b, limit, offset])?;
+            while let Some(row) = rows.next()? {
+                items.push(ImportSessionDto {
+                    id: row.get(0)?,
+                    batch_id: row.get(1)?,
+                    device_id: row.get(2)?,
+                    status: row.get(3)?,
+                    imported_count: row.get(4)?,
+                    failed_count: row.get(5)?,
+                    started_at: row.get(6)?,
+                    finished_at: row.get(7)?,
+                    error_message: row.get(8)?,
+                });
+            }
+        }
+        (None, None) => {
+            let sql = "SELECT id, batch_id, device_id, status, imported_count, failed_count, started_at, finished_at, error_message \
+                       FROM import_sessions ORDER BY id DESC LIMIT ?1 OFFSET ?2";
+            let mut stmt = conn.prepare(sql)?;
+            let mut rows = stmt.query(params![limit, offset])?;
+            while let Some(row) = rows.next()? {
+                items.push(ImportSessionDto {
+                    id: row.get(0)?,
+                    batch_id: row.get(1)?,
+                    device_id: row.get(2)?,
+                    status: row.get(3)?,
+                    imported_count: row.get(4)?,
+                    failed_count: row.get(5)?,
+                    started_at: row.get(6)?,
+                    finished_at: row.get(7)?,
+                    error_message: row.get(8)?,
+                });
+            }
+        }
     }
     Ok(ImportSessionList { total, items })
 }

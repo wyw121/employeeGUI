@@ -50,7 +50,7 @@ use services::scrcpy_manager::{start_device_mirror, stop_device_mirror, stop_dev
 // 直接使用的其他命令函数（未在 commands::* re-export 中覆盖的服务命令）
 use services::ui_reader_service::read_device_ui_state;
 use services::smart_vcf_opener::smart_vcf_opener;
-use services::util_fs::{write_file, delete_file, reveal_in_file_manager};
+// 注意: write_file, delete_file, reveal_in_file_manager 已在 commands/files.rs 中定义
 use xml_judgment_service::{
     get_device_ui_xml,
     find_xml_ui_elements,

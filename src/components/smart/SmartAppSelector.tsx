@@ -27,6 +27,7 @@ import {
 } from '@ant-design/icons';
 import type { AppInfo } from '../../types/smartComponents';
 import { smartAppService } from '../../services/smartAppService';
+import { useOverlayTheme } from '../ui/overlay';
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -47,6 +48,8 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
   deviceId,
   selectedApp
 }) => {
+  // 统一该组件内部所有下拉的弹层主题为暗色（黑底白字）
+  const { popupProps } = useOverlayTheme('dark');
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -232,6 +235,7 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
               value={viewMode}
               onChange={setViewMode}
               placeholder="视图模式"
+              {...popupProps}
             >
               <Option value="popular">热门应用</Option>
               <Option value="all">全部应用</Option>
@@ -243,6 +247,7 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
               value={categoryFilter}
               onChange={setCategoryFilter}
               placeholder="应用类型"
+              {...popupProps}
             >
               <Option value="all">全部</Option>
               <Option value="user">用户应用</Option>
@@ -255,6 +260,7 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
               value={statusFilter}
               onChange={setStatusFilter}
               placeholder="状态"
+              {...popupProps}
             >
               <Option value="all">全部</Option>
               <Option value="enabled">已启用</Option>
@@ -271,11 +277,12 @@ export const SmartAppSelector: React.FC<SmartAppSelectorProps> = ({
                   setPage(1);
                 }}
                 placeholder="刷新策略"
+                {...popupProps}
               >
                 <Option value="cache_first">缓存优先</Option>
                 <Option value="force_refresh">强制刷新</Option>
               </Select>
-              <Select style={{ width: 120 }} value={pageSize} onChange={(v) => { setPageSize(v); setPage(1); }}>
+              <Select style={{ width: 120 }} value={pageSize} onChange={(v) => { setPageSize(v); setPage(1); }} {...popupProps}>
                 <Option value={30}>每页30</Option>
                 <Option value={60}>每页60</Option>
                 <Option value={100}>每页100</Option>

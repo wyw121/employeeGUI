@@ -11,6 +11,7 @@ import {
 import SmartNavigationStepBuilder from './SmartNavigationStepBuilder';
 import SmartElementFinder from '../smart-element-finder/SmartElementFinder';
 import type { SmartScriptStep } from '../../types/smartScript';
+import { useOverlayTheme } from '../ui/overlay';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -30,6 +31,8 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
   onStepGenerated,
   onConfigurationChange
 }) => {
+  // 未来在内容中若添加下拉/弹层，这里可统一传递 popupProps
+  const { classes, popupProps } = useOverlayTheme('inherit');
   const [activeTab, setActiveTab] = useState<string>('wizard');
   const [hasValidStep, setHasValidStep] = useState<boolean>(false);
   const [pendingStep, setPendingStep] = useState<SmartScriptStep | null>(null);
@@ -176,8 +179,8 @@ export const SmartNavigationModal: React.FC<SmartNavigationModalProps> = ({
       }
       open={visible}
       onCancel={handleModalClose}
-      className="overlay-surface"
-      rootClassName="overlay-surface overlay-elevated"
+      className={classes.className}
+      rootClassName={classes.rootClassName}
       footer={
         <Space>
           <Button 

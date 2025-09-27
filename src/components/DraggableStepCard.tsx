@@ -185,8 +185,20 @@ const DraggableStepCardInner: React.FC<
   
   const loopThemeClass = (isAnchor || isInLoop) && loopThemeToken ? `loop-theme-${loopThemeToken}` : '';
   const nonLoopThemeClass = (!isAnchor && !isInLoop && cardThemeToken) ? `loop-theme-${cardThemeToken}` : '';
-  // 非循环卡片默认走深色基线，不自动挂载 light-surface；如需浅色化，请由调用方或主题开关显式添加
-  const nonLoopLightSurface = '';
+  // 非循环卡片表面基线可通过参数一键切换：cardSurface = 'light' | 'dark' | 'inherit'
+  const cardSurfacePref: string | undefined = (() => {
+    const s = (step.parameters as any)?.cardSurface;
+    if (typeof s !== 'string') return undefined;
+    const v = s.trim().toLowerCase();
+    return v === 'light' || v === 'dark' || v === 'inherit' ? v : undefined;
+  })();
+  const nonLoopSurfaceClass = (!isAnchor && !isInLoop)
+    ? (cardSurfacePref === 'light'
+        ? 'light-surface'
+        : cardSurfacePref === 'inherit'
+          ? ''
+          : 'dark-surface')
+    : '';
   
   // 测试白色主题类
   const testWhiteClass = isTestWhiteLoop ? 'test-white-loop' : '';
@@ -212,7 +224,7 @@ const DraggableStepCardInner: React.FC<
           variant={(step.step_type === 'loop_start' || step.step_type === 'loop_end') ? 'outlined' : 'outlined'}
           data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
-            'select-none transition-shadow cursor-grab active:cursor-grabbing',
+            'step-card select-none transition-shadow cursor-grab active:cursor-grabbing',
             // 🧪 测试白色主题优先级最高
             testWhiteClass,
             // 🔵 独特蓝色主题次优先级
@@ -225,8 +237,8 @@ const DraggableStepCardInner: React.FC<
             loopThemeClass,
             // 非循环步骤的皮肤主题类（使用相同变量体系）
             nonLoopThemeClass,
-            // 非循环主题时，挂载 light-surface 以启用可读性与变量驱动
-            nonLoopLightSurface,
+            // 非循环卡片：默认 dark-surface，或通过 cardSurface 参数一键切换
+            nonLoopSurfaceClass,
             typeStyle.cardClass,
             typeStyle.extraCardClass || '',
             dragging
@@ -239,6 +251,7 @@ const DraggableStepCardInner: React.FC<
               step={step}
               typeStyle={typeStyle}
               config={config}
+              controlsVariant={(!isAnchor && !isInLoop) ? (cardSurfacePref === 'light' ? 'light' : cardSurfacePref === 'inherit' ? 'inherit' : 'dark') : 'light'}
               nameDraft={nameDraft}
               editingName={editingName}
               onBeginEditName={beginEditName}

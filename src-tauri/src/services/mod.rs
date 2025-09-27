@@ -42,5 +42,5 @@ pub mod vcf_importer_optimized;
 pub mod multi_brand_vcf_importer;  // 新增：多品牌VCF导入器
 pub mod huawei_enhanced_importer;  // 基于Python成功经验的华为增强导入器
 pub mod scrcpy_manager; // 设备镜像（外部 scrcpy 进程控制）
-pub mod util_fs; // 通用文件系统操作工具
+// 注意：util_fs 模块已迁移到 commands/files.rs，避免重复定义
 // 已移除：xiaohongshu_* 系列模块（自动关注/长连接/服务），按照需求删除

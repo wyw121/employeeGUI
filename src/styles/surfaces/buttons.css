@@ -17,3 +17,28 @@
   color: var(--loop-text, #111827) !important;
 }
 }
+
+/* 控件色系：一键黑底白字（应用于 StepCardHeader 容器时） */
+.controls-dark .ant-typography,
+.controls-dark .anticon,
+.controls-dark .ant-tag,
+.controls-dark .ant-badge,
+.controls-dark .ant-badge-status-text {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.controls-dark .ant-btn,
+.controls-dark .ant-btn > span,
+.controls-dark .ant-btn .anticon { color: var(--color-text, var(--dark-text-primary)) !important; }
+.controls-dark .ant-btn-text,
+.controls-dark .ant-btn-link { background-color: transparent !important; }
+.controls-dark .ant-btn-text:hover,
+.controls-dark .ant-btn-link:hover { background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important; }
+.controls-dark .ant-btn-default {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+  background-color: transparent !important;
+}
+.controls-dark .ant-btn-default:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+}

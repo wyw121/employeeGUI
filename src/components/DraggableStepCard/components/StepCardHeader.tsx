@@ -24,6 +24,8 @@ interface StepCardHeaderProps {
   step: MinimalStep;
   typeStyle: StepTypeStyle;
   config: ActionConfig;
+  /** 控件色系切换：dark=黑底白字 | light=白底黑字 | inherit=不强制 */
+  controlsVariant?: 'dark' | 'light' | 'inherit';
   // 标题编辑
   nameDraft: string;
   editingName: boolean;
@@ -56,6 +58,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
   step,
   typeStyle,
   config,
+  controlsVariant = 'inherit',
   nameDraft,
   editingName,
   onBeginEditName,
@@ -78,7 +81,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
   onUpdateStepParameters,
 }) => {
   return (
-    <div className={`flex items-center justify-between ${typeStyle.titleBarClass || ''}`}>
+    <div className={`flex items-center justify-between ${typeStyle.titleBarClass || ''} ${controlsVariant === 'dark' ? 'controls-dark' : ''}`}>
       <div className="flex items-center space-x-2">
         <div className={`p-1 rounded ${step.step_type === 'loop_start' || step.step_type === 'loop_end' ? typeStyle.headerHandleClass || '' : ''}`}>
           <DragOutlined

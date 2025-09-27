@@ -9,6 +9,7 @@
 - `light-surface`：本体浅色基线（白底深字，覆盖 AntD Card 头/体、Typography、Buttons、Icons、Tag/Badge）
 - `loop-surface`：循环体浅色基线，在 `surfaces/loop.css` 中强化（配合 `in-loop-step`、`loop-anchor`）
 - `overlay-surface`：覆盖层浅色基线（Modal/Popover/Tooltip/Dropdown/Drawer/Select/Picker/Popconfirm/Notification/Message 等）
+  - 变体：`overlay-dark`（黑底浅字）可与 `overlay-surface` 组合，或通过 Hook 自动注入
 
 3) 业务变体层
 - `in-loop-step`：循环体子步骤视觉变体
@@ -28,6 +29,9 @@
   - Modal：`className="overlay-surface"` + `rootClassName="overlay-surface overlay-elevated"`
   - Popover/Tooltip/Dropdown/Drawer：`overlayClassName="overlay-surface"`
   - 也可使用工具：`withOverlaySurface` HOC 或 `useOverlaySurfaceProps()` hook
+  - 统一主题 Hook：`useOverlayTheme(initial)` 返回 `{ classes, popupProps }`
+    - classes：用于 Modal/Drawer 的 className/rootClassName（支持 inherit/light/dark）
+    - popupProps：用于 Select/Dropdown/Tooltip/Popover/DatePicker 等（处理 getPopupContainer 与 *ClassName）
 
 ## 常见坑
 - 只改背景不挂浅色表面，会出现白底白字（因全局暗色让文字默认白）。

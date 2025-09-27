@@ -6,6 +6,7 @@ import type { SmartScriptStep } from '../../types/smartScript';
 import { runSingleStepOnDevices } from '../../hooks/singleStepTest/multiDevice';
 import { useSingleStepTest } from '../../hooks/useSingleStepTest';
 import { MultiDeviceResultPanel } from './MultiDeviceResultPanel';
+import { useOverlayTheme } from '../ui/overlay';
 
 const { Text } = Typography;
 
@@ -24,6 +25,7 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
 
   const options = useMemo(() => devices.map(d => ({ label: d.name || d.id, value: d.id, online: (d as any).isOnline?.() })), [devices]);
   const deviceNameMap = useMemo(() => Object.fromEntries(devices.map(d => [d.id, d.name || d.id])), [devices]);
+  const { classes } = useOverlayTheme('inherit');
 
   const onRun = async () => {
     if (selectedIds.length === 0) {
@@ -65,8 +67,8 @@ export const MultiDeviceTestLauncher: React.FC<MultiDeviceTestLauncherProps> = (
           if (result) { setOpen(false); setResult(null); } else { onRun(); }
         }}
         width={720}
-        className="overlay-surface"
-        rootClassName="overlay-surface overlay-elevated"
+        className={classes.className}
+        rootClassName={classes.rootClassName}
         styles={{ mask: { backdropFilter: 'blur(1px)' } }}
         zIndex={2100}
         destroyOnHidden

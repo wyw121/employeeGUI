@@ -27,4 +27,117 @@
   background-color: transparent !important;
   border-color: transparent !important;
 }
+
+/* 修复：非循环步骤卡片标题栏在暗黑主题下被强制黑底
+   约束：仅当卡片根不是循环相关（无 in-loop-step/loop-anchor）时才生效，
+        并且要求由组件在 Card 根添加 step-card 类（已在 DraggableStepCard 中加）。
+   目标：让非循环步骤默认跟随 GUI 主页面色系，而不是黑色标题栏。 */
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head {
+  /* 与卡片主体一致的暗色，而非更深一档的黑色 */
+  background-color: var(--color-bg-elevated, var(--dark-bg-card)) !important;
+  border-bottom-color: var(--border-primary, rgba(0,0,0,0.08)) !important;
+}
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head-title {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+
+/* 暗黑主题下，非循环步骤卡片标题区内元素的可读性修正（信息/多设备按钮等） */
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-typography,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .anticon,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-tag,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-badge,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-badge-status-text {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+
+/* 标题栏里的按钮（文本/链接/默认）统一文字颜色，hover 有轻微对比 */
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn > span,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn .anticon {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-text,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-link {
+  background-color: transparent !important;
+}
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-text:hover,
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-link:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+}
+
+/* 可能出现的默认按钮（如测试按钮等）在标题栏内的边框/hover 调整 */
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-default {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+  background-color: transparent !important;
+}
+.dark-theme .step-card:not(.in-loop-step):not(.loop-anchor) .ant-card-head .ant-btn-default:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+}
+/* 一键切换为“非循环=黑底白字”：在卡片根添加 dark-surface 类即可（整卡覆盖） */
+.step-card.dark-surface.ant-card,
+.step-card.dark-surface .ant-card,
+.step-card.dark-surface .ant-card-head,
+.step-card.dark-surface .ant-card-body {
+  background-color: var(--color-bg-elevated, var(--dark-bg-card)) !important;
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.step-card.dark-surface .ant-card-head {
+  border-bottom-color: var(--color-border, var(--dark-border-primary)) !important;
+}
+.step-card.dark-surface .ant-card-head .ant-typography,
+.step-card.dark-surface .ant-card-head .anticon,
+.step-card.dark-surface .ant-card-head .ant-tag,
+.step-card.dark-surface .ant-card-head .ant-badge,
+.step-card.dark-surface .ant-card-head .ant-badge-status-text {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.step-card.dark-surface .ant-card-head .ant-btn,
+.step-card.dark-surface .ant-card-head .ant-btn > span,
+.step-card.dark-surface .ant-card-head .ant-btn .anticon {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.step-card.dark-surface .ant-card-head .ant-btn-text,
+.step-card.dark-surface .ant-card-head .ant-btn-link {
+  background-color: transparent !important;
+}
+.step-card.dark-surface .ant-card-head .ant-btn-text:hover,
+.step-card.dark-surface .ant-card-head .ant-btn-link:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+}
+.step-card.dark-surface .ant-card-head .ant-btn-default {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+  background-color: transparent !important;
+}
+.step-card.dark-surface .ant-card-head .ant-btn-default:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+}
+
+/* 整卡范围（包含内容区）的小控件按钮可读性增强 */
+.step-card.dark-surface .ant-btn,
+.step-card.dark-surface .ant-btn > span,
+.step-card.dark-surface .ant-btn .anticon {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+}
+.step-card.dark-surface .ant-btn-text,
+.step-card.dark-surface .ant-btn-link {
+  background-color: transparent !important;
+}
+.step-card.dark-surface .ant-btn-text:hover,
+.step-card.dark-surface .ant-btn-link:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+}
+.step-card.dark-surface .ant-btn-default {
+  color: var(--color-text, var(--dark-text-primary)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+  background-color: transparent !important;
+}
+.step-card.dark-surface .ant-btn-default:hover {
+  background-color: var(--bg-hover, rgba(255,255,255,0.05)) !important;
+  border-color: var(--color-border, var(--dark-border-primary)) !important;
+}
 }

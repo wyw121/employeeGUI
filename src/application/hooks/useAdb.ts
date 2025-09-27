@@ -257,6 +257,13 @@ export const useAdb = () => {
     return await applicationService.getDeviceStats();
   }, []);
 
+  /**
+   * 获取设备联系人数量（统一接口）
+   */
+  const getDeviceContactCount = useCallback(async (deviceId: string) => {
+    return await applicationService.getDeviceContactCount(deviceId);
+  }, []);
+
   // ===== 工具方法 =====
   
   /**
@@ -420,6 +427,7 @@ export const useAdb = () => {
     // === 高级功能 ===
     getHealthStatus,
     getDeviceStats,
+  getDeviceContactCount,
     
     // === 工具方法 ===
     clearError,

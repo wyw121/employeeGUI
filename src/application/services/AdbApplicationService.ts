@@ -519,6 +519,21 @@ export class AdbApplicationService {
     return await this.deviceManager.getDeviceStats();
   }
 
+  /**
+   * 获取设备联系人数量（应用层统一入口）
+   */
+  async getDeviceContactCount(deviceId: string): Promise<number> {
+    try {
+      const { isTauri, invoke } = await import('@tauri-apps/api/core');
+      if (!isTauri()) return 0;
+      const count = await invoke<number>('get_device_contact_count', { device_id: deviceId });
+      return Math.max(0, Number(count || 0));
+    } catch (error) {
+      console.error('getDeviceContactCount failed:', error);
+      return 0;
+    }
+  }
+
   // ===== 私有方法 =====
 
   /**

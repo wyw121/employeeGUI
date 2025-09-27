@@ -5,6 +5,7 @@ import { useAdb } from '../../../application/hooks/useAdb';
 import { selectFolder, selectTxtFile } from './utils/dialog';
 import { fetchContactNumbers, importNumbersFromFolder, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
 import { VcfImportService } from '../../../services/VcfImportService';
+import { DeviceAssignmentTable } from './components/DeviceAssignmentTable';
 
 const { Title, Text } = Typography;
 
@@ -35,6 +36,7 @@ export const ContactImportWorkbench: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [items, setItems] = useState<ContactNumberDto[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [assignment, setAssignment] = useState<Record<string, { industry?: string; idStart?: number; idEnd?: number }>>({});
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -169,6 +171,8 @@ export const ContactImportWorkbench: React.FC = () => {
               将所选号码生成VCF并导入设备
             </Button>
           </Space>
+          <Divider />
+          <DeviceAssignmentTable value={assignment} onChange={setAssignment} />
         </Card>
       </Col>
     </Row>

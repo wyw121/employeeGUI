@@ -34,12 +34,13 @@ use services::adb_service::AdbService;
 use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
-use services::contact_storage::*; // 导入号码存储命令
+use services::contact_storage::*; // 导入号码存储命令（现在使用模块化版本）
 use services::crash_debugger::*;
 use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
 use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_button, get_navigation_configs};
 use services::safe_adb_manager::*;
+use services::device_contact_metrics::get_device_contact_count;
 use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
@@ -164,6 +165,8 @@ fn main() {
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入
             import_vcf_contacts_huawei_enhanced, // 华为增强导入（基于Python成功经验）
             debug_vcf_import_with_crash_detection, // 详细崩溃调试命令
+            // 联系人度量
+            get_device_contact_count,
             // UI状态读取功能
             read_device_ui_state, // 实时读取设备UI状态
             // 智能VCF打开器

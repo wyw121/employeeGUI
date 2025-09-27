@@ -2,14 +2,12 @@ use std::fs;
 use std::path::Path;
 
 use rusqlite::Connection;
-use serde_json::json;
-use tauri::command;
 
 use super::models::{ContactNumberList, ImportNumbersResult};
 use super::parser::extract_numbers_from_text;
-use super::repo::{get_contacts_db_path, init_db, insert_numbers, list_numbers, fetch_numbers};
+use super::repo::{fetch_numbers, get_contacts_db_path, init_db, insert_numbers, list_numbers};
 
-#[command]
+#[tauri::command]
 pub async fn import_contact_numbers_from_file(file_path: String) -> Result<ImportNumbersResult, String> {
     if !Path::new(&file_path).exists() {
         return Err(format!("文件不存在: {}", file_path));
@@ -33,7 +31,7 @@ pub async fn import_contact_numbers_from_file(file_path: String) -> Result<Impor
     })
 }
 
-#[command]
+#[tauri::command]
 pub async fn import_contact_numbers_from_folder(folder_path: String) -> Result<ImportNumbersResult, String> {
     let folder = Path::new(&folder_path);
     if !folder.exists() || !folder.is_dir() {
@@ -83,7 +81,7 @@ pub async fn import_contact_numbers_from_folder(folder_path: String) -> Result<I
     })
 }
 
-#[command]
+#[tauri::command]
 pub async fn list_contact_numbers(limit: Option<i64>, offset: Option<i64>, search: Option<String>) -> Result<ContactNumberList, String> {
     let db_path = get_contacts_db_path();
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
@@ -95,7 +93,7 @@ pub async fn list_contact_numbers(limit: Option<i64>, offset: Option<i64>, searc
     list_numbers(&conn, limit, offset, search).map_err(|e| e.to_string())
 }
 
-#[command]
+#[tauri::command]
 pub async fn fetch_contact_numbers(count: i64) -> Result<Vec<super::models::ContactNumberDto>, String> {
     let db_path = get_contacts_db_path();
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;

@@ -2,10 +2,15 @@ use chrono::Local;
 use rusqlite::{params, Connection, Result as SqlResult};
 
 use super::models::{ContactNumberDto, ContactNumberList};
+use std::fs;
+use std::path::Path;
 
 pub fn get_contacts_db_path() -> String {
-    // 使用 SQLite 文件位于 data/contacts.db（相对项目根目录）
-    // 若已有其他路径，请在此统一修改
+    // 确保 data 目录存在
+    let data_dir = Path::new("data");
+    if !data_dir.exists() {
+        let _ = fs::create_dir_all(data_dir);
+    }
     "data/contacts.db".to_string()
 }
 
@@ -46,45 +51,53 @@ pub fn insert_numbers(conn: &Connection, numbers: &[(String, String)], source_fi
 }
 
 pub fn list_numbers(conn: &Connection, limit: i64, offset: i64, search: Option<String>) -> SqlResult<ContactNumberList> {
-    let mut where_clause = String::new();
-    let mut params_vec: Vec<(String, String)> = Vec::new();
+    let mut kw: Option<String> = None;
 
     if let Some(s) = search {
-        if !s.trim().is_empty() {
-            where_clause = " WHERE phone LIKE :kw OR name LIKE :kw".to_string();
-            params_vec.push( (":kw".to_string(), format!("%{}%", s)) );
+        let s = s.trim().to_string();
+        if !s.is_empty() {
+            kw = Some(format!("%{}%", s));
         }
     }
 
-    let total_sql = format!("SELECT COUNT(*) FROM contact_numbers{}", where_clause);
-    let mut stmt_total = conn.prepare(&total_sql)?;
-    let total: i64 = if params_vec.is_empty() {
-        stmt_total.query_row([], |row| row.get(0))?
+    let total: i64 = if let Some(ref k) = kw {
+        let total_sql = "SELECT COUNT(*) FROM contact_numbers WHERE phone LIKE ?1 OR name LIKE ?1";
+        conn.query_row(total_sql, params![k], |row| row.get(0))?
     } else {
-        let mut total_val: i64 = 0;
-        let mut q = stmt_total.query_named(params_vec.iter().map(|(k,v)| (k.as_str(), v.as_str())))?;
-        if let Some(row) = q.next()? {
-            total_val = row.get(0)?;
-        }
-        total_val
+        let total_sql = "SELECT COUNT(*) FROM contact_numbers";
+        conn.query_row(total_sql, [], |row| row.get(0))?
     };
 
-    let list_sql = format!(
-        "SELECT id, phone, name, source_file, created_at FROM contact_numbers{} ORDER BY id DESC LIMIT ?1 OFFSET ?2",
-        where_clause
-    );
-    let mut stmt = conn.prepare(&list_sql)?;
-    let mut rows = stmt.query(params![limit, offset])?;
-
     let mut items: Vec<ContactNumberDto> = Vec::new();
-    while let Some(row) = rows.next()? {
-        items.push(ContactNumberDto {
-            id: row.get(0)?,
-            phone: row.get(1)?,
-            name: row.get(2)?,
-            source_file: row.get(3)?,
-            created_at: row.get(4)?,
-        });
+    
+    if let Some(ref k) = kw {
+        let list_sql = "SELECT id, phone, name, source_file, created_at FROM contact_numbers WHERE (phone LIKE ?1 OR name LIKE ?1) ORDER BY id DESC LIMIT ?2 OFFSET ?3";
+        let mut stmt = conn.prepare(list_sql)?;
+        let mut rows = stmt.query(params![k, limit, offset])?;
+        
+        while let Some(row) = rows.next()? {
+            items.push(ContactNumberDto {
+                id: row.get(0)?,
+                phone: row.get(1)?,
+                name: row.get(2)?,
+                source_file: row.get(3)?,
+                created_at: row.get(4)?,
+            });
+        }
+    } else {
+        let list_sql = "SELECT id, phone, name, source_file, created_at FROM contact_numbers ORDER BY id DESC LIMIT ?1 OFFSET ?2";
+        let mut stmt = conn.prepare(list_sql)?;
+        let mut rows = stmt.query(params![limit, offset])?;
+        
+        while let Some(row) = rows.next()? {
+            items.push(ContactNumberDto {
+                id: row.get(0)?,
+                phone: row.get(1)?,
+                name: row.get(2)?,
+                source_file: row.get(3)?,
+                created_at: row.get(4)?,
+            });
+        }
     }
 
     Ok(ContactNumberList { total, items })

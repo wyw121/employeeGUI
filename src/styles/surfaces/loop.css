@@ -105,4 +105,224 @@
 .loop-surface.loop-anchor.ant-card .ant-card-head {
   border-bottom-color: transparent !important;
 }
+
+/* 🧪 测试用自定义白色系循环样式 - 与默认样式明显不同 */
+.test-white-loop {
+  /* 卡片整体：淡紫色边框 + 纯白背景 */
+  background-color: #ffffff !important;
+  border: 2px solid #e879f9 !important; /* 紫色边框 */
+  box-shadow: 0 4px 12px rgba(232, 121, 249, 0.15) !important; /* 紫色阴影 */
+}
+
+.test-white-loop .ant-card-head {
+  /* 头部：淡紫色背景条 */
+  background-color: #fdf4ff !important; /* 极淡紫背景 */
+  border-bottom: 2px solid #e879f9 !important; /* 紫色分割线 */
+}
+
+.test-white-loop .ant-card-head-title > .flex {
+  /* 内层标题条：深紫色背景 */
+  background-color: #a855f7 !important; /* 深紫背景 */
+  color: #ffffff !important; /* 白色文字 */
+  border-radius: 8px !important;
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(168, 85, 247, 0.3) !important;
+}
+
+.test-white-loop .ant-card-head .ant-typography,
+.test-white-loop .ant-card-head .anticon,
+.test-white-loop .ant-card-head .ant-tag {
+  color: #ffffff !important; /* 头部所有文字/图标为白色 */
+}
+
+.test-white-loop .ant-card-head .ant-tag {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.test-white-loop .ant-card-head .ant-btn {
+  /* 头部按钮：白色边框 + 透明背景 */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+}
+
+.test-white-loop .ant-card-head .ant-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.test-white-loop .ant-card-head .ant-switch-checked {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.test-white-loop .ant-card-body {
+  /* 卡片内容：纯白背景 + 深色文字 */
+  background-color: #ffffff !important;
+  color: #1f2937 !important; /* 深灰色文字 */
+}
+
+.test-white-loop .ant-card-body .ant-typography,
+.test-white-loop .ant-card-body .anticon,
+.test-white-loop .ant-card-body .ant-btn {
+  color: #1f2937 !important; /* 内容区所有元素为深色 */
+}
+
+.test-white-loop .ant-card-body .ant-btn-link {
+  color: #a855f7 !important; /* 链接按钮为紫色 */
+}
+
+.test-white-loop .ant-card-body .ant-btn-link:hover {
+  color: #7c3aed !important; /* 悬停时更深紫色 */
+}
+
+/* 循环体内子步骤的测试样式 */
+.test-white-loop.in-loop-step,
+.test-white-loop .in-loop-step {
+  background-color: #fef7ff !important; /* 极淡紫背景 */
+  border-color: #e879f9 !important;
+  box-shadow: 0 2px 8px rgba(232, 121, 249, 0.1) !important;
+}
+
+.test-white-loop.in-loop-step .ant-card-head,
+.test-white-loop.in-loop-step .ant-card-body,
+.test-white-loop .in-loop-step .ant-card-head,
+.test-white-loop .in-loop-step .ant-card-body {
+  background-color: #fef7ff !important;
+  color: #581c87 !important; /* 深紫文字 */
+}
+
+.test-white-loop.in-loop-step .ant-typography,
+.test-white-loop.in-loop-step .anticon,
+.test-white-loop .in-loop-step .ant-typography,
+.test-white-loop .in-loop-step .anticon {
+  color: #581c87 !important;
+}
+
+/* 特殊标识：在卡片左上角添加测试标记 */
+.test-white-loop::before {
+  content: "🧪 TEST";
+  position: absolute;
+  top: -8px;
+  left: 12px;
+  background-color: #f59e0b;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* 🔵 独特蓝色系循环体样式 - 生产环境使用 */
+.unique-blue-loop {
+  /* 卡片整体：深蓝色边框 + 浅蓝色背景 */
+  background-color: #f0f9ff !important; /* 极浅蓝背景 */
+  border: 2px solid #2563eb !important; /* 深蓝边框 */
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15) !important; /* 蓝色阴影 */
+}
+
+.unique-blue-loop .ant-card-head {
+  /* 头部：中蓝色背景条 */
+  background-color: #dbeafe !important; /* 浅蓝背景 */
+  border-bottom: 2px solid #2563eb !important; /* 深蓝分割线 */
+}
+
+.unique-blue-loop .ant-card-head-title > .flex {
+  /* 内层标题条：深蓝色背景 */
+  background-color: #1d4ed8 !important; /* 深蓝背景 */
+  color: #ffffff !important; /* 白色文字 */
+  border-radius: 8px !important;
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(29, 78, 216, 0.3) !important;
+}
+
+.unique-blue-loop .ant-card-head .ant-typography,
+.unique-blue-loop .ant-card-head .anticon,
+.unique-blue-loop .ant-card-head .ant-tag {
+  color: #ffffff !important; /* 头部所有文字/图标为白色 */
+}
+
+.unique-blue-loop .ant-card-head .ant-tag {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.unique-blue-loop .ant-card-head .ant-btn {
+  /* 头部按钮：白色边框 + 透明背景 */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+}
+
+.unique-blue-loop .ant-card-head .ant-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.unique-blue-loop .ant-card-head .ant-switch-checked {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.unique-blue-loop .ant-card-body {
+  /* 卡片内容：浅蓝背景 + 深蓝文字 */
+  background-color: #f0f9ff !important; /* 极浅蓝背景 */
+  color: #1e3a8a !important; /* 深蓝文字 */
+}
+
+.unique-blue-loop .ant-card-body .ant-typography,
+.unique-blue-loop .ant-card-body .anticon,
+.unique-blue-loop .ant-card-body .ant-btn {
+  color: #1e3a8a !important; /* 内容区所有元素为深蓝色 */
+}
+
+.unique-blue-loop .ant-card-body .ant-btn-link {
+  color: #2563eb !important; /* 链接按钮为中蓝色 */
+}
+
+.unique-blue-loop .ant-card-body .ant-btn-link:hover {
+  color: #1d4ed8 !important; /* 悬停时更深蓝色 */
+}
+
+/* 循环体内子步骤的蓝色系样式 */
+.unique-blue-loop.in-loop-step,
+.unique-blue-loop .in-loop-step {
+  background-color: #eff6ff !important; /* 极浅蓝背景 */
+  border-color: #3b82f6 !important; /* 中蓝边框 */
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1) !important;
+}
+
+.unique-blue-loop.in-loop-step .ant-card-head,
+.unique-blue-loop.in-loop-step .ant-card-body,
+.unique-blue-loop .in-loop-step .ant-card-head,
+.unique-blue-loop .in-loop-step .ant-card-body {
+  background-color: #eff6ff !important;
+  color: #1e40af !important; /* 深蓝文字 */
+}
+
+.unique-blue-loop.in-loop-step .ant-typography,
+.unique-blue-loop.in-loop-step .anticon,
+.unique-blue-loop .in-loop-step .ant-typography,
+.unique-blue-loop .in-loop-step .anticon {
+  color: #1e40af !important;
+}
+
+/* 蓝色系标识：在卡片左上角添加蓝色标记 */
+.unique-blue-loop::before {
+  content: "🔵 BLUE";
+  position: absolute;
+  top: -8px;
+  left: 12px;
+  background-color: #2563eb;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
 }

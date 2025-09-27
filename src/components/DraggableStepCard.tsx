@@ -177,9 +177,21 @@ const DraggableStepCardInner: React.FC<
     if (!t || typeof t !== 'string') return undefined;
     return t.trim();
   })();
+  // 🧪 测试用白色系循环样式 - 通过特殊标记启用
+  const isTestWhiteLoop = step.parameters?.testWhiteLoop === true;
+  
+  // 🔵 独特蓝色系循环样式 - 生产环境使用
+  const isUniqueBluLoop = step.parameters?.uniqueBlueLoop === true;
+  
   const loopThemeClass = (isAnchor || isInLoop) && loopThemeToken ? `loop-theme-${loopThemeToken}` : '';
   const nonLoopThemeClass = (!isAnchor && !isInLoop && cardThemeToken) ? `loop-theme-${cardThemeToken}` : '';
   const nonLoopLightSurface = (!isAnchor && !isInLoop && !!cardThemeToken) ? 'light-surface' : '';
+  
+  // 测试白色主题类
+  const testWhiteClass = isTestWhiteLoop ? 'test-white-loop' : '';
+  
+  // 独特蓝色主题类
+  const uniqueBlueClass = isUniqueBluLoop ? 'unique-blue-loop' : '';
 
   return (
     <div className="w-full" style={{ touchAction: 'none' }}>
@@ -200,6 +212,10 @@ const DraggableStepCardInner: React.FC<
           data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
             'select-none transition-shadow cursor-grab active:cursor-grabbing',
+            // 🧪 测试白色主题优先级最高
+            testWhiteClass,
+            // 🔵 独特蓝色主题次优先级
+            uniqueBlueClass,
             // 循环体内：添加 loop-surface + in-loop-step 两个类，便于独有样式和更强覆盖
             (() => { const s:any = step; return (s.parent_loop_id || s.parentLoopId) ? 'loop-surface in-loop-step' : ''; })(),
             // 循环锚点（开始/结束）卡片：同样应用 loop-surface，确保标题区按钮/文本为深色且清晰可读

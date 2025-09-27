@@ -214,21 +214,19 @@ export function buildDefaultMatchingFromElement(el: ElementLike): BuiltMatching 
     return { strategy: 'standard', fields: [], values: {} };
   }
 
-  // 📊 策略选择逻辑：
-  // - 如果有父节点字段：优先使用 strict（层级严格匹配）
-  // - 如果有 bounds：使用 absolute（精确定位）
-  // - 如果只有语义字段：使用 standard（跨设备兼容）
-  // - 如果字段数量少：使用 relaxed（宽松匹配）
+  // 📊 策略选择逻辑（统一默认 standard）
+  // - 绝大多数场景：统一默认使用 standard（跨设备、分辨率无关，更稳健）
+  // - 特殊兜底：当仅有位置字段（bounds/index）且语义字段不足时，才使用 absolute
+  //   以避免 standard 策略下忽略位置字段导致完全失配
   let strategy = 'standard';
-  
-  if (parentFieldCount > 0) {
-    strategy = 'strict';     // 父节点信息提供层级约束，使用严格匹配
-  } else if (fields.includes('bounds')) {
+
+  // 判断是否属于“仅位置字段或几乎仅位置字段”的兜底情形
+  const hasBounds = fields.includes('bounds');
+  const hasIndexOnly = fields.length === 1 && fields[0] === 'index';
+  const isPositionOnly = (semanticFieldCount === 0) && (hasBounds || hasIndexOnly);
+
+  if (isPositionOnly) {
     strategy = 'absolute';
-  } else if (semanticFieldCount >= 3) {
-    strategy = 'strict';     // 多字段严格匹配
-  } else if (semanticFieldCount <= 1) {
-    strategy = 'relaxed';    // 少字段宽松匹配
   }
 
   console.log(`🎯 智能匹配配置: 策略=${strategy}, 字段=${fields.length}个, 语义字段=${semanticFieldCount}个, 父节点字段=${parentFieldCount}个`, { strategy, fields, values });

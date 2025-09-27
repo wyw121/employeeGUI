@@ -63,7 +63,7 @@ export const useSingleStepTest = () => {
       if (isSmartFindElementType(step.step_type)) {
         console.log('🎯 使用策略匹配模式测试元素查找（单次）');
         const strategyResult = await executeStrategyTest(step, deviceId);
-        const once: SingleStepTestResult = {
+        let once: SingleStepTestResult = {
           success: strategyResult.success,
           step_id: stepId,
           step_name: step.name,
@@ -75,6 +75,70 @@ export const useSingleStepTest = () => {
           error_details: strategyResult.error,
           extracted_data: strategyResult.criteria ? { matchCriteria: strategyResult.criteria } : {}
         };
+
+        // 🆕 可选：在“查找”成功后，根据步骤语义执行一次点击
+        // 触发条件：
+        // 1) 步骤名称以“点击”开头（例如“点击FrameLayout”）；或
+        // 2) 显式开启参数 flags：parameters.test_click_after_match === true
+        const shouldClickAfterMatch = strategyResult.success && (
+          /^点击/.test(step.name || '') || (step.parameters as any)?.test_click_after_match === true
+        );
+
+        if (shouldClickAfterMatch) {
+          try {
+            // 计算点击坐标：优先使用匹配预览的 bounds；否则回退到步骤参数中的 bounds/locator
+            const previewBoundsStr = strategyResult.matchResult?.preview?.bounds;
+            const paramsWithBounds = ensureBoundsNormalized({ ...(step.parameters || {}), bounds: previewBoundsStr ?? (step.parameters as any)?.bounds });
+            const rect = paramsWithBounds.boundsRect;
+            if (rect) {
+              const x = Math.floor((rect.left + rect.right) / 2);
+              const y = Math.floor((rect.top + rect.bottom) / 2);
+
+              // 构造临时 tap 步骤并执行（不修改原步骤类型）
+              const tapStep: SmartScriptStep = {
+                ...step,
+                id: `${step.id}__test_tap`,
+                step_type: 'tap' as any,
+                name: step.name ? `${step.name} - 测试点击` : '测试点击',
+                parameters: {
+                  ...(step.parameters || {}),
+                  x,
+                  y,
+                  hold_duration_ms: 80,
+                },
+              } as SmartScriptStep;
+
+              console.log(`🖱️ 匹配成功后执行测试点击: (${x}, ${y})`);
+              const tapResult = await executeActionOnce(tapStep, deviceId);
+
+              // 合并结果：若点击失败，则整体记为失败并附加日志
+              once = {
+                ...once,
+                success: once.success && tapResult.success,
+                duration_ms: (once.duration_ms || 0) + (tapResult.duration_ms || 0),
+                message: `${once.message}\n\n➡️ 已根据匹配结果在中心点执行点击(${x},${y})：${tapResult.success ? '成功' : '失败'}\n${tapResult.message || ''}`,
+                logs: [...(once.logs || []), `匹配后点击: ${tapResult.success ? '成功' : '失败'}`],
+              };
+            } else {
+              once = {
+                ...once,
+                success: false,
+                message: `${once.message}\n\n⚠️ 已启用“匹配后点击”，但未能解析到元素边界(bounds)，无法计算点击坐标。`,
+                logs: [...(once.logs || []), '匹配后点击: 失败（缺少 bounds）'],
+                error_details: once.error_details || '匹配后点击失败：缺少 bounds',
+              };
+            }
+          } catch (e) {
+            console.warn('匹配后点击执行异常:', e);
+            once = {
+              ...once,
+              success: false,
+              message: `${once.message}\n\n❌ 匹配后点击执行异常: ${e}`,
+              logs: [...(once.logs || []), `匹配后点击: 异常 ${e}`],
+              error_details: String(e),
+            };
+          }
+        }
         return once;
       }
 

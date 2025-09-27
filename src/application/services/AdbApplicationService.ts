@@ -14,6 +14,9 @@ import { DiagnosticService } from '../../domain/adb/services/DiagnosticService';
 import { useAdbStore } from '../store/adbStore';
 import { IUiMatcherRepository, MatchCriteriaDTO, MatchResultDTO } from '../../domain/page-analysis/repositories/IUiMatcherRepository';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import type { ISmartScriptRepository } from '../../domain/smart-script/repositories/ISmartScriptRepository';
+import type { ExtendedSmartScriptStep } from '../../types/loopScript';
+import type { SmartExecutionResult } from '../../types/execution';
 
 /**
  * ADB应用服务
@@ -31,7 +34,8 @@ export class AdbApplicationService {
     private deviceManager: DeviceManagerService,
     private connectionService: ConnectionService,
     private diagnosticService: DiagnosticService,
-    private uiMatcherRepository: IUiMatcherRepository
+    private uiMatcherRepository: IUiMatcherRepository,
+    private smartScriptRepository: ISmartScriptRepository
   ) {
     // 设置事件处理器来同步状态到Store
     this.setupEventHandlers();
@@ -736,6 +740,58 @@ export class AdbApplicationService {
       return g.crypto.randomUUID();
     }
     return 'log-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  // ===== 智能脚本执行（应用层统一入口） =====
+
+  /** 在单台设备上执行整套脚本 */
+  async executeSmartScriptOnDevice(
+    deviceId: string,
+    steps: ExtendedSmartScriptStep[],
+    config?: Partial<{
+      continue_on_error: boolean;
+      auto_verification_enabled: boolean;
+      smart_recovery_enabled: boolean;
+      detailed_logging: boolean;
+    }>
+  ): Promise<SmartExecutionResult> {
+    const store = useAdbStore.getState();
+    try {
+      store.setLoading(true);
+      const result = await this.smartScriptRepository.executeOnDevice(deviceId, steps, config);
+      return result;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      store.setError(err);
+      throw err;
+    } finally {
+      store.setLoading(false);
+    }
+  }
+
+  /** 在多台设备上执行整套脚本 */
+  async executeSmartScriptOnDevices(
+    deviceIds: string[],
+    steps: ExtendedSmartScriptStep[],
+    config?: Partial<{
+      continue_on_error: boolean;
+      auto_verification_enabled: boolean;
+      smart_recovery_enabled: boolean;
+      detailed_logging: boolean;
+    }>
+  ): Promise<Record<string, SmartExecutionResult>> {
+    const store = useAdbStore.getState();
+    try {
+      store.setLoading(true);
+      const result = await this.smartScriptRepository.executeOnDevices(deviceIds, steps, config);
+      return result;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      store.setError(err);
+      throw err;
+    } finally {
+      store.setLoading(false);
+    }
   }
 }
 

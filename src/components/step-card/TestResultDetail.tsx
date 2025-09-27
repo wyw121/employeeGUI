@@ -23,6 +23,7 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <div
+      className="light-surface"
       style={{ maxWidth: 400 }}
       onPointerDown={stop}
       onPointerDownCapture={stop}
@@ -213,10 +214,12 @@ export const TestResultDetail: React.FC<TestResultDetailProps> = ({
  * 测试结果标题组件
  */
 export const TestResultTitle: React.FC<{ stepName: string }> = ({ stepName }) => (
-  <Space>
-    <BugOutlined />
-    <span>测试结果: {stepName}</span>
-  </Space>
+  <div className="light-surface">
+    <Space>
+      <BugOutlined />
+      <span>测试结果: {stepName}</span>
+    </Space>
+  </div>
 );
 
 export default TestResultDetail;

@@ -1,0 +1,31 @@
+/* 轻色表面：在白/浅色背景下保证文本深色，避免被暗黑主题覆盖为白字 */
+.light-surface {
+  color: #111827 !important; /* slate-900 */
+}
+
+.light-surface .ant-typography,
+.light-surface .ant-typography-title,
+.light-surface .ant-typography-caption,
+.light-surface .ant-typography-secondary {
+  color: #111827 !important;
+}
+
+.light-surface .ant-tag {
+  color: #111827 !important;
+}
+
+.light-surface .ant-badge,
+.light-surface .ant-badge-status-text {
+  color: #111827 !important;
+}
+
+.light-surface .text-gray-500,
+.light-surface .text-gray-600,
+.light-surface .text-gray-700 {
+  color: #374151 !important; /* gray-700 */
+}
+
+.light-surface code,
+.light-surface pre {
+  color: #0f172a !important; /* slate-900 */
+}

@@ -20,6 +20,7 @@ import {
 } from "@ant-design/icons";
 import TestResultsDisplay from "../../../components/TestResultsDisplay";
 import { ScriptBuilderIntegration } from "../../../modules/smart-script-management/components/ScriptBuilderIntegration";
+import MultiDeviceScriptLauncher from "./MultiDeviceScriptLauncher";
 import type { ExtendedSmartScriptStep } from "../../../types/loopScript";
 import type {
   ExecutorConfig,
@@ -74,6 +75,8 @@ const ScriptControlPanel: React.FC<ScriptControlPanelProps> = ({
         >
           {isExecuting ? "正在执行脚本..." : "执行脚本"}
         </Button>
+
+        <MultiDeviceScriptLauncher steps={steps} executorConfig={executorConfig} />
 
         <ScriptBuilderIntegration
           steps={steps}

@@ -16,7 +16,8 @@
     "tauri:dev:5321": "cross-env VITE_PORT=5321 tauri dev",
     "tauri:poll": "cross-env WATCH_MODE=poll CHOKIDAR_USEPOLLING=1 FORCE_POLLING=1 tauri dev",
     "type-check": "tsc -p tsconfig.app.json --noEmit",
-    "scan:executor": "node scripts/refactor/scan_executor_functions.mjs"
+    "scan:executor": "node scripts/refactor/scan_executor_functions.mjs",
+    "check:legacy-contacts": "node scripts/check-legacy-contacts.js"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.1",

@@ -237,8 +237,11 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
       style={{
         marginBottom: 16,
         border: executing ? '2px solid #1890ff' : '1px solid #d9d9d9',
-        boxShadow: executing ? '0 2px 8px rgba(24, 144, 255, 0.2)' : undefined
+        boxShadow: executing ? '0 2px 8px rgba(24, 144, 255, 0.2)' : undefined,
+        backgroundColor: '#ffffff'
       }}
+      headStyle={{ backgroundColor: '#f8fafc', color: '#111827' }}
+      bodyStyle={{ color: '#111827' }}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {/* 循环配置区域 */}
@@ -256,6 +259,7 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
                 borderRadius: 8,
                 padding: 16,
                 backgroundColor: '#f6ffed',
+                color: '#1f2937',
                 minHeight: innerSteps.length === 0 ? 100 : 'auto'
               }}
             >
@@ -272,7 +276,7 @@ export const LoopStepCard: React.FC<LoopStepCardProps> = ({
                     style={{
                       textAlign: 'center',
                       padding: '24px 0',
-                      color: '#999'
+                      color: '#6b7280'
                     }}
                   >
                     拖拽步骤到此处添加到循环中

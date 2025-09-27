@@ -4,6 +4,7 @@
 
 /* 导入暗黑主题样式 */
 @import './styles/dark-theme.css';
+@import './styles/surfaces.css';
 
 @tailwind base;
 @tailwind components;

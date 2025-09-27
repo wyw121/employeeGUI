@@ -2,8 +2,6 @@
 
 import React, { useMemo, useState } from "react";
 import { Card } from "antd";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useBoundNode } from "./DraggableStepCard/hooks/useBoundNode";
 import LoopConfigModal from "./DraggableStepCard/components/LoopConfigModal";
 import { getStepTypeStyle } from "./DraggableStepCard/styles/stepTypeStyles";
@@ -75,16 +73,9 @@ const DraggableStepCardInner: React.FC<
   onEditStepParams,
   onOpenPageAnalyzer,
 }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: sortableIsDragging,
-  } = useSortable({ id: step.id });
-  const dragging = isDragging || sortableIsDragging;
-  const style = useCardDraggingStyle({ transform, transition, isDragging: dragging });
+  // 拖拽由外层 SortableItem 承担；本组件仅展示。
+  const dragging = !!isDragging;
+  const style = {} as React.CSSProperties;
   const reducedMotion = usePrefersReducedMotion();
 
   const handleEdit = () => {
@@ -175,13 +166,7 @@ const DraggableStepCardInner: React.FC<
   // 卡片 actions 与 Header 中的操作重复，故移除，统一放在 Header 区域
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="w-full"
-      {...attributes}
-      {...listeners}
-    >
+    <div className="w-full" style={{ touchAction: 'none' }}>
       {/* 轻微旋转/缩放的视觉反馈（尊重 reduced-motion） */}
       <div
         style={
@@ -198,12 +183,12 @@ const DraggableStepCardInner: React.FC<
           bordered={!(step.step_type === 'loop_start' || step.step_type === 'loop_end')}
           data-loop-badge={step.step_type === 'loop_start' ? 'START' : step.step_type === 'loop_end' ? 'END' : undefined}
           className={[
-            'select-none transition-shadow',
+            'select-none transition-shadow cursor-grab active:cursor-grabbing',
             typeStyle.cardClass,
             typeStyle.extraCardClass || '',
             dragging
               ? `ring-2 ${typeStyle.ringClass} shadow-md ${typeStyle.draggingCardClass || ''}`
-              : typeStyle.hoverClass,
+        : typeStyle.hoverClass,
           ].join(' ')}
           bodyStyle={{ padding: 12 }}
           title={

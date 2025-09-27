@@ -343,6 +343,33 @@ export const useAdb = () => {
     } as any);
   }, []);
 
+  // ===== 智能脚本执行（统一出口） =====
+  const executeSmartScriptOnDevice = useCallback(async (
+    deviceId: string,
+    steps: any[],
+    config?: Partial<{
+      continue_on_error: boolean;
+      auto_verification_enabled: boolean;
+      smart_recovery_enabled: boolean;
+      detailed_logging: boolean;
+    }>
+  ) => {
+    return await applicationService.executeSmartScriptOnDevice(deviceId, steps as any, config);
+  }, []);
+
+  const executeSmartScriptOnDevices = useCallback(async (
+    deviceIds: string[],
+    steps: any[],
+    config?: Partial<{
+      continue_on_error: boolean;
+      auto_verification_enabled: boolean;
+      smart_recovery_enabled: boolean;
+      detailed_logging: boolean;
+    }>
+  ) => {
+    return await applicationService.executeSmartScriptOnDevices(deviceIds, steps as any, config);
+  }, []);
+
   // ===== 生命周期 =====
   
   /**
@@ -436,6 +463,10 @@ export const useAdb = () => {
     ,
     // 匹配
     matchElementByCriteria
+    ,
+    // 智能脚本执行
+    executeSmartScriptOnDevice,
+    executeSmartScriptOnDevices
   };
 };
 

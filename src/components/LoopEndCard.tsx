@@ -8,8 +8,7 @@ import {
   DragOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { noDragProps } from './universal-ui/dnd/noDrag';
 import type { LoopConfig, ExtendedSmartScriptStep } from '../types/loopScript';
 
 const { Text } = Typography;
@@ -49,23 +48,8 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
     (step.parameters?.is_infinite_loop as boolean) || false
   );
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: sortableIsDragging,
-  } = useSortable({
-    id: step.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging || sortableIsDragging ? 0.6 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab',
-  };
+  // 统一由外层 SortableItem 处理拖拽；此组件仅负责展示
+  const dragging = !!isDragging;
 
   const handleDeleteLoop = () => {
     if (loopConfig) {
@@ -102,23 +86,21 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
 
   return (
     <div 
-      ref={setNodeRef} 
-      style={style} 
-      {...attributes} 
-      {...listeners}
       className="w-full"
+      style={{ touchAction: 'none', opacity: dragging ? 0.9 : 1, cursor: dragging ? 'grabbing' : 'grab' }}
     >
       <Card
         size="small"
-        className="transition-all duration-300 ease-in-out cursor-grab hover:cursor-grabbing relative overflow-hidden"
+        data-loop-badge="END"
+        className="transition-all duration-300 ease-in-out cursor-grab hover:cursor-grabbing relative overflow-hidden loop-card loop-end"
         style={{ 
           touchAction: 'none',
           border: '4px solid #3b82f6',
           background: 'linear-gradient(to bottom right, #dbeafe, #bfdbfe, #93c5fd)',
-          boxShadow: sortableIsDragging ? 
+          boxShadow: dragging ? 
             '0 20px 40px rgba(59, 130, 246, 0.6), 0 0 0 2px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.3)' : 
             '0 8px 25px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.2), 0 0 0 4px rgba(59, 130, 246, 0.3)',
-          ...(sortableIsDragging ? {
+          ...(dragging ? {
             transform: 'rotate(2deg) scale(1.05)',
             borderColor: '#1d4ed8'
           } : {})
@@ -157,7 +139,7 @@ export const LoopEndCard: React.FC<LoopEndCardProps> = ({
               )}
             </div>
             
-            <Space size="small">
+            <Space size="small" {...noDragProps}>
               {/* � 循环次数设置按钮 */}
               <Button
                 type="text"

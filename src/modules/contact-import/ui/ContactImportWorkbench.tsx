@@ -1,28 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, Col, Row, Space, Typography, Button, Table, Input, Pagination, message, Divider, Tag, Select } from 'antd';
+import { Card, Col, Row, Space, Typography, Button, Table, Input, Pagination, message, Divider, Tag, Select, Alert } from 'antd';
 import { DatabaseOutlined, FileTextOutlined, FolderOpenOutlined, MobileOutlined, FileDoneOutlined } from '@ant-design/icons';
 import { useAdb } from '../../../application/hooks/useAdb';
 import { selectFolder, selectTxtFile } from './utils/dialog';
 import { fetchContactNumbers, importNumbersFromFolder, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
 import { VcfImportService } from '../../../services/VcfImportService';
+import { buildVcfFromNumbers } from '../utils/vcf';
+import BatchPreviewModal from './components/BatchPreviewModal';
+import { executeBatches } from './services/batchExecutor';
 import { DeviceAssignmentTable } from './components/DeviceAssignmentTable';
 import ServiceFactory from '../../../application/services/ServiceFactory';
+import { findRangeConflicts } from '../utils/assignmentValidation';
+import BatchResultModal from './components/BatchResultModal';
+import type { BatchExecuteResult } from './services/batchExecutor';
 
 const { Title, Text } = Typography;
 
-// 简单VCF文本生成（按号码池生成联系人）
-function buildVcfFromNumbers(numbers: ContactNumberDto[]): string {
-  return numbers
-    .map((n, idx) => [
-      'BEGIN:VCARD',
-      'VERSION:3.0',
-      `FN:${n.name || `联系人${idx + 1}`}`,
-      `N:${n.name || `联系人${idx + 1}`};;;;`,
-      `TEL:${n.phone}`,
-      'END:VCARD',
-    ].join('\n'))
-    .join('\n\n');
-}
+// 复用工具函数 buildVcfFromNumbers
 
 export const ContactImportWorkbench: React.FC = () => {
   // 设备
@@ -132,15 +126,49 @@ export const ContactImportWorkbench: React.FC = () => {
   }, [assignment]);
 
   const [onlyUnconsumed, setOnlyUnconsumed] = useState<boolean>(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewBatches, setPreviewBatches] = useState<Array<{ deviceId: string; industry?: string; numbers: ContactNumberDto[] }>>([]);
+  const [resultOpen, setResultOpen] = useState(false);
+  const [lastResult, setLastResult] = useState<null | BatchExecuteResult>(null);
+  const rangeConflicts = useMemo(() => {
+    return findRangeConflicts(
+      Object.fromEntries(Object.entries(assignment).map(([id, a]) => [id, { idStart: a.idStart, idEnd: a.idEnd }]))
+    );
+  }, [assignment]);
 
   const handleGenerateBatches = async () => {
     try {
+      // 生成前：区间冲突校验
+      const conflicts = findRangeConflicts(
+        Object.fromEntries(Object.entries(assignment).map(([id, a]) => [id, { idStart: a.idStart, idEnd: a.idEnd }]))
+      );
+      if (conflicts.length > 0) {
+        message.error('发现区间冲突，请先修正再生成');
+        return;
+      }
       const batches = await contactImportApp.generateVcfBatches(assignment, { onlyUnconsumed });
-      const total = batches.reduce((acc, b) => acc + (b.numbers?.length || 0), 0);
-      message.info(`生成批次：${batches.length}，总计号码：${total}`);
-      // TODO: 在此处进一步展示批次详情、允许逐台生成并导入VCF
+      setPreviewBatches(batches as any);
+      setPreviewOpen(true);
     } catch (e) {
       message.error(`生成批次失败：${e}`);
+    }
+  };
+
+  const handleExecuteFromPreview = async (selectedDeviceIds: string[], options: { markConsumed: boolean }) => {
+    try {
+      const target = previewBatches.filter(b => selectedDeviceIds.includes(b.deviceId));
+      const res = await executeBatches(target as any, options.markConsumed ? {
+        markConsumed: async (batchId: string) => {
+          // 使用应用层统一入口进行区间消费标记
+          await contactImportApp.markConsumed(assignment, batchId);
+        }
+      } : undefined);
+      message.success(`导入完成：成功 ${res.successDevices}/${res.totalDevices}`);
+      setPreviewOpen(false);
+      setLastResult(res);
+      setResultOpen(true);
+    } catch (e) {
+      message.error(`批次导入失败：${e}`);
     }
   };
 
@@ -186,6 +214,22 @@ export const ContactImportWorkbench: React.FC = () => {
       {/* 面板3：设备与VCF */}
       <Col span={24}>
         <Card title={<Space><MobileOutlined />设备与VCF</Space>}>
+          {rangeConflicts.length > 0 && (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={`发现 ${rangeConflicts.length} 处区间冲突`}
+              description={
+                <div>
+                  {rangeConflicts.slice(0, 5).map((c, i) => (
+                    <div key={i}>设备 {c.deviceA} [{c.rangeA.start}-{c.rangeA.end}] 与 设备 {c.deviceB} [{c.rangeB.start}-{c.rangeB.end}] 重叠</div>
+                  ))}
+                  {rangeConflicts.length > 5 && <div style={{ opacity: 0.7 }}>仅显示前5条</div>}
+                </div>
+              }
+            />
+          )}
           <Space wrap>
             <Select
               style={{ width: 280 }}
@@ -214,6 +258,33 @@ export const ContactImportWorkbench: React.FC = () => {
           </div>
         </Card>
       </Col>
+      <BatchPreviewModal
+        open={previewOpen}
+        batches={previewBatches as any}
+        onCancel={() => setPreviewOpen(false)}
+        onExecute={handleExecuteFromPreview}
+      />
+      <BatchResultModal
+        open={resultOpen}
+        result={lastResult}
+        onClose={() => setResultOpen(false)}
+        onRetryFailed={async () => {
+          if (!lastResult) return;
+          const failedIds = lastResult.deviceResults.filter(d => !d.success).map(d => d.deviceId);
+          if (failedIds.length === 0) {
+            message.info('没有失败的设备需要重试');
+            return;
+          }
+          try {
+            const retryBatches = previewBatches.filter(b => failedIds.includes(b.deviceId));
+            const res = await executeBatches(retryBatches as any, undefined);
+            setLastResult(res);
+            message.success(`重试完成：成功 ${res.successDevices}/${res.totalDevices}`);
+          } catch (e) {
+            message.error(`重试失败：${e}`);
+          }
+        }}
+      />
     </Row>
   );
 };

@@ -7,6 +7,7 @@ import { DraggableStepsContainer } from './DraggableStepsContainer';
 import type { ExtendedSmartScriptStep, LoopConfig } from '../types/loopScript';
 import { useLoopPairing } from './universal-ui/script-builder/hooks/useLoopPairing';
 import { buildAutoName } from './universal-ui/script-builder/utils/stepNaming';
+import { useDefaultDeviceId } from '../application/hooks/useDefaultDeviceId';
 
 export interface EnhancedDraggableStepsContainerProps {
   /** 扩展步骤列表 */
@@ -76,6 +77,9 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
   onCreateSystemAction,
   onUpdateStepMeta,
 }) => {
+  // 兜底：当未传 currentDeviceId 时，自动选择默认设备
+  const { defaultDeviceId } = useDefaultDeviceId({ preferSelected: true });
+  const effectiveDeviceId = currentDeviceId || defaultDeviceId;
   
   // 暂时使用基础的DraggableStepsContainer，后续可以扩展
   const handleStepsChange = (newSteps: any[]) => {
@@ -143,7 +147,7 @@ const EnhancedDraggableStepsContainer: React.FC<EnhancedDraggableStepsContainerP
         steps={steps}
         onStepsChange={handleStepsChange}
         onUpdateStepMeta={onUpdateStepMeta}
-        currentDeviceId={currentDeviceId}
+        currentDeviceId={effectiveDeviceId}
         devices={devices}
         onEditStep={onEditStep}
         onDeleteStep={onDeleteStep}

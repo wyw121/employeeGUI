@@ -11,6 +11,8 @@ import { DiagnosticService } from '../../domain/adb/services/DiagnosticService';
 import { AdbApplicationService } from './AdbApplicationService';
 import { IUiMatcherRepository } from '../../domain/page-analysis/repositories/IUiMatcherRepository';
 import { TauriUiMatcherRepository } from '../../infrastructure/repositories/TauriUiMatcherRepository';
+import { ISmartScriptRepository } from '../../domain/smart-script/repositories/ISmartScriptRepository';
+import { TauriSmartScriptRepository } from '../../infrastructure/repositories/TauriSmartScriptRepository';
 import ContactImportApplicationService from './contact-import/ContactImportApplicationService';
 
 /**
@@ -71,6 +73,7 @@ class ServiceContainer {
     this.register('adbRepository', () => new TauriAdbRepository());
   this.register('diagnosticRepository', () => new TauriDiagnosticRepository());
   this.register('uiMatcherRepository', () => new TauriUiMatcherRepository());
+  this.register('smartScriptRepository', () => new TauriSmartScriptRepository());
 
     // 注册Domain Service层
     this.register('deviceManagerService', () => {
@@ -94,7 +97,14 @@ class ServiceContainer {
       const connectionService = this.get<ConnectionService>('connectionService');
       const diagnosticService = this.get<DiagnosticService>('diagnosticService');
       const uiMatcherRepository = this.get<IUiMatcherRepository>('uiMatcherRepository');
-      return new AdbApplicationService(deviceManager, connectionService, diagnosticService, uiMatcherRepository);
+      const smartScriptRepository = this.get<ISmartScriptRepository>('smartScriptRepository');
+      return new AdbApplicationService(
+        deviceManager,
+        connectionService,
+        diagnosticService,
+        uiMatcherRepository,
+        smartScriptRepository
+      );
     });
 
     this.register('contactImportApplicationService', () => {
@@ -137,6 +147,11 @@ export const ServiceFactory = {
    */
   getDiagnosticService(): DiagnosticService {
     return container.get<DiagnosticService>('diagnosticService');
+  },
+
+  /** 获取脚本执行仓储（可选直接使用场景） */
+  getSmartScriptRepository(): ISmartScriptRepository {
+    return container.get<ISmartScriptRepository>('smartScriptRepository');
   },
 
   /** 获取联系人导入应用服务 */

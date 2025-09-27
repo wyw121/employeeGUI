@@ -21,8 +21,7 @@ import {
   DragOutlined,
   PlayCircleOutlined,
 } from "@ant-design/icons";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { noDragProps } from './universal-ui/dnd/noDrag';
 import type { LoopConfig, ExtendedSmartScriptStep } from "../types/loopScript";
 import "./DraggableStepCard/styles/loopTheme.css";
 
@@ -65,23 +64,8 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
     }
   );
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: sortableIsDragging,
-  } = useSortable({
-    id: step.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging || sortableIsDragging ? 0.8 : 1,
-    cursor: isDragging ? "grabbing" : "grab",
-  };
+  // 拖拽包装由外部统一的 SortableItem 提供；本组件只关心展示
+  const dragging = !!isDragging;
 
   const handleSaveConfig = () => {
     onLoopConfigUpdate(tempConfig);
@@ -102,23 +86,19 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
       className="w-full"
+      style={{ touchAction: 'none', opacity: dragging ? 0.9 : 1, cursor: dragging ? 'grabbing' : 'grab' }}
     >
       {/* 🎨 独特的蓝色循环卡片设计 - 使用模块化样式系统 */}
       <Card
         size="small"
-        className={`transition-all duration-300 ease-in-out cursor-grab hover:cursor-grabbing relative overflow-hidden loop-card bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl ${
-          sortableIsDragging
-            ? "loop-card-dragging ring-2 ring-blue-500"
-            : "hover:shadow-lg"
+        data-loop-badge="START"
+        className={`transition-all duration-300 ease-in-out cursor-grab hover:cursor-grabbing relative overflow-hidden loop-card loop-start bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-4 border-blue-500 rounded-2xl ${
+          dragging ? "loop-card-dragging ring-2 ring-blue-500" : "hover:shadow-lg"
         }`}
         style={{
           touchAction: "none",
-          ...(sortableIsDragging
+          ...(dragging
             ? {
                 transform: "rotate(2deg) scale(1.05)",
               }
@@ -156,7 +136,7 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
               )}
             </div>
 
-            <Space size="small">
+            <Space size="small" {...noDragProps}>
               {/* ⚙️ 设置按钮 */}
               <Button
                 type="text"
@@ -210,7 +190,7 @@ export const LoopStartCard: React.FC<LoopStartCardProps> = ({
         <div className="space-y-4 pt-2">
           {isEditing ? (
             // ✏️ 编辑模式 - 蓝色主题表单
-            <div className="space-y-4 p-4 bg-white bg-opacity-70 rounded-lg border-2 border-blue-200 shadow-inner">
+            <div className="space-y-4 p-4 bg-white bg-opacity-70 rounded-lg border-2 border-blue-200 shadow-inner" {...noDragProps}>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Text className="text-sm font-semibold text-blue-800 block mb-2">

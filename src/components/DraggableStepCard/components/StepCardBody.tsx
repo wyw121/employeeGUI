@@ -5,6 +5,7 @@ import type { StepTypeStyle } from '../styles/stepTypeStyles';
 import AccentBars from './body/AccentBars';
 import StrategyArea from './body/StrategyArea';
 import ContactActions from './body/ContactActions';
+import { noDragProps } from '../../universal-ui/dnd/noDrag';
 
 type MinimalStep = {
   id: string;
@@ -62,7 +63,7 @@ export const StepCardBody: React.FC<StepCardBodyProps> = ({
             onCancel={onCancelDesc}
           />
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0" {...noDragProps}>
             <InlineLoopControl
               stepId={step.id}
               parameters={step.parameters}
@@ -78,7 +79,9 @@ export const StepCardBody: React.FC<StepCardBodyProps> = ({
           </div>
         </div>
 
-        <ContactActions step={step} devices={devices} />
+        <div {...noDragProps}>
+          <ContactActions step={step} devices={devices} />
+        </div>
       </div>
     </>
   );

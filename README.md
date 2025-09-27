@@ -128,6 +128,8 @@ npm run tauri dev
 ### 联系人导入（新）
 - 新入口：主界面左侧菜单 → “联系人导入向导”。
 - 说明：全新模块化实现，统一通过 `useAdb()` 架构访问设备；旧入口“VCF 导入（旧版）”将逐步下线。
+ - 架构统一：旧“通讯录管理”页面与配套组件已下线，统一使用 `src/pages/contact-import/ContactImportPage.tsx` 与 `src/modules/contact-import/*` 模块。
+ - 防回归检查：可运行 `npm run check:legacy-contacts` 检查是否存在对旧页面/组件的引用。
 
 ## 项目特点
 

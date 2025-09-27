@@ -84,3 +84,45 @@ pub async fn execute_smart_automation_script(
         }
     }
 }
+
+/// 在多台设备上执行整套智能脚本（顺序执行聚合结果）。
+#[tauri::command]
+pub async fn execute_smart_automation_script_multi(
+    device_ids: Vec<String>,
+    steps: Vec<SmartScriptStep>,
+    config: Option<SmartExecutorConfig>,
+) -> Result<HashMap<String, SmartExecutionResult>, String> {
+    info!("🚀 收到多设备智能脚本批量执行请求: 设备数={}, 步骤数={}", device_ids.len(), steps.len());
+
+    let mut results: HashMap<String, SmartExecutionResult> = HashMap::new();
+
+    for device_id in device_ids {
+        info!("➡️ 开始执行设备: {}", device_id);
+        let executor = SmartScriptExecutor::new(device_id.clone());
+        match executor.execute_smart_script(steps.clone(), config.clone()).await {
+            Ok(result) => {
+                info!("✅ 设备 {} 执行完成: 耗时={}ms, 成功={}", device_id, result.duration_ms, result.success);
+                results.insert(device_id, result);
+            }
+            Err(e) => {
+                error!("❌ 设备 {} 执行失败: {}", device_id, e);
+                // 失败时也生成一个失败结果，保证返回结构完整
+                let fail = SmartExecutionResult {
+                    success: false,
+                    total_steps: steps.len() as u32,
+                    executed_steps: 0,
+                    failed_steps: steps.len() as u32,
+                    skipped_steps: 0,
+                    duration_ms: 0,
+                    logs: vec![format!("设备执行失败: {}", e)],
+                    final_page_state: None,
+                    extracted_data: HashMap::new(),
+                    message: format!("设备执行失败: {}", e),
+                };
+                results.insert(device_id, fail);
+            }
+        }
+    }
+
+    Ok(results)
+}

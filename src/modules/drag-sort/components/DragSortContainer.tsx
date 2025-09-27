@@ -1,30 +1,16 @@
 // 拖拽排序容器组件 - 使用 @dnd-kit (现代拖拽库，支持 React 19)
 
 import React, { useState, useCallback } from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverEvent,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  closestCenter
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove
-} from '@dnd-kit/sortable';
-import {
-  useSortable
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Card } from 'antd';
 
 // 导入类型
 import { DragResult, DroppableArea, DraggableItem } from '../types';
+// 统一 DnD 模块
+import DragSensorsProvider from '../../../components/universal-ui/dnd/DragSensorsProvider';
+import { SortableItem } from '../../../components/universal-ui/dnd/SortableItem';
+import { DragOverlayGhost } from '../../../components/universal-ui/dnd/DragOverlayGhost';
 
 export interface DragSortContainerProps {
   /** 可拖拽项目列表 */
@@ -46,38 +32,7 @@ export interface DragSortContainerProps {
 }
 
 // 可排序项组件
-interface SortableItemProps {
-  id: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}
-
-const SortableItem: React.FC<SortableItemProps> = ({ id, children, disabled }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id,
-    disabled
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1000 : 'auto',
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
-    </div>
-  );
-};
+// 本地 SortableItem 已弃用，统一使用通用模块的 SortableItem
 
 export const DragSortContainer: React.FC<DragSortContainerProps> = ({
   items,
@@ -91,15 +46,6 @@ export const DragSortContainer: React.FC<DragSortContainerProps> = ({
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [itemsState, setItemsState] = useState(items);
-
-  // 配置传感器
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
 
   // 拖拽开始
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -181,13 +127,7 @@ export const DragSortContainer: React.FC<DragSortContainerProps> = ({
   const activeItem = activeId ? itemsState.find(item => item.id === activeId) : null;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
+    <DragSensorsProvider activationDistance={6} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
       <div className={`drag-sort-container ${className || ''}`}>
         {/* 拖拽区域 */}
         {droppableAreas.map((area) => {
@@ -237,16 +177,14 @@ export const DragSortContainer: React.FC<DragSortContainerProps> = ({
       {/* 拖拽预览层 */}
       <DragOverlay>
         {activeItem ? (
-          <div style={{ 
-            opacity: 0.8, 
-            transform: 'rotate(5deg)',
-            boxShadow: '0 5px 15px rgba(0, 0, 0, 0.3)'
-          }}>
-            {renderItem(activeItem, true)}
-          </div>
+          <DragOverlayGhost
+            title={(activeItem.data as any)?.actionName || (activeItem.data as any)?.name || activeItem.id}
+            subtitle={typeof (activeItem.data as any)?.description === 'string' ? (activeItem.data as any).description : undefined}
+            index={activeItem.position}
+          />
         ) : null}
       </DragOverlay>
-    </DndContext>
+    </DragSensorsProvider>
   );
 };
 

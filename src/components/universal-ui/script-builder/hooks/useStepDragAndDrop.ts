@@ -11,7 +11,7 @@ export interface UseStepDragAndDropOptions<T extends { id: string }> {
 }
 
 export function useStepDragAndDrop<T extends { id: string }>(options: UseStepDragAndDropOptions<T>) {
-  const { steps, onStepsChange, activationDistance, activationDelayMs = 100, activationTolerance = 8 } = options;
+  const { steps, onStepsChange, activationDistance = 6, activationDelayMs = 100, activationTolerance = 8 } = options;
 
   // 更稳健的激活约束：优先使用 delay + tolerance，避免轻微指针抖动触发拖拽
   const sensors = useSensors(

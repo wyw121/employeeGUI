@@ -6,6 +6,8 @@ import { SmartScrollControls } from '../components/SmartScrollControls';
 import type { StepTypeStyle } from '../styles/stepTypeStyles';
 import type { ActionConfig } from '../constants/actionConfigs';
 import { TitleEditor } from './TitleEditor';
+import { noDragProps } from '../../universal-ui/dnd/noDrag';
+import { MultiDeviceTestLauncher } from '../../step-card/MultiDeviceTestLauncher';
 
 const { Text } = Typography;
 
@@ -144,7 +146,7 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
         )}
       </div>
 
-      <Space>
+  <Space {...noDragProps}>
         <InfoBubble step={step as any} boundNode={boundNode} snapshotAvailable={snapshotAvailable} onOpenXmlInspector={onOpenXmlInspector} />
 
         {(step.step_type === 'loop_start' || step.step_type === 'loop_end') && (
@@ -168,10 +170,16 @@ export const StepCardHeader: React.FC<StepCardHeaderProps> = ({
             <StepTestButton
               step={step as any}
               deviceId={currentDeviceId}
-              disabled={!currentDeviceId || devices.filter((d) => d.status === 'online').length === 0}
+              // 测试按钮自身会做设备自动选择与可用性判断，这里不再过度禁用
+              disabled={step.step_type === 'loop_start' || step.step_type === 'loop_end'}
             />
           </div>
         )}
+
+        {/* 多设备测试入口（模块化） */}
+        <div onClick={(e) => e.stopPropagation()}>
+          <MultiDeviceTestLauncher step={step as any} />
+        </div>
 
         <Switch
           size="small"

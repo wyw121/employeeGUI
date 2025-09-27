@@ -3,11 +3,15 @@
 import React, { useMemo } from 'react';
 import { Card, Typography, Button } from 'antd';
 import { ActionsToolbar } from './universal-ui/script-builder/components/ActionsToolbar/ActionsToolbar';
-import { DndContext, closestCenter, DragOverlay, useDndMonitor } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { closestCenter, DragOverlay, useDndMonitor, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { SmartStepCardWrapper } from './SmartStepCardWrapper'; // 使用智能步骤卡片包装器
 import { SmartScriptStep } from '../types/smartScript'; // 使用统一的类型定义
-import { useStepDragAndDrop } from './universal-ui/script-builder/hooks/useStepDragAndDrop';
+import { useDefaultDeviceId } from '../application/hooks/useDefaultDeviceId';
+import DragSensorsProvider from './universal-ui/dnd/DragSensorsProvider';
+import { SortableList } from './universal-ui/dnd/SortableList';
+import { SortableItem } from './universal-ui/dnd/SortableItem';
+import { DragOverlayGhost } from './universal-ui/dnd/DragOverlayGhost';
 
 const { Title } = Typography;
 
@@ -80,10 +84,23 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
   onCreateScreenInteraction,
   onCreateSystemAction,
 }) => {
-  // 使用抽离的拖拽 Hook（ESM 导入，兼容 Vite/Tauri）
-  const { sensors, stepIds, handleDragEnd } = useStepDragAndDrop({ steps, onStepsChange, activationDelayMs: 120, activationTolerance: 6 });
+  // 统一 DnD：距离触发（6px），本地实现排序回调
+  const stepIds = React.useMemo(() => steps.map(s => s.id), [steps]);
+  const handleDragEnd = React.useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = steps.findIndex(s => s.id === active.id);
+    const newIndex = steps.findIndex(s => s.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(steps, oldIndex, newIndex);
+    onStepsChange(reordered);
+  }, [steps, onStepsChange]);
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const activeStep = React.useMemo(() => steps.find(s => s.id === activeId) || null, [activeId, steps]);
+
+  // 兜底：当未传入 currentDeviceId 时，自动选择默认设备（selected → online → first）
+  const { defaultDeviceId } = useDefaultDeviceId({ preferSelected: true });
+  const effectiveDeviceId = currentDeviceId || defaultDeviceId;
 
   if (steps.length === 0) {
     return (
@@ -117,35 +134,31 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
         <span className="text-sm text-gray-500">({steps.length} 个步骤)</span>
       </div>
     }>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+      <DragSensorsProvider activationDistance={6} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {/* 拖拽监听器：必须在 DndContext 内部 */}
         <DragMonitor onActiveIdChange={setActiveId} />
-        
-        <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
+        <SortableList items={stepIds}>
           <div className="space-y-3">
             {steps.map((step, index) => (
-              <SmartStepCardWrapper
-                key={step.id}
-                step={step}
-                index={index}
-                currentDeviceId={currentDeviceId}
-                devices={devices}
-                onEdit={onEditStep}
-                onDelete={onDeleteStep}
-                onToggle={onToggleStep}
-                onOpenPageAnalyzer={onOpenPageAnalyzer}
-                onEditStepParams={onEditStepParams}
-                StepTestButton={StepTestButton}
-                onUpdateStepParameters={onUpdateStepParameters}
-                onBatchMatch={onBatchMatch}
-                onUpdateStepMeta={onUpdateStepMeta}
-              />
+              <SortableItem key={step.id} id={step.id}>
+                <SmartStepCardWrapper
+                  step={step}
+                  index={index}
+                  currentDeviceId={effectiveDeviceId}
+                  devices={devices}
+                  onEdit={onEditStep}
+                  onDelete={onDeleteStep}
+                  onToggle={onToggleStep}
+                  onOpenPageAnalyzer={onOpenPageAnalyzer}
+                  onEditStepParams={onEditStepParams}
+                  StepTestButton={StepTestButton}
+                  onUpdateStepParameters={onUpdateStepParameters}
+                  onBatchMatch={onBatchMatch}
+                  onUpdateStepMeta={onUpdateStepMeta}
+                />
+              </SortableItem>
             ))}
-            
+
             {/* 智能页面分析器快捷按钮 */}
             {onOpenPageAnalyzer && (
               <div className="mt-4">
@@ -159,32 +172,19 @@ export const DraggableStepsContainer: React.FC<DraggableStepsContainerProps> = (
               </div>
             )}
           </div>
-        </SortableContext>
+        </SortableList>
 
         {/* 幽灵卡片：仅绘制最小内容，避免复杂嵌套导致掉帧 */}
         <DragOverlay dropAnimation={null}>
           {activeStep ? (
-            <div
-              style={{
-                width: '100%',
-                transform: 'translateZ(0)',
-                willChange: 'transform',
-                pointerEvents: 'none',
-              }}
-              className="select-none"
-            >
-              <div className="rounded-lg border bg-white shadow-lg px-3 py-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">≡</span>
-                  <span className="font-medium truncate max-w-[260px]" title={activeStep.name}>{activeStep.name}</span>
-                  <span className="text-xs text-gray-500">#{steps.findIndex(s => s.id === activeStep.id) + 1}</span>
-                </div>
-                <div className="text-xs text-gray-400 mt-1 truncate max-w-[280px]" title={activeStep.description}>{activeStep.description}</div>
-              </div>
-            </div>
+            <DragOverlayGhost
+              title={activeStep.name}
+              subtitle={activeStep.description}
+              index={steps.findIndex(s => s.id === activeStep.id)}
+            />
           ) : null}
         </DragOverlay>
-      </DndContext>
+      </DragSensorsProvider>
     </Card>
   );
 };

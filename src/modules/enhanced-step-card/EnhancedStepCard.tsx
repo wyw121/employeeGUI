@@ -4,8 +4,6 @@
  */
 
 import React, { useState } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { 
   Card, 
   Tag, 
@@ -52,24 +50,7 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
   isDragging
 }) => {
   const [showXmlInspector, setShowXmlInspector] = useState(false);
-
-  // 设置拖拽功能
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: sortableIsDragging,
-  } = useSortable({
-    id: step.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging || sortableIsDragging ? 0.6 : 1,
-  };
+  const dragging = !!isDragging;
 
   // 🔍 获取增强元素信息（兼容多种格式）
   const enhancedElement = step.parameters?.enhancedElement as EnhancedUIElement | undefined;
@@ -329,14 +310,14 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
 
   return (
     <>
-      <div ref={setNodeRef} style={style}>
+      <div style={{ opacity: dragging ? 0.6 : 1 }}>
         <Card
           title={cardTitle}
           actions={cardActions}
           size="small"
           style={{ 
             marginBottom: 12,
-            cursor: sortableIsDragging ? 'grabbing' : 'grab'
+            cursor: dragging ? 'grabbing' : 'grab'
           }}
           extra={
             <Space>
@@ -349,11 +330,9 @@ export const EnhancedStepCard: React.FC<EnhancedStepCardProps> = ({
                 icon={<DragOutlined />}
                 type="text"
                 size="small"
-                {...attributes}
-                {...listeners}
                 style={{ 
                   cursor: 'grab',
-                  color: sortableIsDragging ? '#1890ff' : '#8c8c8c'
+                  color: dragging ? '#1890ff' : '#8c8c8c'
                 }}
               />
             </Space>

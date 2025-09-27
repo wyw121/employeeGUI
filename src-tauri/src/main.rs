@@ -45,7 +45,7 @@ use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
 use services::smart_element_finder_service::{smart_element_finder, click_detected_element};
-use services::commands::{execute_single_step_test, execute_smart_automation_script};
+use services::commands::{execute_single_step_test, execute_smart_automation_script, execute_smart_automation_script_multi};
 use services::scrcpy_manager::{start_device_mirror, stop_device_mirror, stop_device_mirror_session, list_device_mirror_sessions, cleanup_all, check_scrcpy_available, get_scrcpy_capabilities};
 // 直接使用的其他命令函数（未在 commands::* re-export 中覆盖的服务命令）
 use services::ui_reader_service::read_device_ui_state;
@@ -183,6 +183,7 @@ fn main() {
             // 智能脚本执行器功能
             execute_single_step_test,        // 执行单步测试
             execute_smart_automation_script, // 执行智能脚本批量操作
+            execute_smart_automation_script_multi, // 多设备执行智能脚本
             // 脚本管理功能
             save_smart_script,            // 保存智能脚本
             load_smart_script,            // 加载智能脚本

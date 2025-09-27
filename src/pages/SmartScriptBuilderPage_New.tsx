@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAdb } from "../application/hooks/useAdb";
-import { DeviceStatus } from "../domain/adb/entities/Device";
+// import { DeviceStatus } from "../domain/adb/entities/Device"; // 已通过 useDefaultDeviceId 统一默认选择，不再直接使用
+import { useDefaultDeviceId } from "../application/hooks/useDefaultDeviceId";
 import {
   Row,
   Col,
@@ -43,6 +44,7 @@ const { Title, Paragraph } = Typography;
 const SmartScriptBuilderPage: React.FC = () => {
   // ADB Hook 获取设备信息
   const { devices, refreshDevices } = useAdb();
+  const { defaultDeviceId, hasDevices } = useDefaultDeviceId({ preferSelected: true, autoSelectOnMount: false });
 
   // 创建页面分析服务实例
   const pageAnalysisService = React.useMemo(() => {
@@ -190,15 +192,12 @@ const SmartScriptBuilderPage: React.FC = () => {
     refreshDevices();
   }, [refreshDevices]);
 
-  // 当设备列表变化时，自动选择第一个设备
+  // 当默认设备变化时，若页面本地未选择设备，则应用默认设备
   useEffect(() => {
-    if (devices.length > 0 && !currentDeviceId) {
-      const firstOnlineDevice = devices.find((d) => d.status === DeviceStatus.ONLINE);
-      if (firstOnlineDevice) {
-        setCurrentDeviceId(firstOnlineDevice.id);
-      }
+    if (!currentDeviceId && defaultDeviceId) {
+      setCurrentDeviceId(defaultDeviceId);
     }
-  }, [devices, currentDeviceId]);
+  }, [currentDeviceId, defaultDeviceId]);
 
   // ==================== 事件处理函数 ====================
   const handleNavigationConfigChange = useCallback(

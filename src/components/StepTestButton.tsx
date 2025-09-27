@@ -14,10 +14,14 @@ import {
 import { useSingleStepTest } from '../hooks/useSingleStepTest';
 import type { SmartScriptStep } from '../types/smartScript';
 import { TestResultDetail, TestResultTitle } from './step-card';
+import { useAdb } from '../application/hooks/useAdb';
 
 interface StepTestButtonProps {
   step: SmartScriptStep;
-  deviceId: string;
+  /**
+   * 可选：指定设备ID；若未提供，将自动选择：selectedDevice?.id → 首台在线设备 → 首台设备
+   */
+  deviceId?: string;
   size?: 'small' | 'middle' | 'large';
   disabled?: boolean;
 }
@@ -29,6 +33,7 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
   disabled = false
 }) => {
   const { executeSingleStep, getStepTestResult, isStepTesting, clearStepResult } = useSingleStepTest();
+  const { devices, selectedDevice } = useAdb();
   const [showResultPopover, setShowResultPopover] = useState(false);
   
   const isTesting = isStepTesting(step.id);
@@ -39,14 +44,24 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
     e.stopPropagation();
   };
 
-  // 处理测试执行
+  // 计算有效设备ID（自动选择）
+  const effectiveDeviceId: string | undefined = (() => {
+    if (deviceId && deviceId.trim()) return deviceId;
+    if (selectedDevice?.id) return selectedDevice.id;
+    // 优先首台在线设备
+    const firstOnline = devices.find(d => (d as any).isOnline?.());
+    if (firstOnline?.id) return firstOnline.id;
+    // 退化为列表首台
+    return devices[0]?.id;
+  })();
+
   const handleTest = async () => {
-    if (!deviceId) {
+    if (!effectiveDeviceId) {
       return;
     }
     
     try {
-      await executeSingleStep(step, deviceId);
+      await executeSingleStep(step, effectiveDeviceId);
     } catch (error) {
       console.error('单步测试失败:', error);
     }
@@ -92,7 +107,7 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
     <Button
       {...buttonProps}
       size={size}
-      disabled={disabled || isTesting || !deviceId}
+      disabled={disabled || isTesting || !effectiveDeviceId}
       onClick={handleTest}
       style={{ minWidth: size === 'small' ? 60 : 80 }}
     >
@@ -154,8 +169,8 @@ export const StepTestButton: React.FC<StepTestButtonProps> = ({
     >
       <Tooltip 
         title={
-          !deviceId 
-            ? '请先选择设备' 
+          !effectiveDeviceId 
+            ? '没有可用设备（请连接至少一台设备）' 
             : `点击测试步骤: ${step.name}`
         }
         placement="top"

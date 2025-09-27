@@ -12,6 +12,8 @@
   background-origin: border-box;
   background-clip: padding-box, border-box;
   background-image: linear-gradient(white, white), linear-gradient(135deg, #93c5fd, #3b82f6, #1d4ed8);
+  /* 保证浅色底下文字可读 */
+  color: #111827; /* slate-900 */
 }
 
 .loop-card-dragging {

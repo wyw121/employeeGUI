@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tauri 命令测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tauri 新增命令测试</h1>
+    
+    <div class="test-section">
+        <h2>命令测试</h2>
+        <button onclick="testAdbStartActivity()">测试 adb_start_activity</button>
+        <button onclick="testAdbOpenContacts()">测试 adb_open_contacts_app</button>
+        <button onclick="testAdbViewFile()">测试 adb_view_file</button>
+        <button onclick="testAllCommands()">运行所有测试</button>
+        <button onclick="clearResults()">清空结果</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // 检查是否在 Tauri 环境中
+        function isTauriEnvironment() {
+            return typeof window.__TAURI__ !== 'undefined';
+        }
+
+        function logResult(message, isSuccess = true) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${isSuccess ? 'success' : 'error'}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 测试 adb_start_activity 命令
+        async function testAdbStartActivity() {
+            if (!isTauriEnvironment()) {
+                logResult('❌ 不在 Tauri 环境中，无法测试', false);
+                return;
+            }
+
+            try {
+                logResult('🔄 测试 adb_start_activity 命令...');
+                const result = await window.__TAURI__.tauri.invoke('adb_start_activity', {
+                    deviceId: 'test_device',
+                    packageName: 'com.android.settings',
+                    activityName: 'com.android.settings.Settings'
+                });
+                logResult(`✅ adb_start_activity 命令成功: ${JSON.stringify(result)}`);
+            } catch (error) {
+                logResult(`❌ adb_start_activity 命令失败: ${error.message || error}`, false);
+            }
+        }
+
+        // 测试 adb_open_contacts_app 命令
+        async function testAdbOpenContacts() {
+            if (!isTauriEnvironment()) {
+                logResult('❌ 不在 Tauri 环境中，无法测试', false);
+                return;
+            }
+
+            try {
+                logResult('🔄 测试 adb_open_contacts_app 命令...');
+                const result = await window.__TAURI__.tauri.invoke('adb_open_contacts_app', {
+                    deviceId: 'test_device'
+                });
+                logResult(`✅ adb_open_contacts_app 命令成功: ${JSON.stringify(result)}`);
+            } catch (error) {
+                logResult(`❌ adb_open_contacts_app 命令失败: ${error.message || error}`, false);
+            }
+        }
+
+        // 测试 adb_view_file 命令
+        async function testAdbViewFile() {
+            if (!isTauriEnvironment()) {
+                logResult('❌ 不在 Tauri 环境中，无法测试', false);
+                return;
+            }
+
+            try {
+                logResult('🔄 测试 adb_view_file 命令...');
+                const result = await window.__TAURI__.tauri.invoke('adb_view_file', {
+                    deviceId: 'test_device',
+                    filePath: '/sdcard/test.vcf'
+                });
+                logResult(`✅ adb_view_file 命令成功: ${JSON.stringify(result)}`);
+            } catch (error) {
+                logResult(`❌ adb_view_file 命令失败: ${error.message || error}`, false);
+            }
+        }
+
+        // 运行所有测试
+        async function testAllCommands() {
+            logResult('🚀 开始执行所有命令测试...');
+            await testAdbStartActivity();
+            await new Promise(resolve => setTimeout(resolve, 500)); // 短暂延迟
+            await testAdbOpenContacts();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testAdbViewFile();
+            logResult('✨ 所有测试执行完毕！');
+        }
+
+        // 页面加载时显示环境信息
+        window.addEventListener('load', function() {
+            if (isTauriEnvironment()) {
+                logResult('✅ 检测到 Tauri 环境，可以进行命令测试');
+            } else {
+                logResult('⚠️ 未检测到 Tauri 环境，请在 Tauri 应用中打开此页面', false);
+            }
+        });
+    </script>
+</body>
+</html>

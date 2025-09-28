@@ -2,6 +2,7 @@ pub mod adb_device_tracker;
 pub mod adb_service;  // 现在是模块化的文件夹结构
 pub mod adb_session_manager;  // 新增：ADB会话管理器
 pub mod adb_shell_session;
+pub mod adb_activity;  // 新增：ADB Activity 管理
 pub mod navigation_bar_detector;  // 新增：通用导航栏检测器
 pub mod app_state_detector;
 pub mod app_detection_framework;  // 新增：应用检测框架
@@ -20,6 +21,7 @@ pub mod employee_service;
 pub mod ldplayer_vcf_opener;
 pub mod log_bridge;
 pub mod safe_adb_manager;
+pub mod safe_adb_shell;  // 新增：安全ADB Shell命令执行器
 pub mod device_contact_metrics;
 pub mod script_execution;  // 新增：脚本执行模块（控制流处理系统）
 pub mod script_executor;

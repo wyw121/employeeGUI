@@ -52,6 +52,13 @@ export interface ImportResult {
   failedCount: number;
   strategy: ImportStrategy;
   errorMessage?: string;
+  /** 增强的错误详情 */
+  errorDetails?: {
+    description: string;
+    suggestions: string[];
+    recoverable: boolean;
+    type: string;
+  };
   verificationDetails?: {
     sampledContacts: Array<{
       id: string;

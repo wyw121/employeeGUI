@@ -32,6 +32,7 @@ use tracing::info; // 引入info!宏
 use services::adb_device_tracker::*;
 use services::adb_service::AdbService;
 use services::auth_service::*;
+use services::adb_activity::{adb_start_activity, adb_open_contacts_app, adb_view_file};
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::contact_storage::*; // 导入号码存储命令（现在使用模块化版本）
@@ -46,6 +47,7 @@ use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
 use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_button, get_navigation_configs};
 use services::safe_adb_manager::*;
+use services::safe_adb_shell::safe_adb_shell_command;
 use services::device_contact_metrics::get_device_contact_count;
 use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
@@ -206,6 +208,11 @@ fn main() {
             // 安全ADB管理功能
             get_adb_devices_safe, // 使用安全ADB检测设备
             safe_adb_push,        // 使用安全ADB传输文件
+            safe_adb_shell_command, // 使用安全ADB执行Shell命令
+            // ADB Activity 管理功能
+            adb_start_activity,   // 启动Android Activity
+            adb_open_contacts_app, // 打开联系人应用
+            adb_view_file,        // 使用VIEW Intent打开文件
             // 脚本执行器功能
             execute_automation_script,  // 执行自动化脚本
             validate_device_connection, // 验证设备连接

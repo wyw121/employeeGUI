@@ -137,11 +137,11 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
           activeKey={expandedCategories}
           onChange={setExpandedCategories}
           ghost
-        >
-          {/* 推荐策略 */}
-          {recommendedStrategies.length > 0 && (
-            <Panel
-              header={
+          items={[
+            // 推荐策略
+            ...(recommendedStrategies.length > 0 ? [{
+              key: 'recommended',
+              label: (
                 <Space>
                   <CheckCircleOutlined style={{ color: '#52c41a' }} />
                   推荐策略 ({recommendedStrategies.length})
@@ -149,46 +149,46 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
                     <Tag>{deviceInfo.manufacturer}</Tag>
                   )}
                 </Space>
-              }
-              key="recommended"
-            >
-              <Alert
-                message="基于您的设备信息推荐以下导入策略"
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-              
-              {recommendedStrategies.map(strategy => 
-                renderStrategyCard(strategy, true)
-              )}
-            </Panel>
-          )}
-
-          {/* 所有策略 */}
-          {showAllStrategies && (
-            <Panel
-              header={
+              ),
+              children: (
+                <>
+                  <Alert
+                    message="基于您的设备信息推荐以下导入策略"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                  {recommendedStrategies.map(strategy => 
+                    renderStrategyCard(strategy, true)
+                  )}
+                </>
+              )
+            }] : []),
+            // 所有策略
+            ...(showAllStrategies ? [{
+              key: 'all',
+              label: (
                 <Space>
                   <InfoCircleOutlined />
                   所有可用策略 ({allStrategies.length})
                 </Space>
-              }
-              key="all"
-            >
-              <Alert
-                message="包含所有预设策略，包括实验性和已知失败的方式"
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-              
-              {allStrategies.map(strategy => 
-                renderStrategyCard(strategy)
-              )}
-            </Panel>
-          )}
-        </Collapse>
+              ),
+              children: (
+                <>
+                  <Alert
+                    message="包含所有预设策略，包括实验性和已知失败的方式"
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                  {allStrategies.map(strategy => 
+                    renderStrategyCard(strategy)
+                  )}
+                </>
+              )
+            }] : [])
+          ]}
+        />
       </Radio.Group>
 
       {/* 策略详情 */}
@@ -197,8 +197,10 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
           title="选中策略详情" 
           size="small" 
           style={{ marginTop: 16 }}
-          headStyle={{ background: 'var(--dark-bg-tertiary)', borderBottom: '1px solid var(--dark-border-primary)', color: 'var(--dark-text-primary)' }}
-          bodyStyle={{ background: 'var(--dark-bg-card)', color: 'var(--dark-text-primary)' }}
+          styles={{
+            header: { background: 'var(--dark-bg-tertiary)', borderBottom: '1px solid var(--dark-border-primary)', color: 'var(--dark-text-primary)' },
+            body: { background: 'var(--dark-bg-card)', color: 'var(--dark-text-primary)' }
+          }}
         >
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <div>

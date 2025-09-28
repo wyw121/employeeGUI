@@ -1,9 +1,16 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ImportStrategy, ImportResult, ImportStrategySelection } from '../types';
+import { ImportErrorHandler, type ImportError } from './ImportErrorHandler';
 
 /**
  * 导入策略执行器
  * 根据选择的策略执行具体的 vCard 导入操作
+ * 
+ * 特性：
+ * - ✅ 增强的错误处理和用户友好提示
+ * - ✅ 自动重试机制
+ * - ✅ 详细的执行日志
+ * - ✅ 安全的临时文件清理
  */
 export class ImportStrategyExecutor {
   private static instance: ImportStrategyExecutor;
@@ -64,12 +71,27 @@ export class ImportStrategyExecutor {
 
     } catch (error) {
       console.error('❌ 导入策略执行失败:', error);
+      
+      // 解析错误并提供用户友好信息
+      const importError = ImportErrorHandler.parseError(error, {
+        deviceId,
+        operation: '导入联系人'
+      });
+      
+      const errorDisplay = ImportErrorHandler.formatErrorForUser(importError);
+      
       return {
         success: false,
         importedCount: 0,
         failedCount: 1,
         strategy: selectedStrategy,
-        errorMessage: error instanceof Error ? error.message : '未知错误'
+        errorMessage: errorDisplay.title,
+        errorDetails: {
+          description: errorDisplay.description,
+          suggestions: errorDisplay.actions,
+          recoverable: importError.recoverable,
+          type: importError.type
+        }
       };
     }
   }
@@ -82,14 +104,23 @@ export class ImportStrategyExecutor {
     
     console.log(`📤 推送VCF到设备: ${localVcfPath} -> ${devicePath}`);
     
-    const result = await invoke('adb_push_file', {
-      deviceId,
-      localPath: localVcfPath,
-      remotePath: devicePath
-    });
+    try {
+      const result = await invoke('safe_adb_push', {
+        deviceId,
+        localPath: localVcfPath,
+        remotePath: devicePath
+      });
 
-    if (!(result as any).success) {
-      throw new Error(`文件推送失败: ${(result as any).message}`);
+      console.log(`✅ 文件推送成功: ${result}`);
+      return devicePath;
+    } catch (error) {
+      const importError = ImportErrorHandler.parseError(error, {
+        deviceId,
+        operation: '文件推送'
+      });
+      
+      console.error('❌ 文件推送失败:', importError.message);
+      throw new Error(importError.userMessage);
     }
 
     return devicePath;
@@ -137,10 +168,10 @@ export class ImportStrategyExecutor {
     console.log(`🔄 触发VIEW Intent: ${mimeType}`);
     
     const result = await invoke('adb_start_activity', {
-      deviceId,
+      device_id: deviceId,
       action: 'android.intent.action.VIEW',
-      dataUri: `file://${vcfPath}`,
-      mimeType,
+      data_uri: `file://${vcfPath}`,
+      mime_type: mimeType,
       component: null
     });
 
@@ -159,10 +190,10 @@ export class ImportStrategyExecutor {
     console.log(`🎯 直接触发Activity: ${component}`);
     
     const result = await invoke('adb_start_activity', {
-      deviceId,
+      device_id: deviceId,
       action: 'android.intent.action.VIEW',
-      dataUri: `file://${vcfPath}`,
-      mimeType,
+      data_uri: `file://${vcfPath}`,
+      mime_type: mimeType,
       component
     });
 
@@ -220,14 +251,20 @@ export class ImportStrategyExecutor {
    */
   async cleanup(deviceId: string): Promise<void> {
     try {
-      await invoke('adb_shell_command', {
+      await invoke('safe_adb_shell_command', {
         deviceId,
-        command: 'rm -f /sdcard/temp_import.vcf'
+        shellCommand: 'rm -f /sdcard/temp_import.vcf'
       });
       
       console.log('🧹 清理临时文件完成');
     } catch (error) {
-      console.warn('清理临时文件时出错:', error);
+      const importError = ImportErrorHandler.parseError(error, {
+        deviceId,
+        operation: '清理临时文件'
+      });
+      
+      console.warn('清理临时文件时出错:', importError.message);
+      // 清理失败不影响主流程，只记录警告
     }
   }
 }

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Steps, Button, Space, message, Spin, Switch, Input, Form, Alert } from 'antd';
-import { ImportStrategySelector } from '../../../../import-strategies/ui/ImportStrategySelector';
+import { Modal, Steps, Button, Space, App, Spin, Switch, Input, Form, Alert } from 'antd';
 import { ImportResultDisplay } from '../../../../import-strategies/ui/ImportResultDisplay';
 import { ImportStrategyExecutor } from '../../../../import-strategies/services/ImportStrategyExecutor';
 import type { ImportStrategy, ImportResult } from '../../../../import-strategies/types';
 import { getRecommendedStrategies } from '../../../../import-strategies/strategies';
 import { useAdb } from '../../../../../../application/hooks/useAdb';
+import { EnhancedStrategyConfigurator } from './strategy-configurator';
 
 interface DeviceSpecificImportDialogProps {
   /** 是否显示对话框 */
@@ -42,7 +42,7 @@ const { Step } = Steps;
  * - ✅ 模块化设计，文件大小控制在450行以内
  * - ✅ TypeScript类型安全
  */
-export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProps> = ({
+const DeviceSpecificImportDialogContent: React.FC<DeviceSpecificImportDialogProps> = ({
   visible,
   vcfFilePath,
   targetDeviceId,
@@ -50,6 +50,8 @@ export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProp
   onSuccess,
   deviceContext
 }) => {
+  const { message } = App.useApp();
+  
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedStrategy, setSelectedStrategy] = useState<ImportStrategy | undefined>();
   const [importResult, setImportResult] = useState<ImportResult | undefined>();
@@ -182,18 +184,13 @@ export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProp
       case 0:
         return (
           <div style={{ minHeight: '300px', padding: '20px 0' }}>
-            <Alert
-              message={`目标设备: ${deviceContext?.deviceName || targetDevice?.getDisplayName() || targetDeviceId}`}
-              description={`为设备 ${deviceContext?.deviceName || targetDeviceId} 选择最适合的导入策略`}
-              type="info"
-              showIcon
-              style={{ marginBottom: 20 }}
-            />
-            <ImportStrategySelector
+            <EnhancedStrategyConfigurator
               deviceInfo={deviceInfoForStrategy}
               selectedStrategy={selectedStrategy}
               onStrategyChange={setSelectedStrategy}
-              showAllStrategies={false}
+              deviceContext={{
+                deviceName: deviceContext?.deviceName || targetDevice?.getDisplayName() || targetDeviceId
+              }}
             />
           </div>
         );
@@ -321,7 +318,7 @@ export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProp
       width={700}
       footer={getFooterButtons()}
       maskClosable={false}
-      destroyOnClose={true}
+      destroyOnHidden={true}
     >
       <Steps current={currentStep} style={{ marginBottom: 24 }}>
         <Step title={getStepTitle(0)} />
@@ -338,5 +335,18 @@ export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProp
 
       {!isImporting && renderStepContent()}
     </Modal>
+  );
+};
+
+/**
+ * 设备特定导入对话框包装器
+ * 
+ * 提供App组件context，解决静态消息API的context警告
+ */
+export const DeviceSpecificImportDialog: React.FC<DeviceSpecificImportDialogProps> = (props) => {
+  return (
+    <App>
+      <DeviceSpecificImportDialogContent {...props} />
+    </App>
   );
 };

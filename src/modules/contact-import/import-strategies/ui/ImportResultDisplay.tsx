@@ -21,7 +21,7 @@ export const ImportResultDisplay: React.FC<ImportResultDisplayProps> = ({
   onRetry,
   onClose
 }) => {
-  const { success, importedCount, failedCount, strategy, errorMessage, verificationDetails } = result;
+  const { success, importedCount, failedCount, strategy, errorMessage, errorDetails, verificationDetails } = result;
 
   const getResultIcon = () => {
     if (success) {
@@ -149,13 +149,29 @@ export const ImportResultDisplay: React.FC<ImportResultDisplayProps> = ({
   const renderFailureContent = () => (
     <div>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        {/* 错误信息 */}
+        {/* 增强的错误信息 */}
         <Alert
-          message="导入失败"
-          description={errorMessage || '未知错误，请检查设备连接状态和VCF文件格式'}
+          message={errorMessage || "导入失败"}
+          description={errorDetails?.description || '未知错误，请检查设备连接状态和VCF文件格式'}
           type="error"
           showIcon
         />
+
+        {/* 错误解决建议 */}
+        {errorDetails?.suggestions && errorDetails.suggestions.length > 0 && (
+          <Card title="解决建议" size="small">
+            <List
+              size="small"
+              dataSource={errorDetails.suggestions}
+              renderItem={(suggestion) => (
+                <List.Item>
+                  <InfoCircleOutlined style={{ color: '#1890ff', marginRight: 8 }} />
+                  {suggestion}
+                </List.Item>
+              )}
+            />
+          </Card>
+        )}
 
         {/* 策略详情 */}
         <Card title="使用的导入策略" size="small">
@@ -172,28 +188,32 @@ export const ImportResultDisplay: React.FC<ImportResultDisplayProps> = ({
           )}
         </Card>
 
-        {/* 建议操作 */}
-        <Card title="建议操作" size="small">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div>• 检查设备是否已连接且处于解锁状态</div>
-            <div>• 确认VCF文件格式正确且包含有效联系人数据</div>
-            <div>• 尝试其他成功率更高的导入策略</div>
-            <div>• 检查设备是否已安装联系人应用</div>
-          </Space>
-        </Card>
+        {/* 默认建议操作（如果没有特定建议） */}
+        {(!errorDetails?.suggestions || errorDetails.suggestions.length === 0) && (
+          <Card title="建议操作" size="small">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>• 检查设备是否已连接且处于解锁状态</div>
+              <div>• 确认VCF文件格式正确且包含有效联系人数据</div>
+              <div>• 尝试其他成功率更高的导入策略</div>
+              <div>• 检查设备是否已安装联系人应用</div>
+            </Space>
+          </Card>
+        )}
       </Space>
     </div>
   );
 
   const actions = [];
   
-  if (!success && onRetry) {
+  // 只有在可恢复的错误情况下才显示重试按钮
+  if (!success && onRetry && (!errorDetails || errorDetails.recoverable)) {
     actions.push(
       <Button 
         key="retry"
         type="primary" 
         icon={<ReloadOutlined />} 
         onClick={onRetry}
+        disabled={errorDetails?.type === 'device_offline'} // 设备离线时禁用重试
       >
         重新尝试
       </Button>

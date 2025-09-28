@@ -9,7 +9,16 @@
 ### 🏗️ 架构原则
 
 - **统一的 ADB 接口**: 所有 ADB 相关功能都通过 `useAdb()` Hook 统一管理
-- **单一数据源**: 设备状态通过 `useAdbStore` 集中管理
+- *### 镜像视图（Scrcpy）使用说明
+- **自包含依赖**：scrcpy 已打包在应用中，用户无需额外安装
+- 打开"镜像视图"，选择设备并配置参数（分辨率上限、码率/预设、最大FPS、窗口标题、保持常亮、息屏继续、置顶、无边框）
+- 点击"启动镜像"将启动内置的 scrcpy 进程，实现设备屏幕镜像
+- 会话管理：支持多设备、多会话并发；应用关闭时自动清理子进程
+- 渲染模式：
+	- 外部窗口：标准 scrcpy 窗口（当前默认）
+	- 嵌入式：内置播放器（未来接入 WebCodecs/Canvas）
+
+📋 **完整文档**: 详见 [scrcpy 集成说明](docs/SCRCPY_INTEGRATION.md)*: 设备状态通过 `useAdbStore` 集中管理
 - **分层设计**: 严格遵循 DDD 分层架构约束
 
 📖 **重要**: 请阅读 [ADB 架构统一性规范](./ADB_ARCHITECTURE_STANDARDS.md) 了解开发约束和最佳实践。
@@ -56,6 +65,9 @@ employeeGUI/
 ```bash
 # 安装前端依赖
 npm install
+
+# 设置 scrcpy 镜像功能（必须）
+npm run setup:scrcpy
 
 # 安装Tauri CLI (如果还没有安装)
 npm install -g @tauri-apps/cli

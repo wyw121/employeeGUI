@@ -6,6 +6,7 @@ import NumbersTable from '../batch-manager/components/NumbersTable';
 import SessionActionsBar from './SessionActionsBar';
 import { useBatchData } from '../batch-manager/hooks/useBatchData';
 import { useDebouncedValue } from '../batch-manager/hooks/useDebouncedValue';
+import { useBatchIndustry } from '../batch-manager/hooks/useBatchIndustry';
 import type { BatchFilterState } from '../batch-manager/types';
 
 interface Props {
@@ -33,12 +34,21 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
   const [lastSessionId, setLastSessionId] = useState<number | undefined>(undefined);
   // 会话行选择（单选）
   const [selectedSessionKeys, setSelectedSessionKeys] = useState<React.Key[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('sessions');
+  // NumbersTable 外部筛选（行业/状态）
+  const [numbersFilters, setNumbersFilters] = useState<{ status?: string | null; industry?: string | null }>({});
   
   // 复用 BatchManagerDrawer 的数据逻辑
-  const { loading, batches, sessions, numbers, reload } = useBatchData(effectiveFilter, {
-    numbers: { limit: numbersPage.pageSize, offset: (numbersPage.page - 1) * numbersPage.pageSize },
-    sessions: { limit: sessionsPage.pageSize, offset: (sessionsPage.page - 1) * sessionsPage.pageSize },
-  });
+  const { loading, batches, sessions, numbers, reload } = useBatchData(
+    { ...effectiveFilter, numbersStatus: numbersFilters.status ?? null, numbersIndustry: numbersFilters.industry ?? null },
+    {
+      numbers: { limit: numbersPage.pageSize, offset: (numbersPage.page - 1) * numbersPage.pageSize },
+      sessions: { limit: sessionsPage.pageSize, offset: (sessionsPage.page - 1) * sessionsPage.pageSize },
+    }
+  );
+
+  // 按当前会话列表批次预取“分类标签”（行业）
+  const industryLabels = useBatchIndustry(sessions);
   
   // 当 props 变化时更新筛选状态
   useEffect(() => {
@@ -53,30 +63,23 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
   
   // 按状态过滤会话（前端过滤，因为后端接口不支持状态筛选）
   const filteredSessions = useMemo(() => {
-    if (!sessions || status === 'all') return sessions;
-    
-    const targetStatus = status === 'pending' ? 'pending' : 
-                        status === 'success' ? 'success' : 
-                        status === 'failed' ? 'failed' : null;
-                        
-    if (!targetStatus) return sessions;
-    
-    return {
-      ...sessions,
-      items: sessions.items.filter(s => s.status === targetStatus),
-      total: sessions.items.filter(s => s.status === targetStatus).length,
-    };
-  }, [sessions, status]);
+    if (!sessions) return sessions;
+    const list = sessions.items || [];
+    const targetStatus = status === 'pending' ? 'pending' : status === 'success' ? 'success' : status === 'failed' ? 'failed' : null;
+    const wantedIndustry = (effectiveFilter.industry ?? '').trim();
 
-  // 当选择会话时，将筛选切换为按批次（以启用“再生成VCF”等批次相关操作）
-  useEffect(() => {
-    if (!filteredSessions || selectedSessionKeys.length === 0) return;
-    const sid = selectedSessionKeys[0];
-    const row = filteredSessions.items.find((s: any) => s.id === sid);
-    if (row?.batch_id && filter.batchId !== row.batch_id) {
-      setFilter(prev => ({ ...prev, mode: 'by-batch', batchId: row.batch_id }));
-    }
-  }, [selectedSessionKeys, filteredSessions]);
+    const filtered = list.filter((s: any) => {
+      const statusOk = targetStatus ? s.status === targetStatus : true;
+      if (!statusOk) return false;
+      if (!wantedIndustry) return true; // 不限
+      const ind = (s.industry ?? '').trim();
+      return ind === wantedIndustry; // 仅保留匹配行业的会话
+    });
+
+    return { ...sessions, items: filtered, total: filtered.length };
+  }, [sessions, status, effectiveFilter.industry]);
+
+  // 保持设备视图稳定：不在行选择时自动切换为按批次
 
 
   return (
@@ -107,7 +110,8 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
         <Divider style={{ margin: '8px 0' }} />
         
         <Tabs
-          defaultActiveKey="sessions"
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             { 
               key: 'sessions', 
@@ -116,10 +120,15 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
                 <SessionsTable
                   data={filteredSessions}
                   loading={loading}
+                  industryLabels={industryLabels}
                   highlightId={lastSessionId}
                   rowSelectionType="radio"
                   selectedRowKeys={selectedSessionKeys}
                   onSelectionChange={(keys) => setSelectedSessionKeys(keys)}
+                  onViewBatchNumbers={(bid) => {
+                    setFilter(prev => ({ ...prev, mode: 'by-batch', batchId: bid }));
+                    setActiveTab('numbers');
+                  }}
                   pagination={{
                     current: sessionsPage.page,
                     pageSize: sessionsPage.pageSize,
@@ -144,6 +153,11 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
                     onChange: (page, pageSize) => setNumbersPage({ page, pageSize }),
                   }}
                   onRefresh={reload}
+                  controlledFilters={{
+                    status: numbersFilters.status ?? null,
+                    industry: numbersFilters.industry ?? null,
+                    onChange: setNumbersFilters,
+                  }}
                 />
               )
             },

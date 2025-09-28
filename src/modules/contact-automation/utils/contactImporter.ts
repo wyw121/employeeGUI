@@ -1,5 +1,16 @@
 /**
- * 联系人导入工具
+ * 联系人导入工具（Legacy Adapter）
+ *
+ * 重要：本文件直接调用 Tauri invoke 执行导入等动作，属于历史路径。
+ * 根据《ADB 架构统一报告/开发指导文档》，新代码必须通过统一接口 useAdb() → 应用服务访问，
+ * 不应在 UI 或模块层直接使用 invoke。
+ *
+ * 迁移建议：
+ * - 优先使用 src/modules/contact-import/hooks/useUnifiedContactImport 与 UnifiedAdbDeviceManager。
+ * - 若功能仍需保留，请逐步将调用迁移到应用服务（ServiceFactory.getAdbApplicationService()）
+ *   或 contact-import 模块的公共 API，避免平行实现与状态分裂。
+ *
+ * 注意：为避免破坏现有功能，本文件暂不移除；新代码请勿再新增依赖。
  */
 
 import { invoke } from '@tauri-apps/api/core';

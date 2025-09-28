@@ -1,0 +1,169 @@
+import React, { useMemo, useState } from 'react';
+import { Row, Col, Space, App } from 'antd';
+import styles from '../DeviceAssignmentGrid.module.css';
+import { useDeviceAssignmentState, type DeviceAssignmentRow } from './useDeviceAssignmentState';
+import { Toolbar } from './Toolbar';
+import { DeviceCard } from './DeviceCard';
+import { getBindings, bindBatchToDevice } from '../../services/deviceBatchBinding';
+import { processPendingSessionsForDevice } from '../../services/sessionImportService';
+import { allocateNumbersToDevice } from '../../services/contactNumberService';
+
+export interface DeviceAssignmentGridProps {
+  value?: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>;
+  onChange?: (value: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>) => void;
+  industries?: string[];
+  conflictingDeviceIds?: string[];
+  conflictPeersByDevice?: Record<string, Array<{ peerId: string; start: number; end: number }>>;
+  onJumpToDevice?: (deviceId: string) => void;
+  onGenerateVcf?: (deviceId: string, params: { start?: number; end?: number; industry?: string }) => Promise<void> | void;
+  onImportToDevice?: (deviceId: string, params: { start?: number; end?: number; industry?: string; scriptKey?: string }) => Promise<void> | void;
+  importScripts?: Array<{ key: string; label: string }>;
+  onOpenSessions?: (opts: { deviceId: string; status?: 'pending' | 'success' | 'failed' | 'all' }) => void;
+}
+
+const DEFAULT_INDUSTRIES = ['不限', '电商', '教育', '医疗', '金融', '本地生活', '其他'];
+
+export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props) => {
+  const { message } = App.useApp();
+  const {
+    devices, data,
+    rowState, updateRow,
+    counts, loadingIds, refreshCount, refreshAllCounts,
+    meta,
+    assignCount, setAssignCount,
+    selected, setSelected, selectedIds, allSelected, toggleSelectAll, clearSelection,
+    autoAssignRange,
+  } = useDeviceAssignmentState(props.value, props.onChange);
+
+  const [bulkCount, setBulkCount] = useState<number>(100);
+  const [generatingIds, setGeneratingIds] = useState<Record<string, boolean>>({});
+  const [importingIds, setImportingIds] = useState<Record<string, boolean>>({});
+  const [allocatingIds, setAllocatingIds] = useState<Record<string, boolean>>({});
+  const [scriptByDevice, setScriptByDevice] = useState<Record<string, string>>({});
+  const SCRIPT_OPTIONS = useMemo(() => (
+    props.importScripts && props.importScripts.length > 0
+      ? props.importScripts
+      : [
+          { key: 'auto', label: '自动识别' },
+          { key: 'multi_brand', label: '通用（多品牌）' },
+          { key: 'huawei_enhanced', label: '华为增强' },
+        ]
+  ), [props.importScripts]);
+
+  const bulkAssign = () => {
+    const ids = selectedIds;
+    if (ids.length === 0) { message.warning('请先选择需要分配的设备'); return; }
+    const n = Math.max(1, Math.floor(bulkCount || 0));
+    let maxEnd = -1;
+    for (const r of Object.values(rowState)) { if (typeof r?.idEnd === 'number') maxEnd = Math.max(maxEnd, r.idEnd!); }
+    const next = { ...rowState } as typeof rowState;
+    for (const id of ids) {
+      const start = Math.max(0, maxEnd + 1);
+      const end = start + (n - 1);
+      next[id] = { ...next[id], idStart: start, idEnd: end };
+      maxEnd = end;
+    }
+    props.onChange?.(next);
+    message.success(`已为 ${ids.length} 台设备分配区间（每台 ${n} 个）`);
+  };
+
+  const handleGenerateVcf = async (row: DeviceAssignmentRow) => {
+    const { deviceId } = row;
+    setGeneratingIds(prev => ({ ...prev, [deviceId]: true }));
+    try {
+      if (props.onGenerateVcf) await props.onGenerateVcf(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry });
+      else message.info('未接入 onGenerateVcf 回调');
+    } finally { setGeneratingIds(prev => ({ ...prev, [deviceId]: false })); }
+  };
+
+  const handleImportToDevice = async (row: DeviceAssignmentRow) => {
+    const { deviceId } = row;
+    setImportingIds(prev => ({ ...prev, [deviceId]: true }));
+    try {
+      const scriptKey = scriptByDevice[deviceId] || 'auto';
+      const pending = getBindings(deviceId).pending.length;
+      if (pending > 0) {
+        let lastProgress = 0;
+        const summary = await processPendingSessionsForDevice(deviceId, {
+          scriptKey,
+          onProgress: ({ index, total }) => {
+            const pct = Math.floor((index / total) * 100);
+            if (pct - lastProgress >= 10 || index === total) { lastProgress = pct; message.loading({ content: `设备 ${deviceId} 导入中… ${index}/${total}` as any, key: `imp_${deviceId}`, duration: 0 }); }
+          }
+        });
+        message.destroy(`imp_${deviceId}`);
+        message.success(`导入完成：成功 ${summary.success}/${summary.total}，失败 ${summary.failed}`);
+        props.onOpenSessions?.({ deviceId, status: 'all' });
+      } else if (props.onImportToDevice) {
+        await props.onImportToDevice(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry, scriptKey });
+      } else {
+        message.info('没有待导入会话，且未接入 onImportToDevice 回调');
+      }
+    } finally { setImportingIds(prev => ({ ...prev, [deviceId]: false })); }
+  };
+
+  const handleAllocateToDevice = async (row: DeviceAssignmentRow) => {
+    const { deviceId } = row;
+    setAllocatingIds(prev => ({ ...prev, [deviceId]: true }));
+    try {
+      const n = Math.max(1, Math.floor(assignCount[deviceId] ?? 100));
+      const res = await allocateNumbersToDevice(deviceId, n, row.industry);
+      if (!res || !res.batch_id || res.number_count <= 0) { message.warning('当前条件下无可分配号码，请调整行业或数量后重试'); return; }
+      bindBatchToDevice(deviceId, res.batch_id);
+      message.success(`已为设备 ${deviceId} 分配 ${res.number_count} 个号码（批次 ${res.batch_id}）`);
+      props.onOpenSessions?.({ deviceId, status: 'pending' });
+    } catch (e: any) { message.error(`分配失败：${e?.message || e}`); }
+    finally { setAllocatingIds(prev => ({ ...prev, [deviceId]: false })); }
+  };
+
+  const industries = props.industries && props.industries.length > 0 ? props.industries : DEFAULT_INDUSTRIES;
+
+  return (
+    <div>
+      <Space className={styles.toolbar} wrap>
+        <Toolbar
+          allSelected={allSelected}
+          selectedCount={selectedIds.length}
+          onToggleAll={toggleSelectAll}
+          onClear={clearSelection}
+          bulkCount={bulkCount}
+          setBulkCount={setBulkCount}
+          onBulkAssign={bulkAssign}
+          onRefreshDevices={undefined}
+          onRefreshAllCounts={refreshAllCounts}
+        />
+      </Space>
+      <Row gutter={[12, 12]}>
+        {data.map((row) => {
+          const isSelected = !!selected[row.deviceId];
+          const bindings = getBindings(row.deviceId);
+          return (
+            <Col key={row.deviceId} xs={24} sm={12} md={8} lg={6} xl={6} xxl={4}>
+              <DeviceCard
+                row={row}
+                industries={industries}
+                isSelected={isSelected}
+                setSelected={(checked) => setSelected(prev => ({ ...prev, [row.deviceId]: checked }))}
+                meta={meta[row.deviceId]}
+                loadingCount={!!loadingIds[row.deviceId]}
+                onRefreshCount={() => refreshCount(row.deviceId)}
+                onUpdateRow={(patch) => updateRow(row.deviceId, patch)}
+                assignCount={assignCount[row.deviceId] ?? 100}
+                setAssignCount={(n) => setAssignCount(prev => ({ ...prev, [row.deviceId]: n }))}
+                onAutoAssign={() => autoAssignRange(row.deviceId, assignCount[row.deviceId] ?? 100)}
+                onAllocate={() => handleAllocateToDevice(row)}
+                onGenerateVcf={() => handleGenerateVcf(row)}
+                onImport={() => handleImportToDevice(row)}
+                importing={!!importingIds[row.deviceId]}
+                allocating={!!allocatingIds[row.deviceId]}
+                generating={!!generatingIds[row.deviceId]}
+                bindings={{ pending: bindings.pending.length, imported: bindings.imported.length }}
+                onOpenSessions={(status) => props.onOpenSessions?.({ deviceId: row.deviceId, status })}
+              />
+            </Col>
+          );
+        })}
+      </Row>
+    </div>
+  );
+};

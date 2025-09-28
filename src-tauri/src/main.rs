@@ -35,7 +35,11 @@ use services::auth_service::*;
 use services::contact_automation::*;
 use services::contact_service::*;
 use services::contact_storage::*; // 导入号码存储命令（现在使用模块化版本）
-use services::contact_storage::commands::{get_contact_number_stats_cmd, set_contact_numbers_industry_by_id_range};
+use services::contact_storage::commands::{
+    get_contact_number_stats_cmd,
+    get_distinct_industries_cmd,
+    set_contact_numbers_industry_by_id_range,
+};
 use services::crash_debugger::*;
 use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
@@ -172,12 +176,15 @@ fn main() {
             finish_import_session_record,
             list_import_session_records,
             list_numbers_by_vcf_batch,
+            list_numbers_by_vcf_batch_filtered,
             list_numbers_without_vcf_batch,
             get_contact_number_stats_cmd,
+            get_distinct_industries_cmd,
             set_contact_numbers_industry_by_id_range,
             create_vcf_batch_with_numbers_cmd,
             list_numbers_for_vcf_batch_cmd,
             tag_numbers_industry_by_vcf_batch_cmd,
+                allocate_numbers_to_device_cmd,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
             import_vcf_contacts_multi_brand,    // 多品牌批量尝试导入

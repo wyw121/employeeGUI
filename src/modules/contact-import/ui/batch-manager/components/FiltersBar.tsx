@@ -1,8 +1,10 @@
 import React from 'react';
-import { Space, Select, Input, Switch } from 'antd';
+import { Space, Select, Input, Switch, Button } from 'antd';
 import type { BatchFilterState } from '../types';
 import type { VcfBatchList } from '../../services/contactNumberService';
 import { useAdb } from '../../../../../application/hooks/useAdb';
+import { clearBatchIndustryCache } from '../../services/industry/batchIndustryService';
+import { useIndustryOptions } from '../hooks/useIndustryOptions';
 
 interface Props {
   value: BatchFilterState;
@@ -17,12 +19,27 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
     label: `${d.name || d.model || d.id}` 
   }));
 
+  const { options: industryOptions, loading: industriesLoading, reload: reloadIndustries } = useIndustryOptions();
+
+  const handleModeChange = (mode: BatchFilterState['mode']) => {
+    // 避免出现 deviceId 和 batchId 同时生效，切换模式时清理冲突字段
+    if (mode === 'by-device') {
+      onChange({ ...value, mode, batchId: undefined });
+    } else if (mode === 'by-batch') {
+      onChange({ ...value, mode, deviceId: undefined });
+    } else if (mode === 'no-batch') {
+      onChange({ ...value, mode, batchId: undefined });
+    } else {
+      onChange({ ...value, mode });
+    }
+  };
+
   return (
     <Space wrap>
       <Select
         style={{ width: 160 }}
         value={value.mode}
-        onChange={(mode) => onChange({ ...value, mode })}
+        onChange={handleModeChange}
         options={[
           { value: 'all', label: '全部号码' },
           { value: 'by-device', label: '按设备' },
@@ -50,6 +67,15 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
           showSearch
         />
       )}
+      {/* 行业筛选（所有模式可用）*/}
+      <Select
+        style={{ width: 160 }}
+        placeholder="行业"
+        value={value.industry ?? ''}
+        onChange={(industry) => onChange({ ...value, industry })}
+        options={industryOptions}
+        loading={industriesLoading}
+      />
       {value.mode === 'all' && (
         <Input
           style={{ width: 220 }}
@@ -74,6 +100,8 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
           仅显示该批次
         </span>
       )}
+      {/* 手动刷新分类缓存 */}
+  <Button size="small" onClick={() => { clearBatchIndustryCache(); reloadIndustries(); onChange({ ...value }); }}>刷新分类</Button>
     </Space>
   );
 };

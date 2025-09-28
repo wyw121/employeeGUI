@@ -18,7 +18,9 @@
     "type-check": "tsc -p tsconfig.app.json --noEmit",
     "scan:executor": "node scripts/refactor/scan_executor_functions.mjs",
     "check:legacy-contacts": "node scripts/check-legacy-contacts.js",
-    "clean:legacy-contacts": "node scripts/remove-legacy-contacts.mjs"
+    "clean:legacy-contacts": "node scripts/remove-legacy-contacts.mjs",
+    "setup:scrcpy": "pwsh -ExecutionPolicy Bypass -File scripts/setup-scrcpy.ps1",
+    "verify:scrcpy": "pwsh -ExecutionPolicy Bypass -File scripts/verify-scrcpy.ps1"
   },
   "scriptsExtra": {},
   "cleaners": {},

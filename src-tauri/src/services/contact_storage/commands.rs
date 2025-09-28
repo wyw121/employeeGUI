@@ -5,6 +5,7 @@ use rusqlite::Connection;
 
 use super::models::{ContactNumberList, ImportNumbersResult};
 use super::models::{ContactNumberStatsDto, IndustryCountDto};
+use super::models::AllocationResultDto;
 use super::parser::extract_numbers_from_text;
 use super::repo::{
     fetch_numbers,
@@ -16,6 +17,7 @@ use super::repo::{
     init_db,
     insert_numbers,
     list_numbers,
+    list_numbers_filtered,
     create_vcf_batch,
     list_vcf_batches,
     get_vcf_batch,
@@ -24,11 +26,14 @@ use super::repo::{
     list_import_sessions,
     list_numbers_by_batch,
     list_numbers_without_batch,
+    list_numbers_without_batch_filtered,
     get_contact_number_stats,
+    get_distinct_industries,
     set_numbers_industry_by_id_range,
     create_vcf_batch_with_numbers,
     list_numbers_for_vcf_batch,
     tag_numbers_industry_by_vcf_batch,
+    allocate_numbers_to_device,
 };
 
 #[tauri::command]
@@ -105,8 +110,27 @@ pub async fn import_contact_numbers_from_folder(folder_path: String) -> Result<I
     })
 }
 
+/// 为设备分配号码，创建批次与待导入会话
 #[tauri::command]
-pub async fn list_contact_numbers(limit: Option<i64>, offset: Option<i64>, search: Option<String>) -> Result<ContactNumberList, String> {
+pub async fn allocate_numbers_to_device_cmd(device_id: String, count: i64, industry: Option<String>) -> Result<AllocationResultDto, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    match allocate_numbers_to_device(&conn, &device_id, count, industry.as_deref()) {
+        Ok((batch_id, vcf_file_path, number_ids, session_id)) => Ok(AllocationResultDto {
+            device_id,
+            batch_id,
+            vcf_file_path,
+            number_count: number_ids.len() as i64,
+            number_ids,
+            session_id,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn list_contact_numbers(limit: Option<i64>, offset: Option<i64>, search: Option<String>, industry: Option<String>, status: Option<String>) -> Result<ContactNumberList, String> {
     let db_path = get_contacts_db_path();
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
@@ -114,7 +138,12 @@ pub async fn list_contact_numbers(limit: Option<i64>, offset: Option<i64>, searc
     let limit = limit.unwrap_or(50);
     let offset = offset.unwrap_or(0);
 
-    list_numbers(&conn, limit, offset, search).map_err(|e| e.to_string())
+    // 若提供 industry/status 则走带筛选的路径
+    if industry.is_some() || status.is_some() {
+        list_numbers_filtered(&conn, limit, offset, search, industry, status).map_err(|e| e.to_string())
+    } else {
+        list_numbers(&conn, limit, offset, search).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -209,13 +238,13 @@ pub async fn finish_import_session_record(session_id: i64, status: String, impor
 }
 
 #[tauri::command]
-pub async fn list_import_session_records(device_id: Option<String>, batch_id: Option<String>, limit: Option<i64>, offset: Option<i64>) -> Result<super::models::ImportSessionList, String> {
+pub async fn list_import_session_records(device_id: Option<String>, batch_id: Option<String>, industry: Option<String>, limit: Option<i64>, offset: Option<i64>) -> Result<super::models::ImportSessionList, String> {
     let db_path = get_contacts_db_path();
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     let limit = limit.unwrap_or(50);
     let offset = offset.unwrap_or(0);
-    list_import_sessions(&conn, device_id.as_deref(), batch_id.as_deref(), limit, offset).map_err(|e| e.to_string())
+    list_import_sessions(&conn, device_id.as_deref(), batch_id.as_deref(), industry.as_deref(), limit, offset).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -229,13 +258,27 @@ pub async fn list_numbers_by_vcf_batch(batch_id: String, only_used: Option<bool>
 }
 
 #[tauri::command]
-pub async fn list_numbers_without_vcf_batch(limit: Option<i64>, offset: Option<i64>) -> Result<ContactNumberList, String> {
+pub async fn list_numbers_by_vcf_batch_filtered(batch_id: String, industry: Option<String>, status: Option<String>, limit: Option<i64>, offset: Option<i64>) -> Result<ContactNumberList, String> {
     let db_path = get_contacts_db_path();
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     let limit = limit.unwrap_or(50);
     let offset = offset.unwrap_or(0);
-    list_numbers_without_batch(&conn, limit, offset).map_err(|e| e.to_string())
+    list_numbers_by_batch_filtered(&conn, &batch_id, industry, status, limit, offset).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_numbers_without_vcf_batch(limit: Option<i64>, offset: Option<i64>, industry: Option<String>, status: Option<String>) -> Result<ContactNumberList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+    if industry.is_some() || status.is_some() {
+        list_numbers_without_batch_filtered(&conn, limit, offset, industry, status).map_err(|e| e.to_string())
+    } else {
+        list_numbers_without_batch(&conn, limit, offset).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -292,4 +335,12 @@ pub async fn tag_numbers_industry_by_vcf_batch_cmd(batch_id: String, industry: S
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     tag_numbers_industry_by_vcf_batch(&conn, &batch_id, &industry).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_distinct_industries_cmd() -> Result<Vec<String>, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    get_distinct_industries(&conn).map_err(|e| e.to_string())
 }

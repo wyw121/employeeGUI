@@ -17,6 +17,13 @@ pub struct ContactNumberDto {
     pub name: String,
     pub source_file: String,
     pub created_at: String,
+    // 可选的业务元数据（可能为NULL）
+    pub industry: Option<String>,
+    pub used: Option<i64>,
+    pub used_at: Option<String>,
+    pub used_batch: Option<String>,
+    pub status: Option<String>,
+    pub imported_device_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -67,10 +74,22 @@ pub struct ImportSessionDto {
     pub started_at: String,
     pub finished_at: Option<String>,
     pub error_message: Option<String>,
+    pub industry: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImportSessionList {
     pub total: i64,
     pub items: Vec<ImportSessionDto>,
+}
+
+// 分配结果（为设备分配一批号码并生成对应的 VCF 批次与待导入会话）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AllocationResultDto {
+    pub device_id: String,
+    pub batch_id: String,
+    pub vcf_file_path: String,
+    pub number_count: i64,
+    pub number_ids: Vec<i64>,
+    pub session_id: i64, // 新建的 pending 会话ID
 }

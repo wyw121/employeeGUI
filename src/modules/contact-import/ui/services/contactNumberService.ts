@@ -45,6 +45,13 @@ export interface ContactNumberDto {
   name: string;
   source_file: string;
   created_at: string;
+  // 可选的业务元数据（后端可能为 NULL）
+  industry?: string | null;
+  used?: number | null; // 0/1
+  used_at?: string | null;
+  used_batch?: string | null; // VCF 批次ID
+  status?: 'not_imported' | 'imported' | 'vcf_generated' | '' | null;
+  imported_device_id?: string | null;
 }
 
 export interface ContactNumberList {
@@ -52,9 +59,11 @@ export interface ContactNumberList {
   items: ContactNumberDto[];
 }
 
-export async function listContactNumbers(params: { limit?: number; offset?: number; search?: string } = {}): Promise<ContactNumberList> {
-  const { limit, offset, search } = params;
-  return invoke<ContactNumberList>('list_contact_numbers', { limit, offset, search });
+export async function listContactNumbers(params: { limit?: number; offset?: number; search?: string; industry?: string; status?: string } = {}): Promise<ContactNumberList> {
+  const { limit, offset, search, industry, status } = params;
+  // 混合大小写键，兼容后端命名差异；行业“未分类”用特殊键传递 __UNCLASSIFIED__
+  const payload = { limit, offset, search, industry, status, Industry: industry, Status: status } as const;
+  return invoke<ContactNumberList>('list_contact_numbers', payload as any);
 }
 
 export async function fetchContactNumbers(count: number): Promise<ContactNumberDto[]> {
@@ -63,12 +72,12 @@ export async function fetchContactNumbers(count: number): Promise<ContactNumberD
 
 export async function fetchContactNumbersByIdRange(startId: number, endId: number): Promise<ContactNumberDto[]> {
   if (endId < startId) return [];
-  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range', { start_id: startId, end_id: endId });
+  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range', { start_id: startId, end_id: endId, startId, endId });
 }
 
 export async function fetchContactNumbersByIdRangeUnconsumed(startId: number, endId: number): Promise<ContactNumberDto[]> {
   if (endId < startId) return [];
-  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range_unconsumed', { start_id: startId, end_id: endId });
+  return invoke<ContactNumberDto[]>('fetch_contact_numbers_by_id_range_unconsumed', { start_id: startId, end_id: endId, startId, endId });
 }
 
 export async function markContactNumbersUsedByIdRange(startId: number, endId: number, batchId: string): Promise<number> {
@@ -84,6 +93,8 @@ export interface VcfBatchDto {
   vcf_file_path: string;
   source_start_id?: number | null;
   source_end_id?: number | null;
+  // 可选：批次统一分类（若后端在创建批次时写入）
+  industry?: string | null;
 }
 
 export interface VcfBatchList {
@@ -101,11 +112,23 @@ export interface ImportSessionDto {
   started_at: string;
   finished_at?: string | null;
   error_message?: string | null;
+  // 可选：该会话所对应号码集的行业/分类（前端选择后通过后端记录）
+  industry?: string | null;
 }
 
 export interface ImportSessionList {
   total: number;
   items: ImportSessionDto[];
+}
+
+// 分配结果（与后端 AllocationResultDto 对齐）
+export interface AllocationResultDto {
+  device_id: string;
+  batch_id: string;
+  vcf_file_path: string;
+  number_count: number;
+  number_ids: number[];
+  session_id: number;
 }
 
 export async function createVcfBatchRecord(params: { batchId: string; vcfFilePath: string; sourceStartId?: number; sourceEndId?: number; }): Promise<void> {
@@ -131,9 +154,26 @@ export async function listNumbersByVcfBatch(batchId: string, onlyUsed?: boolean,
   return invoke<ContactNumberList>('list_numbers_by_vcf_batch', payload as any);
 }
 
-export async function listNumbersWithoutVcfBatch(params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
-  const { limit, offset } = params;
-  return invoke<ContactNumberList>('list_numbers_without_vcf_batch', { limit, offset });
+export async function listNumbersByVcfBatchFiltered(batchId: string, params: { industry?: string; status?: string; limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
+  const { industry, status, limit, offset } = params;
+  const ind = industry && industry.trim() && industry.trim() !== '不限' ? industry.trim() : undefined;
+  const payload = { batch_id: batchId, batchId, industry: ind, Industry: ind, status, Status: status, limit, offset } as const;
+  return invoke<ContactNumberList>('list_numbers_by_vcf_batch_filtered', payload as any);
+}
+
+export async function listNumbersWithoutVcfBatch(params: { limit?: number; offset?: number; industry?: string; status?: string } = {}): Promise<ContactNumberList> {
+  const { limit, offset, industry, status } = params;
+  const payload = { limit, offset, industry, status, Industry: industry, Status: status } as const;
+  return invoke<ContactNumberList>('list_numbers_without_vcf_batch', payload as any);
+}
+
+// ---- 行业下拉缓存（避免仅当前页可见行业） ----
+let cachedIndustries: string[] | null = null;
+export async function getDistinctIndustries(forceRefresh = false): Promise<string[]> {
+  if (cachedIndustries && !forceRefresh) return cachedIndustries;
+  const list = await invoke<string[]>('get_distinct_industries_cmd');
+  cachedIndustries = list;
+  return list;
 }
 
 export async function createImportSessionRecord(batchId: string, deviceId: string): Promise<number> {
@@ -158,7 +198,17 @@ export async function finishImportSessionRecord(sessionId: number, status: 'succ
   return invoke<void>('finish_import_session_record', payload as any);
 }
 
-export async function listImportSessionRecords(params: { deviceId?: string; batchId?: string; limit?: number; offset?: number } = {}): Promise<ImportSessionList> {
-  const { deviceId, batchId, limit, offset } = params;
-  return invoke<ImportSessionList>('list_import_session_records', { device_id: deviceId, batch_id: batchId, limit, offset });
+export async function listImportSessionRecords(params: { deviceId?: string; batchId?: string; industry?: string; limit?: number; offset?: number } = {}): Promise<ImportSessionList> {
+  const { deviceId, batchId, industry, limit, offset } = params;
+  // 兼容大小写键并传递行业过滤（空串与“不限”不传）
+  const ind = industry && industry.trim() && industry.trim() !== '不限' ? industry.trim() : undefined;
+  return invoke<ImportSessionList>('list_import_session_records', { device_id: deviceId, batch_id: batchId, industry: ind, Industry: ind, limit, offset });
+}
+
+// 为设备在数据库层分配号码并创建 VCF 批次与 pending 会话
+export async function allocateNumbersToDevice(deviceId: string, count: number = 100, industry?: string): Promise<AllocationResultDto> {
+  // 兼容 snake/camel 命名；industry 为空或“不限”时不传递
+  const ind = industry && industry.trim() && industry.trim() !== '不限' ? industry.trim() : undefined;
+  const payload = { device_id: deviceId, deviceId, count, industry: ind, Industry: ind } as const;
+  return invoke<AllocationResultDto>('allocate_numbers_to_device_cmd', payload as any);
 }

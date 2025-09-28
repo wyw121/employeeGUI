@@ -15,7 +15,7 @@ import { bindBatchToDevice, markBatchImportedForDevice } from './services/device
 import BatchPreviewModal from './components/BatchPreviewModal';
 import { executeBatches } from './services/batchExecutor';
 // 新的竖向卡片栅格组件，替代表格视图
-import { DeviceAssignmentGrid } from './components/DeviceAssignmentGrid';
+import { DeviceAssignmentGrid } from './components/DeviceAssignmentGrid/DeviceAssignmentGrid';
 import ServiceFactory from '../../../application/services/ServiceFactory';
 import { findRangeConflicts } from '../utils/assignmentValidation';
 import BatchResultModal from './components/BatchResultModal';

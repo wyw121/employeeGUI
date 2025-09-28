@@ -16,16 +16,24 @@ interface Props {
 
 const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
   const [filter, setFilter] = useState<BatchFilterState>({ mode: 'all' });
+  const [numbersFilters, setNumbersFilters] = useState<{ status?: string | null; industry?: string | null }>({});
   const debouncedSearch = useDebouncedValue(filter.search, 400);
   const effectiveFilter = { ...filter, search: debouncedSearch } as BatchFilterState;
   // 简单分页状态（后续可抽到 hook 内）
   const [numbersPage, setNumbersPage] = useState({ page: 1, pageSize: 50 });
   const [sessionsPage, setSessionsPage] = useState({ page: 1, pageSize: 50 });
   const [lastSessionId, setLastSessionId] = useState<number | undefined>(undefined);
-  const { loading, batches, sessions, numbers, reload } = useBatchData(effectiveFilter, {
+  const { loading, batches, sessions, numbers, reload } = useBatchData(
+    {
+      ...effectiveFilter,
+      numbersStatus: numbersFilters.status ?? null,
+      numbersIndustry: numbersFilters.industry ?? null,
+    },
+    {
     numbers: { limit: numbersPage.pageSize, offset: (numbersPage.page - 1) * numbersPage.pageSize },
     sessions: { limit: sessionsPage.pageSize, offset: (sessionsPage.page - 1) * sessionsPage.pageSize },
-  });
+    }
+  );
 
   return (
     <Drawer
@@ -59,6 +67,11 @@ const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
                   onChange: (page, pageSize) => setNumbersPage({ page, pageSize }),
                 }}
                 onRefresh={reload}
+                controlledFilters={{
+                  status: numbersFilters.status ?? null,
+                  industry: numbersFilters.industry ?? null,
+                  onChange: setNumbersFilters,
+                }}
               />
             ) },
             { key: 'sessions', label: '导入会话', children: (

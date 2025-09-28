@@ -8,4 +8,5 @@ export interface BatchFilterState {
   deviceId?: string;
   onlyUsed?: boolean; // 仅显示已导入（used_batch 命中批次）
   search?: string;
+  industry?: string; // 行业筛选：不限/电商/医疗/...
 }

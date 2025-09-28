@@ -35,6 +35,8 @@ use super::repo::{
     list_numbers_for_vcf_batch,
     tag_numbers_industry_by_vcf_batch,
     allocate_numbers_to_device,
+    update_import_session_industry,
+    revert_import_session_to_failed,
 };
 
 #[tauri::command]
@@ -344,4 +346,22 @@ pub async fn get_distinct_industries_cmd() -> Result<Vec<String>, String> {
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     get_distinct_industries(&conn).map_err(|e| e.to_string())
+}
+
+/// 更新导入会话的行业/分类
+#[tauri::command]
+pub async fn update_import_session_industry_cmd(session_id: i64, industry: Option<String>) -> Result<(), String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    update_import_session_industry(&conn, session_id, industry.as_deref()).map_err(|e| e.to_string())
+}
+
+/// 将成功会话改为失败并回滚号码为未导入
+#[tauri::command]
+pub async fn revert_import_session_to_failed_cmd(session_id: i64, reason: Option<String>) -> Result<i64, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    revert_import_session_to_failed(&conn, session_id, reason.as_deref()).map_err(|e| e.to_string())
 }

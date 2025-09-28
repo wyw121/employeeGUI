@@ -114,7 +114,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
         // 若外部提供回调，走外部逻辑（可能包含生成VCF再导入）
         await props.onImportToDevice(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry, scriptKey });
       } else {
-        // 无 pending 且无外部回调：自动生成“未分类100” 的 VCF 并导入
+        // 无 pending 且无外部回调：自动生成“未分类100” 的 VCF 并导入（带设备端严格校验）
         const unclassified = await fetchUnclassifiedNumbers(100, true);
         if (!unclassified.length) { message.warning('没有可用的未分类号码'); return; }
         const vcfContent = buildVcfFromNumbers(unclassified as any);
@@ -127,15 +127,40 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
         let sessionId: number | null = null;
         try { sessionId = await createImportSessionRecord(batchId, deviceId); } catch {}
         const vcfService = ServiceFactory.getVcfImportApplicationService();
+        // 导入前联系人数量
+        let beforeCount: number | null = null;
+        try {
+          const metrics = ServiceFactory.getDeviceMetricsApplicationService();
+          beforeCount = await metrics.getContactCount(deviceId);
+        } catch {}
         const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
+        // 导入后联系人数量，严格校验
+        let delta: number | undefined = undefined;
+        let ok = !!outcome.success;
+        let msg = outcome.message || '';
+        if (beforeCount != null) {
+          try {
+            const metrics = ServiceFactory.getDeviceMetricsApplicationService();
+            const after = await metrics.getContactCount(deviceId);
+            delta = after - beforeCount;
+            if (ok && (delta ?? 0) <= 0) {
+              ok = false;
+              msg = (msg ? `${msg}; ` : '') + `verification failed (delta=${delta})`;
+            }
+          } catch {}
+        }
         try {
           if (sessionId != null) {
-            const status = outcome.success ? 'success' : 'failed';
-            await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, outcome.success ? undefined : outcome.message);
+            const status = ok ? 'success' : 'failed';
+            await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, ok ? undefined : msg);
           }
         } catch {}
-        if (outcome.success) message.success(`导入成功：${outcome.importedCount ?? 0}`);
-        else message.error(outcome.message || '导入失败');
+        if (ok) {
+          if (typeof delta === 'number') message.success(`导入成功：联系人 +${delta}`);
+          else message.success('导入成功');
+        } else {
+          message.error(msg || '导入失败');
+        }
       }
     } finally { setImportingIds(prev => ({ ...prev, [deviceId]: false })); }
   };

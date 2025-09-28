@@ -83,7 +83,11 @@ function App() {
   }
 
   if (FullApp) {
-    return <FullApp />;
+    return (
+      <div className="dark-theme">
+        <FullApp />
+      </div>
+    );
   }
 
   return (

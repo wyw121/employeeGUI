@@ -1,4 +1,4 @@
-import type { ImportStrategy, VCardVersion, ImportTriggerMethod, DeviceManufacturer } from './types';
+import { ImportStrategy, VCardVersion, ImportTriggerMethod, DeviceManufacturer } from './types';
 
 /**
  * 预定义的导入策略配置
@@ -173,4 +173,4 @@ function detectManufacturer(manufacturerStr?: string): DeviceManufacturer {
   return DeviceManufacturer.OTHER;
 }
 
-export { DetectManufacturer as detectManufacturer };
+export { detectManufacturer };

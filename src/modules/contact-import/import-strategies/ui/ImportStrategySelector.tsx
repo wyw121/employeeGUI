@@ -146,7 +146,7 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
                   <CheckCircleOutlined style={{ color: '#52c41a' }} />
                   推荐策略 ({recommendedStrategies.length})
                   {deviceInfo?.manufacturer && (
-                    <Tag size="small">{deviceInfo.manufacturer}</Tag>
+                    <Tag>{deviceInfo.manufacturer}</Tag>
                   )}
                 </Space>
               }
@@ -196,7 +196,9 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
         <Card 
           title="选中策略详情" 
           size="small" 
-          style={{ marginTop: 16, backgroundColor: '#fafafa' }}
+          style={{ marginTop: 16 }}
+          headStyle={{ background: 'var(--dark-bg-tertiary)', borderBottom: '1px solid var(--dark-border-primary)', color: 'var(--dark-text-primary)' }}
+          bodyStyle={{ background: 'var(--dark-bg-card)', color: 'var(--dark-text-primary)' }}
         >
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <div>
@@ -217,7 +219,6 @@ export const ImportStrategySelector: React.FC<ImportStrategySelectorProps> = ({
               <Alert
                 message={selectedStrategy.notes}
                 type={selectedStrategy.successRate === 'failed' ? 'error' : 'info'}
-                size="small"
                 showIcon
               />
             )}

@@ -40,6 +40,7 @@ use services::contact_storage::commands::{
     get_distinct_industries_cmd,
     set_contact_numbers_industry_by_id_range,
 };
+use services::contact_storage::commands::{update_import_session_industry_cmd, revert_import_session_to_failed_cmd};
 use services::crash_debugger::*;
 use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
@@ -184,6 +185,8 @@ fn main() {
             create_vcf_batch_with_numbers_cmd,
             list_numbers_for_vcf_batch_cmd,
             tag_numbers_industry_by_vcf_batch_cmd,
+            update_import_session_industry_cmd,
+            revert_import_session_to_failed_cmd,
                 allocate_numbers_to_device_cmd,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,

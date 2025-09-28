@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import React, { useState } from 'react';
+import { ImportStrategyDialog } from '../modules/contact-import/import-strategies/ui/ImportStrategyDialog';
+import { App } from 'antd';
 
 interface PermissionTestPageProps {}
 
@@ -8,6 +10,8 @@ const PermissionTestPage: React.FC<PermissionTestPageProps> = () => {
   const [contactsFile, setContactsFile] = useState('D:\\repositories\\employeeGUI\\test_contacts_permission.txt');
   const [testResult, setTestResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showStrategyDialog, setShowStrategyDialog] = useState(false);
+  const { message } = App.useApp();
 
   const testPermissionHandling = async () => {
     setIsLoading(true);
@@ -25,24 +29,15 @@ const PermissionTestPage: React.FC<PermissionTestPageProps> = () => {
     }
   };
 
-  const testVcfImportWithPermission = async () => {
-    setIsLoading(true);
-    setTestResult('正在测试完整VCF导入流程（包含权限处理）...');
-    
-    try {
-      const result = await invoke('test_vcf_import_with_permission', {
-        deviceId: deviceId,
-        contactsFile: contactsFile
-      });
-      setTestResult(`VCF导入测试结果: ${result}`);
-    } catch (error) {
-      setTestResult(`VCF导入测试失败: ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleImportStrategySelect = (result: any) => {
+    // 这里可以处理导入结果
+    setTestResult(`VCF导入测试成功: ${JSON.stringify(result, null, 2)}`);
+    message.success('VCF导入测试成功');
+    setShowStrategyDialog(false);
   };
 
   return (
+    <App>
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">权限处理测试页面</h1>
       
@@ -93,14 +88,22 @@ const PermissionTestPage: React.FC<PermissionTestPageProps> = () => {
           </button>
           
           <button
-            onClick={testVcfImportWithPermission}
+            onClick={() => setShowStrategyDialog(true)}
             disabled={isLoading}
             className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
           >
-            {isLoading ? '导入中...' : '测试完整VCF导入'}
+            {isLoading ? '导入中...' : '测试完整VCF导入（选择策略）'}
           </button>
         </div>
       </div>
+
+      {/* 导入策略选择对话框 */}
+      <ImportStrategyDialog
+        visible={showStrategyDialog}
+        onClose={() => setShowStrategyDialog(false)}
+        vcfFilePath={contactsFile}
+        onSuccess={handleImportStrategySelect}
+      />
 
       {/* 测试结果 */}
       {testResult && (
@@ -137,6 +140,7 @@ const PermissionTestPage: React.FC<PermissionTestPageProps> = () => {
         </div>
       </div>
     </div>
+    </App>
   );
 };
 

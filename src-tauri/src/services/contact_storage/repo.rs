@@ -951,3 +951,50 @@ pub fn tag_numbers_industry_by_vcf_batch(conn: &Connection, batch_id: &str, indu
     )?;
     Ok(affected as i64)
 }
+
+/// 更新导入会话的行业/分类标签（仅更新 import_sessions.industry 字段）
+pub fn update_import_session_industry(conn: &Connection, session_id: i64, industry: Option<&str>) -> SqlResult<()> {
+    match industry {
+        Some(ind) if !ind.trim().is_empty() => {
+            conn.execute(
+                "UPDATE import_sessions SET industry = ?1 WHERE id = ?2",
+                params![ind.trim(), session_id],
+            )?;
+        }
+        _ => {
+            // 传空则清空分类
+            conn.execute(
+                "UPDATE import_sessions SET industry = NULL WHERE id = ?1",
+                params![session_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// 将成功会话改为失败，并回滚其关联号码为“未导入/可用”（used=0,status='not_imported',imported_device_id=NULL）
+/// 返回受影响号码数量
+pub fn revert_import_session_to_failed(conn: &Connection, session_id: i64, reason: Option<&str>) -> SqlResult<i64> {
+    // 获取该会话对应的批次和设备
+    let (batch_id, device_id): (String, String) = {
+        let mut stmt = conn.prepare("SELECT batch_id, device_id FROM import_sessions WHERE id = ?1")?;
+        let mut rows = stmt.query(params![session_id])?;
+        if let Some(row) = rows.next()? { (row.get(0)?, row.get(1)?) } else { return Ok(0); }
+    };
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let tx = conn.unchecked_transaction()?;
+    // 1) 更新会话状态为 failed，并记录原因（追加到 error_message）
+    {
+        let append_msg = reason.unwrap_or("manual revert");
+        let sql = "UPDATE import_sessions SET status = 'failed', finished_at = ?1, error_message = \
+                   CASE WHEN (error_message IS NULL OR TRIM(error_message) = '') THEN ?2 ELSE (error_message || char(10) || ?2) END\
+                   WHERE id = ?3";
+        let _ = tx.execute(sql, params![now, format!("reverted: {}", append_msg), session_id]);
+    }
+    // 2) 回滚该批次且由该会话设备导入的号码
+    let sql_numbers = "UPDATE contact_numbers SET used = 0, used_at = NULL, status = 'not_imported', imported_device_id = NULL \
+                       WHERE id IN (SELECT number_id FROM vcf_batch_numbers WHERE batch_id = ?1) AND imported_device_id = ?2";
+    let affected = tx.execute(sql_numbers, params![batch_id, device_id])?;
+    tx.commit()?;
+    Ok(affected as i64)
+}

@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, InputNumber, Select, Button, Space, Typography, Tooltip, Tag, Badge, App } from 'antd';
 import { ReloadOutlined, MobileOutlined } from '@ant-design/icons';
+import { DeviceSpecificImportDialog } from './components';
+import { getBindings } from '../../services/deviceBatchBinding';
+import { fetchUnclassifiedNumbers } from '../../services/unclassifiedService';
+import { buildVcfFromNumbers } from '../../../utils/vcf';
+import { VcfImportService } from '../../../../../services/VcfImportService';
+import { createVcfBatchWithNumbers } from '../../../../vcf-sessions/services/vcfSessionService';
+import { createImportSessionRecord } from '../../services/contactNumberService';
 import styles from '../DeviceAssignmentGrid.module.css';
 
 const { Text } = Typography;
@@ -46,7 +53,76 @@ function PhoneVisual({ manufacturer, model }: { manufacturer?: string; model?: s
 
 export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
   const { message } = App.useApp();
+  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
+  const [vcfFilePath, setVcfFilePath] = useState<string>('');
+  const [preparingVcf, setPreparingVcf] = useState(false);
   const row = props.row;
+
+  /**
+   * 为设备准备VCF文件
+   */
+  const prepareVcfForImport = async (): Promise<string> => {
+    const { deviceId } = row;
+    
+    // 检查是否有现成的pending会话
+    const pending = getBindings(deviceId).pending;
+    if (pending.length > 0) {
+      const latestSession = pending[pending.length - 1];
+      // 这里假设pending会话有vcfFilePath属性，实际需要根据数据结构调整
+      const existingPath = (latestSession as any).vcfFilePath;
+      if (existingPath) {
+        console.log('使用现有VCF文件:', existingPath);
+        return existingPath;
+      }
+    }
+    
+    // 自动生成VCF
+    console.log('自动生成VCF文件...');
+    const unclassified = await fetchUnclassifiedNumbers(100, true);
+    if (!unclassified.length) {
+      throw new Error('没有可用的未分类号码');
+    }
+    
+    const vcfContent = buildVcfFromNumbers(unclassified as any);
+    const tempPath = VcfImportService.generateTempVcfPath();
+    await VcfImportService.writeVcfFile(tempPath, vcfContent);
+    
+    // 创建批次和会话记录
+    const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
+    const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
+    
+    try {
+      await createVcfBatchWithNumbers({
+        batchId,
+        vcfFilePath: tempPath,
+        sourceStartId: ids[0],
+        sourceEndId: ids[ids.length - 1],
+        numberIds: ids
+      });
+      await createImportSessionRecord(batchId, deviceId);
+    } catch (e) {
+      console.warn('创建VCF批次或会话记录失败:', e);
+    }
+    
+    console.log('VCF文件生成完成:', tempPath);
+    return tempPath;
+  };
+
+  /**
+   * 处理导入按钮点击
+   */
+  const handleImportClick = async () => {
+    setPreparingVcf(true);
+    try {
+      const vcfPath = await prepareVcfForImport();
+      setVcfFilePath(vcfPath);
+      setStrategyDialogOpen(true);
+    } catch (error) {
+      message.error(`准备VCF文件失败: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      setPreparingVcf(false);
+    }
+  };
   const hasSelfError = typeof row.idStart === 'number' && typeof row.idEnd === 'number' && (row.idStart > row.idEnd);
   return (
     <Card
@@ -100,7 +176,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
       <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <Button size="small" onClick={(e) => { e.stopPropagation(); props.onAllocate(); }} loading={!!props.allocating} type="dashed">分配{Math.max(1, Math.floor(props.assignCount ?? 100))}</Button>
         <Button size="small" onClick={(e) => { e.stopPropagation(); props.onGenerateVcf(); }} loading={!!props.generating}>生成VCF</Button>
-        <Button size="small" type="primary" onClick={(e) => { e.stopPropagation(); props.onImport(); }} loading={!!props.importing} style={{ flex: '0 0 auto' }}>导入</Button>
+        <Button size="small" type="primary" 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            handleImportClick(); 
+          }} 
+          loading={preparingVcf || !!props.importing} 
+          style={{ flex: '0 0 auto' }}
+        >
+          {preparingVcf ? '准备中...' : '导入'}
+        </Button>
       </div>
       <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Tag color={props.bindings.pending > 0 ? 'gold' : undefined} data-no-card-toggle style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); props.onOpenSessions?.('pending'); }}>
@@ -110,6 +195,28 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
           已导入: <Text strong>{props.bindings.imported}</Text>
         </Tag>
       </div>
+
+      <DeviceSpecificImportDialog
+        visible={strategyDialogOpen}
+        vcfFilePath={vcfFilePath}
+        targetDeviceId={row.deviceId}
+        deviceContext={{
+          deviceName: row.deviceName,
+          manufacturer: props.meta?.manufacturer,
+          model: props.meta?.model
+        }}
+        onClose={() => {
+          setStrategyDialogOpen(false);
+          setVcfFilePath('');
+        }}
+        onSuccess={async (result) => {
+          setStrategyDialogOpen(false);
+          setVcfFilePath('');
+          message.success(`导入到 ${row.deviceName} 成功: ${result.importedCount} 个联系人`);
+          // 调用原始的刷新回调来更新设备状态
+          props.onRefreshCount();
+        }}
+      />
     </Card>
   );
 };

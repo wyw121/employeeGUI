@@ -168,6 +168,18 @@ npm run tauri dev
 		- 全部（支持关键词搜索）
 - 模块路径：`src/modules/contact-import/ui/batch-manager/*`（纯展示与筛选逻辑，后续“再生成/再导入”在此接入）。
 
+#### 会话管理增强（新）
+- 会话分类：在“会话列表”中支持内联编辑“分类”（行业标签）。点击“编辑”可从历史分类下拉选择或直接输入新分类，保存后实时持久化到数据库。
+- 成功回滚为失败：对状态为“成功”的会话，提供“标记失败并回滚”操作。确认后：
+	- 会话状态被设置为“失败”，错误信息附加“用户手动回滚”原因；
+	- 与该会话关联的号码将被事务性恢复为“未导入/可用”（used=0，status='not_imported'，imported_device_id 置空），支持后续重新分配/导入；
+	- 操作完成后会提示恢复的号码数量并刷新列表。
+- 端到端路径：前端 `SessionsTable` → 服务 `contactNumberService` → Tauri 命令 `update_import_session_industry_cmd` / `revert_import_session_to_failed_cmd` → SQLite 事务。
+- 文件位置：
+	- 前端：`src/modules/contact-import/ui/batch-manager/components/SessionsTable.tsx`
+	- 服务：`src/modules/contact-import/ui/services/contactNumberService.ts`
+	- 后端：`src-tauri/src/services/contact_storage/{repo.rs,commands.rs}` 与命令注册 `src-tauri/src/main.rs`
+
 ## 项目特点
 
 ### 分层架构

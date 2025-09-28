@@ -1,8 +1,8 @@
-import React from 'react';
-import { Table, Tag, Button, Space, App } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Table, Tag, Button, Space, Select, App, Popconfirm } from 'antd';
 import type { ImportSessionList } from '../types';
-import { getVcfBatchRecord, createImportSessionRecord, finishImportSessionRecord } from '../../services/contactNumberService';
-import ServiceFactory from '../../../../../application/services/ServiceFactory';
+import { EnhancedSessionImportButton } from './enhanced-import/EnhancedSessionImportButton';
+import { getDistinctIndustries, revertImportSessionToFailed, updateImportSessionIndustry } from '../../services/contactNumberService';
 
 interface Props {
   data?: ImportSessionList | null;
@@ -25,33 +25,38 @@ interface Props {
 }
 
 const SessionsTable: React.FC<Props> = ({ data, loading, industryLabels, pagination, highlightId, rowSelectionType = 'radio', selectedRowKeys, onSelectionChange, onViewBatchNumbers, onRefresh }) => {
-  const { message } = App.useApp();
-  const handleImport = async (row: any) => {
-    const batchId: string = row.batch_id;
-    const deviceId: string = row.device_id;
-    try {
-      // 读取批次以获取 vcf_file_path
-      const batch = await getVcfBatchRecord(batchId);
-      if (!batch || !batch.vcf_file_path) {
-        return message.warning('批次缺少 VCF 文件路径，无法导入');
-      }
-      const sessionId = await createImportSessionRecord(batchId, deviceId);
-      message.info(`会话 #${sessionId} 已创建，开始导入...`);
-      try { await onRefresh?.(); } catch {}
-      const vcfService = ServiceFactory.getVcfImportApplicationService();
-      const res = await vcfService.importToDevice(deviceId, batch.vcf_file_path);
-      const status = res.success ? 'success' : 'failed';
-      await finishImportSessionRecord(sessionId, status as any, res.importedCount ?? 0, res.failedCount ?? 0, res.success ? undefined : res.message);
-      if (res.success) {
-        message.success('导入成功');
-      } else {
-        message.error(res.message || '导入失败');
-      }
-      try { await onRefresh?.(); } catch {}
-    } catch (e: any) {
-      message.error(`导入异常: ${e?.message ?? e}`);
+  const { message, modal } = App.useApp();
+  const [editing, setEditing] = useState<{ id: number; value?: string | null } | null>(null);
+  const [indOptions, setIndOptions] = useState<string[]>([]);
+
+  const ensureIndustryOptions = async () => {
+    if (indOptions.length === 0) {
+      const list = await getDistinctIndustries().catch(() => []);
+      setIndOptions(list);
     }
   };
+
+  const handleSaveIndustry = async (sessionId: number, industry?: string | null) => {
+    try {
+      await updateImportSessionIndustry(sessionId, industry);
+      setEditing(null);
+      message.success('已更新分类');
+      await onRefresh?.();
+    } catch (e: any) {
+      message.error(`更新分类失败: ${e?.message || e}`);
+    }
+  };
+
+  const handleRevert = async (sessionId: number) => {
+    try {
+      const affected = await revertImportSessionToFailed(sessionId, '用户手动回滚');
+      message.success(`已回滚为失败，恢复号码 ${affected} 个为未导入`);
+      await onRefresh?.();
+    } catch (e: any) {
+      message.error(`回滚失败: ${e?.message || e}`);
+    }
+  };
+
   return (
     <Table
       rowKey="id"
@@ -75,10 +80,45 @@ const SessionsTable: React.FC<Props> = ({ data, loading, industryLabels, paginat
       columns={[
         { title: 'ID', dataIndex: 'id', width: 80 },
         { title: '批次', dataIndex: 'batch_id' },
-        { title: '分类', width: 100, render: (_: any, r: any) => {
+        { title: '分类', width: 180, render: (_: any, r: any) => {
           const fromServer = (r.industry ?? '').trim();
-          const label = fromServer || industryLabels?.[r.batch_id];
-          return label ? <Tag>{label}</Tag> : <Tag color="default">—</Tag>;
+          const label = fromServer || industryLabels?.[r.batch_id] || '';
+          const isEditing = editing?.id === r.id;
+          if (isEditing) {
+            return (
+              <Space size={4}>
+                <Select
+                  size="small"
+                  style={{ minWidth: 120 }}
+                  showSearch
+                  placeholder="选择或输入分类"
+                  mode="tags"
+                  value={editing?.value ? [editing.value] : []}
+                  onDropdownVisibleChange={(open) => { if (open) ensureIndustryOptions(); }}
+                  onChange={(vals) => {
+                    const arr = Array.isArray(vals) ? vals : [];
+                    const last = arr.length ? String(arr[arr.length - 1]).trim() : '';
+                    setEditing({ id: r.id, value: last || undefined });
+                  }}
+                  options={[...indOptions.map(i => ({ label: i, value: i }))]}
+                  // 允许自由输入
+                  onSearch={(val) => { /* no-op: keep typed */ }}
+                  filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
+                  // Antd Select 不支持直接 free text 提交，这里使用 tag 模式较重；简化为 options+保留原值
+                />
+                <Space size={4}>
+                  <Button size="small" type="primary" onClick={() => handleSaveIndustry(r.id, editing?.value || undefined)}>保存</Button>
+                  <Button size="small" onClick={() => setEditing(null)}>取消</Button>
+                </Space>
+              </Space>
+            );
+          }
+          return (
+            <Space size={4}>
+              {label ? <Tag>{label}</Tag> : <Tag color="default">—</Tag>}
+              <Button size="small" type="link" onClick={() => setEditing({ id: r.id, value: label })}>编辑</Button>
+            </Space>
+          );
         } },
         { title: '设备', dataIndex: 'device_id' },
         { title: '状态', dataIndex: 'status', render: (s: string) => s === 'success' ? <Tag color="green">成功</Tag> : s === 'failed' ? <Tag color="red">失败</Tag> : <Tag>进行中</Tag> },
@@ -91,10 +131,24 @@ const SessionsTable: React.FC<Props> = ({ data, loading, industryLabels, paginat
         { title: '开始', dataIndex: 'started_at', width: 160 },
         { title: '结束', dataIndex: 'finished_at', width: 160 },
         { title: '错误', dataIndex: 'error_message' },
-        { title: '操作', width: 220, render: (_: any, r: any) => (
+        { title: '操作', width: 320, render: (_: any, r: any) => (
           <Space size={8}>
             <Button size="small" onClick={() => onViewBatchNumbers?.(r.batch_id)}>查看</Button>
-            <Button size="small" type="primary" onClick={() => handleImport(r)} disabled={!r?.batch_id || !r?.device_id}>导入</Button>
+            <EnhancedSessionImportButton 
+              sessionRow={r} 
+              onRefresh={onRefresh}
+            />
+            {r.status === 'success' && (
+              <Popconfirm
+                title="将该会话标记为失败并回滚号码？"
+                description="相关号码将恢复为未导入，可重新分配/导入。此操作不可逆。"
+                okText="确认回滚"
+                cancelText="取消"
+                onConfirm={() => handleRevert(r.id)}
+              >
+                <Button size="small" danger>标记失败并回滚</Button>
+              </Popconfirm>
+            )}
           </Space>
         ) },
       ]}

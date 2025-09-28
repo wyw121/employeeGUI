@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAdb } from '../application/hooks/useAdb';
+import { ImportStrategyDialog } from '../modules/contact-import/import-strategies/ui/ImportStrategyDialog';
+import { App } from 'antd';
 
 interface VcfOpenResult {
   success: boolean;
@@ -41,6 +43,10 @@ const SmartVcfImporter: React.FC = () => {
   const [uiState, setUiState] = useState<DeviceUIState | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [autoMonitor, setAutoMonitor] = useState(false);
+  const [showStrategyDialog, setShowStrategyDialog] = useState(false);
+  const [importType, setImportType] = useState<'smart' | 'complete' | null>(null);
+  
+  const { message } = App.useApp();
 
   // 使用统一的ADB接口 - 遵循DDD架构约束
   const { 
@@ -97,7 +103,36 @@ const SmartVcfImporter: React.FC = () => {
     }
   };
 
-  // 智能VCF导入
+  // 显示策略选择对话框 - 智能导入
+  const handleSmartImportClick = () => {
+    if (!selectedDevice) {
+      addLog('❌ 请先选择设备');
+      return;
+    }
+    setImportType('smart');
+    setShowStrategyDialog(true);
+  };
+
+  // 显示策略选择对话框 - 完整导入
+  const handleCompleteImportClick = () => {
+    if (!selectedDevice || !contactsFile) {
+      addLog('❌ 请选择设备和联系人文件');
+      return;
+    }
+    setImportType('complete');
+    setShowStrategyDialog(true);
+  };
+
+  // 处理导入策略选择完成
+  const handleImportSuccess = (result: any) => {
+    addLog(`🎉 导入成功完成！`);
+    addLog(`✅ 导入结果: ${JSON.stringify(result, null, 2)}`);
+    message.success('导入成功完成！');
+    setShowStrategyDialog(false);
+    setImportType(null);
+  };
+
+  // 智能VCF导入（保留原有功能作为备用）
   const startSmartImport = async () => {
     if (!selectedDevice) {
       addLog('❌ 请先选择设备');
@@ -212,7 +247,8 @@ const SmartVcfImporter: React.FC = () => {
   }, []);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <App>
+      <div className="p-6 max-w-7xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <h1 className="text-3xl font-bold text-blue-600">🤖 智能VCF联系人导入器</h1>
@@ -277,19 +313,19 @@ const SmartVcfImporter: React.FC = () => {
             </button>
             
             <button
-              onClick={startSmartImport}
+              onClick={handleSmartImportClick}
               disabled={!selectedDevice || isImporting}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400"
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
             >
-              {isImporting ? '🔄 智能导入中...' : '🤖 智能导入 (仅打开)'}
+              {isImporting ? '🔄 智能导入中...' : '🤖 智能导入 (选择策略)'}
             </button>
             
             <button
-              onClick={startCompleteImport}
+              onClick={handleCompleteImportClick}
               disabled={!selectedDevice || !contactsFile || isImporting}
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-gray-400"
             >
-              {isImporting ? '🔄 完整导入中...' : '🚀 完整导入 (传输+打开)'}
+              {isImporting ? '🔄 完整导入中...' : '🚀 完整导入 (选择策略)'}
             </button>
 
             <div className="flex items-center gap-2">
@@ -418,8 +454,17 @@ const SmartVcfImporter: React.FC = () => {
             <p><strong>UI状态读取:</strong> 手动获取当前设备界面状态，了解应用当前状态</p>
           </div>
         </div>
+
+        {/* 导入策略选择对话框 */}
+        <ImportStrategyDialog
+          visible={showStrategyDialog}
+          onClose={() => setShowStrategyDialog(false)}
+          vcfFilePath={contactsFile}
+          onSuccess={handleImportSuccess}
+        />
       </div>
     </div>
+    </App>
   );
 };
 

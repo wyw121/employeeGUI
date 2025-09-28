@@ -212,3 +212,16 @@ export async function allocateNumbersToDevice(deviceId: string, count: number = 
   const payload = { device_id: deviceId, deviceId, count, industry: ind, Industry: ind } as const;
   return invoke<AllocationResultDto>('allocate_numbers_to_device_cmd', payload as any);
 }
+
+// ---- 新增：会话分类编辑 & 成功回滚为失败 ----
+
+export async function updateImportSessionIndustry(sessionId: number, industry?: string | null): Promise<void> {
+  const ind = industry && industry.trim() ? industry.trim() : undefined;
+  const payload = { session_id: sessionId, sessionId, industry: ind, Industry: ind } as const;
+  return invoke<void>('update_import_session_industry_cmd', payload as any);
+}
+
+export async function revertImportSessionToFailed(sessionId: number, reason?: string): Promise<number> {
+  const payload = { session_id: sessionId, sessionId, reason } as const;
+  return invoke<number>('revert_import_session_to_failed_cmd', payload as any);
+}

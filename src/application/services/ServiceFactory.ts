@@ -17,6 +17,9 @@ import ContactImportApplicationService from './contact-import/ContactImportAppli
 import VcfImportApplicationService from './contact-import/VcfImportApplicationService';
 import { IContactAutomationRepository } from '../../domain/contact-automation/repositories/IContactAutomationRepository';
 import { TauriContactAutomationRepository } from '../../infrastructure/repositories/TauriContactAutomationRepository';
+import { TauriDeviceMetricsRepository } from '../../infrastructure/repositories/TauriDeviceMetricsRepository';
+import type { IDeviceMetricsRepository } from '../../domain/device/repositories/IDeviceMetricsRepository';
+import DeviceMetricsApplicationService from './device/DeviceMetricsApplicationService';
 
 /**
  * 服务容器
@@ -78,6 +81,7 @@ class ServiceContainer {
   this.register('uiMatcherRepository', () => new TauriUiMatcherRepository());
   this.register('smartScriptRepository', () => new TauriSmartScriptRepository());
   this.register('contactAutomationRepository', () => new TauriContactAutomationRepository());
+  this.register('deviceMetricsRepository', () => new TauriDeviceMetricsRepository());
 
     // 注册Domain Service层
     this.register('deviceManagerService', () => {
@@ -118,6 +122,11 @@ class ServiceContainer {
     this.register('vcfImportApplicationService', () => {
       const repo = this.get<IContactAutomationRepository>('contactAutomationRepository');
       return new VcfImportApplicationService(repo);
+    });
+
+    this.register('deviceMetricsApplicationService', () => {
+      const repo = this.get<IDeviceMetricsRepository>('deviceMetricsRepository');
+      return new DeviceMetricsApplicationService(repo);
     });
   }
 }
@@ -171,6 +180,11 @@ export const ServiceFactory = {
   /** 获取 VCF 导入应用服务 */
   getVcfImportApplicationService(): VcfImportApplicationService {
     return container.get<VcfImportApplicationService>('vcfImportApplicationService');
+  },
+
+  /** 获取 设备指标应用服务 */
+  getDeviceMetricsApplicationService(): DeviceMetricsApplicationService {
+    return container.get<DeviceMetricsApplicationService>('deviceMetricsApplicationService');
   },
 
   /**

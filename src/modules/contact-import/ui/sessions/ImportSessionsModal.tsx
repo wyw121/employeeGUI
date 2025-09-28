@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Modal, Tabs, Divider, Space, Button, App } from 'antd';
+import { Modal, Tabs, Divider, Space, Button, App, Tooltip } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import FiltersBar from '../batch-manager/components/FiltersBar';
 import SessionsTable from '../batch-manager/components/SessionsTable';
 import NumbersTable from '../batch-manager/components/NumbersTable';
@@ -36,6 +37,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
   // 会话行选择（支持多选批量重新导入）
   const [selectedSessionKeys, setSelectedSessionKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState<string>('sessions');
+  const [showPendingOnly, setShowPendingOnly] = useState<boolean>(false);
   // NumbersTable 外部筛选（行业/状态）
   const [numbersFilters, setNumbersFilters] = useState<{ status?: string | null; industry?: string | null }>({});
   
@@ -72,13 +74,14 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     const filtered = list.filter((s: any) => {
       const statusOk = targetStatus ? s.status === targetStatus : true;
       if (!statusOk) return false;
+      if (showPendingOnly && s.status !== 'pending') return false;
       if (!wantedIndustry) return true; // 不限
       const ind = (s.industry ?? '').trim();
       return ind === wantedIndustry; // 仅保留匹配行业的会话
     });
 
     return { ...sessions, items: filtered, total: filtered.length };
-  }, [sessions, status, effectiveFilter.industry]);
+  }, [sessions, status, effectiveFilter.industry, showPendingOnly]);
 
   // 批量“重新导入”选中的会话
   const onBulkReimportSelected = async () => {
@@ -95,16 +98,28 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
       if (!rows.length) return message.warning('所选会话需为“未导入”且包含设备与批次信息');
       const { reimportSelectedSessions } = await import('../services/sessionImportService');
       message.info(`开始批量导入 ${rows.length} 条会话...`);
+      let failed = 0;
+      let lastOk = true;
       const outcome = await reimportSelectedSessions(rows, {
-        onProgress: ({ index, total, ok }) => {
-          if (index === total) {
-            if (ok) {
-              message.success('批量导入已完成');
+        verifyMode: 'delta-strict',
+        onProgress: ({ index, total, ok, delta }) => {
+          lastOk = ok;
+          if (ok) {
+            if (typeof delta === 'number') {
+              message.success(`第 ${index}/${total} 条导入校验通过（联系人 +${delta}）`);
             } else {
-              message.info('批量导入已完成（包含失败条目）');
+              message.success(`第 ${index}/${total} 条导入完成`);
             }
+          } else {
+            failed += 1;
+            const tip = typeof delta === 'number' ? `（校验失败 delta=${delta}）` : '';
+            message.error(`第 ${index}/${total} 条导入失败${tip}`);
           }
-        }
+          if (index === total) {
+            if (failed === 0 && lastOk) message.success('批量导入完成（全部通过校验）');
+            else message.info(`批量导入完成：失败 ${failed}/${total}`);
+          }
+        },
       });
       setLastSessionId(outcome.lastCreatedSessionId);
       setSelectedSessionKeys([]);
@@ -112,6 +127,17 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     } catch (e: any) {
       message.error(`批量导入异常: ${e?.message ?? e}`);
     }
+  };
+
+  // 快捷：全选“本页未导入”
+  const onSelectAllPendingThisPage = () => {
+    const items: any[] = filteredSessions?.items || [];
+    if (!items.length) return setSelectedSessionKeys([]);
+    const start = (sessionsPage.page - 1) * sessionsPage.pageSize;
+    const end = Math.min(start + sessionsPage.pageSize, items.length);
+    const pageItems = items.slice(start, end);
+    const keys = pageItems.filter(r => r.status === 'pending').map(r => r.id as React.Key);
+    setSelectedSessionKeys(keys);
   };
 
 
@@ -151,6 +177,23 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
               label: (
                 <Space>
                   <span>导入会话 ({filteredSessions?.total || 0})</span>
+                  <Space size={6}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={showPendingOnly}
+                        onChange={e => { setShowPendingOnly(e.target.checked); setSelectedSessionKeys([]); setSessionsPage({ page: 1, pageSize: sessionsPage.pageSize }); }}
+                        style={{ verticalAlign: 'middle' }}
+                      />
+                      <span style={{ fontSize: 12, color: '#666' }}>只显示未导入</span>
+                    </label>
+                    <Tooltip title="批量操作仅对未导入(pending)的会话生效">
+                      <QuestionCircleOutlined style={{ color: '#999' }} />
+                    </Tooltip>
+                  </Space>
+                  <Button size="small" onClick={onSelectAllPendingThisPage}>
+                    全选本页未导入
+                  </Button>
                   <Button size="small" type="primary" disabled={!selectedSessionKeys.length} onClick={onBulkReimportSelected}>
                     重新导入所选
                   </Button>

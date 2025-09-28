@@ -178,7 +178,7 @@ export class VcfImportService {
    */
   static generateTempVcfPath(): string {
     const timestamp = Date.now();
-    return `temp_contacts_${timestamp}.txt`;
+    return `temp_contacts_${timestamp}.vcf`;
   }
 
   /**
@@ -189,12 +189,16 @@ export class VcfImportService {
   static convertContactsToVcfContent(
     contacts: Array<{ name: string; phone?: string; email?: string }>
   ): string {
-    return contacts
-      .map(
-        (contact) =>
-          `${contact.name},${contact.phone || ""},${contact.email || ""}`
-      )
-      .join("\n");
+    const lines: string[] = [];
+    for (const c of contacts) {
+      lines.push("BEGIN:VCARD");
+      lines.push("VERSION:3.0");
+      lines.push(`FN:${(c.name || '').replace(/\n/g, ' ')}`);
+      if (c.phone) lines.push(`TEL:${c.phone}`);
+      if (c.email) lines.push(`EMAIL:${c.email}`);
+      lines.push("END:VCARD");
+    }
+    return lines.join("\n");
   }
 
   /**

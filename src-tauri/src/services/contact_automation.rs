@@ -4,14 +4,14 @@
 //! 2. 多品牌导入入口
 //! 3. 华为增强导入入口
 
-use crate::services::multi_brand_vcf_importer::{MultiBrandVcfImporter, MultiBrandImportResult};
+use crate::services::multi_brand_vcf_importer::MultiBrandVcfImporter;
+use crate::services::multi_brand_vcf_types::MultiBrandImportResult;
 use crate::services::huawei_enhanced_importer::{HuaweiEmuiEnhancedStrategy, ImportExecutionResult};
 use crate::services::vcf_importer::{Contact, VcfImporter, VcfImportResult, VcfVerifyResult};
-use tauri::command;
 use tracing::{error, info, warn};
 
 /// 从联系人列表生成 VCF 文件
-#[command]
+#[tauri::command]
 pub async fn generate_vcf_file(contacts: Vec<Contact>, output_path: String) -> Result<String, String> {
     match VcfImporter::generate_vcf_file(contacts, &output_path).await {
         Ok(path) => Ok(path),
@@ -25,7 +25,7 @@ pub async fn generate_vcf_file(contacts: Vec<Contact>, output_path: String) -> R
 // 旧的小红书自动关注复合流程已完全移除。
 
 /// 多品牌VCF导入（批量尝试不同品牌的导入方式）
-#[command]
+#[tauri::command]
 pub async fn import_vcf_contacts_multi_brand(
     device_id: String,
     contacts_file_path: String,
@@ -73,7 +73,7 @@ pub async fn import_vcf_contacts_multi_brand(
 }
 
 /// 华为设备增强VCF导入（基于Python成功经验）
-#[command]
+#[tauri::command]
 pub async fn import_vcf_contacts_huawei_enhanced(
     device_id: String,
     contacts_file_path: String,

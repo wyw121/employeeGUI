@@ -40,6 +40,9 @@ pub mod vcf_importer;
 pub mod vcf_importer_async;
 pub mod vcf_importer_optimized;
 pub mod multi_brand_vcf_importer;  // 新增：多品牌VCF导入器
+pub mod vcf_utils;                 // 新增：VCF 工具函数
+pub mod multi_brand_vcf_types;     // 新增：多品牌导入类型定义
+pub mod multi_brand_vcf_strategies; // 新增：多品牌策略模块
 pub mod huawei_enhanced_importer;  // 基于Python成功经验的华为增强导入器
 pub mod scrcpy_manager; // 设备镜像（外部 scrcpy 进程控制）
 // 注意：util_fs 模块已迁移到 commands/files.rs，避免重复定义

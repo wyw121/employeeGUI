@@ -40,6 +40,7 @@ import TemplateLibrary from './template/TemplateLibrary'; // 模板库
 import { ContactImportWizard } from '../modules/contact-import';
 import { featureFlags } from '../config/featureFlags';
 import ContactImportPage from '../pages/contact-import/ContactImportPage';
+import QuickPhoneMirror from './QuickPhoneMirror';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -151,6 +152,12 @@ const DemoInner: React.FC = () => {
                 />
               </Tooltip>
               <Button onClick={() => setInspectorOpen({ open: true })} type="primary">打开检查器</Button>
+              <QuickPhoneMirror 
+                type="default" 
+                onMirrorStarted={(sessionId, deviceId) => {
+                  console.log(`手机镜像已启动: 会话ID=${sessionId}, 设备=${deviceId}`);
+                }} 
+              />
               <Badge count={5} style={{ backgroundColor: '#ff6b8a' }}>
                 <Button icon={<SyncOutlined />} size="large">
                   刷新设备

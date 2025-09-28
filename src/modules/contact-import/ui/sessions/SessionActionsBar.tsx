@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Button, Space, Tooltip, Checkbox, App } from 'antd';
-import { ReloadOutlined, FolderOpenOutlined, ImportOutlined, FileExcelOutlined, FileTextOutlined, ThunderboltOutlined, SyncOutlined } from '@ant-design/icons';
+import { ReloadOutlined, FolderOpenOutlined, ImportOutlined, FileExcelOutlined, FileTextOutlined, ThunderboltOutlined, SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { VcfBatchDto, ContactNumberList } from '../services/contactNumberService';
 import { createImportSessionRecord, finishImportSessionRecord, markContactNumbersUsedByIdRange } from '../services/contactNumberService';
 import { VcfActions } from '../services/vcfActions';
-import ServiceFactory from '../../../../application/services/ServiceFactory';
 import { useAdb } from '../../../../application/hooks/useAdb';
 import { toCsvWithLabels } from '../../utils/csv';
 import { buildCsvNameFromTemplate } from '../../utils/filename';
@@ -14,6 +13,8 @@ import { VcfImportService } from '../../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../../utils/vcf';
 import { createVcfBatchWithNumbers } from '../../../vcf-sessions/services/vcfSessionService';
 import { bindBatchToDevice, markBatchImportedForDevice } from '../services/deviceBatchBinding';
+import { queryDeviceContactCount } from '../services/deviceContactMetrics';
+import ServiceFactory from '../../../../application/services/ServiceFactory';
 
 interface Props {
   mode: 'all' | 'by-batch' | 'by-device' | 'no-batch';
@@ -74,6 +75,12 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
         try { await onRefresh?.(); } catch {}
       }
       const vcfService = ServiceFactory.getVcfImportApplicationService();
+      // 导入前获取联系人数量（用于简单校验）
+      let beforeCount: number | null = null;
+      try {
+        const metrics = ServiceFactory.getDeviceMetricsApplicationService();
+        beforeCount = await metrics.getContactCount(deviceId);
+      } catch {}
       const res = await vcfService.importToDevice(deviceId, path);
       // 2) 成功时尝试标记号码使用范围
       if (res.success && batch?.source_start_id != null && batch?.source_end_id != null) {
@@ -90,6 +97,14 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
       }
       if (res.success) {
         message.success('导入成功');
+        // 导入后校验增量
+        if (beforeCount != null) {
+          try {
+            const metrics = ServiceFactory.getDeviceMetricsApplicationService();
+            const { after, delta } = await metrics.validateImportDelta(deviceId, beforeCount);
+            message.info(`导入后联系人：${after}（增量：${delta}）`);
+          } catch {}
+        }
         await onActionDone?.({ lastSessionId: sessionId > 0 ? sessionId : undefined });
       } else {
         message.error(`导入失败: ${res.message}`);
@@ -128,6 +143,20 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
       message.success(`已导出 VCF 至: ${path}`);
     } catch (e: any) {
       message.error(`导出失败: ${e?.message ?? e}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const onVerifyDeviceContacts = async () => {
+    const id = deviceId || selectedDevice?.id;
+    if (!id) return message.warning('请先选择设备');
+    try {
+      setLoading('verify');
+      const count = await queryDeviceContactCount(id);
+      message.success(`设备当前联系人数量：${count}`);
+    } catch (e: any) {
+      message.error(`查询联系人数量失败：${e?.message ?? e}`);
     } finally {
       setLoading(null);
     }
@@ -260,6 +289,13 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
           导出VCF
         </Button>
       </Tooltip>
+      {!!deviceId && (
+        <Tooltip title="查询设备当前联系人数量（快速验证导入结果）">
+          <Button icon={<CheckCircleOutlined />} onClick={onVerifyDeviceContacts} loading={loading==='verify'}>
+            验证设备联系人
+          </Button>
+        </Tooltip>
+      )}
     </Space>
   );
 };

@@ -1,6 +1,7 @@
 import { getVcfBatchRecord, listImportSessionRecords, finishImportSessionRecord } from './contactNumberService';
 import ServiceFactory from '../../../../application/services/ServiceFactory';
 import { markBatchImportedForDevice } from './deviceBatchBinding';
+import { getImportOptions } from '../../automation/automationBridge';
 
 export interface PendingImportDetail {
   sessionId: number;
@@ -9,6 +10,7 @@ export interface PendingImportDetail {
   importedCount: number;
   failedCount: number;
   message?: string;
+  delta?: number; // 设备联系人数量变化（用于严格校验）
 }
 
 export interface PendingImportSummary {
@@ -27,9 +29,9 @@ export interface PendingImportSummary {
  */
 export async function processPendingSessionsForDevice(
   deviceId: string,
-  options: { limit?: number; scriptKey?: string; onProgress?: (progress: { index: number; total: number; detail: PendingImportDetail }) => void } = {},
+  options: { limit?: number; scriptKey?: string; verifyMode?: 'none' | 'delta-strict'; onProgress?: (progress: { index: number; total: number; detail: PendingImportDetail }) => void } = {},
 ): Promise<PendingImportSummary> {
-  const { limit = 1000, scriptKey, onProgress } = options;
+  const { limit = 1000, scriptKey, verifyMode = 'delta-strict', onProgress } = options;
 
   // 拉取该设备的会话列表并筛选 pending
   const list = await listImportSessionRecords({ deviceId, limit });
@@ -64,11 +66,27 @@ export async function processPendingSessionsForDevice(
         summary.failed += 1;
       } else {
         const vcfService = ServiceFactory.getVcfImportApplicationService();
-        const outcome = await vcfService.importToDevice(deviceId, batch.vcf_file_path, scriptKey);
-        const ok = !!outcome?.success;
+        // 导入前联系人计数
+        let before: number | null = null;
+        if (verifyMode !== 'none') {
+          try { before = await ServiceFactory.getDeviceMetricsApplicationService().getContactCount(deviceId); } catch {}
+        }
+        const outcome = await vcfService.importToDevice(deviceId, batch.vcf_file_path, getImportOptions(scriptKey));
+        let ok = !!outcome?.success;
         const importedCount = Number(outcome?.importedCount ?? 0);
         const failedCount = Number(outcome?.failedCount ?? 0);
-        const msg = outcome?.message || '';
+        let msg = outcome?.message || '';
+        let delta: number | undefined = undefined;
+        if (verifyMode !== 'none' && before != null) {
+          try {
+            const after = await ServiceFactory.getDeviceMetricsApplicationService().getContactCount(deviceId);
+            delta = after - before;
+            if (verifyMode === 'delta-strict' && ok && delta <= 0) {
+              ok = false;
+              msg = (msg ? `${msg}; ` : '') + `verification failed (delta=${delta})`;
+            }
+          } catch {}
+        }
 
         await finishImportSessionRecord(s.id, ok ? 'success' : 'failed', importedCount, failedCount, ok ? undefined : msg);
 
@@ -78,7 +96,7 @@ export async function processPendingSessionsForDevice(
         } else {
           summary.failed += 1;
         }
-        detail = { ...detail, success: ok, importedCount, failedCount, message: msg };
+        detail = { ...detail, success: ok, importedCount, failedCount, message: msg, delta };
       }
     } catch (e: any) {
       const errMsg = e?.message || String(e);
@@ -102,9 +120,9 @@ export async function processPendingSessionsForDevice(
  */
 export async function processLatestPendingSessionForDevice(
   deviceId: string,
-  options: { scriptKey?: string } = {},
+  options: { scriptKey?: string; verifyMode?: 'none' | 'delta-strict' } = {},
 ): Promise<PendingImportSummary> {
-  const { scriptKey } = options;
+  const { scriptKey, verifyMode = 'delta-strict' } = options;
   const list = await listImportSessionRecords({ deviceId, limit: 50 });
   const pending = (list.items || []).filter(s => s.status === 'pending');
   // 最新优先：id 降序
@@ -132,11 +150,26 @@ export async function processLatestPendingSessionForDevice(
       summary.failed = 1;
     } else {
       const vcfService = ServiceFactory.getVcfImportApplicationService();
-      const outcome = await vcfService.importToDevice(deviceId, batch.vcf_file_path, scriptKey);
-      const ok = !!outcome?.success;
+      let before: number | null = null;
+      if (verifyMode !== 'none') {
+        try { before = await ServiceFactory.getDeviceMetricsApplicationService().getContactCount(deviceId); } catch {}
+      }
+      const outcome = await vcfService.importToDevice(deviceId, batch.vcf_file_path, getImportOptions(scriptKey));
+      let ok = !!outcome?.success;
       const importedCount = Number(outcome?.importedCount ?? 0);
       const failedCount = Number(outcome?.failedCount ?? 0);
-      const msg = outcome?.message || '';
+      let msg = outcome?.message || '';
+      let delta: number | undefined = undefined;
+      if (verifyMode !== 'none' && before != null) {
+        try {
+          const after = await ServiceFactory.getDeviceMetricsApplicationService().getContactCount(deviceId);
+          delta = after - before;
+          if (verifyMode === 'delta-strict' && ok && delta <= 0) {
+            ok = false;
+            msg = (msg ? `${msg}; ` : '') + `verification failed (delta=${delta})`;
+          }
+        } catch {}
+      }
 
       await finishImportSessionRecord(latest.id, ok ? 'success' : 'failed', importedCount, failedCount, ok ? undefined : msg);
       if (ok) {
@@ -145,7 +178,7 @@ export async function processLatestPendingSessionForDevice(
       } else {
         summary.failed = 1;
       }
-      detail = { ...detail, success: ok, importedCount, failedCount, message: msg };
+      detail = { ...detail, success: ok, importedCount, failedCount, message: msg, delta };
     }
   } catch (e: any) {
     const errMsg = e?.message || String(e);
@@ -164,11 +197,21 @@ export async function processLatestPendingSessionForDevice(
  * - 顺序执行，避免设备并发冲突；任一失败不中断其余任务。
  * - 返回最后一次创建的会话ID（便于高亮）。
  */
-export async function reimportSelectedSessions(
+export type ReimportDeps = {
+  getVcfBatchRecord: (batchId: string) => Promise<{ vcf_file_path?: string } | null>;
+  createImportSessionRecord: (batchId: string, deviceId: string) => Promise<number>;
+  finishImportSessionRecord: (sessionId: number, status: 'success' | 'failed', imported: number, failed: number, error?: string) => Promise<void>;
+  importToDevice: (deviceId: string, vcfPath: string, scriptKey?: string) => Promise<{ success: boolean; importedCount?: number; failedCount?: number; message?: string }>;
+  markBatchImportedForDevice: (deviceId: string, batchId: string) => void | Promise<void>;
+  getDeviceContactCount: (deviceId: string) => Promise<number>;
+};
+
+export async function reimportSelectedSessionsWithDeps(
   rows: Array<{ id: number; batch_id: string; device_id: string }>,
-  options: { scriptKey?: string; onProgress?: (progress: { index: number; total: number; createdSessionId?: number; rowId: number; ok: boolean; message?: string }) => void } = {},
+  deps: ReimportDeps,
+  options: { scriptKey?: string; verifyMode?: 'none' | 'delta-strict'; onProgress?: (progress: { index: number; total: number; createdSessionId?: number; rowId: number; ok: boolean; message?: string; delta?: number }) => void } = {},
 ): Promise<{ total: number; success: number; failed: number; lastCreatedSessionId?: number }>{
-  const { scriptKey, onProgress } = options;
+  const { scriptKey, verifyMode = 'delta-strict', onProgress } = options;
   let success = 0;
   let failed = 0;
   let lastCreatedSessionId: number | undefined = undefined;
@@ -176,33 +219,51 @@ export async function reimportSelectedSessions(
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     try {
-      const batch = await getVcfBatchRecord(r.batch_id);
+      const batch = await deps.getVcfBatchRecord(r.batch_id);
       if (!batch || !batch.vcf_file_path) {
         failed += 1;
         onProgress?.({ index: i + 1, total: rows.length, rowId: r.id, ok: false, message: '批次缺少 VCF 文件路径' });
         continue;
       }
       // 新建会话记录
-      const sessionId = await (await import('./contactNumberService')).createImportSessionRecord(r.batch_id, r.device_id);
+      const sessionId = await deps.createImportSessionRecord(r.batch_id, r.device_id);
       lastCreatedSessionId = sessionId || lastCreatedSessionId;
-      const vcfService = ServiceFactory.getVcfImportApplicationService();
-      const res = await vcfService.importToDevice(r.device_id, batch.vcf_file_path, scriptKey);
-      const status = res.success ? 'success' : 'failed';
-      await (await import('./contactNumberService')).finishImportSessionRecord(
+      // 导入前联系人数量
+      let before: number | null = null;
+      if (verifyMode !== 'none') {
+        try { before = await deps.getDeviceContactCount(r.device_id); } catch {}
+      }
+      const res = await deps.importToDevice(r.device_id, batch.vcf_file_path, scriptKey);
+      // 导入后联系人数量与严格校验
+      let delta: number | undefined = undefined;
+      let ok = !!res.success;
+      let message = res.message;
+      if (verifyMode !== 'none' && before != null) {
+        try {
+          const after = await deps.getDeviceContactCount(r.device_id);
+          delta = after - before;
+          if (verifyMode === 'delta-strict' && ok && delta <= 0) {
+            ok = false;
+            message = (message ? `${message}; ` : '') + `verification failed (delta=${delta})`;
+          }
+        } catch {}
+      }
+      const status = ok ? 'success' : 'failed';
+      await deps.finishImportSessionRecord(
         sessionId,
         status as any,
         Number(res.importedCount ?? 0),
         Number(res.failedCount ?? 0),
-        res.success ? undefined : res.message,
+        ok ? undefined : message,
       );
-      if (res.success) {
+      if (ok) {
         success += 1;
         // 轻量前端绑定：标记该批次已被该设备导入
-        try { markBatchImportedForDevice(r.device_id, r.batch_id); } catch {}
+        try { await deps.markBatchImportedForDevice(r.device_id, r.batch_id); } catch {}
       } else {
         failed += 1;
       }
-      onProgress?.({ index: i + 1, total: rows.length, createdSessionId: sessionId, rowId: r.id, ok: !!res.success, message: res.message });
+      onProgress?.({ index: i + 1, total: rows.length, createdSessionId: sessionId, rowId: r.id, ok, message, delta });
     } catch (e: any) {
       failed += 1;
       onProgress?.({ index: i + 1, total: rows.length, rowId: r.id, ok: false, message: e?.message || String(e) });
@@ -210,4 +271,19 @@ export async function reimportSelectedSessions(
   }
 
   return { total: rows.length, success, failed, lastCreatedSessionId };
+}
+
+export async function reimportSelectedSessions(
+  rows: Array<{ id: number; batch_id: string; device_id: string }>,
+  options: { scriptKey?: string; verifyMode?: 'none' | 'delta-strict'; onProgress?: (progress: { index: number; total: number; createdSessionId?: number; rowId: number; ok: boolean; message?: string; delta?: number }) => void } = {},
+): Promise<{ total: number; success: number; failed: number; lastCreatedSessionId?: number }>{
+  const deps: ReimportDeps = {
+    getVcfBatchRecord,
+    createImportSessionRecord: (batchId, deviceId) => import('./contactNumberService').then(m => m.createImportSessionRecord(batchId, deviceId)),
+    finishImportSessionRecord: (sessionId, status, imported, failed, err) => import('./contactNumberService').then(m => m.finishImportSessionRecord(sessionId, status as any, imported, failed, err)),
+    importToDevice: (deviceId, vcfPath, scriptKey) => ServiceFactory.getVcfImportApplicationService().importToDevice(deviceId, vcfPath, getImportOptions(scriptKey)),
+    markBatchImportedForDevice,
+    getDeviceContactCount: (deviceId) => ServiceFactory.getDeviceMetricsApplicationService().getContactCount(deviceId),
+  };
+  return reimportSelectedSessionsWithDeps(rows, deps, options);
 }

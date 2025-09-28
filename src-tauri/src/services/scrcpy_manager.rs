@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio, Child};
 use std::collections::HashMap;
 use std::sync::{Mutex, Arc};
+use std::io::Read;
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
@@ -20,22 +21,55 @@ fn scrcpy_path() -> String {
     if let Ok(p) = std::env::var("SCRCPY_PATH") {
         if !p.trim().is_empty() { return p; }
     }
-    // 2) 本地 platform-tools 目录（相对工作目录）
-    #[cfg(windows)]
-    {
-        let local = std::path::Path::new(".\\platform-tools\\scrcpy.exe");
-        if local.exists() {
-            return local.to_string_lossy().to_string();
+    
+    // 2) 尝试多个可能的路径位置
+    let possible_paths = [
+        // 当前工作目录下的 platform-tools
+        #[cfg(windows)]
+        ".\\platform-tools\\scrcpy.exe",
+        #[cfg(not(windows))]
+        "./platform-tools/scrcpy",
+        
+        // 相对于可执行文件的路径 (Tauri 运行时可能在不同的目录)
+        #[cfg(windows)]
+        "..\\platform-tools\\scrcpy.exe",
+        #[cfg(not(windows))]
+        "../platform-tools/scrcpy",
+        
+        // 尝试从 src-tauri 目录往上找
+        #[cfg(windows)]
+        "..\\..\\platform-tools\\scrcpy.exe",
+        #[cfg(not(windows))]
+        "../../platform-tools/scrcpy",
+    ];
+    
+    for path in &possible_paths {
+        let p = std::path::Path::new(path);
+        if p.exists() {
+            info!("找到 scrcpy 路径: {}", path);
+            return p.canonicalize()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| path.to_string());
         }
     }
-    #[cfg(not(windows))]
-    {
-        let local = std::path::Path::new("./platform-tools/scrcpy");
-        if local.exists() {
-            return local.to_string_lossy().to_string();
+    
+    // 3) 检查应用资源目录（Tauri 打包后的位置）
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            #[cfg(windows)]
+            let resource_path = exe_dir.join("platform-tools").join("scrcpy.exe");
+            #[cfg(not(windows))]
+            let resource_path = exe_dir.join("platform-tools").join("scrcpy");
+            
+            if resource_path.exists() {
+                info!("找到应用资源中的 scrcpy: {:?}", resource_path);
+                return resource_path.to_string_lossy().to_string();
+            }
         }
     }
-    // 3) 默认依赖 PATH
+    
+    // 4) 默认依赖 PATH
+    warn!("未找到本地 scrcpy，依赖系统 PATH");
     "scrcpy".to_string()
 }
 
@@ -87,7 +121,7 @@ fn build_args(device_id: &str, opts: &ScrcpyOptions) -> Vec<String> {
     // 码率
     if let Some(b) = &opts.bitrate {
         if !b.trim().is_empty() {
-            args.push("--bit-rate".into());
+            args.push("--video-bit-rate".into());
             args.push(b.trim().to_string());
         }
     }
@@ -193,13 +227,49 @@ pub fn start_scrcpy(device_id: &str, opts: ScrcpyOptions) -> Result<String> {
     let args = build_args(device_id, &opts);
     info!("launching scrcpy: {} {:?} (device={}, session={})", exe, args, device_id, session);
 
-    let child = Command::new(exe)
-        .args(&args)
+    // 先尝试启动并捕获错误信息
+    let mut cmd = Command::new(&exe);
+    cmd.args(&args)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| anyhow!("failed to start scrcpy: {}", e))?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let child = match cmd.spawn() {
+        Ok(mut child) => {
+            // 给进程一点时间启动，然后检查是否仍在运行
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    // 进程已经退出，读取错误信息
+                    let mut stderr = String::new();
+                    let mut stdout = String::new();
+                    if let Some(mut stderr_pipe) = child.stderr.take() {
+                        let _ = std::io::Read::read_to_string(&mut stderr_pipe, &mut stderr);
+                    }
+                    if let Some(mut stdout_pipe) = child.stdout.take() {
+                        let _ = std::io::Read::read_to_string(&mut stdout_pipe, &mut stdout);
+                    }
+                    error!("scrcpy 进程启动后立即退出，状态码: {}", status);
+                    error!("scrcpy stderr: {}", stderr);
+                    error!("scrcpy stdout: {}", stdout);
+                    return Err(anyhow!("scrcpy 启动失败，退出状态: {}. stderr: {}, stdout: {}", status, stderr, stdout));
+                }
+                Ok(None) => {
+                    // 进程仍在运行，这是正常情况
+                    info!("scrcpy 进程启动成功，PID: {:?}", child.id());
+                    child
+                }
+                Err(e) => {
+                    error!("检查 scrcpy 进程状态失败: {}", e);
+                    return Err(anyhow!("无法检查 scrcpy 进程状态: {}", e));
+                }
+            }
+        }
+        Err(e) => {
+            error!("启动 scrcpy 失败: {}", e);
+            return Err(anyhow!("failed to start scrcpy: {}", e));
+        }
+    };
 
     let entry = state.children.entry(device_id.to_string()).or_insert_with(HashMap::new);
     if let Some(mut old) = entry.remove(&session) {

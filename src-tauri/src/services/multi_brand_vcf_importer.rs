@@ -1,7 +1,5 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
@@ -9,93 +7,17 @@ use tracing::{error, info, warn};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-/// 设备品牌信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceBrandInfo {
-    pub brand: String,
-    pub model: String,
-    pub android_version: String,
-    pub manufacturer: String,
-}
-
-/// VCF导入策略
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VcfImportStrategy {
-    pub strategy_name: String,
-    pub brand_patterns: Vec<String>, // 支持的品牌名称模式
-    pub contact_app_packages: Vec<String>, // 通讯录应用包名列表
-    pub import_methods: Vec<ImportMethod>, // 导入方法列表
-    pub verification_methods: Vec<VerificationMethod>, // 验证方法列表
-}
-
-/// 导入方法
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportMethod {
-    pub method_name: String,
-    pub steps: Vec<ImportStep>, // 导入步骤
-    pub timeout_seconds: u64,
-    pub retry_count: u32,
-}
-
-/// 导入步骤
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportStep {
-    pub step_type: ImportStepType,
-    pub description: String,
-    pub parameters: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ImportStepType {
-    LaunchContactApp,           // 启动通讯录应用
-    NavigateToImport,          // 导航到导入功能
-    SelectVcfFile,             // 选择VCF文件
-    ConfirmImport,             // 确认导入
-    WaitForCompletion,         // 等待导入完成
-    HandlePermissions,         // 处理权限请求
-    NavigateToFolder,          // 导航到文件夹
-    CustomAdbCommand,          // 自定义ADB命令
-}
-
-/// 验证方法
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerificationMethod {
-    pub method_name: String,
-    pub verification_type: VerificationType,
-    pub expected_results: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VerificationType {
-    ContactCount,              // 联系人数量验证
-    ContactSample,             // 联系人样本验证
-    DatabaseQuery,             // 数据库查询验证
-}
-
-/// 导入结果
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MultiBrandImportResult {
-    pub success: bool,
-    pub used_strategy: Option<String>,
-    pub used_method: Option<String>,
-    pub total_contacts: usize,
-    pub imported_contacts: usize,
-    pub failed_contacts: usize,
-    pub attempts: Vec<ImportAttempt>,
-    pub message: String,
-    pub duration_seconds: u64,
-}
-
-/// 导入尝试记录
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ImportAttempt {
-    pub strategy_name: String,
-    pub method_name: String,
-    pub success: bool,
-    pub error_message: Option<String>,
-    pub duration_seconds: u64,
-    pub verification_result: Option<bool>,
-}
+pub use crate::services::multi_brand_vcf_types::{
+    DeviceBrandInfo,
+    VcfImportStrategy,
+    ImportMethod,
+    ImportStep,
+    ImportStepType,
+    VerificationMethod,
+    VerificationType,
+    MultiBrandImportResult,
+    ImportAttempt,
+};
 
 /// 多品牌VCF导入器
 pub struct MultiBrandVcfImporter {
@@ -141,266 +63,8 @@ impl MultiBrandVcfImporter {
 
     /// 初始化内置策略
     fn initialize_builtin_strategies(&mut self) {
-        // 华为策略
-        let huawei_strategy = VcfImportStrategy {
-            strategy_name: "Huawei_EMUI".to_string(),
-            brand_patterns: vec!["huawei".to_string(), "honor".to_string(), "荣耀".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.huawei.contacts".to_string(),
-                "com.android.providers.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "EMUI_Standard_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动华为通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入功能".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "选择VCF文件".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // 小米策略
-        let xiaomi_strategy = VcfImportStrategy {
-            strategy_name: "MIUI_Xiaomi".to_string(),
-            brand_patterns: vec!["xiaomi".to_string(), "redmi".to_string(), "小米".to_string(), "红米".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.miui.contacts".to_string(),
-                "com.xiaomi.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "MIUI_Standard_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动MIUI通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入/导出".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "从存储设备导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // 原生Android策略
-        let android_strategy = VcfImportStrategy {
-            strategy_name: "Stock_Android".to_string(),
-            brand_patterns: vec!["google".to_string(), "pixel".to_string(), "android".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.google.android.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "Stock_Android_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动原生通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "选择VCF文件".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // OPPO策略
-        let oppo_strategy = VcfImportStrategy {
-            strategy_name: "ColorOS_OPPO".to_string(),
-            brand_patterns: vec!["oppo".to_string(), "oneplus".to_string(), "realme".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.oppo.contacts".to_string(),
-                "com.coloros.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "ColorOS_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动ColorOS通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入联系人".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "从文件导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // VIVO策略
-        let vivo_strategy = VcfImportStrategy {
-            strategy_name: "FuntouchOS_VIVO".to_string(),
-            brand_patterns: vec!["vivo".to_string(), "iqoo".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.vivo.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "FuntouchOS_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动VIVO通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "从存储卡导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // 三星策略
-        let samsung_strategy = VcfImportStrategy {
-            strategy_name: "OneUI_Samsung".to_string(),
-            brand_patterns: vec!["samsung".to_string(), "三星".to_string()],
-            contact_app_packages: vec![
-                "com.android.contacts".to_string(),
-                "com.samsung.android.contacts".to_string(),
-                "com.samsung.android.app.contacts".to_string(),
-            ],
-            import_methods: vec![
-                ImportMethod {
-                    method_name: "OneUI_Import".to_string(),
-                    steps: vec![
-                        ImportStep {
-                            step_type: ImportStepType::LaunchContactApp,
-                            description: "启动三星通讯录".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::NavigateToImport,
-                            description: "导航到导入/导出联系人".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                        ImportStep {
-                            step_type: ImportStepType::SelectVcfFile,
-                            description: "从设备存储空间导入".to_string(),
-                            parameters: HashMap::new(),
-                        },
-                    ],
-                    timeout_seconds: 120,
-                    retry_count: 2,
-                },
-            ],
-            verification_methods: vec![
-                VerificationMethod {
-                    method_name: "ContactCount".to_string(),
-                    verification_type: VerificationType::ContactCount,
-                    expected_results: HashMap::new(),
-                },
-            ],
-        };
-
-        // 添加所有策略
-        self.strategies.extend(vec![
-            huawei_strategy,
-            xiaomi_strategy,
-            android_strategy,
-            oppo_strategy,
-            vivo_strategy,
-            samsung_strategy,
-        ]);
-
+        let list = crate::services::multi_brand_vcf_strategies::builtin_strategies();
+        self.strategies.extend(list);
         info!("已初始化 {} 个内置导入策略", self.strategies.len());
     }
 
@@ -485,7 +149,16 @@ impl MultiBrandVcfImporter {
         let start_time = std::time::Instant::now();
         let mut attempts = Vec::new();
         
-        info!("开始多品牌VCF导入: {}", vcf_file_path);
+        // 兼容传入为 .txt 的情况，先转换为 .vcf
+        let normalized_vcf_path = match crate::services::vcf_utils::ensure_vcf_path(vcf_file_path) {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("输入非VCF并转换失败: {}, 将继续尝试原始路径", e);
+                vcf_file_path.to_string()
+            }
+        };
+
+        info!("开始多品牌VCF导入: {}", normalized_vcf_path);
         
         // 检测设备信息
         let device_info = match self.detect_device_info().await {
@@ -531,7 +204,7 @@ impl MultiBrandVcfImporter {
                 let method_start = std::time::Instant::now();
                 info!("  尝试方法: {}", method.method_name);
                 
-                match self.try_import_method(strategy, method, vcf_file_path).await {
+                match self.try_import_method(strategy, method, &normalized_vcf_path).await {
                     Ok(result) => {
                         let attempt = ImportAttempt {
                             strategy_name: strategy.strategy_name.clone(),
@@ -600,18 +273,18 @@ impl MultiBrandVcfImporter {
         // 这里将实现具体的导入逻辑
         // 当前先返回一个简化的实现
         
-        // 首先检查通讯录应用是否存在
+        // 首先检查通讯录应用是否存在（使用 pm path 更可靠，避免 grep 在某些机型不可用）
         let mut available_app = None;
         for package in &strategy.contact_app_packages {
-            let check_cmd = format!("pm list packages | grep {}", package);
-            if let Ok(output) = self.execute_adb_command(&["-s", &self.device_id, "shell", &check_cmd]) {
-                if !output.stdout.is_empty() {
+            if let Ok(output) = self.execute_adb_command(&["-s", &self.device_id, "shell", "pm", "path", package]) {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if stdout.contains("package:") {
                     available_app = Some(package.clone());
                     break;
                 }
             }
         }
-        
+
         let app_package = available_app.ok_or_else(|| anyhow::anyhow!("未找到可用的通讯录应用"))?;
         
         info!("使用通讯录应用: {}", app_package);
@@ -659,14 +332,29 @@ impl MultiBrandVcfImporter {
     async fn launch_contact_app(&self, package_name: &str) -> Result<()> {
         info!("启动通讯录应用: {}", package_name);
         
-        let output = self.execute_adb_command(&[
-            "-s", &self.device_id,
-            "shell", "am", "start", "-n",
-            &format!("{}/com.android.contacts.activities.PeopleActivity", package_name)
-        ])?;
-        
-        if !output.stderr.is_empty() {
-            // 尝试其他启动方式
+        // 优先按已知 Activity 组件启动，失败则退回 LAUNCHER
+        let try_components = vec![
+            format!("{}/com.android.contacts.activities.PeopleActivity", package_name),
+            format!("{}/.activities.PeopleActivity", package_name),
+            format!("{}/.activities.MainActivity", package_name),
+        ];
+
+        let mut launched = false;
+        for comp in try_components {
+            let out = self.execute_adb_command(&[
+                "-s", &self.device_id,
+                "shell", "am", "start", "-n", &comp
+            ])?;
+            let serr = String::from_utf8_lossy(&out.stderr);
+            let sout = String::from_utf8_lossy(&out.stdout);
+            if !sout.contains("Error") && !serr.to_lowercase().contains("error") {
+                launched = true;
+                break;
+            }
+        }
+
+        if !launched {
+            // 尝试通过 LAUNCHER 启动
             let _ = self.execute_adb_command(&[
                 "-s", &self.device_id,
                 "shell", "monkey", "-p", package_name, "-c", "android.intent.category.LAUNCHER", "1"
@@ -690,9 +378,36 @@ impl MultiBrandVcfImporter {
     /// 选择VCF文件
     async fn select_vcf_file(&self, vcf_file_path: &str) -> Result<()> {
         info!("选择VCF文件: {}", vcf_file_path);
-        
-        // 这里会实现文件选择逻辑
-        // 目前先返回成功
+
+        // 1) 将本地生成的 VCF 推送到设备常见可读位置
+        let push_targets = vec![
+            "/sdcard/Download/contacts_import.vcf",
+            "/storage/emulated/0/Download/contacts_import.vcf",
+        ];
+
+        let mut pushed_path: Option<&str> = None;
+        for tgt in &push_targets {
+            let out = self.execute_adb_command(&["-s", &self.device_id, "push", vcf_file_path, tgt])?;
+            let sout = String::from_utf8_lossy(&out.stdout);
+            let serr = String::from_utf8_lossy(&out.stderr);
+            if serr.is_empty() && (sout.contains("file pushed") || sout.contains("bytes in")) {
+                pushed_path = Some(*tgt);
+                break;
+            }
+        }
+        let device_vcf = pushed_path.ok_or_else(|| anyhow::anyhow!("VCF 文件推送到设备失败"))?;
+
+        // 2) 通过 Intent 直接打开 VCF（触发系统选择/导入）
+        let file_uri = format!("file://{}", device_vcf);
+        let _ = self.execute_adb_command(&[
+            "-s", &self.device_id,
+            "shell", "am", "start",
+            "-a", "android.intent.action.VIEW",
+            "-d", &file_uri,
+            "-t", "text/x-vcard",
+        ])?;
+
+        // 等待 UI 响应
         sleep(Duration::from_secs(2)).await;
         Ok(())
     }
@@ -718,8 +433,9 @@ impl MultiBrandVcfImporter {
     /// 处理权限请求
     async fn handle_permissions(&self) -> Result<()> {
         info!("处理权限请求");
-        
-        // 这里会实现权限处理逻辑
+        // 尝试通过 appops 允许读取/写入联系人（对系统应用可能无效，但不阻塞流程）
+        let _ = self.execute_adb_command(&["-s", &self.device_id, "shell", "cmd", "appops", "set", "com.android.contacts", "READ_CONTACTS", "allow"]);
+        let _ = self.execute_adb_command(&["-s", &self.device_id, "shell", "cmd", "appops", "set", "com.android.contacts", "WRITE_CONTACTS", "allow"]);
         sleep(Duration::from_secs(1)).await;
         Ok(())
     }

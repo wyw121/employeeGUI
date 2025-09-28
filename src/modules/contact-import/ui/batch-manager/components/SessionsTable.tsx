@@ -13,15 +13,24 @@ interface Props {
   };
   onRefresh?: () => void | Promise<void>;
   highlightId?: number;
+  // 行选择（默认单选radio）
+  rowSelectionType?: 'checkbox' | 'radio';
+  selectedRowKeys?: React.Key[];
+  onSelectionChange?: (selectedRowKeys: React.Key[], selectedRows: any[]) => void;
 }
 
-const SessionsTable: React.FC<Props> = ({ data, loading, pagination, highlightId }) => {
+const SessionsTable: React.FC<Props> = ({ data, loading, pagination, highlightId, rowSelectionType = 'radio', selectedRowKeys, onSelectionChange }) => {
   return (
     <Table
       rowKey="id"
       size="small"
       loading={loading}
       dataSource={data?.items || []}
+      rowSelection={onSelectionChange ? {
+        type: rowSelectionType,
+        selectedRowKeys,
+        onChange: onSelectionChange,
+      } : undefined}
       pagination={pagination ? {
         current: pagination.current,
         pageSize: pagination.pageSize,

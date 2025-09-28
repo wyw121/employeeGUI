@@ -9,13 +9,29 @@ export async function createVcfBatchWithNumbers(params: {
   numberIds: number[];
 }): Promise<number> {
   const { batchId, vcfFilePath, sourceStartId, sourceEndId, numberIds } = params;
-  return invoke<number>('create_vcf_batch_with_numbers_cmd', {
+  // 直接一次性包含两种命名风格，最大化兼容性
+  const payload = {
     batch_id: batchId,
+    batchId,
     vcf_file_path: vcfFilePath,
+    vcfFilePath,
     source_start_id: sourceStartId,
+    sourceStartId,
     source_end_id: sourceEndId,
+    sourceEndId,
     number_ids: numberIds,
+    numberIds,
+  } as const;
+  console.debug('[vcfSession] createVcfBatchWithNumbers payload (mixed):', {
+    batch_id: payload.batch_id,
+    batchId: payload.batchId,
+    source_start_id: payload.source_start_id,
+    sourceStartId: payload.sourceStartId,
+    source_end_id: payload.source_end_id,
+    sourceEndId: payload.sourceEndId,
+    number_ids_len: payload.number_ids.length,
   });
+  return invoke<number>('create_vcf_batch_with_numbers_cmd', payload as any);
 }
 
 export async function listNumbersForVcfBatch(batchId: string, params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {

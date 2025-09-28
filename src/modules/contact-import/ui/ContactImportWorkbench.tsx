@@ -3,14 +3,14 @@ import { Card, Col, Row, Space, Typography, Button, Table, Input, Pagination, me
 import { DatabaseOutlined, FileTextOutlined, FolderOpenOutlined, MobileOutlined, FileDoneOutlined } from '@ant-design/icons';
 import styles from './ContactImportWorkbench.module.css';
 import { selectFolder, selectTxtFile } from './utils/dialog';
-import { importNumbersFromFolder, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
+import { importNumbersFromFolder, importNumbersFromFolders, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
 import { VcfActions } from './services/vcfActions';
 import { importVcfToDeviceByScript } from './services/importRouter';
 import { VcfImportService } from '../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../utils/vcf';
 import { createVcfBatchWithNumbers } from '../../vcf-sessions/services/vcfSessionService';
 import { createImportSessionRecord, finishImportSessionRecord } from './services/contactNumberService';
-import { fetchUnclassifiedNumbers, pickFirstNIds } from './services/unclassifiedService';
+import { fetchUnclassifiedNumbers } from './services/unclassifiedService';
 import { bindBatchToDevice, markBatchImportedForDevice } from './services/deviceBatchBinding';
 import BatchPreviewModal from './components/BatchPreviewModal';
 import { executeBatches } from './services/batchExecutor';
@@ -24,6 +24,10 @@ import type { BatchExecuteResult } from './services/batchExecutor';
 import { BatchManagerDrawer } from './batch-manager';
 import { getContactNumberStats, ContactNumberStatsDto } from './services/stats/contactStatsService';
 import StatsBar from './components/StatsBar';
+import { ImportSessionsModal } from './sessions';
+import { useSourceFolders } from './hooks/useSourceFolders';
+import { SourceFolderAddButton } from './components/SourceFolderAddButton';
+import { SourceFoldersList } from './components/SourceFoldersList';
 
 const { Title, Text } = Typography;
 
@@ -47,6 +51,8 @@ export const ContactImportWorkbench: React.FC = () => {
   const [onlyUnconsumed, setOnlyUnconsumed] = useState<boolean>(true);
   // 号码池统计
   const [stats, setStats] = useState<ContactNumberStatsDto | null>(null);
+  // 持久化的“文件夹路径列表”
+  const { folders, addFolder, removeFolder, clearAll, hasItems } = useSourceFolders();
   // 加载号码池列表
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -112,6 +118,26 @@ export const ContactImportWorkbench: React.FC = () => {
     } finally { setLoading(false); }
   };
 
+  const handleImportFromSavedFolders = async () => {
+    if (!folders.length) {
+      message.info('请先添加至少一个文件夹路径');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await importNumbersFromFolders(folders);
+      if (res.success) {
+        message.success(`文件 ${res.total_files}，写入 ${res.inserted}，重复 ${res.duplicates}`);
+      } else {
+        message.error(`部分导入失败：写入 ${res.inserted}，重复 ${res.duplicates}`);
+      }
+      loadList();
+      loadStats();
+    } catch (e) {
+      message.error(`导入失败: ${e}`);
+    } finally { setLoading(false); }
+  };
+
   // 生成并导入VCF
   const selectedItems = useMemo(() => items.filter(i => selectedRowKeys.includes(i.id)), [items, selectedRowKeys]);
   // 顶部快速按钮：提示使用下方设备卡片上的“生成VCF/导入”
@@ -132,33 +158,54 @@ export const ContactImportWorkbench: React.FC = () => {
   const handleGenerateVcfForDevice = useCallback(async (deviceId: string, params: { start?: number; end?: number; industry?: string }) => {
     let { start, end } = params;
     try {
-      // 若未设定区间，则自动选择“未分类”的100个号码（优先未消费）
+      // 若未设定区间：直接选取“未分类”的100个号码（仅未消费），避免使用连续区间导致误选
       if (typeof start !== 'number' || typeof end !== 'number' || end < start) {
         const unclassified = await fetchUnclassifiedNumbers(100, true);
         if (unclassified.length === 0) {
           message.warning('没有可用的未分类号码');
           return;
         }
-        const ids = pickFirstNIds(unclassified, 100);
-        start = ids[0];
-        end = ids[ids.length - 1];
+        const content = buildVcfFromNumbers(unclassified as any);
+        const filePath = `contacts_${deviceId}_auto_100_${Date.now()}.vcf`;
+        await VcfImportService.writeVcfFile(filePath, content);
+        // 记录批次与号码映射；使用最小/最大ID作为来源范围参考
+        let mappingOk = true;
+        try {
+          const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
+          const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
+          await createVcfBatchWithNumbers({ batchId, vcfFilePath: filePath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids });
+          // 绑定到设备：待导入
+          bindBatchToDevice(deviceId, batchId);
+        } catch (e: any) {
+          mappingOk = false;
+          console.warn('记录批次映射失败（不影响VCF生成）：', e);
+        }
+        message.success(`VCF 文件已生成：${filePath}`);
+        if (!mappingOk) {
+          message.warning('VCF已生成，但批次映射保存失败（后端未记录）。可稍后在会话面板重试。');
+        }
+        return;
       }
+      // 有明确区间：保持原有按区间生成逻辑
       const batches = await contactImportApp.generateVcfBatches({ [deviceId]: { idStart: start!, idEnd: end!, industry: params.industry } }, { onlyUnconsumed });
       const batch = batches[0];
       const content = buildVcfFromNumbers((batch?.numbers || []) as any);
       const filePath = `contacts_${deviceId}_${start}-${end}.vcf`;
       await VcfImportService.writeVcfFile(filePath, content);
-      // 记录批次与号码映射（用于后续按批次查询/打标）；失败不影响文件生成
+      let mappingOk = true;
       try {
         const batchId = `vcf_${deviceId}_${start}_${end}_${Date.now()}`;
         const numberIds = (batch?.numbers || []).map(n => n.id);
         await createVcfBatchWithNumbers({ batchId, vcfFilePath: filePath, sourceStartId: start, sourceEndId: end, numberIds });
-        // 绑定到设备：待导入（仅生成文件也可先绑定，方便后续在设备卡片上直接导入）
         bindBatchToDevice(deviceId, batchId);
       } catch (e) {
+        mappingOk = false;
         console.warn('记录批次映射失败（不影响VCF生成）：', e);
       }
-      message.success(`VCF 已生成：${filePath}`);
+      message.success(`VCF 文件已生成：${filePath}`);
+      if (!mappingOk) {
+        message.warning('VCF已生成，但批次映射保存失败（后端未记录）。可稍后在会话面板重试。');
+      }
       // 行业可能在生成/导入前设置于 assignment，但号码库行业不变；状态栏无需刷新
     } catch (e) {
       message.error(`生成失败：${e}`);
@@ -169,31 +216,75 @@ export const ContactImportWorkbench: React.FC = () => {
   const handleImportToDeviceFromCard = useCallback(async (deviceId: string, params: { start?: number; end?: number; industry?: string; scriptKey?: string }) => {
     let { start, end, scriptKey } = params;
     try {
-      // 若未设定区间，则自动选择“未分类”的100个号码（优先未消费）
+      // 若未设定区间：直接选取“未分类”的100个号码（未消费）生成VCF并导入
       if (typeof start !== 'number' || typeof end !== 'number' || end < start) {
         const unclassified = await fetchUnclassifiedNumbers(100, true);
         if (unclassified.length === 0) {
           message.warning('没有可用的未分类号码');
           return;
         }
-        const ids = pickFirstNIds(unclassified, 100);
-        start = ids[0];
-        end = ids[ids.length - 1];
+        const vcfContent = buildVcfFromNumbers(unclassified as any);
+        const tempPath = VcfImportService.generateTempVcfPath();
+        await VcfImportService.writeVcfFile(tempPath, vcfContent);
+
+        // 批次与映射 + 会话
+        const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
+        const generatedBatchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
+        let mappingOk = true;
+        try {
+          await createVcfBatchWithNumbers({ batchId: generatedBatchId, vcfFilePath: tempPath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids });
+          bindBatchToDevice(deviceId, generatedBatchId);
+        } catch (e) {
+          mappingOk = false;
+          console.warn('记录批次映射失败（不影响导入）：', e);
+        }
+        let sessionId: number | null = null;
+        try {
+          sessionId = await createImportSessionRecord(generatedBatchId, deviceId);
+        } catch (e) {
+          console.warn('创建导入会话失败（不中断导入）：', e);
+        }
+
+        const outcome = await importVcfToDeviceByScript(deviceId, tempPath, scriptKey);
+
+        try {
+          if (sessionId != null) {
+            const status = outcome.success ? 'success' : 'failed';
+            await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, outcome.success ? undefined : outcome.message);
+          }
+          if (outcome.success) {
+            markBatchImportedForDevice(deviceId, generatedBatchId);
+          }
+        } catch (e) {
+          console.warn('完成导入会话记录失败：', e);
+        }
+
+        if (outcome.success) {
+          message.success(`导入成功：${outcome.importedCount}`);
+          if (!mappingOk) {
+            message.warning('导入成功，但批次映射保存失败（后端未记录）。');
+          }
+        } else {
+          message.error(outcome.message || '导入失败');
+        }
+        return;
       }
+
+      // 有明确区间：保持原有逻辑
       const batches = await contactImportApp.generateVcfBatches({ [deviceId]: { idStart: start!, idEnd: end!, industry: params.industry } }, { onlyUnconsumed });
       const batch = batches[0];
       const vcfContent = buildVcfFromNumbers((batch?.numbers || []) as any);
       const tempPath = VcfImportService.generateTempVcfPath();
       await VcfImportService.writeVcfFile(tempPath, vcfContent);
 
-      // 生成后记录批次和号码映射，便于后续按批次回溯号码与行业打标；同时记录导入会话
       const generatedBatchId = `vcf_${deviceId}_${start}_${end}_${Date.now()}`;
       const numberIds = (batch?.numbers || []).map(n => n.id);
+      let mappingOk = true;
       try {
         await createVcfBatchWithNumbers({ batchId: generatedBatchId, vcfFilePath: tempPath, sourceStartId: start, sourceEndId: end, numberIds });
-        // 绑定到设备：待导入
         bindBatchToDevice(deviceId, generatedBatchId);
       } catch (e) {
+        mappingOk = false;
         console.warn('记录批次映射失败（不影响VCF生成）：', e);
       }
       let sessionId: number | null = null;
@@ -211,7 +302,6 @@ export const ContactImportWorkbench: React.FC = () => {
           await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, outcome.success ? undefined : outcome.message);
         }
         if (outcome.success) {
-          // 从“待导入”移动到“已导入”
           markBatchImportedForDevice(deviceId, generatedBatchId);
         }
       } catch (e) {
@@ -220,6 +310,9 @@ export const ContactImportWorkbench: React.FC = () => {
 
       if (outcome.success) {
         message.success(`导入成功：${outcome.importedCount}`);
+        if (!mappingOk) {
+          message.warning('导入成功，但批次映射保存失败（后端未记录）。');
+        }
         // 导入不直接修改 used 标记，只有在预览执行批量时才可选标记；此处不刷新 stats
       } else {
         message.error(outcome.message || '导入失败');
@@ -275,6 +368,7 @@ export const ContactImportWorkbench: React.FC = () => {
 
   const [currentJumpId, setCurrentJumpId] = useState<string | null>(null);
   const [batchDrawerOpen, setBatchDrawerOpen] = useState(false);
+  const [sessionsModal, setSessionsModal] = useState<{ open: boolean; deviceId?: string; status?: 'all' | 'pending' | 'success' | 'failed' }>({ open: false });
   const handleJumpToDevice = useCallback((deviceId: string) => {
     // 兼容旧表格与新栅格卡片的定位
     const el = document.querySelector(`[data-device-card="${deviceId}"]`) || document.querySelector(`[data-row-key="${deviceId}"]`);
@@ -363,6 +457,7 @@ export const ContactImportWorkbench: React.FC = () => {
             conflictPeersByDevice={conflictPeersByDevice}
             onGenerateVcf={handleGenerateVcfForDevice}
             onImportToDevice={handleImportToDeviceFromCard}
+            onOpenSessions={({ deviceId, status }) => setSessionsModal({ open: true, deviceId, status: (status ?? 'all') as any })}
           />
           <div className={styles.batchActionsRow}>
             <Button type="primary" onClick={handleGenerateBatches} disabled={hasInvalidRanges || allRangesEmpty}>
@@ -386,7 +481,10 @@ export const ContactImportWorkbench: React.FC = () => {
             <Space>
               <Button icon={<FileTextOutlined />} onClick={handleImportTxt}>导入TXT文件</Button>
               <Button icon={<FolderOpenOutlined />} onClick={handleImportFolder}>导入文件夹</Button>
+              <SourceFolderAddButton onAdded={addFolder} />
+              <Button onClick={handleImportFromSavedFolders} disabled={!hasItems}>从已保存目录导入</Button>
             </Space>
+            <SourceFoldersList folders={folders} onRemove={removeFolder} onClearAll={clearAll} />
             <Divider className={styles.dividerTight} />
             <div className={styles.searchBar}>
               <Input.Search
@@ -458,6 +556,12 @@ export const ContactImportWorkbench: React.FC = () => {
         }}
       />
       <BatchManagerDrawer open={batchDrawerOpen} onClose={() => setBatchDrawerOpen(false)} />
+      <ImportSessionsModal
+        open={sessionsModal.open}
+        onClose={() => setSessionsModal({ open: false })}
+        deviceId={sessionsModal.deviceId}
+        status={sessionsModal.status}
+      />
     </Row>
   );
 };

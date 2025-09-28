@@ -2,6 +2,7 @@ import React from 'react';
 import { Space, Select, Input, Switch } from 'antd';
 import type { BatchFilterState } from '../types';
 import type { VcfBatchList } from '../../services/contactNumberService';
+import { useAdb } from '../../../../../application/hooks/useAdb';
 
 interface Props {
   value: BatchFilterState;
@@ -10,6 +11,12 @@ interface Props {
 }
 
 const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
+  const { devices } = useAdb();
+  const deviceOptions = devices.map(d => ({ 
+    value: d.id, 
+    label: `${d.name || d.model || d.id}` 
+  }));
+
   return (
     <Space wrap>
       <Select
@@ -18,10 +25,21 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
         onChange={(mode) => onChange({ ...value, mode })}
         options={[
           { value: 'all', label: '全部号码' },
+          { value: 'by-device', label: '按设备' },
           { value: 'by-batch', label: '按批次' },
           { value: 'no-batch', label: '未生成VCF' },
         ]}
       />
+      {value.mode === 'by-device' && (
+        <Select
+          style={{ width: 220 }}
+          placeholder="选择设备"
+          value={value.deviceId}
+          onChange={(deviceId) => onChange({ ...value, deviceId })}
+          options={deviceOptions}
+          showSearch
+        />
+      )}
       {value.mode === 'by-batch' && (
         <Select
           style={{ width: 220 }}
@@ -32,14 +50,16 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
           showSearch
         />
       )}
-      <Input
-        style={{ width: 220 }}
-        placeholder="按设备ID筛选会话（可选）"
-        value={value.deviceId}
-        onChange={(e) => onChange({ ...value, deviceId: e.target.value })}
-        allowClear
-      />
-      {value.mode !== 'by-batch' && (
+      {value.mode === 'all' && (
+        <Input
+          style={{ width: 220 }}
+          placeholder="按设备ID筛选会话（可选）"
+          value={value.deviceId}
+          onChange={(e) => onChange({ ...value, deviceId: e.target.value })}
+          allowClear
+        />
+      )}
+      {(value.mode === 'all' || value.mode === 'no-batch') && (
         <Input
           style={{ width: 220 }}
           placeholder="搜索 号码/姓名"

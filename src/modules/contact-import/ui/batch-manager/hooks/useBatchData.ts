@@ -62,6 +62,14 @@ export function useBatchData(filter: BatchFilterState, paging?: UseBatchDataPagi
           limit: nLimit,
           offset: nOffset,
         });
+      } else if (mode === 'by-device' && deviceId) {
+        // 按设备模式：显示该设备相关的所有号码（通过会话关联的批次）
+        // 这里简化处理，可以根据实际需求优化
+        nums = await listContactNumbers({
+          limit: nLimit,
+          offset: nOffset,
+          search,
+        });
       } else if (mode === 'no-batch') {
         nums = await listNumbersWithoutVcfBatch({
           limit: nLimit,

@@ -125,7 +125,10 @@ export async function getVcfBatchRecord(batchId: string): Promise<VcfBatchDto | 
 
 export async function listNumbersByVcfBatch(batchId: string, onlyUsed?: boolean, params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
   const { limit, offset } = params;
-  return invoke<ContactNumberList>('list_numbers_by_vcf_batch', { batch_id: batchId, only_used: onlyUsed, limit, offset });
+  // 兼容后端参数命名差异：同时发送 snake_case 与 camelCase，避免 "missing required key batchId" 错误
+  const payload = { batch_id: batchId, batchId, only_used: onlyUsed, onlyUsed, limit, offset } as const;
+  console.debug('[numbers] listNumbersByVcfBatch payload (mixed):', payload);
+  return invoke<ContactNumberList>('list_numbers_by_vcf_batch', payload as any);
 }
 
 export async function listNumbersWithoutVcfBatch(params: { limit?: number; offset?: number } = {}): Promise<ContactNumberList> {
@@ -134,11 +137,25 @@ export async function listNumbersWithoutVcfBatch(params: { limit?: number; offse
 }
 
 export async function createImportSessionRecord(batchId: string, deviceId: string): Promise<number> {
-  return invoke<number>('create_import_session_record', { batch_id: batchId, device_id: deviceId });
+  const payload = { batch_id: batchId, batchId, device_id: deviceId, deviceId } as const;
+  console.debug('[importSession] createImportSessionRecord payload (mixed):', payload);
+  return invoke<number>('create_import_session_record', payload as any);
 }
 
 export async function finishImportSessionRecord(sessionId: number, status: 'success' | 'failed', importedCount: number, failedCount: number, errorMessage?: string): Promise<void> {
-  return invoke<void>('finish_import_session_record', { session_id: sessionId, status, imported_count: importedCount, failed_count: failedCount, error_message: errorMessage });
+  const payload = {
+    session_id: sessionId,
+    sessionId,
+    status,
+    imported_count: importedCount,
+    importedCount,
+    failed_count: failedCount,
+    failedCount,
+    error_message: errorMessage,
+    errorMessage,
+  } as const;
+  console.debug('[importSession] finishImportSessionRecord payload (mixed):', payload);
+  return invoke<void>('finish_import_session_record', payload as any);
 }
 
 export async function listImportSessionRecords(params: { deviceId?: string; batchId?: string; limit?: number; offset?: number } = {}): Promise<ImportSessionList> {

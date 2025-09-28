@@ -27,6 +27,7 @@ export interface DeviceAssignmentGridProps {
   onGenerateVcf?: (deviceId: string, params: { start?: number; end?: number; industry?: string }) => Promise<void> | void;
   onImportToDevice?: (deviceId: string, params: { start?: number; end?: number; industry?: string; scriptKey?: string }) => Promise<void> | void;
   importScripts?: Array<{ key: string; label: string }>;
+  onOpenSessions?: (opts: { deviceId: string; status?: 'pending' | 'success' | 'failed' | 'all' }) => void;
 }
 
 const DEFAULT_INDUSTRIES = ['不限', '电商', '教育', '医疗', '金融', '本地生活', '其他'];
@@ -54,6 +55,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
   onGenerateVcf,
   onImportToDevice,
   importScripts,
+  onOpenSessions,
 }) => {
   const { devices, refreshDevices, getDeviceContactCount, getDeviceInfo } = useAdb();
 
@@ -404,10 +406,20 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = ({
                     const imported = b.imported.length;
                     return (
                       <>
-                        <Tag color={pending > 0 ? 'gold' : undefined} data-no-card-toggle>
+                        <Tag
+                          color={pending > 0 ? 'gold' : undefined}
+                          data-no-card-toggle
+                          style={{ cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); onOpenSessions?.({ deviceId: row.deviceId, status: 'pending' }); }}
+                        >
                           待导入: <Text strong>{pending}</Text>
                         </Tag>
-                        <Tag color={imported > 0 ? 'green' : undefined} data-no-card-toggle>
+                        <Tag
+                          color={imported > 0 ? 'green' : undefined}
+                          data-no-card-toggle
+                          style={{ cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); onOpenSessions?.({ deviceId: row.deviceId, status: 'success' }); }}
+                        >
                           已导入: <Text strong>{imported}</Text>
                         </Tag>
                       </>

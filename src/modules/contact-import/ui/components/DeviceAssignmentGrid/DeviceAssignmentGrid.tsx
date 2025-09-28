@@ -5,8 +5,14 @@ import { useDeviceAssignmentState, type DeviceAssignmentRow } from './useDeviceA
 import { Toolbar } from './Toolbar';
 import { DeviceCard } from './DeviceCard';
 import { getBindings, bindBatchToDevice } from '../../services/deviceBatchBinding';
-import { processPendingSessionsForDevice } from '../../services/sessionImportService';
+import { processPendingSessionsForDevice, processLatestPendingSessionForDevice } from '../../services/sessionImportService';
+import { VcfImportService } from '../../../../../services/VcfImportService';
+import { buildVcfFromNumbers } from '../../../utils/vcf';
+import { fetchUnclassifiedNumbers } from '../../services/unclassifiedService';
+import { createVcfBatchWithNumbers, } from '../../../../vcf-sessions/services/vcfSessionService';
+import { createImportSessionRecord, finishImportSessionRecord } from '../../services/contactNumberService';
 import { allocateNumbersToDevice } from '../../services/contactNumberService';
+import ServiceFactory from '../../../../../application/services/ServiceFactory';
 
 export interface DeviceAssignmentGridProps {
   value?: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>;
@@ -83,6 +89,16 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
       const scriptKey = scriptByDevice[deviceId] || 'auto';
       const pending = getBindings(deviceId).pending.length;
       if (pending > 0) {
+        // 先尝试仅导入“最新一条”pending 会话
+        const latest = await processLatestPendingSessionForDevice(deviceId, { scriptKey });
+        if (latest.total === 1) {
+          const ok = latest.success === 1;
+          if (ok) message.success(`已导入最新会话，批次 ${latest.details[0].batchId}`);
+          else message.error(`最新会话导入失败：${latest.details[0].message || ''}`);
+          props.onOpenSessions?.({ deviceId, status: 'all' });
+          return;
+        }
+        // 回退：逐条导入所有 pending
         let lastProgress = 0;
         const summary = await processPendingSessionsForDevice(deviceId, {
           scriptKey,
@@ -95,9 +111,31 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
         message.success(`导入完成：成功 ${summary.success}/${summary.total}，失败 ${summary.failed}`);
         props.onOpenSessions?.({ deviceId, status: 'all' });
       } else if (props.onImportToDevice) {
+        // 若外部提供回调，走外部逻辑（可能包含生成VCF再导入）
         await props.onImportToDevice(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry, scriptKey });
       } else {
-        message.info('没有待导入会话，且未接入 onImportToDevice 回调');
+        // 无 pending 且无外部回调：自动生成“未分类100” 的 VCF 并导入
+        const unclassified = await fetchUnclassifiedNumbers(100, true);
+        if (!unclassified.length) { message.warning('没有可用的未分类号码'); return; }
+        const vcfContent = buildVcfFromNumbers(unclassified as any);
+        const tempPath = VcfImportService.generateTempVcfPath();
+        await VcfImportService.writeVcfFile(tempPath, vcfContent);
+        // 记录批次与会话
+        const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
+        const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
+        try { await createVcfBatchWithNumbers({ batchId, vcfFilePath: tempPath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids }); } catch {}
+        let sessionId: number | null = null;
+        try { sessionId = await createImportSessionRecord(batchId, deviceId); } catch {}
+        const vcfService = ServiceFactory.getVcfImportApplicationService();
+        const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
+        try {
+          if (sessionId != null) {
+            const status = outcome.success ? 'success' : 'failed';
+            await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, outcome.success ? undefined : outcome.message);
+          }
+        } catch {}
+        if (outcome.success) message.success(`导入成功：${outcome.importedCount ?? 0}`);
+        else message.error(outcome.message || '导入失败');
       }
     } finally { setImportingIds(prev => ({ ...prev, [deviceId]: false })); }
   };

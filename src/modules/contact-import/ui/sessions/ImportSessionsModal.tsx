@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Modal, Tabs, Divider, Space } from 'antd';
+import { Modal, Tabs, Divider, Space, Button, App } from 'antd';
 import FiltersBar from '../batch-manager/components/FiltersBar';
 import SessionsTable from '../batch-manager/components/SessionsTable';
 import NumbersTable from '../batch-manager/components/NumbersTable';
@@ -18,6 +18,7 @@ interface Props {
 }
 
 const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId, status = 'all' }) => {
+  const { message } = App.useApp();
   // 初始化筛选状态：优先使用传入的设备和批次
   const [filter, setFilter] = useState<BatchFilterState>(() => ({
     mode: batchId ? 'by-batch' : deviceId ? 'by-device' : 'all',
@@ -32,7 +33,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
   const [numbersPage, setNumbersPage] = useState({ page: 1, pageSize: 50 });
   const [sessionsPage, setSessionsPage] = useState({ page: 1, pageSize: 50 });
   const [lastSessionId, setLastSessionId] = useState<number | undefined>(undefined);
-  // 会话行选择（单选）
+  // 会话行选择（支持多选批量重新导入）
   const [selectedSessionKeys, setSelectedSessionKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState<string>('sessions');
   // NumbersTable 外部筛选（行业/状态）
@@ -79,7 +80,39 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     return { ...sessions, items: filtered, total: filtered.length };
   }, [sessions, status, effectiveFilter.industry]);
 
-  // 保持设备视图稳定：不在行选择时自动切换为按批次
+  // 批量“重新导入”选中的会话
+  const onBulkReimportSelected = async () => {
+    try {
+      if (!filteredSessions?.items?.length) return message.warning('没有可操作的会话');
+      const selected = (filteredSessions.items as any[]).filter(it => selectedSessionKeys.includes(it.id));
+      if (!selected.length) return message.warning('请先在列表中勾选要重新导入的会话');
+      // 仅允许有 device_id 与 batch_id 的行
+      const rows = selected
+        // 仅“未导入(pending)”才参与批量重新导入
+        .filter(r => r.status === 'pending')
+        .filter(r => r.device_id && r.batch_id)
+        .map(r => ({ id: r.id as number, batch_id: r.batch_id as string, device_id: r.device_id as string }));
+      if (!rows.length) return message.warning('所选会话需为“未导入”且包含设备与批次信息');
+      const { reimportSelectedSessions } = await import('../services/sessionImportService');
+      message.info(`开始批量导入 ${rows.length} 条会话...`);
+      const outcome = await reimportSelectedSessions(rows, {
+        onProgress: ({ index, total, ok }) => {
+          if (index === total) {
+            if (ok) {
+              message.success('批量导入已完成');
+            } else {
+              message.info('批量导入已完成（包含失败条目）');
+            }
+          }
+        }
+      });
+      setLastSessionId(outcome.lastCreatedSessionId);
+      setSelectedSessionKeys([]);
+      try { await reload(); } catch {}
+    } catch (e: any) {
+      message.error(`批量导入异常: ${e?.message ?? e}`);
+    }
+  };
 
 
   return (
@@ -115,14 +148,21 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
           items={[
             { 
               key: 'sessions', 
-              label: `导入会话 (${filteredSessions?.total || 0})`, 
+              label: (
+                <Space>
+                  <span>导入会话 ({filteredSessions?.total || 0})</span>
+                  <Button size="small" type="primary" disabled={!selectedSessionKeys.length} onClick={onBulkReimportSelected}>
+                    重新导入所选
+                  </Button>
+                </Space>
+              ), 
               children: (
                 <SessionsTable
                   data={filteredSessions}
                   loading={loading}
                   industryLabels={industryLabels}
                   highlightId={lastSessionId}
-                  rowSelectionType="radio"
+                  rowSelectionType="checkbox"
                   selectedRowKeys={selectedSessionKeys}
                   onSelectionChange={(keys) => setSelectedSessionKeys(keys)}
                   onViewBatchNumbers={(bid) => {

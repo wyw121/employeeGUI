@@ -14,6 +14,9 @@ import { TauriUiMatcherRepository } from '../../infrastructure/repositories/Taur
 import { ISmartScriptRepository } from '../../domain/smart-script/repositories/ISmartScriptRepository';
 import { TauriSmartScriptRepository } from '../../infrastructure/repositories/TauriSmartScriptRepository';
 import ContactImportApplicationService from './contact-import/ContactImportApplicationService';
+import VcfImportApplicationService from './contact-import/VcfImportApplicationService';
+import { IContactAutomationRepository } from '../../domain/contact-automation/repositories/IContactAutomationRepository';
+import { TauriContactAutomationRepository } from '../../infrastructure/repositories/TauriContactAutomationRepository';
 
 /**
  * 服务容器
@@ -74,6 +77,7 @@ class ServiceContainer {
   this.register('diagnosticRepository', () => new TauriDiagnosticRepository());
   this.register('uiMatcherRepository', () => new TauriUiMatcherRepository());
   this.register('smartScriptRepository', () => new TauriSmartScriptRepository());
+  this.register('contactAutomationRepository', () => new TauriContactAutomationRepository());
 
     // 注册Domain Service层
     this.register('deviceManagerService', () => {
@@ -109,6 +113,11 @@ class ServiceContainer {
 
     this.register('contactImportApplicationService', () => {
       return new ContactImportApplicationService();
+    });
+
+    this.register('vcfImportApplicationService', () => {
+      const repo = this.get<IContactAutomationRepository>('contactAutomationRepository');
+      return new VcfImportApplicationService(repo);
     });
   }
 }
@@ -157,6 +166,11 @@ export const ServiceFactory = {
   /** 获取联系人导入应用服务 */
   getContactImportApplicationService(): ContactImportApplicationService {
     return container.get<ContactImportApplicationService>('contactImportApplicationService');
+  },
+
+  /** 获取 VCF 导入应用服务 */
+  getVcfImportApplicationService(): VcfImportApplicationService {
+    return container.get<VcfImportApplicationService>('vcfImportApplicationService');
   },
 
   /**

@@ -25,6 +25,7 @@ use super::repo::{
     finish_import_session,
     list_import_sessions,
     list_numbers_by_batch,
+    list_numbers_by_batch_filtered,
     list_numbers_without_batch,
     list_numbers_without_batch_filtered,
     get_contact_number_stats,

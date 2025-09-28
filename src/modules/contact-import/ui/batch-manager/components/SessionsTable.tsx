@@ -1,8 +1,8 @@
 import React from 'react';
-import { Table, Tag, Button, Space, message } from 'antd';
+import { Table, Tag, Button, Space, App } from 'antd';
 import type { ImportSessionList } from '../types';
 import { getVcfBatchRecord, createImportSessionRecord, finishImportSessionRecord } from '../../services/contactNumberService';
-import { VcfActions } from '../../services/vcfActions';
+import ServiceFactory from '../../../../../application/services/ServiceFactory';
 
 interface Props {
   data?: ImportSessionList | null;
@@ -25,6 +25,7 @@ interface Props {
 }
 
 const SessionsTable: React.FC<Props> = ({ data, loading, industryLabels, pagination, highlightId, rowSelectionType = 'radio', selectedRowKeys, onSelectionChange, onViewBatchNumbers, onRefresh }) => {
+  const { message } = App.useApp();
   const handleImport = async (row: any) => {
     const batchId: string = row.batch_id;
     const deviceId: string = row.device_id;
@@ -37,7 +38,8 @@ const SessionsTable: React.FC<Props> = ({ data, loading, industryLabels, paginat
       const sessionId = await createImportSessionRecord(batchId, deviceId);
       message.info(`会话 #${sessionId} 已创建，开始导入...`);
       try { await onRefresh?.(); } catch {}
-      const res = await VcfActions.importVcfToDevice(batch.vcf_file_path, deviceId);
+      const vcfService = ServiceFactory.getVcfImportApplicationService();
+      const res = await vcfService.importToDevice(deviceId, batch.vcf_file_path);
       const status = res.success ? 'success' : 'failed';
       await finishImportSessionRecord(sessionId, status as any, res.importedCount ?? 0, res.failedCount ?? 0, res.success ? undefined : res.message);
       if (res.success) {

@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Space, message, Tooltip, Checkbox } from 'antd';
+import { Button, Space, Tooltip, Checkbox, App } from 'antd';
 import { ReloadOutlined, FolderOpenOutlined, ImportOutlined, FileExcelOutlined, FileTextOutlined, ThunderboltOutlined, SyncOutlined } from '@ant-design/icons';
 import type { VcfBatchDto, ContactNumberList } from '../services/contactNumberService';
 import { createImportSessionRecord, finishImportSessionRecord, markContactNumbersUsedByIdRange } from '../services/contactNumberService';
 import { VcfActions } from '../services/vcfActions';
+import ServiceFactory from '../../../../application/services/ServiceFactory';
 import { useAdb } from '../../../../application/hooks/useAdb';
 import { toCsvWithLabels } from '../../utils/csv';
 import { buildCsvNameFromTemplate } from '../../utils/filename';
@@ -12,7 +13,6 @@ import { fetchUnclassifiedNumbers } from '../services/unclassifiedService';
 import { VcfImportService } from '../../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../../utils/vcf';
 import { createVcfBatchWithNumbers } from '../../../vcf-sessions/services/vcfSessionService';
-import { importVcfToDeviceByScript } from '../services/importRouter';
 import { bindBatchToDevice, markBatchImportedForDevice } from '../services/deviceBatchBinding';
 
 interface Props {
@@ -25,6 +25,7 @@ interface Props {
 }
 
 const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDeviceId, onRefresh, onActionDone }) => {
+  const { message } = App.useApp();
   const { selectedDevice } = useAdb();
   const [loading, setLoading] = useState<string | null>(null);
   const [markAfterImport, setMarkAfterImport] = useState<boolean>(false);
@@ -63,7 +64,6 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
   const onReimport = async () => {
     const path = batch?.vcf_file_path;
     if (!path) return message.warning('没有可导入的VCF路径');
-    if (!deviceId) return message.warning('请在上方筛选器中选择设备');
     try {
       setLoading('import');
       // 1) 创建导入会话
@@ -73,7 +73,8 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
         message.info(`已创建导入会话 #${sessionId}，正在导入...`);
         try { await onRefresh?.(); } catch {}
       }
-      const res = await VcfActions.importVcfToDevice(path, deviceId);
+      const vcfService = ServiceFactory.getVcfImportApplicationService();
+      const res = await vcfService.importToDevice(deviceId, path);
       // 2) 成功时尝试标记号码使用范围
       if (res.success && batch?.source_start_id != null && batch?.source_end_id != null) {
         try {
@@ -179,7 +180,8 @@ const SessionActionsBar: React.FC<Props> = ({ mode, batch, numbers, targetDevice
       } catch (e) {
         console.warn('创建导入会话失败（不中断导入）：', e);
       }
-      const outcome = await importVcfToDeviceByScript(deviceId, tempPath);
+      const vcfService = ServiceFactory.getVcfImportApplicationService();
+      const outcome = await vcfService.importToDevice(deviceId, tempPath);
       try {
         if (sessionId != null) {
           const status = outcome.success ? 'success' : 'failed';

@@ -5,7 +5,6 @@ import styles from './ContactImportWorkbench.module.css';
 import { selectFolder, selectTxtFile } from './utils/dialog';
 import { importNumbersFromFolder, importNumbersFromFolders, importNumbersFromTxtFile, listContactNumbers, ContactNumberDto } from './services/contactNumberService';
 import { VcfActions } from './services/vcfActions';
-import { importVcfToDeviceByScript } from './services/importRouter';
 import { VcfImportService } from '../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../utils/vcf';
 import { createVcfBatchWithNumbers } from '../../vcf-sessions/services/vcfSessionService';
@@ -245,7 +244,8 @@ export const ContactImportWorkbench: React.FC = () => {
           console.warn('创建导入会话失败（不中断导入）：', e);
         }
 
-        const outcome = await importVcfToDeviceByScript(deviceId, tempPath, scriptKey);
+  const vcfService = ServiceFactory.getVcfImportApplicationService();
+  const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
 
         try {
           if (sessionId != null) {
@@ -294,7 +294,8 @@ export const ContactImportWorkbench: React.FC = () => {
         console.warn('创建导入会话失败（不中断导入）：', e);
       }
 
-      const outcome = await importVcfToDeviceByScript(deviceId, tempPath, scriptKey);
+  const vcfService = ServiceFactory.getVcfImportApplicationService();
+  const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
 
       try {
         if (sessionId != null) {

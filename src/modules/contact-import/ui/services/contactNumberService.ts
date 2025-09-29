@@ -225,3 +225,25 @@ export async function revertImportSessionToFailed(sessionId: number, reason?: st
   const payload = { session_id: sessionId, sessionId, reason } as const;
   return invoke<number>('revert_import_session_to_failed_cmd', payload as any);
 }
+
+export interface ImportSessionEventDto {
+  id: number;
+  session_id: number;
+  occurred_at: string;
+  device_id?: string | null;
+  status?: 'pending' | 'success' | 'failed' | string | null;
+  imported_count?: number | null;
+  failed_count?: number | null;
+  error_message?: string | null;
+}
+
+export interface ImportSessionEventList {
+  total: number;
+  items: ImportSessionEventDto[];
+}
+
+export async function listImportSessionEvents(sessionId: number, params: { limit?: number; offset?: number } = {}): Promise<ImportSessionEventList> {
+  const { limit, offset } = params;
+  const payload = { session_id: sessionId, sessionId, limit, offset } as const;
+  return invoke<ImportSessionEventList>('list_import_session_events_cmd', payload as any);
+}

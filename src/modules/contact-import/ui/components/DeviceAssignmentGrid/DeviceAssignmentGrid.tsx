@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Row, Col, Space, App } from 'antd';
 import styles from '../DeviceAssignmentGrid.module.css';
 import { useDeviceAssignmentState, type DeviceAssignmentRow } from './useDeviceAssignmentState';
@@ -13,6 +13,7 @@ import { createVcfBatchWithNumbers, } from '../../../../vcf-sessions/services/vc
 import { createImportSessionRecord, finishImportSessionRecord } from '../../services/contactNumberService';
 import { allocateNumbersToDevice } from '../../services/contactNumberService';
 import ServiceFactory from '../../../../../application/services/ServiceFactory';
+import { useIndustryOptions } from '../../shared/industryOptions';
 
 export interface DeviceAssignmentGridProps {
   value?: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>;
@@ -46,6 +47,11 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
   const [importingIds, setImportingIds] = useState<Record<string, boolean>>({});
   const [allocatingIds, setAllocatingIds] = useState<Record<string, boolean>>({});
   const [scriptByDevice, setScriptByDevice] = useState<Record<string, string>>({});
+  const baseIndustries = useMemo(
+    () => (props.industries && props.industries.length > 0 ? props.industries : DEFAULT_INDUSTRIES),
+    [props.industries]
+  );
+  const { options: industryOptions, include: includeIndustryOption, refresh: refreshIndustryOptions } = useIndustryOptions(baseIndustries);
   const SCRIPT_OPTIONS = useMemo(() => (
     props.importScripts && props.importScripts.length > 0
       ? props.importScripts
@@ -179,7 +185,13 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
     finally { setAllocatingIds(prev => ({ ...prev, [deviceId]: false })); }
   };
 
-  const industries = props.industries && props.industries.length > 0 ? props.industries : DEFAULT_INDUSTRIES;
+  useEffect(() => {
+    data.forEach((row) => {
+      if (row.industry) {
+        includeIndustryOption(row.industry);
+      }
+    });
+  }, [data, includeIndustryOption]);
 
   return (
     <div>
@@ -204,7 +216,7 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
             <Col key={row.deviceId} xs={24} sm={12} md={8} lg={6} xl={6} xxl={4}>
               <DeviceCard
                 row={row}
-                industries={industries}
+                industries={industryOptions}
                 isSelected={isSelected}
                 setSelected={(checked) => setSelected(prev => ({ ...prev, [row.deviceId]: checked }))}
                 meta={meta[row.deviceId]}
@@ -222,6 +234,8 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
                 generating={!!generatingIds[row.deviceId]}
                 bindings={{ pending: bindings.pending.length, imported: bindings.imported.length }}
                 onOpenSessions={(status) => props.onOpenSessions?.({ deviceId: row.deviceId, status })}
+                onIncludeIndustryOption={includeIndustryOption}
+                onRequestIndustries={refreshIndustryOptions}
               />
             </Col>
           );

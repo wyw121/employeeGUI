@@ -37,6 +37,7 @@ use super::repo::{
     allocate_numbers_to_device,
     update_import_session_industry,
     revert_import_session_to_failed,
+    list_import_session_events,
 };
 
 #[tauri::command]
@@ -364,4 +365,15 @@ pub async fn revert_import_session_to_failed_cmd(session_id: i64, reason: Option
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     revert_import_session_to_failed(&conn, session_id, reason.as_deref()).map_err(|e| e.to_string())
+}
+
+/// 列出会话的导入事件时间序列（用于“导入最新时间”下拉）
+#[tauri::command]
+pub async fn list_import_session_events_cmd(session_id: i64, limit: Option<i64>, offset: Option<i64>) -> Result<super::models::ImportSessionEventList, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let limit = limit.unwrap_or(20);
+    let offset = offset.unwrap_or(0);
+    list_import_session_events(&conn, session_id, limit, offset).map_err(|e| e.to_string())
 }

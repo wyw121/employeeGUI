@@ -10,7 +10,7 @@ pub fn builtin_strategies() -> Vec<VcfImportStrategy> {
     // 华为/荣耀策略（避免 provider 包，优先使用 UI 包）
     let huawei_strategy = VcfImportStrategy {
         strategy_name: "Huawei_EMUI".to_string(),
-        brand_patterns: vec!["huawei".into(), "honor".into(), "荣耀".into()],
+        brand_patterns: vec!["huawei".into(), "honor".into(), "华为荣耀".into()],
         contact_app_packages: vec![
             "com.hihonor.contacts".into(),
             "com.huawei.contacts".into(),

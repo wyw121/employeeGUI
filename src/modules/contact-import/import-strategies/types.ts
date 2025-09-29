@@ -3,6 +3,8 @@
  * 基于实际测试结果定义的导入方式组合
  */
 
+import { getBrandDisplayName } from './config/deviceBrands';
+
 export enum VCardVersion {
   V21 = '2.1',
   V30 = '3.0',
@@ -19,14 +21,21 @@ export enum ImportTriggerMethod {
 }
 
 export enum DeviceManufacturer {
-  HONOR = 'Honor',
-  HUAWEI = 'Huawei',
-  XIAOMI = 'Xiaomi',
+  HONOR = 'HONOR',
+  HUAWEI = 'HUAWEI',
+  XIAOMI = 'XIAOMI',
   OPPO = 'OPPO',
-  VIVO = 'Vivo',
-  SAMSUNG = 'Samsung',
-  GOOGLE = 'Google',
-  OTHER = 'Other'
+  VIVO = 'VIVO',
+  SAMSUNG = 'SAMSUNG',
+  GOOGLE = 'GOOGLE',
+  OTHER = 'OTHER'
+}
+
+/**
+ * 获取设备制造商的显示名称
+ */
+export function getManufacturerDisplayName(manufacturer: DeviceManufacturer): string {
+  return getBrandDisplayName(manufacturer);
 }
 
 export interface ImportStrategy {

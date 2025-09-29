@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Space, Select, Input, Switch, Button } from 'antd';
 import type { BatchFilterState } from '../types';
 import type { VcfBatchList } from '../../services/contactNumberService';
 import { useAdb } from '../../../../../application/hooks/useAdb';
 import { clearBatchIndustryCache } from '../../services/industry/batchIndustryService';
-import { useIndustryOptions } from '../hooks/useIndustryOptions';
+import { useIndustryOptions } from '../../shared/industryOptions';
 
 interface Props {
   value: BatchFilterState;
@@ -19,7 +19,11 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
     label: `${d.name || d.model || d.id}` 
   }));
 
-  const { options: industryOptions, loading: industriesLoading, reload: reloadIndustries } = useIndustryOptions();
+  const { options: industryRawOptions, loading: industriesLoading, refresh: refreshIndustries } = useIndustryOptions();
+  const industryOptions = useMemo(
+    () => [{ value: '', label: '不限' }, ...industryRawOptions.map((label) => ({ value: label, label }))],
+    [industryRawOptions]
+  );
 
   const handleModeChange = (mode: BatchFilterState['mode']) => {
     // 避免出现 deviceId 和 batchId 同时生效，切换模式时清理冲突字段
@@ -75,6 +79,7 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
         onChange={(industry) => onChange({ ...value, industry })}
         options={industryOptions}
         loading={industriesLoading}
+        showSearch
       />
       {value.mode === 'all' && (
         <Input
@@ -101,7 +106,16 @@ const FiltersBar: React.FC<Props> = ({ value, onChange, batches }) => {
         </span>
       )}
       {/* 手动刷新分类缓存 */}
-  <Button size="small" onClick={() => { clearBatchIndustryCache(); reloadIndustries(); onChange({ ...value }); }}>刷新分类</Button>
+      <Button
+        size="small"
+        onClick={() => {
+          clearBatchIndustryCache();
+          void refreshIndustries();
+          onChange({ ...value });
+        }}
+      >
+        刷新分类
+      </Button>
     </Space>
   );
 };

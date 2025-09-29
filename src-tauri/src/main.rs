@@ -189,6 +189,7 @@ fn main() {
             tag_numbers_industry_by_vcf_batch_cmd,
             update_import_session_industry_cmd,
             revert_import_session_to_failed_cmd,
+            list_import_session_events_cmd,
                 allocate_numbers_to_device_cmd,
             // 新增的VCF导入和小红书自动关注功能
             generate_vcf_file,
@@ -273,6 +274,7 @@ fn main() {
             list_xml_cache_files,        // 列出所有XML缓存文件
             read_xml_cache_file,         // 读取XML缓存文件内容
             get_xml_file_size,           // 获取XML文件大小
+            get_xml_file_absolute_path,  // 获取XML文件绝对路径
             delete_xml_cache_file,       // 删除XML缓存文件
             parse_cached_xml_to_elements // 解析缓存XML为UI元素
             ,

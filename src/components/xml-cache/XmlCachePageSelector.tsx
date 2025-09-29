@@ -9,19 +9,16 @@ import {
   List, 
   Button, 
   Tag, 
-  Tooltip, 
   Space, 
   Typography, 
-  Avatar, 
   message, 
   Spin, 
   Popconfirm,
-  Statistic,
-  Row,
-  Col,
   Empty,
-  Input
+  Input,
+  Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import { 
   FileTextOutlined, 
   ClockCircleOutlined, 
@@ -231,6 +228,32 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
     }
   `;
 
+  const handleCopyAbsolutePath = async (page: CachedXmlPage) => {
+    const { absoluteFilePath } = page;
+    if (!absoluteFilePath) {
+      message.warning('未找到该XML的绝对路径');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(absoluteFilePath);
+      message.success({ content: '已复制XML文件绝对路径', duration: 1.8 });
+    } catch (error) {
+      console.error('❌ 复制XML绝对路径失败:', error);
+      message.error('复制失败，请检查剪贴板权限');
+    }
+  };
+
+  const handleRevealInFileManager = async (page: CachedXmlPage) => {
+    try {
+      await XmlPageCacheService.revealCachedPage(page);
+      message.success({ content: '已在文件管理器中打开', duration: 1.8 });
+    } catch (error) {
+      console.error('❌ 打开文件管理器失败:', error);
+      message.error('打开文件管理器失败');
+    }
+  };
+
   return (
     <>
       {/* 注入样式 */}
@@ -333,120 +356,153 @@ export const XmlCachePageSelector: React.FC<XmlCachePageSelectorProps> = ({
           <List
             size="small"
             dataSource={filteredPages}
-            renderItem={(page) => (
-              <List.Item
-                className="xml-cache-list-item"
-                style={{ 
-                  padding: '8px 8px', // 减少内边距
-                  border: '1px solid #374151',
-                  borderRadius: '6px',
-                  marginBottom: '4px',
-                  backgroundColor: '#374151',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  minHeight: 'auto', // 允许自适应高度
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4b5563';
-                  e.currentTarget.style.borderColor = '#6366f1';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#374151';
-                  e.currentTarget.style.borderColor = '#374151';
-                }}
-                onClick={() => handlePageSelect(page)}
-                actions={[
-                  <div key="delete" style={{ width: '32px', textAlign: 'center' }}>
-                    <Popconfirm
-                      title="删除?"
-                      onConfirm={(e) => {
-                        e?.stopPropagation();
-                        handleDeletePage(page);
-                      }}
-                      okText="删除"
-                      cancelText="取消"
-                    >
-                      <Button 
-                        type="text" 
-                        danger 
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ 
-                          fontSize: '10px', 
-                          padding: '4px',
-                          minWidth: '24px',  // 最小宽度
-                          width: '24px',     // 固定宽度
-                          height: '24px'     // 固定高度
-                        }}
-                      />
-                    </Popconfirm>
-                  </div>
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <span style={{ 
-                      fontSize: '14px', // 缩小图标
-                      display: 'inline-block',
-                      width: '20px', // 缩小宽度
-                      textAlign: 'center',
-                      flexShrink: 0, // 防止收缩
-                    }}>
-                      {getAppIcon(page.appPackage)}
-                    </span>
-                  }
-                  title={
-                    <div style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', // 改为垂直布局
-                      gap: '2px',
-                      minWidth: 0, // 允许收缩
-                    }}>
-                      <Text 
-                        strong 
-                        style={{ 
-                          fontSize: '12px', 
-                          color: '#f9fafb',
-                          lineHeight: '1.2',
-                          wordBreak: 'break-all', // 强制换行
-                          overflow: 'hidden',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2, // 最多显示2行
-                          WebkitBoxOrient: 'vertical' as any,
-                        }}
-                        title={page.pageTitle} // 悬浮显示完整标题
-                      >
-                        {page.pageTitle}
-                      </Text>
-                      <Text 
-                        type="secondary" 
-                        style={{ 
-                          fontSize: '10px', 
-                          color: '#d1d5db',
-                          lineHeight: '1',
-                        }}
-                      >
-                        {formatTime(page.createdAt)}
-                      </Text>
-                    </div>
-                  }
-                  description={
-                    <div style={{ 
-                      fontSize: '10px', 
-                      color: '#9ca3af',
-                      lineHeight: '1.2',
-                      marginTop: '4px',
-                    }}>
-                      <div style={{ marginBottom: '2px' }}>{page.deviceId}</div>
-                      <div>
-                        {page.clickableCount}个元素 • {formatFileSize(page.fileSize)}
+            renderItem={(page) => {
+              const contextMenuItems: MenuProps['items'] = [
+                {
+                  key: 'open-explorer',
+                  label: '在文件管理器中打开',
+                },
+                {
+                  key: 'copy-path',
+                  label: '复制绝对路径',
+                },
+              ];
+
+              return (
+                <Dropdown
+                  trigger={["contextMenu"]}
+                  menu={{
+                    items: contextMenuItems,
+                    onClick: (info) => {
+                      info.domEvent.stopPropagation();
+                      switch (info.key) {
+                        case 'open-explorer':
+                          handleRevealInFileManager(page);
+                          break;
+                        case 'copy-path':
+                          handleCopyAbsolutePath(page);
+                          break;
+                        default:
+                          break;
+                      }
+                    },
+                  }}
+                >
+                  <List.Item
+                    className="xml-cache-list-item"
+                    style={{ 
+                      padding: '8px 8px', // 减少内边距
+                      border: '1px solid #374151',
+                      borderRadius: '6px',
+                      marginBottom: '4px',
+                      backgroundColor: '#374151',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      minHeight: 'auto', // 允许自适应高度
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#4b5563';
+                      e.currentTarget.style.borderColor = '#6366f1';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#374151';
+                      e.currentTarget.style.borderColor = '#374151';
+                    }}
+                    onClick={() => handlePageSelect(page)}
+                    actions={[
+                      <div key="delete" style={{ width: '32px', textAlign: 'center' }}>
+                        <Popconfirm
+                          title="删除?"
+                          onConfirm={(e) => {
+                            e?.stopPropagation();
+                            handleDeletePage(page);
+                          }}
+                          okText="删除"
+                          cancelText="取消"
+                        >
+                          <Button 
+                            type="text" 
+                            danger 
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ 
+                              fontSize: '10px', 
+                              padding: '4px',
+                              minWidth: '24px',  // 最小宽度
+                              width: '24px',     // 固定宽度
+                              height: '24px'     // 固定高度
+                            }}
+                          />
+                        </Popconfirm>
                       </div>
-                    </div>
-                  }
-                />
-              </List.Item>
-            )}
+                    ]}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <span style={{ 
+                          fontSize: '14px', // 缩小图标
+                          display: 'inline-block',
+                          width: '20px', // 缩小宽度
+                          textAlign: 'center',
+                          flexShrink: 0, // 防止收缩
+                        }}>
+                          {getAppIcon(page.appPackage)}
+                        </span>
+                      }
+                      title={
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', // 改为垂直布局
+                          gap: '2px',
+                          minWidth: 0, // 允许收缩
+                        }}>
+                          <Text 
+                            strong 
+                            style={{ 
+                              fontSize: '12px', 
+                              color: '#f9fafb',
+                              lineHeight: '1.2',
+                              wordBreak: 'break-all', // 强制换行
+                              overflow: 'hidden',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2, // 最多显示2行
+                              WebkitBoxOrient: 'vertical' as any,
+                            }}
+                            title={page.pageTitle} // 悬浮显示完整标题
+                          >
+                            {page.pageTitle}
+                          </Text>
+                          <Text 
+                            type="secondary" 
+                            style={{ 
+                              fontSize: '10px', 
+                              color: '#d1d5db',
+                              lineHeight: '1',
+                            }}
+                          >
+                            {formatTime(page.createdAt)}
+                          </Text>
+                        </div>
+                      }
+                      description={
+                        <div style={{ 
+                          fontSize: '10px', 
+                          color: '#9ca3af',
+                          lineHeight: '1.2',
+                          marginTop: '4px',
+                        }}>
+                          <div style={{ marginBottom: '2px' }}>{page.deviceId}</div>
+                          <div>
+                            {page.clickableCount}个元素 • {formatFileSize(page.fileSize)}
+                          </div>
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                </Dropdown>
+              );
+            }}
           />
         )}
       </Spin>

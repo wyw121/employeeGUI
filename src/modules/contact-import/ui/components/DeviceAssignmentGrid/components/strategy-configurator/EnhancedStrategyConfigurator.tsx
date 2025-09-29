@@ -42,7 +42,7 @@ export const EnhancedStrategyConfigurator: React.FC<EnhancedStrategyConfigurator
   onStrategyChange,
   deviceContext
 }) => {
-  const [showAllStrategies, setShowAllStrategies] = useState(false);
+  const [showAllStrategies, setShowAllStrategies] = useState(true);
 
   return (
     <div className="enhanced-strategy-configurator">

@@ -9,6 +9,7 @@ import { VcfImportService } from '../../../../../services/VcfImportService';
 import { createVcfBatchWithNumbers } from '../../../../vcf-sessions/services/vcfSessionService';
 import { createImportSessionRecord } from '../../services/contactNumberService';
 import styles from '../DeviceAssignmentGrid.module.css';
+import { normalizeIndustry } from '../../shared/industryOptions';
 
 const { Text } = Typography;
 
@@ -39,6 +40,8 @@ export interface DeviceCardProps {
   generating?: boolean;
   bindings: { pending: number; imported: number };
   onOpenSessions?: (status: 'pending' | 'success' | 'all') => void;
+  onIncludeIndustryOption?: (value?: string | null) => void;
+  onRequestIndustries?: () => void;
 }
 
 function PhoneVisual({ manufacturer, model }: { manufacturer?: string; model?: string }) {
@@ -57,6 +60,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
   const [vcfFilePath, setVcfFilePath] = useState<string>('');
   const [preparingVcf, setPreparingVcf] = useState(false);
   const row = props.row;
+  const industryValue = normalizeIndustry(row.industry) ?? '';
 
   /**
    * 为设备准备VCF文件
@@ -147,11 +151,52 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
       <div className={styles.deviceIdText}><Text type="secondary">{row.deviceId}</Text></div>
       <div style={{ marginBottom: 8 }}>
         <Space size={[4, 4]} wrap>
-          {row.industry ? <Tag color="blue">{row.industry}</Tag> : <Tag>未选择行业</Tag>}
+          {industryValue ? <Tag color="blue">{industryValue}</Tag> : <Tag>未选择行业</Tag>}
         </Space>
       </div>
       <Space direction="vertical" className={styles.assignRow}>
-        <Select style={{ width: '100%' }} value={row.industry} options={props.industries.map(i => ({ label: i, value: i }))} onChange={(v) => props.onUpdateRow({ industry: v })} />
+        <Select
+          style={{ width: '100%' }}
+          mode="tags"
+          allowClear
+          showSearch
+          placeholder="选择或输入分类"
+          value={industryValue ? [industryValue] : []}
+          options={props.industries.map((label) => ({ label, value: label }))}
+          tokenSeparators={[',', ' ']}
+          maxTagCount={1}
+          onDropdownVisibleChange={(open) => {
+            if (open) {
+              props.onRequestIndustries?.();
+            }
+          }}
+          onChange={(vals) => {
+            const arr = Array.isArray(vals) ? vals : [];
+            if (arr.length === 0) {
+              if (industryValue) {
+                props.onUpdateRow({ industry: undefined });
+              }
+              return;
+            }
+            const last = String(arr[arr.length - 1]).trim();
+            const normalized = normalizeIndustry(last);
+            if (!normalized) {
+              if (industryValue) {
+                props.onUpdateRow({ industry: undefined });
+              }
+              return;
+            }
+            if (normalized !== industryValue) {
+              props.onUpdateRow({ industry: normalized });
+            }
+            props.onIncludeIndustryOption?.(normalized);
+          }}
+          onClear={() => {
+            if (industryValue) {
+              props.onUpdateRow({ industry: undefined });
+            }
+          }}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <InputNumber size="small" style={{ width: 110 }} status={hasSelfError ? 'error' : undefined} min={0} value={row.idStart} placeholder="起" onChange={(v) => props.onUpdateRow({ idStart: typeof v === 'number' ? v : undefined })} />
           <Text type="secondary">~</Text>

@@ -38,6 +38,24 @@ pub async fn get_xml_file_size(file_name: String) -> Result<u64, String> {
 }
 
 #[tauri::command]
+pub async fn get_xml_file_absolute_path(file_name: String) -> Result<String, String> {
+    use std::fs;
+    let debug_dir = get_debug_xml_dir();
+    let file_path = debug_dir.join(&file_name);
+    if !file_path.exists() { return Err(format!("XML缓存文件不存在: {}", file_name)); }
+
+    info!("📂 获取XML缓存文件绝对路径: {}", file_path.display());
+
+    match fs::canonicalize(&file_path) {
+        Ok(path) => Ok(path.to_string_lossy().to_string()),
+        Err(err) => {
+            info!("⚠️ canonicalize失败，将返回原路径: {} - {}", file_path.display(), err);
+            Ok(file_path.to_string_lossy().to_string())
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn delete_xml_cache_file(file_name: String) -> Result<(), String> {
     use std::fs;
     let debug_dir = get_debug_xml_dir();

@@ -30,4 +30,5 @@ pub use commands::{
     mark_contact_numbers_used_by_id_range,
     set_contact_numbers_industry_by_id_range,
     tag_numbers_industry_by_vcf_batch_cmd,
+    list_import_session_events_cmd,
 };

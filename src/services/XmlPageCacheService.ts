@@ -9,6 +9,8 @@ import { RealXMLAnalysisService } from './RealXMLAnalysisService';
 export interface CachedXmlPage {
   /** 文件路径 */
   filePath: string;
+  /** 文件绝对路径 */
+  absoluteFilePath: string;
   /** 文件名 */
   fileName: string;
   /** 设备ID */
@@ -74,6 +76,21 @@ export class XmlPageCacheService {
   }
 
   /**
+   * 在文件管理器中打开指定的缓存页面文件
+   */
+  static async revealCachedPage(cachedPage: CachedXmlPage): Promise<void> {
+    const targetPath = cachedPage.absoluteFilePath || cachedPage.filePath;
+
+    try {
+      console.log('📂 打开缓存文件所在位置:', targetPath);
+      await invoke('reveal_in_file_manager', { path: targetPath });
+    } catch (error) {
+      console.error('❌ 打开文件管理器失败:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 加载所有缓存页面的元数据
    */
   private static async loadCachedPages(): Promise<void> {
@@ -128,12 +145,14 @@ export class XmlPageCacheService {
       // 使用RealXMLAnalysisService进行智能分析
       const appPackage = this.detectAppPackage(xmlContent);
       const pageAnalysis = this.analyzePageContent(xmlContent, appPackage);
+      const absoluteFilePath: string = await invoke('get_xml_file_absolute_path', { fileName });
       
       // 生成页面标题
       const pageTitle = this.generatePageTitle(xmlContent, appPackage, fileInfo.timestamp);
       
       const cachedPage: CachedXmlPage = {
         filePath: `${this.DEBUG_XML_DIR}/${fileName}`,
+        absoluteFilePath,
         fileName,
         deviceId: fileInfo.deviceId,
         timestamp: fileInfo.timestamp,

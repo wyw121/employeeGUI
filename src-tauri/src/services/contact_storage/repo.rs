@@ -63,6 +63,20 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         )",
         [],
     )?;
+    // 记录每次导入事件的时间序列
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS import_session_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER,
+            occurred_at TEXT,
+            device_id TEXT,
+            status TEXT,
+            imported_count INTEGER,
+            failed_count INTEGER,
+            error_message TEXT
+        )",
+        [],
+    )?;
     // 兼容旧表：尝试补加 industry 列
     let _ = conn.execute("ALTER TABLE import_sessions ADD COLUMN industry TEXT", []);
     // 维护批次与号码的映射表（生成VCF时显式记录包含哪些号码）
@@ -376,7 +390,13 @@ pub fn create_import_session(conn: &Connection, batch_id: &str, device_id: &str)
         "INSERT INTO import_sessions (batch_id, device_id, industry, status, imported_count, failed_count, started_at) VALUES (?1, ?2, (SELECT TRIM(industry) FROM contact_numbers WHERE used_batch = ?1 AND TRIM(industry) != '' LIMIT 1), 'pending', 0, 0, ?3)",
         params![batch_id, device_id, now],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    // 初始事件
+    let _ = conn.execute(
+        "INSERT INTO import_session_events (session_id, occurred_at, device_id, status, imported_count, failed_count) VALUES (?1, ?2, ?3, 'pending', 0, 0)",
+        params![id, now, device_id],
+    );
+    Ok(id)
 }
 
 pub fn finish_import_session(conn: &Connection, session_id: i64, status: &str, imported_count: i64, failed_count: i64, error_message: Option<&str>) -> SqlResult<()> {
@@ -385,6 +405,11 @@ pub fn finish_import_session(conn: &Connection, session_id: i64, status: &str, i
         "UPDATE import_sessions SET status = ?1, imported_count = ?2, failed_count = ?3, finished_at = ?4, error_message = ?5 WHERE id = ?6",
         params![status, imported_count, failed_count, now, error_message, session_id],
     )?;
+    // 记录完成事件
+    let _ = conn.execute(
+        "INSERT INTO import_session_events (session_id, occurred_at, status, imported_count, failed_count, error_message) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![session_id, now, status, imported_count, failed_count, error_message],
+    );
     // 如果导入成功：更新所属批次内号码的状态与归属设备
     if status == "success" {
         // 找到该会话对应的批次与设备
@@ -411,6 +436,34 @@ pub fn finish_import_session(conn: &Connection, session_id: i64, status: &str, i
         }
     }
     Ok(())
+}
+
+pub fn list_import_session_events(conn: &Connection, session_id: i64, limit: i64, offset: i64) -> SqlResult<super::models::ImportSessionEventList> {
+    let total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_session_events WHERE session_id = ?1",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+
+    let mut items: Vec<super::models::ImportSessionEventDto> = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, occurred_at, device_id, status, imported_count, failed_count, error_message
+         FROM import_session_events WHERE session_id = ?1 ORDER BY occurred_at DESC LIMIT ?2 OFFSET ?3",
+    )?;
+    let mut rows = stmt.query(params![session_id, limit, offset])?;
+    while let Some(row) = rows.next()? {
+        items.push(super::models::ImportSessionEventDto {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            occurred_at: row.get(2)?,
+            device_id: row.get(3).ok(),
+            status: row.get(4).ok(),
+            imported_count: row.get(5).ok(),
+            failed_count: row.get(6).ok(),
+            error_message: row.get(7).ok(),
+        });
+    }
+    Ok(super::models::ImportSessionEventList { total, items })
 }
 
 pub fn list_import_sessions(conn: &Connection, device_id: Option<&str>, batch_id: Option<&str>, industry: Option<&str>, limit: i64, offset: i64) -> SqlResult<ImportSessionList> {

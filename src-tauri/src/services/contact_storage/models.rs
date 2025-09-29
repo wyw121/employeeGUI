@@ -83,6 +83,25 @@ pub struct ImportSessionList {
     pub items: Vec<ImportSessionDto>,
 }
 
+// 每次导入事件（会话维度的时间序列）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportSessionEventDto {
+    pub id: i64,
+    pub session_id: i64,
+    pub occurred_at: String,
+    pub device_id: Option<String>,
+    pub status: Option<String>,
+    pub imported_count: Option<i64>,
+    pub failed_count: Option<i64>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportSessionEventList {
+    pub total: i64,
+    pub items: Vec<ImportSessionEventDto>,
+}
+
 // 分配结果（为设备分配一批号码并生成对应的 VCF 批次与待导入会话）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AllocationResultDto {

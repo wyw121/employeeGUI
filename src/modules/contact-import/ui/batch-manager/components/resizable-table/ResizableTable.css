@@ -1,0 +1,164 @@
+/**
+ * 可调整列宽表格的样式定义
+ * 
+ * 提供拖拽调整列宽时的视觉反馈和交互体验
+ */
+
+.resizable-table-container {
+  position: relative;
+  width: 100%;
+}
+
+/* 可调整大小的表格样式 */
+.resizable-table {
+  width: 100%;
+}
+
+.resizable-table .ant-table {
+  overflow: hidden;
+}
+
+.resizable-table .ant-table-thead > tr > th {
+  position: relative;
+  padding: 8px 16px;
+}
+
+/* 可调整大小的表头单元格 */
+.resizable-th {
+  position: relative !important;
+  user-select: none;
+}
+
+/* 拖拽手柄样式 */
+.resize-handle {
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 6px !important;
+  cursor: col-resize !important;
+  z-index: 10 !important;
+  background-color: transparent;
+  border-right: 2px solid transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+  border-right: 2px solid #1890ff !important;
+  background-color: rgba(24, 144, 255, 0.05);
+}
+
+.resize-handle:active {
+  border-right: 2px solid #096dd9 !important;
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+/* 拖拽中的全局样式 */
+body.resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* 暗黑主题适配 */
+/* 暗黑模式无需额外竖线样式 */
+
+.dark .resize-handle:hover {
+  border-right: 2px solid #40a9ff !important;
+  background-color: rgba(64, 169, 255, 0.08);
+}
+
+.dark .resize-handle:active {
+  border-right: 2px solid #1890ff !important;
+  background-color: rgba(64, 169, 255, 0.12);
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .resize-handle {
+    width: 8px !important; /* 移动端增加拖拽区域 */
+  }
+}
+
+/* 表格滚动时的固定定位 */
+.resizable-table .ant-table-scroll .ant-table-header {
+  overflow: visible;
+}
+
+/* 防止表头内容与拖拽手柄重叠 */
+.resizable-th .ant-table-column-title {
+  padding-right: 8px;
+}
+
+/* 最小宽度约束 */
+.resizable-th[data-min-width] {
+  min-width: attr(data-min-width px, 50px);
+}
+
+/* 拖拽时的视觉指示器 */
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 16px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 1px,
+    #d9d9d9 1px,
+    #d9d9d9 2px
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover::after {
+  opacity: 1;
+}
+
+.dark .resize-handle::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 1px,
+    #595959 1px,
+    #595959 2px
+  );
+}
+
+/* 表格容器边界 */
+.resizable-table-container {
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.dark .resizable-table-container {
+  border: 1px solid #434343;
+}
+
+/* 修复Ant Design表格样式冲突 */
+.resizable-table .ant-table-container {
+  border-left: 0;
+  border-right: 0;
+}
+
+.resizable-table .ant-table-cell {
+  border-right: none !important;
+}
+
+.dark .resizable-table .ant-table-cell {
+  border-right: none !important;
+}
+
+/* 最后一列不显示右边框 */
+.resizable-table .ant-table-thead > tr > th:last-child .resize-handle {
+  display: none !important;
+}

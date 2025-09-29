@@ -20,6 +20,7 @@ const UnifiedViewDemo: React.FC = () => {
   const createDemoPage = (): CachedXmlPage => {
     return {
       filePath: '/demo/ui_dump_demo.xml',
+      absoluteFilePath: '/demo/ui_dump_demo.xml',
       fileName: 'ui_dump_demo.xml',
       deviceId: 'demo-device',
       timestamp: new Date().toISOString(),

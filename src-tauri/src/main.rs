@@ -53,7 +53,6 @@ use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_
 use services::safe_adb_manager::*;
 use services::safe_adb_shell::safe_adb_shell_command;
 use services::device_contact_metrics::get_device_contact_count;
-use services::fast_ui_automation::{fast_ui_dump, adb_tap, adb_tap_by_text};
 use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
@@ -79,6 +78,7 @@ use services::universal_ui_page_analyzer::{
     deduplicate_elements,
     identify_page_type,
 };
+use services::quick_ui_automation::*; // 新增：快速UI自动化命令
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() {
@@ -221,6 +221,10 @@ fn main() {
             adb_start_activity,   // 启动Android Activity
             adb_open_contacts_app, // 打开联系人应用
             adb_view_file,        // 使用VIEW Intent打开文件
+            // 快速UI自动化功能（新增）
+            adb_dump_ui_xml,      // 快速抓取页面XML
+            adb_click_element,    // 通过resource-id点击元素
+            adb_tap_coordinate,   // 通过坐标点击
             // 脚本执行器功能
             execute_automation_script,  // 执行自动化脚本
             validate_device_connection, // 验证设备连接
@@ -283,11 +287,8 @@ fn main() {
             get_xml_file_size,           // 获取XML文件大小
             get_xml_file_absolute_path,  // 获取XML文件绝对路径
             delete_xml_cache_artifacts,  // 删除XML及关联截图
-            parse_cached_xml_to_elements, // 解析缓存XML为UI元素
-            // 快速UI自动化功能（联系人导入对话框处理）
-            fast_ui_dump,       // 快速UI界面抓取
-            adb_tap,           // 基于坐标的快速点击
-            adb_tap_by_text,   // 基于文本的点击
+            parse_cached_xml_to_elements // 解析缓存XML为UI元素
+            ,
             // 设备镜像（scrcpy）
             start_device_mirror,
             stop_device_mirror,

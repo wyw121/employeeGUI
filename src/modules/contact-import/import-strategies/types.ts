@@ -76,13 +76,6 @@ export interface ImportResult {
     }>;
     totalFound: number;
   };
-  /** 对话框处理结果 */
-  dialogProcessingResult?: {
-    success: boolean;
-    processedDialogs: string[];
-    totalTime: number;
-    error?: string;
-  };
 }
 
 export interface ImportStrategySelection {

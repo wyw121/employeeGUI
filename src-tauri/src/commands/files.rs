@@ -49,7 +49,8 @@ pub async fn read_file_as_data_url(path: String) -> Result<String, String> {
     use std::path::Path;
     use base64::Engine as _;
     
-    tracing::info!("🖼️ 读取图片文件为 data URL: {}", path);
+    #[cfg(debug_assertions)]
+    tracing::debug!("🖼️ 读取图片文件: {}", path);
     
     let bytes = std::fs::read(&path).map_err(|e| {
         tracing::error!("❌ 读取文件失败: {} - {}", path, e);
@@ -75,10 +76,11 @@ pub async fn read_file_as_data_url(path: String) -> Result<String, String> {
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let data_url = format!("data:{};base64,{}", mime, b64);
     
-    tracing::info!("✅ 成功生成 data URL: {} -> {} (原始文件{}字节, base64长度{}字符)", 
-                  path, mime, bytes.len(), b64.len());
-    tracing::debug!("📄 Data URL 前100字符: {}", 
-                   &data_url[..std::cmp::min(100, data_url.len())]);
+    #[cfg(debug_assertions)]
+    tracing::debug!("✅ 生成 data URL: {} -> {} ({}KB)", 
+                   path.split(['/', '\\']).last().unwrap_or("unknown"), 
+                   mime, 
+                   bytes.len() / 1024);
     
     Ok(data_url)
 }

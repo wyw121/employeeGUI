@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import invokeCompat from '../../../../api/core/tauriInvoke';
 import type { ImportStrategy, ImportResult, ImportStrategySelection } from '../types';
 import { ImportErrorHandler, type ImportError } from './ImportErrorHandler';
-import { ParallelClickProcessor } from '../../../../domain/contact-import/dialog-automation';
+import { AutomationEngine, type AutomationResult } from '../../automation';
 
 /**
  * 导入策略执行器
@@ -13,21 +13,15 @@ import { ParallelClickProcessor } from '../../../../domain/contact-import/dialog
  * - ✅ 自动重试机制
  * - ✅ 详细的执行日志
  * - ✅ 安全的临时文件清理
- * - ✅ 自动化对话框处理（仅此一次/始终，vCard确认）
  */
 export class ImportStrategyExecutor {
   private static instance: ImportStrategyExecutor;
-  private dialogProcessor: ParallelClickProcessor;
   
   static getInstance(): ImportStrategyExecutor {
     if (!ImportStrategyExecutor.instance) {
       ImportStrategyExecutor.instance = new ImportStrategyExecutor();
     }
     return ImportStrategyExecutor.instance;
-  }
-
-  constructor() {
-    this.dialogProcessor = new ParallelClickProcessor();
   }
 
   /**
@@ -57,21 +51,36 @@ export class ImportStrategyExecutor {
         };
       }
 
-      // 3. 自动化处理对话框
-      console.log('🤖 开始自动化对话框处理...');
-      const dialogResult = await this.dialogProcessor.processContactImportDialogs(deviceId);
+      // 3. 自动化处理导入对话框（新增）
+      console.log('🤖 开始自动化处理导入对话框...');
+      const automationResult = await this.handleImportDialogs(deviceId);
       
-      if (!dialogResult.success) {
-        console.warn('⚠️ 对话框处理失败，但继续执行:', dialogResult.error);
-        // 对话框处理失败不会中断整个导入过程，只记录警告
+      if (!automationResult.success) {
+        console.warn('⚠️ 自动化对话框处理未完全成功，可能需要手动操作');
+        console.warn(`自动化结果: ${automationResult.message}`);
       } else {
-        console.log('✅ 对话框处理成功:', dialogResult.processedDialogs);
+        console.log('✅ 自动化对话框处理成功');
       }
 
-      // 4. 等待导入完成
+      // 4. 根据自动化结果调整返回值
+      const finalSuccess = importSuccess && automationResult.vCardConfirmed;
+      
+      if (!finalSuccess) {
+        return {
+          success: false,
+          importedCount: 0,
+          failedCount: 1,
+          strategy: selectedStrategy,
+          errorMessage: automationResult.success 
+            ? '导入触发失败' 
+            : `导入对话框处理失败: ${automationResult.message}`
+        };
+      }
+
+      // 3. 等待导入完成
       await this.waitForImportCompletion();
 
-      // 5. 验证导入结果（可选）
+      // 4. 验证导入结果（可选）
       let verificationDetails;
       if (enableVerification && selection.verificationPhones) {
         verificationDetails = await this.verifyImportResults(
@@ -85,8 +94,7 @@ export class ImportStrategyExecutor {
         importedCount: verificationDetails?.totalFound || 1,
         failedCount: 0,
         strategy: selectedStrategy,
-        verificationDetails,
-        dialogProcessingResult: dialogResult
+        verificationDetails
       };
 
     } catch (error) {
@@ -285,6 +293,59 @@ export class ImportStrategyExecutor {
       
       console.warn('清理临时文件时出错:', importError.message);
       // 清理失败不影响主流程，只记录警告
+    }
+  }
+
+  /**
+   * 处理导入过程中的对话框（新增）
+   * 自动化处理"仅此一次"和"vCard确认"对话框
+   */
+  private async handleImportDialogs(deviceId: string): Promise<AutomationResult> {
+    try {
+      console.log('🚀 启动自动化对话框处理引擎...');
+      
+      // 创建自动化引擎实例
+      const automationEngine = new AutomationEngine(deviceId, {
+        timeout: 8000,        // 8秒超时
+        retryInterval: 300,   // 300ms间隔检查
+        maxRetries: 25        // 最多25次重试
+      });
+
+      // 执行自动化处理
+      const result = await automationEngine.executeAutomation();
+      
+      console.log(`🎯 自动化执行结果:`, {
+        success: result.success,
+        vCardConfirmed: result.vCardConfirmed,
+        completedDialogs: result.completedDialogs.length,
+        duration: `${result.duration}ms`,
+        attempts: result.totalAttempts
+      });
+
+      // 打印详细的点击结果
+      if (result.completedDialogs.length > 0) {
+        console.log('📋 对话框处理详情:');
+        result.completedDialogs.forEach((dialog, index) => {
+          console.log(`  ${index + 1}. ${dialog.dialogType}: ${dialog.success ? '✅ 成功' : '❌ 失败'}`);
+          if (dialog.error) {
+            console.log(`     错误: ${dialog.error}`);
+          }
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ 自动化对话框处理失败:', error);
+      
+      // 返回失败结果
+      return {
+        success: false,
+        completedDialogs: [],
+        totalAttempts: 0,
+        duration: 0,
+        vCardConfirmed: false,
+        message: `自动化处理异常: ${(error as Error).message}`
+      };
     }
   }
 }

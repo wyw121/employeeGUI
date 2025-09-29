@@ -2,9 +2,14 @@
  * 调试工具集 - 统一管理调试日志输出
  */
 
-// 调试模式控制
-const DEBUG_MODE = process.env.NODE_ENV === 'development';
-const VERBOSE_LOGS = process.env.REACT_APP_VERBOSE_LOGS === 'true';
+// 调试模式控制 - 兼容浏览器环境
+const DEBUG_MODE = typeof process !== 'undefined' 
+  ? process.env.NODE_ENV === 'development' 
+  : (import.meta as any).env?.DEV || false;
+
+const VERBOSE_LOGS = typeof process !== 'undefined' 
+  ? process.env.REACT_APP_VERBOSE_LOGS === 'true' 
+  : (import.meta as any).env?.VITE_VERBOSE_LOGS === 'true';
 
 /**
  * 图片加载相关调试日志

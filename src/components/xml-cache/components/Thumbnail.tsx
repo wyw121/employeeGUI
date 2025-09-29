@@ -1,5 +1,7 @@
 import React from "react";
 import { getCachedDataUrl, loadDataUrlWithCache } from "../utils/imageCache";
+import { useImageLazyLoad } from "../../../hooks/useIntersectionObserver";
+import { imageDebug, performance } from "../../../utils/debugUtils";
 
 export interface ThumbnailProps {
   src?: string;
@@ -13,6 +15,9 @@ export interface ThumbnailProps {
   expandMode?: 'none' | 'hover' | 'click'; // default 'click' to avoid hover flicker in large lists
   collapsedHeight?: number | string; // collapsed height (default: height)
   maxExpandedHeight?: number | string; // e.g., '80vh' to avoid overscroll; default '80vh'
+  // Lazy loading options
+  enableLazyLoad?: boolean; // default true
+  lazyLoadDistance?: string; // default '100px'
 }
 
 // A tiny image component that provides a graceful fallback when the image fails to load.
@@ -27,91 +32,113 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   expandMode = 'click',
   collapsedHeight,
   maxExpandedHeight = '80vh',
+  enableLazyLoad = true,
+  lazyLoadDistance = '100px',
 }) => {
+  // 懒加载支持
+  const [containerRef, shouldLoad, isVisible] = useImageLazyLoad({
+    enabled: enableLazyLoad,
+    preloadDistance: lazyLoadDistance,
+  });
+  
+  // 图片状态
   const [imgSrc, setImgSrc] = React.useState<string | undefined>(undefined);
   const [triedFallback, setTriedFallback] = React.useState(false);
-  const [hovered, setHovered] = React.useState(false);
-  const hoverTimer = React.useRef<number | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [sourceType, setSourceType] = React.useState<'asset' | 'data' | 'none'>('none');
+  
+  // UI 状态
+  const [hovered, setHovered] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
+  const hoverTimer = React.useRef<number | null>(null);
 
-  // Decide image source once per input change (best practice on Windows):
-  // - If absolutePathForFallback exists: try backend data URL first; if fail, fallback to asset src
-  // - Else: use asset src when provided
+  // 图片加载逻辑（仅在应该加载时执行）
   React.useEffect(() => {
+    // 如果启用懒加载但还未可见，不加载
+    if (!shouldLoad) {
+      return;
+    }
+    
     let cancelled = false;
+    const perfKey = `thumbnail-${absolutePathForFallback?.split(/[\\\/]/).pop() || 'unknown'}`;
+    
     setLoaded(false);
     setTriedFallback(false);
     setSourceType('none');
     setImgSrc(undefined);
+    
+    performance.mark(`${perfKey}-start`);
+    
     (async () => {
       if (absolutePathForFallback) {
-        console.log(`🔍 尝试加载图片: ${absolutePathForFallback}`);
+        imageDebug.log(`🔍 尝试加载图片: ${absolutePathForFallback}`);
         const dataUrl = await loadDataUrlWithCache(absolutePathForFallback);
         if (!cancelled && dataUrl) {
-          console.log(`📊 设置 data URL 源: ${absolutePathForFallback} (长度: ${dataUrl.length}) - 使用 loading="eager"`);
+          imageDebug.log(`📊 设置 data URL 源 (${(dataUrl.length/1024).toFixed(1)}KB)`);
           setImgSrc(dataUrl);
           setSourceType('data');
+          performance.mark(`${perfKey}-loaded`);
           return;
         }
         // fallback to asset if available
         if (!cancelled && src) {
-          console.log(`📊 回退到资源源: ${src}`);
+          imageDebug.verbose(`📊 回退到资源源: ${src}`);
           setImgSrc(src);
           setSourceType('asset');
         }
       } else if (src) {
-        console.log(`📊 使用资源源: ${src}`);
+        imageDebug.verbose(`� 使用资源源: ${src}`);
         setImgSrc(src);
         setSourceType('asset');
       } else {
-        // no image available
-        console.log(`📊 无图片源可用`);
+        imageDebug.verbose('� 无图片源可用');
         setImgSrc(undefined);
         setSourceType('none');
       }
     })();
+    
     return () => {
       cancelled = true;
     };
-  }, [absolutePathForFallback, src]);
+  }, [absolutePathForFallback, src, shouldLoad]);
 
   const handleError = React.useCallback(async (error: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.log(`🔴 图片加载错误: ${absolutePathForFallback}`, {
-      imgSrc,
+    imageDebug.error(`🔴 图片加载错误: ${absolutePathForFallback}`, {
       sourceType,
       triedFallback,
-      error: error.currentTarget.src,
+      src: error.currentTarget.src,
     });
     
     // Only try once to avoid loops
     if (triedFallback || !absolutePathForFallback) {
-      console.log(`🔴 不再重试: triedFallback=${triedFallback}, absolutePathForFallback=${!!absolutePathForFallback}`);
+      imageDebug.warn('🔴 不再重试，设置为无图片状态');
       setImgSrc(undefined);
       return;
     }
     setTriedFallback(true);
+    
     // Check cache first
     const cached = getCachedDataUrl(absolutePathForFallback);
     if (cached) {
-      console.log(`🔄 使用缓存重试: ${absolutePathForFallback} (长度: ${cached.length})`);
+      imageDebug.log(`🔄 使用缓存重试: (${(cached.length/1024).toFixed(1)}KB)`);
       setImgSrc(cached);
       setSourceType("data");
       return;
     }
-    console.log(`🔄 重新加载图片: ${absolutePathForFallback}`);
+    
+    imageDebug.log(`🔄 重新加载图片: ${absolutePathForFallback}`);
     const dataUrl = await loadDataUrlWithCache(absolutePathForFallback);
     if (dataUrl) {
-      console.log(`🔄 重新加载成功: ${absolutePathForFallback} (长度: ${dataUrl.length})`);
+      imageDebug.log(`🔄 重新加载成功: (${(dataUrl.length/1024).toFixed(1)}KB)`);
       setImgSrc(dataUrl);
       setSourceType("data");
       return;
     }
-    console.log(`🔴 重新加载失败: ${absolutePathForFallback}`);
+    
+    imageDebug.error(`🔴 重新加载失败: ${absolutePathForFallback}`);
     setImgSrc(undefined);
     setSourceType("none");
-  }, [absolutePathForFallback, triedFallback, imgSrc, sourceType]);
+  }, [absolutePathForFallback, triedFallback, sourceType]);
 
   const collapsedH = collapsedHeight ?? height;
   const isHoverExpanded = (expandMode === 'hover') && hovered && !!imgSrc && loaded;
@@ -140,6 +167,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
 
   return (
     <div
+      ref={containerRef}
       style={containerStyle}
       onMouseEnter={() => {
         if (expandMode === 'hover') {
@@ -172,12 +200,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
             loading="eager"
             onError={handleError}
             onLoad={() => {
-              console.log(`✅ 图片加载成功: ${absolutePathForFallback}`, {
-                imgSrc: imgSrc?.substring(0, 50) + '...',
-                sourceType,
-                loadingAttribute: 'eager', // 确认使用 eager 加载
-                dataUrlLength: imgSrc?.length,
-              });
+              imageDebug.log(`✅ 图片渲染成功: ${sourceType} (${(imgSrc?.length || 0)/1024 | 0}KB)`);
               setLoaded(true);
             }}
           />

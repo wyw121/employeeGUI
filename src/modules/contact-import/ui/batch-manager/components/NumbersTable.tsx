@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Table, Tag, Space, Typography } from 'antd';
 import type { ContactNumberList } from '../types';
-import { getDistinctIndustries as fetchDistinctIndustries } from '../../services/contactNumberService';
+import { getDistinctIndustries as fetchDistinctIndustries, ContactNumberDto } from '../../services/contactNumberService';
 
 interface Props {
   data?: ContactNumberList | null;
@@ -21,9 +21,22 @@ interface Props {
   };
   // 行业下拉依赖：历史行业缓存（可选）。若不传则组件内部拉取一次并缓存于内存。
   industriesCache?: string[];
+  // 多选功能（新增）
+  selection?: {
+    selectedRows: ContactNumberDto[];
+    onChange: (selectedRows: ContactNumberDto[], selectedRowKeys: React.Key[]) => void;
+    getCheckboxProps?: (record: ContactNumberDto) => { disabled?: boolean };
+  };
 }
 
-const NumbersTable: React.FC<Props> = ({ data, loading, pagination, controlledFilters, industriesCache }) => {
+const NumbersTable: React.FC<Props> = ({ 
+  data, 
+  loading, 
+  pagination, 
+  controlledFilters, 
+  industriesCache,
+  selection 
+}) => {
   const items = data?.items || [];
 
   // 内部筛选状态：行业/状态（仅对当前页数据做客户端过滤）
@@ -159,6 +172,15 @@ const NumbersTable: React.FC<Props> = ({ data, loading, pagination, controlledFi
         size="small"
         loading={loading}
         dataSource={filteredItems}
+        rowSelection={selection ? {
+          type: 'checkbox',
+          selectedRowKeys: selection.selectedRows.map(row => row.id),
+          onChange: (selectedRowKeys, selectedRows) => {
+            selection.onChange(selectedRows as ContactNumberDto[], selectedRowKeys);
+          },
+          getCheckboxProps: selection.getCheckboxProps,
+          preserveSelectedRowKeys: true,
+        } : undefined}
         pagination={pagination ? {
           current: pagination.current,
           pageSize: pagination.pageSize,

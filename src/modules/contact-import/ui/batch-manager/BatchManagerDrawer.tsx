@@ -4,9 +4,11 @@ import FiltersBar from './components/FiltersBar';
 import NumbersTable from './components/NumbersTable';
 import SessionsTable from './components/SessionsTable';
 import ActionsBar from './components/ActionsBar';
+import { BulkActionsBar } from './components/bulk-actions';
 import { useBatchData } from './hooks/useBatchData';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import type { BatchFilterState } from './types';
+import { ContactNumberDto } from '../services/contactNumberService';
 import styles from './BatchManagerDrawer.module.css';
 
 interface Props {
@@ -23,6 +25,10 @@ const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
   const [numbersPage, setNumbersPage] = useState({ page: 1, pageSize: 50 });
   const [sessionsPage, setSessionsPage] = useState({ page: 1, pageSize: 50 });
   const [lastSessionId, setLastSessionId] = useState<number | undefined>(undefined);
+  
+  // 批量选择状态（新增）
+  const [selectedNumbers, setSelectedNumbers] = useState<ContactNumberDto[]>([]);
+  
   const { loading, batches, sessions, numbers, reload } = useBatchData(
     {
       ...effectiveFilter,
@@ -34,6 +40,20 @@ const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
     sessions: { limit: sessionsPage.pageSize, offset: (sessionsPage.page - 1) * sessionsPage.pageSize },
     }
   );
+
+  // 批量操作回调
+  const handleSelectionChange = (selectedRows: ContactNumberDto[], selectedRowKeys: React.Key[]) => {
+    setSelectedNumbers(selectedRows);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedNumbers([]);
+  };
+
+  const handleArchiveComplete = async () => {
+    await reload();
+    setSelectedNumbers([]);
+  };
 
   return (
     <Drawer
@@ -57,22 +77,37 @@ const BatchManagerDrawer: React.FC<Props> = ({ open, onClose }) => {
         <Tabs
           items={[
             { key: 'numbers', label: '号码', children: (
-              <NumbersTable
-                data={numbers}
-                loading={loading}
-                pagination={{
-                  current: numbersPage.page,
-                  pageSize: numbersPage.pageSize,
-                  total: numbers?.total || 0,
-                  onChange: (page, pageSize) => setNumbersPage({ page, pageSize }),
-                }}
-                onRefresh={reload}
-                controlledFilters={{
-                  status: numbersFilters.status ?? null,
-                  industry: numbersFilters.industry ?? null,
-                  onChange: setNumbersFilters,
-                }}
-              />
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <BulkActionsBar
+                  selectedNumbers={selectedNumbers}
+                  onClearSelection={handleClearSelection}
+                  onArchiveComplete={handleArchiveComplete}
+                  loading={loading}
+                />
+                <NumbersTable
+                  data={numbers}
+                  loading={loading}
+                  pagination={{
+                    current: numbersPage.page,
+                    pageSize: numbersPage.pageSize,
+                    total: numbers?.total || 0,
+                    onChange: (page, pageSize) => setNumbersPage({ page, pageSize }),
+                  }}
+                  onRefresh={reload}
+                  controlledFilters={{
+                    status: numbersFilters.status ?? null,
+                    industry: numbersFilters.industry ?? null,
+                    onChange: setNumbersFilters,
+                  }}
+                  selection={{
+                    selectedRows: selectedNumbers,
+                    onChange: handleSelectionChange,
+                    getCheckboxProps: (record) => ({
+                      disabled: loading, // 加载时禁用选择
+                    }),
+                  }}
+                />
+              </Space>
             ) },
             { key: 'sessions', label: '导入会话', children: (
               <SessionsTable

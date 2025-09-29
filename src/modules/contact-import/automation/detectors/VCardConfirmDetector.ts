@@ -78,22 +78,51 @@ export class VCardConfirmDetector {
    * 提取确定按钮元素信息
    */
   private extractConfirmButton(xmlContent: string): ElementMatch | null {
-    // 匹配确定按钮节点
-    const buttonRegex = new RegExp(
-      `<node[^>]*resource-id="${this.config.confirmButtonId}"[^>]*text="确定"[^>]*bounds="([^"]*)"[^>]*class="([^"]*)"[^>]*clickable="true"[^>]*>`,
-      'i'
-    );
-
-    const match = xmlContent.match(buttonRegex);
-    if (!match) return null;
-
-    return {
+    // 最通用的匹配方式：分步查找并提取信息
+    console.log(`🔍 VCardConfirm: 查找"确定"按钮...`);
+    
+    // 第一步：找到包含目标resource-id和text的node  
+    const nodePattern = `<node[^>]*resource-id="${this.config.confirmButtonId}"[^>]*text="确定"[^>]*>`;
+    const altNodePattern = `<node[^>]*text="确定"[^>]*resource-id="${this.config.confirmButtonId}"[^>]*>`;
+    
+    let nodeMatch = xmlContent.match(new RegExp(nodePattern, 'i'));
+    if (!nodeMatch) {
+      nodeMatch = xmlContent.match(new RegExp(altNodePattern, 'i'));
+    }
+    
+    if (!nodeMatch) {
+      console.log(`❌ VCardConfirm: 未找到匹配的节点`);
+      return null;
+    }
+    
+    const fullNode = nodeMatch[0];
+    console.log(`✅ VCardConfirm: 找到节点: ${fullNode.substring(0, 100)}...`);
+    
+    // 第二步：从找到的节点中提取各个属性
+    const boundsMatch = fullNode.match(/bounds="([^"]*)"/i);
+    const classMatch = fullNode.match(/class="([^"]*)"/i);
+    const clickableMatch = fullNode.match(/clickable="([^"]*)"/i);
+    
+    if (!boundsMatch) {
+      console.log(`❌ VCardConfirm: 未找到bounds属性`);
+      return null;
+    }
+    
+    if (!clickableMatch || clickableMatch[1] !== 'true') {
+      console.log(`❌ VCardConfirm: 按钮不可点击`);
+      return null;
+    }
+    
+    const result = {
       resourceId: this.config.confirmButtonId,
       text: "确定",
-      bounds: match[1],
-      className: match[2],
+      bounds: boundsMatch[1],
+      className: classMatch ? classMatch[1] : "android.widget.Button",
       clickable: true
     };
+    
+    console.log(`✅ VCardConfirm: 成功提取按钮信息:`, result);
+    return result;
   }
 
   /**

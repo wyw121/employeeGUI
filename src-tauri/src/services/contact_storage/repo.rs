@@ -348,6 +348,32 @@ pub fn mark_numbers_used_by_id_range(conn: &Connection, start_id: i64, end_id: i
     Ok(affected as i64)
 }
 
+/// 批量将指定ID的号码重置为未导入状态
+pub fn mark_numbers_as_not_imported_by_ids(conn: &Connection, number_ids: &[i64]) -> SqlResult<i64> {
+    if number_ids.is_empty() {
+        return Ok(0);
+    }
+    
+    // 构建 IN 子句的占位符
+    let placeholders = number_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "UPDATE contact_numbers SET 
+         used = 0, 
+         used_at = NULL, 
+         used_batch = NULL,
+         status = 'not_imported',
+         imported_device_id = NULL
+         WHERE id IN ({})",
+        placeholders
+    );
+    
+    // 转换为 rusqlite 参数
+    let params: Vec<&dyn rusqlite::ToSql> = number_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    
+    let affected = conn.execute(&sql, &params[..])?;
+    Ok(affected as i64)
+}
+
 // ---------- 批次与会话：仓储函数 ----------
 
 pub fn create_vcf_batch(conn: &Connection, batch_id: &str, vcf_file_path: &str, source_start_id: Option<i64>, source_end_id: Option<i64>) -> SqlResult<()> {

@@ -90,7 +90,24 @@ pub async fn adb_click_element(
         }
     }
 
-    // 使用uiautomator2通过resource-id点击元素
+    // 🚀 优化：直接使用坐标点击作为主方案（更快更可靠）
+    // 备用方案改为主方案，因为坐标点击兼容性更好且速度更快
+    info!("🎯 使用坐标点击方案（主方案）");
+    match try_click_by_coordinates(&mut safe_adb, &device_id, &resource_id).await {
+        Ok(true) => {
+            info!("✅ 坐标点击成功");
+            return Ok(true);
+        }
+        Ok(false) => {
+            warn!("❌ 坐标点击返回false，尝试uiautomator方案");
+        }
+        Err(e) => {
+            warn!("❌ 坐标点击失败，尝试uiautomator方案: {}", e);
+        }
+    }
+
+    // 备用方案：使用uiautomator2通过resource-id点击元素
+    info!("🔄 备用方案：使用uiautomator点击");
     let selector = format!("resourceId(\"{}\")", resource_id);
     let click_args = vec![
         "-s", &device_id,
@@ -103,18 +120,16 @@ pub async fn adb_click_element(
         Ok(output) => {
             // 检查输出中是否包含成功指示
             if output.contains("OK") || output.contains("success") {
-                info!("✅ 元素点击成功: {}", resource_id);
+                info!("✅ uiautomator点击成功: {}", resource_id);
                 Ok(true)
             } else {
-                warn!("⚠️ 点击元素可能失败: {}", output);
-                // 尝试备用方案：通过坐标点击
-                try_click_by_coordinates(&mut safe_adb, &device_id, &resource_id).await
+                warn!("⚠️ uiautomator点击可能失败: {}", output);
+                Err(format!("所有点击方案都失败了"))
             }
         }
         Err(e) => {
-            warn!("❌ 直接点击失败，尝试备用方案: {}", e);
-            // 备用方案：先查找元素坐标，再点击
-            try_click_by_coordinates(&mut safe_adb, &device_id, &resource_id).await
+            error!("❌ uiautomator点击也失败: {}", e);
+            Err(format!("所有点击方案都失败了: {}", e))
         }
     }
 }

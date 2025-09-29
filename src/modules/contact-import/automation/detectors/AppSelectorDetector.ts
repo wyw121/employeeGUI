@@ -59,22 +59,51 @@ export class AppSelectorDetector {
    * 提取"仅此一次"按钮元素信息
    */
   private extractOnceButton(xmlContent: string): ElementMatch | null {
-    // 匹配"仅此一次"按钮节点
-    const buttonRegex = new RegExp(
-      `<node[^>]*resource-id="${this.config.onceButtonId}"[^>]*text="仅此一次"[^>]*bounds="([^"]*)"[^>]*class="([^"]*)"[^>]*clickable="true"[^>]*>`,
-      'i'
-    );
-
-    const match = xmlContent.match(buttonRegex);
-    if (!match) return null;
-
-    return {
+    // 最通用的匹配方式：分步查找并提取信息
+    console.log(`🔍 AppSelector: 查找"仅此一次"按钮...`);
+    
+    // 第一步：找到包含目标resource-id和text的node
+    const nodePattern = `<node[^>]*resource-id="${this.config.onceButtonId}"[^>]*text="仅此一次"[^>]*>`;
+    const altNodePattern = `<node[^>]*text="仅此一次"[^>]*resource-id="${this.config.onceButtonId}"[^>]*>`;
+    
+    let nodeMatch = xmlContent.match(new RegExp(nodePattern, 'i'));
+    if (!nodeMatch) {
+      nodeMatch = xmlContent.match(new RegExp(altNodePattern, 'i'));
+    }
+    
+    if (!nodeMatch) {
+      console.log(`❌ AppSelector: 未找到匹配的节点`);
+      return null;
+    }
+    
+    const fullNode = nodeMatch[0];
+    console.log(`✅ AppSelector: 找到节点: ${fullNode.substring(0, 100)}...`);
+    
+    // 第二步：从找到的节点中提取各个属性
+    const boundsMatch = fullNode.match(/bounds="([^"]*)"/i);
+    const classMatch = fullNode.match(/class="([^"]*)"/i);
+    const clickableMatch = fullNode.match(/clickable="([^"]*)"/i);
+    
+    if (!boundsMatch) {
+      console.log(`❌ AppSelector: 未找到bounds属性`);
+      return null;
+    }
+    
+    if (!clickableMatch || clickableMatch[1] !== 'true') {
+      console.log(`❌ AppSelector: 按钮不可点击`);
+      return null;
+    }
+    
+    const result = {
       resourceId: this.config.onceButtonId,
       text: "仅此一次",
-      bounds: match[1],
-      className: match[2],
+      bounds: boundsMatch[1],
+      className: classMatch ? classMatch[1] : "android.widget.Button",
       clickable: true
     };
+    
+    console.log(`✅ AppSelector: 成功提取按钮信息:`, result);
+    return result;
   }
 
   /**

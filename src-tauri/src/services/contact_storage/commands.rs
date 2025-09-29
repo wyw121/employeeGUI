@@ -198,6 +198,17 @@ pub async fn mark_contact_numbers_used_by_id_range(start_id: i64, end_id: i64, b
     mark_numbers_used_by_id_range(&conn, start_id, end_id, &batch_id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn mark_contact_numbers_as_not_imported(number_ids: Vec<i64>) -> Result<i64, String> {
+    if number_ids.is_empty() {
+        return Ok(0);
+    }
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    mark_numbers_as_not_imported_by_ids(&conn, &number_ids).map_err(|e| e.to_string())
+}
+
 // -------- 新增：批次与导入会话 API --------
 
 #[tauri::command]

@@ -61,7 +61,19 @@ export class AutomationEngine {
         // 检测所有可能的对话框
         const detections = await this.detectAllDialogs(xmlContent);
         
+        console.log(`🔍 第${attempt + 1}次检测结果: 发现${detections.length}个对话框`);
+        detections.forEach((detection, index) => {
+          console.log(`  ${index + 1}. ${detection.type}: ${detection.detected ? '✅ 检测到' : '❌ 未检测到'} (置信度: ${detection.confidence})`);
+          if (detection.targetElement) {
+            console.log(`     目标元素: ${detection.targetElement.resourceId} "${detection.targetElement.text}" ${detection.targetElement.bounds}`);
+          }
+          if (detection.message) {
+            console.log(`     消息: ${detection.message}`);
+          }
+        });
+        
         if (detections.length === 0) {
+          console.log(`⏭️ 未检测到对话框，等待${this.config.retryInterval}ms后继续...`);
           await this.sleep(this.config.retryInterval);
           continue;
         }
@@ -69,7 +81,13 @@ export class AutomationEngine {
         // 准备并行点击操作
         const clickOperations = await this.prepareClickOperations(detections);
         
+        console.log(`🎯 准备执行${clickOperations.length}个点击操作`);
+        clickOperations.forEach((op, index) => {
+          console.log(`  ${index + 1}. ${op.dialogType}: ${op.elementMatch.resourceId} "${op.elementMatch.text}"`);
+        });
+        
         if (clickOperations.length > 0) {
+          console.log(`🚀 开始执行并行点击...`);
           // 执行并行点击
           const clickResults = await this.clickHandler.executeParallelClicks(clickOperations);
           completedDialogs.push(...clickResults);

@@ -85,6 +85,18 @@ export async function markContactNumbersUsedByIdRange(startId: number, endId: nu
   return invoke<number>('mark_contact_numbers_used_by_id_range', { start_id: startId, end_id: endId, batch_id: batchId });
 }
 
+/**
+ * 批量将指定ID的号码重置为未导入状态
+ * @param numberIds 要归档的号码ID数组
+ * @returns 操作影响的行数
+ */
+export async function markContactNumbersAsNotImported(numberIds: number[]): Promise<number> {
+  if (numberIds.length === 0) return 0;
+  return invoke<number>('mark_contact_numbers_as_not_imported', { 
+    number_ids: numberIds 
+  });
+}
+
 // -------- 批次与导入会话：前端服务封装 --------
 
 export interface VcfBatchDto {

@@ -28,6 +28,7 @@ pub use commands::{
     list_numbers_without_vcf_batch,
     list_vcf_batch_records,
     mark_contact_numbers_used_by_id_range,
+    mark_contact_numbers_as_not_imported,
     set_contact_numbers_industry_by_id_range,
     tag_numbers_industry_by_vcf_batch_cmd,
     list_import_session_events_cmd,

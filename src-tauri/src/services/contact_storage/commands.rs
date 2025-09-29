@@ -18,6 +18,7 @@ use super::repo::{
     insert_numbers,
     list_numbers,
     list_numbers_filtered,
+    mark_numbers_as_not_imported_by_ids,
     create_vcf_batch,
     list_vcf_batches,
     get_vcf_batch,

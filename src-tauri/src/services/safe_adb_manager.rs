@@ -6,6 +6,7 @@ use tracing::{error, info, warn};
 use std::os::windows::process::CommandExt;
 
 /// ADB路径管理器 - 解决雷电模拟器ADB崩溃问题
+#[derive(Clone)]
 pub struct SafeAdbManager {
     preferred_adb_path: Option<String>,
     fallback_paths: Vec<String>,

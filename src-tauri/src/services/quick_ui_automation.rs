@@ -2,6 +2,33 @@ use crate::services::safe_adb_manager::SafeAdbManager;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use tracing::{info, warn, error};
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+// 全局ADB管理器实例，避免重复初始化
+lazy_static! {
+    static ref GLOBAL_ADB: Mutex<Option<SafeAdbManager>> = Mutex::new(None);
+}
+
+/// 获取或初始化全局ADB管理器
+async fn get_global_adb() -> Result<SafeAdbManager, String> {
+    let mut global_adb = GLOBAL_ADB.lock().unwrap();
+    
+    if global_adb.is_none() {
+        info!("🎯 初始化全局ADB管理器");
+        let mut adb = SafeAdbManager::new();
+        
+        // 一次性完成ADB路径查找和验证
+        if let Err(e) = adb.find_safe_adb_path() {
+            return Err(format!("ADB路径不可用: {}", e));
+        }
+        
+        *global_adb = Some(adb);
+        info!("✅ 全局ADB管理器初始化完成");
+    }
+    
+    Ok(global_adb.as_ref().unwrap().clone())
+}
 
 /**
  * 快速UI操作结果
@@ -24,22 +51,8 @@ pub async fn adb_dump_ui_xml(device_id: String) -> Result<String, String> {
     let start_time = std::time::Instant::now();
     info!("🔍 快速抓取UI XML: device={}", device_id);
 
-    let mut safe_adb = SafeAdbManager::new();
-
-    // 确保ADB路径可用
-    if let Err(e) = safe_adb.find_safe_adb_path() {
-        return Err(format!("ADB路径不可用: {}", e));
-    }
-
-    // 验证设备连接
-    match safe_adb.is_device_online(&device_id) {
-        Ok(false) | Err(_) => {
-            return Err(format!("设备 {} 未连接或检测失败", device_id));
-        }
-        Ok(true) => {
-            // 设备在线，继续
-        }
-    }
+    // 使用全局ADB管理器，避免重复初始化
+    let mut safe_adb = get_global_adb().await?;
 
     // 执行UI dump
     let dump_args = vec![
@@ -73,64 +86,49 @@ pub async fn adb_click_element(
 ) -> Result<bool, String> {
     info!("👆 点击元素: device={}, resource_id={}", device_id, resource_id);
 
-    let mut safe_adb = SafeAdbManager::new();
+    // 使用全局ADB管理器，避免重复初始化和设备检查
+    let mut safe_adb = get_global_adb().await?;
 
-    // 确保ADB路径可用
-    if let Err(e) = safe_adb.find_safe_adb_path() {
-        return Err(format!("ADB路径不可用: {}", e));
-    }
-
-    // 验证设备连接
-    match safe_adb.is_device_online(&device_id) {
-        Ok(false) | Err(_) => {
-            return Err(format!("设备 {} 未连接", device_id));
-        }
-        Ok(true) => {
-            // 设备在线
-        }
-    }
-
-    // 🚀 优化：直接使用坐标点击作为主方案（更快更可靠）
-    // 备用方案改为主方案，因为坐标点击兼容性更好且速度更快
-    info!("🎯 使用坐标点击方案（主方案）");
-    match try_click_by_coordinates(&mut safe_adb, &device_id, &resource_id).await {
-        Ok(true) => {
-            info!("✅ 坐标点击成功");
-            return Ok(true);
-        }
-        Ok(false) => {
-            warn!("❌ 坐标点击返回false，尝试uiautomator方案");
-        }
-        Err(e) => {
-            warn!("❌ 坐标点击失败，尝试uiautomator方案: {}", e);
-        }
-    }
-
-    // 备用方案：使用uiautomator2通过resource-id点击元素
-    info!("🔄 备用方案：使用uiautomator点击");
-    let selector = format!("resourceId(\"{}\")", resource_id);
-    let click_args = vec![
+    // 🚀 极速优化：单次UI抓取 + 直接坐标点击（无备用方案）
+    info!("🎯 使用极速坐标点击（一次抓取，直接点击）");
+    
+    // 一次性抓取UI XML
+    let dump_args = vec![
         "-s", &device_id,
-        "shell", "uiautomator", "runtest", "UiAutomatorStub.jar",
-        "-c", "com.github.uiautomatorstub.Stub", "-e", "cmd", "click",
-        "-e", "selector", &selector
+        "exec-out", "uiautomator", "dump", "/dev/stdout"
     ];
 
-    match safe_adb.execute_adb_command(&click_args) {
-        Ok(output) => {
-            // 检查输出中是否包含成功指示
-            if output.contains("OK") || output.contains("success") {
-                info!("✅ uiautomator点击成功: {}", resource_id);
-                Ok(true)
-            } else {
-                warn!("⚠️ uiautomator点击可能失败: {}", output);
-                Err(format!("所有点击方案都失败了"))
+    let xml_content = match safe_adb.execute_adb_command(&dump_args) {
+        Ok(output) => clean_ui_dump_output(&output),
+        Err(e) => {
+            return Err(format!("获取UI内容失败: {}", e));
+        }
+    };
+
+    // 直接计算坐标并点击
+    if let Some((x, y)) = extract_element_coordinates(&xml_content, &resource_id) {
+        info!("� 找到元素坐标: ({}, {})", x, y);
+        
+        // 立即执行点击
+        let x_str = x.to_string();
+        let y_str = y.to_string();
+        let tap_args = vec![
+            "-s", &device_id,
+            "shell", "input", "tap",
+            &x_str, &y_str
+        ];
+
+        match safe_adb.execute_adb_command(&tap_args) {
+            Ok(_) => {
+                info!("✅ 极速坐标点击成功");
+                return Ok(true);
+            }
+            Err(e) => {
+                return Err(format!("坐标点击失败: {}", e));
             }
         }
-        Err(e) => {
-            error!("❌ uiautomator点击也失败: {}", e);
-            Err(format!("所有点击方案都失败了: {}", e))
-        }
+    } else {
+        return Err(format!("未找到resource-id为 {} 的可点击元素", resource_id));
     }
 }
 
@@ -145,22 +143,10 @@ pub async fn adb_tap_coordinate(
 ) -> Result<bool, String> {
     info!("🎯 坐标点击: device={}, x={}, y={}", device_id, x, y);
 
-    let mut safe_adb = SafeAdbManager::new();
+    // 使用全局ADB管理器，跳过重复检查
+    let mut safe_adb = get_global_adb().await?;
 
-    // 确保ADB路径可用
-    if let Err(e) = safe_adb.find_safe_adb_path() {
-        return Err(format!("ADB路径不可用: {}", e));
-    }
-
-    // 验证设备连接
-    match safe_adb.is_device_online(&device_id) {
-        Ok(false) | Err(_) => {
-            return Err(format!("设备 {} 未连接", device_id));
-        }
-        Ok(true) => {}
-    }
-
-    // 执行点击
+    // 直接执行点击，无需重复验证设备
     let x_str = x.to_string();
     let y_str = y.to_string();
     let tap_args = vec![

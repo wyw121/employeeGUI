@@ -124,9 +124,15 @@ pub async fn parse_cached_xml_to_elements(xml_content: String) -> Result<serde_j
 }
 
 fn get_debug_xml_dir() -> std::path::PathBuf {
-    std::env::current_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."))
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new(".."))
-        .join("debug_xml")
+    // 确保指向项目根目录的 debug_xml 目录
+    // 无论当前工作目录在 src-tauri 还是项目根目录，都能正确找到
+    let current = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    // 如果当前目录名是 src-tauri，则取父目录
+    if current.file_name().and_then(|name| name.to_str()) == Some("src-tauri") {
+        current.parent().unwrap_or(&current).join("debug_xml")
+    } else {
+        // 否则直接在当前目录下查找
+        current.join("debug_xml")
+    }
 }

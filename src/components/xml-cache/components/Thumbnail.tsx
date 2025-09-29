@@ -47,22 +47,27 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
     setImgSrc(undefined);
     (async () => {
       if (absolutePathForFallback) {
+        console.log(`🔍 尝试加载图片: ${absolutePathForFallback}`);
         const dataUrl = await loadDataUrlWithCache(absolutePathForFallback);
         if (!cancelled && dataUrl) {
+          console.log(`📊 设置 data URL 源: ${absolutePathForFallback} (长度: ${dataUrl.length}) - 使用 loading="eager"`);
           setImgSrc(dataUrl);
           setSourceType('data');
           return;
         }
         // fallback to asset if available
         if (!cancelled && src) {
+          console.log(`📊 回退到资源源: ${src}`);
           setImgSrc(src);
           setSourceType('asset');
         }
       } else if (src) {
+        console.log(`📊 使用资源源: ${src}`);
         setImgSrc(src);
         setSourceType('asset');
       } else {
         // no image available
+        console.log(`📊 无图片源可用`);
         setImgSrc(undefined);
         setSourceType('none');
       }
@@ -72,9 +77,17 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
     };
   }, [absolutePathForFallback, src]);
 
-  const handleError = React.useCallback(async () => {
+  const handleError = React.useCallback(async (error: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.log(`🔴 图片加载错误: ${absolutePathForFallback}`, {
+      imgSrc,
+      sourceType,
+      triedFallback,
+      error: error.currentTarget.src,
+    });
+    
     // Only try once to avoid loops
     if (triedFallback || !absolutePathForFallback) {
+      console.log(`🔴 不再重试: triedFallback=${triedFallback}, absolutePathForFallback=${!!absolutePathForFallback}`);
       setImgSrc(undefined);
       return;
     }
@@ -82,19 +95,23 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
     // Check cache first
     const cached = getCachedDataUrl(absolutePathForFallback);
     if (cached) {
+      console.log(`🔄 使用缓存重试: ${absolutePathForFallback} (长度: ${cached.length})`);
       setImgSrc(cached);
       setSourceType("data");
       return;
     }
+    console.log(`🔄 重新加载图片: ${absolutePathForFallback}`);
     const dataUrl = await loadDataUrlWithCache(absolutePathForFallback);
     if (dataUrl) {
+      console.log(`🔄 重新加载成功: ${absolutePathForFallback} (长度: ${dataUrl.length})`);
       setImgSrc(dataUrl);
       setSourceType("data");
       return;
     }
+    console.log(`🔴 重新加载失败: ${absolutePathForFallback}`);
     setImgSrc(undefined);
     setSourceType("none");
-  }, [absolutePathForFallback, triedFallback]);
+  }, [absolutePathForFallback, triedFallback, imgSrc, sourceType]);
 
   const collapsedH = collapsedHeight ?? height;
   const isHoverExpanded = (expandMode === 'hover') && hovered && !!imgSrc && loaded;
@@ -152,9 +169,17 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
             src={imgSrc}
             alt={alt}
             style={imgStyle}
-            loading="lazy"
+            loading="eager"
             onError={handleError}
-            onLoad={() => setLoaded(true)}
+            onLoad={() => {
+              console.log(`✅ 图片加载成功: ${absolutePathForFallback}`, {
+                imgSrc: imgSrc?.substring(0, 50) + '...',
+                sourceType,
+                loadingAttribute: 'eager', // 确认使用 eager 加载
+                dataUrlLength: imgSrc?.length,
+              });
+              setLoaded(true);
+            }}
           />
           {/* Simple placeholder while loading image bytes */}
           {!loaded && (

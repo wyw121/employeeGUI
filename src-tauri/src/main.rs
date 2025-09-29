@@ -53,6 +53,7 @@ use services::navigation_bar_detector::{detect_navigation_bar, click_navigation_
 use services::safe_adb_manager::*;
 use services::safe_adb_shell::safe_adb_shell_command;
 use services::device_contact_metrics::get_device_contact_count;
+use services::fast_ui_automation::{fast_ui_dump, adb_tap, adb_tap_by_text};
 use services::script_executor::*;
 use services::script_manager::*;  // 新增：脚本管理服务
 use services::smart_app_service::*;
@@ -282,8 +283,11 @@ fn main() {
             get_xml_file_size,           // 获取XML文件大小
             get_xml_file_absolute_path,  // 获取XML文件绝对路径
             delete_xml_cache_artifacts,  // 删除XML及关联截图
-            parse_cached_xml_to_elements // 解析缓存XML为UI元素
-            ,
+            parse_cached_xml_to_elements, // 解析缓存XML为UI元素
+            // 快速UI自动化功能（联系人导入对话框处理）
+            fast_ui_dump,       // 快速UI界面抓取
+            adb_tap,           // 基于坐标的快速点击
+            adb_tap_by_text,   // 基于文本的点击
             // 设备镜像（scrcpy）
             start_device_mirror,
             stop_device_mirror,

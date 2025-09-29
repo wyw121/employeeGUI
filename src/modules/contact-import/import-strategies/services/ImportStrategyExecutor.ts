@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import invokeCompat from '../../../../api/core/tauriInvoke';
 import type { ImportStrategy, ImportResult, ImportStrategySelection } from '../types';
 import { ImportErrorHandler, type ImportError } from './ImportErrorHandler';
+import { ParallelClickProcessor } from '../../../../domain/contact-import/dialog-automation';
 
 /**
  * 导入策略执行器
@@ -12,15 +13,21 @@ import { ImportErrorHandler, type ImportError } from './ImportErrorHandler';
  * - ✅ 自动重试机制
  * - ✅ 详细的执行日志
  * - ✅ 安全的临时文件清理
+ * - ✅ 自动化对话框处理（仅此一次/始终，vCard确认）
  */
 export class ImportStrategyExecutor {
   private static instance: ImportStrategyExecutor;
+  private dialogProcessor: ParallelClickProcessor;
   
   static getInstance(): ImportStrategyExecutor {
     if (!ImportStrategyExecutor.instance) {
       ImportStrategyExecutor.instance = new ImportStrategyExecutor();
     }
     return ImportStrategyExecutor.instance;
+  }
+
+  constructor() {
+    this.dialogProcessor = new ParallelClickProcessor();
   }
 
   /**
@@ -50,10 +57,21 @@ export class ImportStrategyExecutor {
         };
       }
 
-      // 3. 等待导入完成
+      // 3. 自动化处理对话框
+      console.log('🤖 开始自动化对话框处理...');
+      const dialogResult = await this.dialogProcessor.processContactImportDialogs(deviceId);
+      
+      if (!dialogResult.success) {
+        console.warn('⚠️ 对话框处理失败，但继续执行:', dialogResult.error);
+        // 对话框处理失败不会中断整个导入过程，只记录警告
+      } else {
+        console.log('✅ 对话框处理成功:', dialogResult.processedDialogs);
+      }
+
+      // 4. 等待导入完成
       await this.waitForImportCompletion();
 
-      // 4. 验证导入结果（可选）
+      // 5. 验证导入结果（可选）
       let verificationDetails;
       if (enableVerification && selection.verificationPhones) {
         verificationDetails = await this.verifyImportResults(
@@ -67,7 +85,8 @@ export class ImportStrategyExecutor {
         importedCount: verificationDetails?.totalFound || 1,
         failedCount: 0,
         strategy: selectedStrategy,
-        verificationDetails
+        verificationDetails,
+        dialogProcessingResult: dialogResult
       };
 
     } catch (error) {

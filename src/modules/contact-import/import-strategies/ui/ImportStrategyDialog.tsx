@@ -12,6 +12,8 @@ interface ImportStrategyDialogProps {
   vcfFilePath: string;
   onClose: () => void;
   onSuccess?: (result: ImportResult) => void;
+  /** 可选：指定目标设备ID，用于会话导入时预选设备 */
+  targetDeviceId?: string;
 }
 
 const { Step } = Steps;
@@ -20,7 +22,8 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
   visible,
   vcfFilePath,
   onClose,
-  onSuccess
+  onSuccess,
+  targetDeviceId
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedStrategy, setSelectedStrategy] = useState<ImportStrategy | undefined>();
@@ -30,9 +33,24 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
   const [verificationPhones, setVerificationPhones] = useState<string>('');
   const [form] = Form.useForm();
 
-  const { selectedDevice } = useAdb();
+  const { selectedDevice, devices, selectDevice } = useAdb();
 
-  // 重置状态
+  // 获取有效的目标设备
+  const getEffectiveDevice = () => {
+    if (targetDeviceId) {
+      // 优先使用指定的目标设备
+      const targetDevice = devices.find(device => device.id === targetDeviceId);
+      if (targetDevice) {
+        return targetDevice;
+      }
+    }
+    // 回退到全局选中的设备
+    return selectedDevice;
+  };
+
+  const effectiveDevice = getEffectiveDevice();
+
+  // 重置状态和智能预选
   useEffect(() => {
     if (visible) {
       setCurrentStep(0);
@@ -41,18 +59,28 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
       setIsImporting(false);
       setVerificationPhones('');
       
+      // 如果有目标设备ID，自动选择该设备
+      if (targetDeviceId && targetDeviceId !== selectedDevice?.id) {
+        const targetDevice = devices.find(device => device.id === targetDeviceId);
+        if (targetDevice) {
+          console.log('🎯 自动选择会话目标设备:', targetDevice.id);
+          selectDevice(targetDeviceId);
+        }
+      }
+      
       // 自动推荐策略
-      if (selectedDevice) {
+      if (effectiveDevice) {
         const recommended = getRecommendedStrategies({
-          manufacturer: selectedDevice.product || selectedDevice.properties?.brand || 'Unknown',
-          model: selectedDevice.model
+          manufacturer: effectiveDevice.product || effectiveDevice.properties?.brand || 'Unknown',
+          model: effectiveDevice.model
         });
         if (recommended.length > 0) {
+          console.log('🎯 自动推荐策略:', recommended[0].name);
           setSelectedStrategy(recommended[0]);
         }
       }
     }
-  }, [visible, selectedDevice]);
+  }, [visible, effectiveDevice, targetDeviceId, selectedDevice, devices, selectDevice]);
 
   const handleNext = () => {
     if (currentStep === 0 && !selectedStrategy) {
@@ -67,7 +95,7 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
   };
 
   const handleStartImport = async () => {
-    if (!selectedStrategy || !selectedDevice) {
+    if (!selectedStrategy || !effectiveDevice) {
       message.error('请选择导入策略和设备');
       return;
     }
@@ -85,7 +113,7 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
       const selection: ImportStrategySelection = {
         selectedStrategy,
         vcfFilePath,
-        deviceId: selectedDevice.id,
+        deviceId: effectiveDevice.id,
         enableVerification,
         verificationPhones: phones
       };
@@ -105,7 +133,7 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
       }
 
       // 清理临时文件
-      await executor.cleanup(selectedDevice.id);
+      await executor.cleanup(effectiveDevice.id);
 
     } catch (error) {
       console.error('导入过程出错:', error);
@@ -136,8 +164,8 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
           <div style={{ minHeight: 400 }}>
             <ImportStrategySelector
               deviceInfo={{
-                manufacturer: selectedDevice?.product || selectedDevice?.properties?.brand || 'Unknown',
-                model: selectedDevice?.model
+                manufacturer: effectiveDevice?.product || effectiveDevice?.properties?.brand || 'Unknown',
+                model: effectiveDevice?.model
               }}
               selectedStrategy={selectedStrategy}
               onStrategyChange={setSelectedStrategy}
@@ -155,8 +183,11 @@ export const ImportStrategyDialog: React.FC<ImportStrategyDialogProps> = ({
                   <div>
                     <h4>确认导入配置</h4>
                     <p>VCF文件: <code>{vcfFilePath}</code></p>
-                    <p>目标设备: <strong>{selectedDevice?.model} ({selectedDevice?.id})</strong></p>
+                    <p>目标设备: <strong>{effectiveDevice?.model} ({effectiveDevice?.id})</strong></p>
                     <p>选择策略: <strong>{selectedStrategy?.name}</strong></p>
+                    {targetDeviceId && effectiveDevice?.id === targetDeviceId && (
+                      <p style={{ color: '#52c41a' }}>✅ 已预选会话目标设备</p>
+                    )}
                   </div>
 
                   <Form.Item label="验证导入结果" extra="导入后查询联系人数据库验证结果">

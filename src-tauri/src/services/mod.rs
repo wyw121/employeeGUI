@@ -10,6 +10,7 @@ pub mod auth_service;
 pub mod contact;
 pub mod contact_automation;
 pub mod error_handling; // 新增：错误处理模块
+pub mod fast_ui_automation; // 新增：快速UI自动化处理
 pub mod navigation_bar_detector; // 新增：通用导航栏检测器
 pub mod page_analyzer_service; // 新增：页面分析服务
 pub mod universal_ui_page_analyzer; // 新增：Universal UI 页面分析器

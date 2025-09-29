@@ -142,7 +142,9 @@ export async function listVcfBatchRecords(params: { limit?: number; offset?: num
 }
 
 export async function getVcfBatchRecord(batchId: string): Promise<VcfBatchDto | null> {
-  const res = await invoke<VcfBatchDto | null>('get_vcf_batch_record', { batch_id: batchId });
+  // 同时传递 snake_case 与 camelCase，兼容不同命名约定的命令参数
+  const payload = { batch_id: batchId, batchId } as const;
+  const res = await invoke<VcfBatchDto | null>('get_vcf_batch_record', payload as any);
   return res;
 }
 

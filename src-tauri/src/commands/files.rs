@@ -48,7 +48,13 @@ pub async fn clear_adb_keys() -> Result<(), String> {
 pub async fn read_file_as_data_url(path: String) -> Result<String, String> {
     use std::path::Path;
     use base64::Engine as _;
-    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    tracing::info!("🖼️ 读取图片文件为 data URL: {}", path);
+    
+    let bytes = std::fs::read(&path).map_err(|e| {
+        tracing::error!("❌ 读取文件失败: {} - {}", path, e);
+        format!("读取文件失败: {}", e)
+    })?;
 
     // 简单基于扩展名推断 MIME 类型，避免引入额外依赖
     let mime = Path::new(&path)
@@ -66,8 +72,15 @@ pub async fn read_file_as_data_url(path: String) -> Result<String, String> {
         .unwrap_or("application/octet-stream");
 
     // Base64 编码
-    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-    Ok(format!("data:{};base64,{}", mime, b64))
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let data_url = format!("data:{};base64,{}", mime, b64);
+    
+    tracing::info!("✅ 成功生成 data URL: {} -> {} (原始文件{}字节, base64长度{}字符)", 
+                  path, mime, bytes.len(), b64.len());
+    tracing::debug!("📄 Data URL 前100字符: {}", 
+                   &data_url[..std::cmp::min(100, data_url.len())]);
+    
+    Ok(data_url)
 }
 
 /// 在系统文件管理器中定位文件/打开目录

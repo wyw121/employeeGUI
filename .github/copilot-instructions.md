@@ -238,6 +238,40 @@ npm run type-check
 - 组件名称使用 PascalCase
 - Props 接口必须明确定义
 
+### Hook 使用最佳实践：
+
+- **`useAdb()` 使用原则**：
+  - 同一页面最多只应在父组件或顶级组件中使用一次
+  - 通过 props 向子组件传递需要的数据，而非让每个子组件都调用 `useAdb()`
+  - 避免在模态框中的多个子组件同时使用
+  - 如需在多个组件中使用，考虑使用 Context 或状态提升
+
+- **防重复调用规则**：
+  ```typescript
+  // ❌ 错误：多个组件都调用 useAdb()
+  function ParentModal() {
+    return (
+      <Modal>
+        <ComponentA /> {/* 内部调用 useAdb() */}
+        <ComponentB /> {/* 内部调用 useAdb() */}
+        <ComponentC /> {/* 内部调用 useAdb() */}
+      </Modal>
+    );
+  }
+
+  // ✅ 正确：在父组件调用，通过 props 传递
+  function ParentModal() {
+    const { devices, selectedDevice } = useAdb();
+    return (
+      <Modal>
+        <ComponentA devices={devices} />
+        <ComponentB selectedDevice={selectedDevice} />
+        <ComponentC devices={devices} />
+      </Modal>
+    );
+  }
+  ```
+
 ### 导入规范：
 
 ```typescript
@@ -279,6 +313,12 @@ import { useAdbDevices } from "@/hooks/useAdbDevices";
    - 禁止创建新的状态管理解决方案
    - 必须使用项目统一的状态管理模式
 
+5. **重复调用和性能问题**
+   - 禁止多个组件同时调用相同的初始化函数
+   - 禁止在同一页面多次调用 `useAdb().refreshDevices()`
+   - 必须在 Hook 内部实现防重复调用机制
+   - 避免在短时间内重复执行昂贵的操作（如设备检测、文件操作）
+
 ## 📋 代码审查检查点
 
 开发完成后必须检查：
@@ -290,6 +330,8 @@ import { useAdbDevices } from "@/hooks/useAdbDevices";
 5. ✅ 是否有未使用的导入或变量
 6. ✅ 组件是否可以正常构建和运行
 7. ✅ 是否存在超过行数阈值但未给出拆分计划的文件
+8. ✅ **新增**：是否存在重复调用初始化函数的风险
+9. ✅ **新增**：多个组件同时使用 `useAdb()` 时是否会造成性能问题
 
 ## 🎯 AI 代理特别指令
 
@@ -303,6 +345,7 @@ import { useAdbDevices } from "@/hooks/useAdbDevices";
 6. **业务价值优先**：专注核心业务功能，避免创建演示、示例或展示性代码
 7. **生产就绪标准**：所有代码必须达到生产环境标准，不接受简化版本
 8. **主动模块化守护**：发现文件超标或结构臃肿时优先建议/实施拆分，而非继续累积
+9. **防重复调用检查**：创建新组件时必须检查是否会导致重复初始化或资源浪费
 
 **禁止行为：**
 
@@ -313,6 +356,7 @@ import { useAdbDevices } from "@/hooks/useAdbDevices";
 - 创建简单的演示页面或示例代码
 - 构建非业务核心的展示组件
 - 将新增逻辑持续堆叠到已超标的巨型文件中而不提出拆分方案
+- **新增**：在一个页面/模态框中创建多个同时调用 `useAdb()` 的组件
 
 ## 📚 相关文档
 

@@ -266,3 +266,45 @@ export async function deleteImportSession(sessionId: number, options: { archiveN
   } as const;
   return invoke<DeleteImportSessionResult>('delete_import_session_cmd', payload as any);
 }
+
+export interface BulkDeleteFailure {
+  sessionId: number;
+  message: string;
+}
+
+export interface BulkDeleteImportSessionsSummary {
+  total: number;
+  succeeded: number[];
+  failed: BulkDeleteFailure[];
+  archivedNumberCount: number;
+}
+
+export async function bulkDeleteImportSessions(sessionIds: number[], options: { archiveNumbers?: boolean } = {}): Promise<BulkDeleteImportSessionsSummary> {
+  const summary: BulkDeleteImportSessionsSummary = {
+    total: sessionIds.length,
+    succeeded: [],
+    failed: [],
+    archivedNumberCount: 0,
+  };
+
+  for (const rawId of sessionIds) {
+    const sessionId = Number(rawId);
+    if (!Number.isFinite(sessionId)) {
+      summary.failed.push({ sessionId: rawId as number, message: '无效的会话 ID' });
+      continue;
+    }
+
+    try {
+      const result = await deleteImportSession(sessionId, options);
+      summary.succeeded.push(sessionId);
+      summary.archivedNumberCount += result.archived_number_count ?? 0;
+    } catch (error: any) {
+      summary.failed.push({
+        sessionId,
+        message: String(error?.message ?? error ?? '未知错误'),
+      });
+    }
+  }
+
+  return summary;
+}

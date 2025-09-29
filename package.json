@@ -51,6 +51,8 @@
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "5.0.2",
+    "@testing-library/react": "^16.0.0",
+    "jsdom": "^24.0.0",
     "autoprefixer": "^10.4.14",
     "cross-env": "^7.0.3",
     "postcss": "^8.4.27",

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Modal, Tabs, Divider, Space, Button, App, Tooltip } from 'antd';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Modal, Tabs, Divider, Space, Button, App } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
+import SelectedSessionsToolbar from './components/SelectedSessionsToolbar';
 import FiltersBar from '../batch-manager/components/FiltersBar';
 import SessionsTable from '../batch-manager/components/SessionsTable';
 import NumbersTable from '../batch-manager/components/NumbersTable';
@@ -9,6 +10,7 @@ import { useBatchData } from '../batch-manager/hooks/useBatchData';
 import { useDebouncedValue } from '../batch-manager/hooks/useDebouncedValue';
 import { useBatchIndustry } from '../batch-manager/hooks/useBatchIndustry';
 import type { BatchFilterState } from '../batch-manager/types';
+import { bulkDeleteImportSessions } from '../services/contactNumberService';
 
 interface Props {
   open: boolean;
@@ -40,6 +42,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
   const [showPendingOnly, setShowPendingOnly] = useState<boolean>(false);
   // NumbersTable 外部筛选（行业/状态）
   const [numbersFilters, setNumbersFilters] = useState<{ status?: string | null; industry?: string | null }>({});
+  const [bulkDeletionLoading, setBulkDeletionLoading] = useState<boolean>(false);
   
   // 复用 BatchManagerDrawer 的数据逻辑
   const { loading, batches, sessions, numbers, reload } = useBatchData(
@@ -140,6 +143,123 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     setSelectedSessionKeys(keys);
   };
 
+  const onTogglePendingOnly = (next: boolean) => {
+    setShowPendingOnly(next);
+    setSelectedSessionKeys([]);
+    setSessionsPage((prev) => ({ page: 1, pageSize: prev.pageSize }));
+  };
+
+  const performBulkDeletion = async (mode: 'delete' | 'archive') => {
+    if (bulkDeletionLoading) return;
+    const items: any[] = filteredSessions?.items || [];
+    const normalizedKeys = selectedSessionKeys
+      .map((key) => (typeof key === 'number' ? key : Number(key)))
+      .filter((key) => Number.isFinite(key)) as number[];
+    const selectedSet = new Set(normalizedKeys);
+    const selectedRows = items.filter(row => selectedSet.has(Number(row.id)));
+    if (!selectedRows.length) {
+      message.warning('请先在列表中勾选要删除的会话');
+      return;
+    }
+
+    const sessionIds = selectedRows
+      .map((row) => Number(row.id))
+      .filter((id) => Number.isFinite(id)) as number[];
+    if (!sessionIds.length) {
+      message.warning('所选会话 ID 无效，无法删除');
+      return;
+    }
+
+    setBulkDeletionLoading(true);
+    try {
+      const summary = await bulkDeleteImportSessions(sessionIds, { archiveNumbers: mode === 'archive' });
+      const successCount = summary.succeeded.length;
+      const failureCount = summary.failed.length;
+
+      if (successCount > 0) {
+        const actionLabel = mode === 'archive' ? '归档并删除' : '删除';
+        const archiveInfo = mode === 'archive' && summary.archivedNumberCount > 0
+          ? `，恢复号码 ${summary.archivedNumberCount} 个为未导入`
+          : '';
+        message.success(`已${actionLabel} ${successCount} 条会话${archiveInfo}`);
+      }
+
+      if (failureCount > 0) {
+        message.warning(`共有 ${failureCount}/${summary.total} 条会话处理失败`);
+        const [firstFailure] = summary.failed;
+        if (firstFailure) {
+          message.error(`会话 #${firstFailure.sessionId} 失败：${firstFailure.message}`);
+        }
+      }
+
+      const succeededSet = new Set(summary.succeeded);
+      setSelectedSessionKeys((prev) => prev.filter((key) => {
+        const numericKey = typeof key === 'number' ? key : Number(key);
+        if (!Number.isFinite(numericKey)) return true;
+        return !succeededSet.has(numericKey);
+      }));
+
+      try {
+        await reload();
+      } catch (error: any) {
+        console.error('[sessions] reload after bulk deletion failed', error);
+      }
+    } catch (error: any) {
+      message.error(`批量删除失败：${error?.message ?? error}`);
+    } finally {
+      setBulkDeletionLoading(false);
+    }
+  };
+
+  const openBulkDeleteConfirm = () => {
+    const items: any[] = filteredSessions?.items || [];
+    const normalizedKeys = selectedSessionKeys
+      .map((key) => (typeof key === 'number' ? key : Number(key)))
+      .filter((key) => Number.isFinite(key)) as number[];
+    const selectedSet = new Set(normalizedKeys);
+    const selectedRows = items.filter(row => selectedSet.has(Number(row.id)));
+    if (!selectedRows.length) {
+      message.warning('请先在列表中勾选要删除的会话');
+      return;
+    }
+
+    const total = selectedRows.length;
+    const statusTally = selectedRows.reduce((acc: Record<string, number>, row: any) => {
+      const status = row.status || 'unknown';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const modalRef = Modal.confirm({
+      title: `批量删除 ${total} 条会话`,
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+          <p>将对所选会话执行删除操作：</p>
+          <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
+            {(Object.entries(statusTally) as Array<[string, number]>).map(([status, count]) => (
+              <li key={status}>{status}：{count} 条</li>
+            ))}
+          </ul>
+          <p style={{ marginBottom: 0 }}>请选择删除方式：</p>
+          <ul style={{ paddingLeft: 18, marginBottom: 0 }}>
+            <li><strong>直接删除</strong>：仅移除会话记录，保留号码状态。</li>
+            <li><strong>号码归档</strong>：恢复关联号码为未导入，释放批次。</li>
+          </ul>
+        </div>
+      ),
+      okButtonProps: { style: { display: 'none' } },
+      cancelButtonProps: { style: { display: 'none' } },
+      footer: () => (
+        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+          <Button onClick={() => modalRef.destroy()}>取消</Button>
+          <Button danger onClick={() => { modalRef.destroy(); void performBulkDeletion('delete'); }}>直接删除</Button>
+          <Button type="primary" onClick={() => { modalRef.destroy(); void performBulkDeletion('archive'); }}>号码归档后删除</Button>
+        </Space>
+      ),
+    });
+  };
+
 
   return (
     <Modal
@@ -165,7 +285,17 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
             await reload();
           }}
         />
-        
+        <SelectedSessionsToolbar
+          selectedCount={selectedSessionKeys.length}
+          pendingOnly={showPendingOnly}
+          onTogglePendingOnly={onTogglePendingOnly}
+          onSelectAllPendingThisPage={onSelectAllPendingThisPage}
+          onReimportSelected={onBulkReimportSelected}
+          onDeleteSelected={openBulkDeleteConfirm}
+          actionsDisabled={loading}
+          deleteLoading={bulkDeletionLoading}
+        />
+
         <Divider style={{ margin: '8px 0' }} />
         
         <Tabs
@@ -174,31 +304,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
           items={[
             { 
               key: 'sessions', 
-              label: (
-                <Space>
-                  <span>导入会话 ({filteredSessions?.total || 0})</span>
-                  <Space size={6}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <input
-                        type="checkbox"
-                        checked={showPendingOnly}
-                        onChange={e => { setShowPendingOnly(e.target.checked); setSelectedSessionKeys([]); setSessionsPage({ page: 1, pageSize: sessionsPage.pageSize }); }}
-                        style={{ verticalAlign: 'middle' }}
-                      />
-                      <span style={{ fontSize: 12, color: '#666' }}>只显示未导入</span>
-                    </label>
-                    <Tooltip title="批量操作仅对未导入(pending)的会话生效">
-                      <QuestionCircleOutlined style={{ color: '#999' }} />
-                    </Tooltip>
-                  </Space>
-                  <Button size="small" onClick={onSelectAllPendingThisPage}>
-                    全选本页未导入
-                  </Button>
-                  <Button size="small" type="primary" disabled={!selectedSessionKeys.length} onClick={onBulkReimportSelected}>
-                    重新导入所选
-                  </Button>
-                </Space>
-              ), 
+              label: `导入会话 (${filteredSessions?.total || 0})`, 
               children: (
                 <SessionsTable
                   data={filteredSessions}

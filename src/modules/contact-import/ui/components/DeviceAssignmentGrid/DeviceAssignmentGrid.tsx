@@ -82,10 +82,20 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
   const handleGenerateVcf = async (row: DeviceAssignmentRow) => {
     const { deviceId } = row;
     setGeneratingIds(prev => ({ ...prev, [deviceId]: true }));
+    let shouldOpenSessions = false;
     try {
-      if (props.onGenerateVcf) await props.onGenerateVcf(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry });
-      else message.info('未接入 onGenerateVcf 回调');
-    } finally { setGeneratingIds(prev => ({ ...prev, [deviceId]: false })); }
+      if (props.onGenerateVcf) {
+        await props.onGenerateVcf(deviceId, { start: row.idStart, end: row.idEnd, industry: row.industry });
+        shouldOpenSessions = true;
+      } else {
+        message.info('未接入 onGenerateVcf 回调');
+      }
+    } finally {
+      setGeneratingIds(prev => ({ ...prev, [deviceId]: false }));
+      if (shouldOpenSessions) {
+        props.onOpenSessions?.({ deviceId, status: 'pending' });
+      }
+    }
   };
 
   const handleImportToDevice = async (row: DeviceAssignmentRow) => {

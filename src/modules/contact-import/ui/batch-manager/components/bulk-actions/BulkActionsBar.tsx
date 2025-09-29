@@ -6,8 +6,7 @@ import {
   CloseOutlined,
   ReloadOutlined 
 } from '@ant-design/icons';
-import { ContactNumberDto } from '../../services/contactNumberService';
-import { BulkArchiveDialog } from './BulkArchiveDialog';
+import { ContactNumberDto, markContactNumbersAsNotImported } from '../../../services/contactNumberService';
 
 const { Text } = Typography;
 
@@ -28,7 +27,6 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onArchiveComplete,
   loading = false
 }) => {
-  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
   // 统计选中号码的状态分布
@@ -57,19 +55,33 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
     return stats;
   }, [selectedNumbers]);
 
-  const handleArchive = () => {
+  const handleArchive = async () => {
     if (statistics.archiveable === 0) {
       message.warning('所选号码中没有可归档的项目');
       return;
     }
-    setArchiveDialogOpen(true);
-  };
 
-  const handleArchiveSuccess = async () => {
-    setArchiveDialogOpen(false);
-    message.success(`成功归档 ${statistics.archiveable} 个号码`);
-    await onArchiveComplete();
-    onClearSelection();
+    try {
+      setArchiving(true);
+      
+      // 提取要归档的号码ID（只处理已导入或已生成VCF的）
+      const archiveableNumbers = selectedNumbers.filter(n => 
+        n.status === 'imported' || n.status === 'vcf_generated'
+      );
+      const numberIds = archiveableNumbers.map(number => number.id);
+      
+      // 批量重置号码状态
+      await markContactNumbersAsNotImported(numberIds);
+      
+      message.success(`成功归档 ${numberIds.length} 个号码`);
+      await onArchiveComplete();
+      onClearSelection();
+    } catch (error) {
+      console.error('批量归档失败:', error);
+      message.error('归档操作失败，请重试');
+    } finally {
+      setArchiving(false);
+    }
   };
 
   if (selectedNumbers.length === 0) {
@@ -140,17 +152,6 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           </Popconfirm>
         </Space>
       </div>
-
-      {/* 归档对话框 */}
-      <BulkArchiveDialog
-        open={archiveDialogOpen}
-        selectedNumbers={selectedNumbers.filter(n => 
-          n.status === 'imported' || n.status === 'vcf_generated'
-        )}
-        onClose={() => setArchiveDialogOpen(false)}
-        onSuccess={handleArchiveSuccess}
-        onLoadingChange={setArchiving}
-      />
     </div>
   );
 };

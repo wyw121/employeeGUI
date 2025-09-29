@@ -9,11 +9,11 @@ import { processPendingSessionsForDevice, processLatestPendingSessionForDevice }
 import { VcfImportService } from '../../../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../../../utils/vcf';
 import { fetchUnclassifiedNumbers } from '../../services/unclassifiedService';
-import { createVcfBatchWithNumbers, } from '../../../../vcf-sessions/services/vcfSessionService';
-import { createImportSessionRecord, finishImportSessionRecord } from '../../services/contactNumberService';
+import { finishImportSessionRecord } from '../../services/contactNumberService';
 import { allocateNumbersToDevice } from '../../services/contactNumberService';
 import ServiceFactory from '../../../../../application/services/ServiceFactory';
 import { useIndustryOptions } from '../../shared/industryOptions';
+import { registerGeneratedBatch } from '../../services/vcfBatchRegistrationService';
 
 export interface DeviceAssignmentGridProps {
   value?: Record<string, Omit<DeviceAssignmentRow, 'deviceId' | 'deviceName'>>;
@@ -139,9 +139,14 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
         // 记录批次与会话
         const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
         const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
-        try { await createVcfBatchWithNumbers({ batchId, vcfFilePath: tempPath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids }); } catch {}
-        let sessionId: number | null = null;
-        try { sessionId = await createImportSessionRecord(batchId, deviceId); } catch {}
+        const { mappingOk, sessionId } = await registerGeneratedBatch({
+          deviceId,
+          batchId,
+          vcfFilePath: tempPath,
+          numberIds: ids,
+          sourceStartId: ids[0],
+          sourceEndId: ids[ids.length - 1],
+        });
         const vcfService = ServiceFactory.getVcfImportApplicationService();
         // 导入前联系人数量
         let beforeCount: number | null = null;
@@ -171,6 +176,9 @@ export const DeviceAssignmentGrid: React.FC<DeviceAssignmentGridProps> = (props)
             await finishImportSessionRecord(sessionId, status as any, outcome.importedCount ?? 0, outcome.failedCount ?? 0, ok ? undefined : msg);
           }
         } catch {}
+        if (!mappingOk) {
+          message.warning('导入完成，但批次映射保存失败（后端未记录）。');
+        }
         if (ok) {
           if (typeof delta === 'number') message.success(`导入成功：联系人 +${delta}`);
           else message.success('导入成功');

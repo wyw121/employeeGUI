@@ -40,17 +40,35 @@ pub async fn get_xml_file_size(file_name: String) -> Result<u64, String> {
 #[tauri::command]
 pub async fn get_xml_file_absolute_path(file_name: String) -> Result<String, String> {
     use std::fs;
-    let debug_dir = get_debug_xml_dir();
-    let file_path = debug_dir.join(&file_name);
-    if !file_path.exists() { return Err(format!("XML缓存文件不存在: {}", file_name)); }
+    // 原有逻辑：优先使用父目录的 debug_xml
+    let primary_debug_dir = get_debug_xml_dir();
+    let primary_file_path = primary_debug_dir.join(&file_name);
 
-    info!("📂 获取XML缓存文件绝对路径: {}", file_path.display());
+    // 回退逻辑：某些运行方式下 current_dir 可能就是项目根目录，直接尝试 ./debug_xml
+    let fallback_debug_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("debug_xml");
+    let fallback_file_path = fallback_debug_dir.join(&file_name);
 
-    match fs::canonicalize(&file_path) {
+    let (chosen_path, chosen_base) = if primary_file_path.exists() {
+        (primary_file_path, "parent/debug_xml")
+    } else if fallback_file_path.exists() {
+        (fallback_file_path, "current/debug_xml")
+    } else {
+        return Err(format!("缓存文件不存在: {} (尝试于: {} 与 {})",
+            file_name,
+            primary_debug_dir.display(),
+            fallback_debug_dir.display()
+        ));
+    };
+
+    info!("📂 获取缓存文件绝对路径: [{}] {}", chosen_base, chosen_path.display());
+
+    match fs::canonicalize(&chosen_path) {
         Ok(path) => Ok(path.to_string_lossy().to_string()),
         Err(err) => {
-            info!("⚠️ canonicalize失败，将返回原路径: {} - {}", file_path.display(), err);
-            Ok(file_path.to_string_lossy().to_string())
+            info!("⚠️ canonicalize失败，将返回原路径: {} - {}", chosen_path.display(), err);
+            Ok(chosen_path.to_string_lossy().to_string())
         }
     }
 }

@@ -682,35 +682,118 @@ pub fn list_import_sessions(conn: &Connection, device_id: Option<&str>, batch_id
 
 /// 获取指定批次下的号码（区分是否已标记 used）
 pub fn list_numbers_by_batch(conn: &Connection, batch_id: &str, only_used: Option<bool>, limit: i64, offset: i64) -> SqlResult<ContactNumberList> {
-    let total_sql = match only_used {
-        Some(true) => "SELECT COUNT(*) FROM contact_numbers WHERE used_batch = ?1",
-        Some(false) => "SELECT COUNT(*) FROM contact_numbers WHERE (used_batch IS NULL OR used_batch != ?1)",
-        None => "SELECT COUNT(*) FROM contact_numbers",
+    let show_batch_numbers = match only_used {
+        Some(false) => false,
+        _ => true,
     };
-    let total: i64 = if only_used.is_none() {
-        conn.query_row(total_sql, [], |row| row.get(0))?
+
+    if show_batch_numbers {
+        let total: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM vcf_batch_numbers WHERE batch_id = ?1",
+            params![batch_id],
+            |row| row.get(0),
+        )?;
+
+        let mut items: Vec<ContactNumberDto> = Vec::new();
+        let sql = "SELECT c.id, c.phone, c.name, c.source_file, c.created_at, c.industry, c.used, c.used_at, c.used_batch, c.status, c.imported_device_id \
+                   FROM contact_numbers c \
+                   JOIN vcf_batch_numbers m ON c.id = m.number_id \
+                   WHERE m.batch_id = ?1 \
+                   ORDER BY c.id ASC LIMIT ?2 OFFSET ?3";
+        let mut stmt = conn.prepare(sql)?;
+        let mut rows = stmt.query(params![batch_id, limit, offset])?;
+        while let Some(row) = rows.next()? {
+            items.push(ContactNumberDto {
+                id: row.get(0)?,
+                phone: row.get(1)?,
+                name: row.get(2)?,
+                source_file: row.get(3)?,
+                created_at: row.get(4)?,
+                industry: row.get(5).ok(),
+                used: row.get(6).ok(),
+                used_at: row.get(7).ok(),
+                used_batch: row.get(8).ok(),
+                status: row.get(9).ok(),
+                imported_device_id: row.get(10).ok(),
+            });
+        }
+        Ok(ContactNumberList { total, items })
     } else {
-        conn.query_row(total_sql, params![batch_id], |row| row.get(0))?
-    };
+        let total: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM contact_numbers c WHERE NOT EXISTS (SELECT 1 FROM vcf_batch_numbers m WHERE m.batch_id = ?1 AND m.number_id = c.id)",
+            params![batch_id],
+            |row| row.get(0),
+        )?;
 
+        let mut items: Vec<ContactNumberDto> = Vec::new();
+        let sql = "SELECT c.id, c.phone, c.name, c.source_file, c.created_at, c.industry, c.used, c.used_at, c.used_batch, c.status, c.imported_device_id \
+                   FROM contact_numbers c \
+                   WHERE NOT EXISTS (SELECT 1 FROM vcf_batch_numbers m WHERE m.batch_id = ?1 AND m.number_id = c.id) \
+                   ORDER BY c.id ASC LIMIT ?2 OFFSET ?3";
+        let mut stmt = conn.prepare(sql)?;
+        let mut rows = stmt.query(params![batch_id, limit, offset])?;
+        while let Some(row) = rows.next()? {
+            items.push(ContactNumberDto {
+                id: row.get(0)?,
+                phone: row.get(1)?,
+                name: row.get(2)?,
+                source_file: row.get(3)?,
+                created_at: row.get(4)?,
+                industry: row.get(5).ok(),
+                used: row.get(6).ok(),
+                used_at: row.get(7).ok(),
+                used_batch: row.get(8).ok(),
+                status: row.get(9).ok(),
+                imported_device_id: row.get(10).ok(),
+            });
+        }
+        Ok(ContactNumberList { total, items })
+    }
+}
+
+/// 指定批次下的号码，支持按行业/状态过滤
+pub fn list_numbers_by_batch_filtered(
+    conn: &Connection,
+    batch_id: &str,
+    industry: Option<String>,
+    status: Option<String>,
+    limit: i64,
+    offset: i64,
+) -> SqlResult<ContactNumberList> {
+    let mut clauses: Vec<String> = vec!["m.batch_id = ?".to_string()];
+    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(batch_id.to_string())];
+    if let Some(ind) = industry.and_then(|x| { let t = x.trim().to_string(); if t.is_empty() { None } else { Some(t) } }) {
+        if ind == "__UNCLASSIFIED__" || ind == "未分类" {
+            clauses.push("(c.industry IS NULL OR TRIM(c.industry) = '')".to_string());
+        } else {
+            clauses.push("TRIM(c.industry) = ?".to_string());
+            params_vec.push(Box::new(ind));
+        }
+    }
+    if let Some(st) = status.and_then(|x| { let t = x.trim().to_string(); if t.is_empty() { None } else { Some(t) } }) {
+        clauses.push("c.status = ?".to_string());
+        params_vec.push(Box::new(st));
+    }
+    let where_sql = format!(" WHERE {}", clauses.join(" AND "));
+    let total_sql = format!(
+        "SELECT COUNT(*) FROM contact_numbers c JOIN vcf_batch_numbers m ON c.id = m.number_id{}",
+        where_sql
+    );
+    let total: i64 = conn.query_row(total_sql.as_str(), rusqlite::params_from_iter(params_vec.iter().map(|b| &**b)), |row| row.get(0))?;
+
+    let list_sql = format!(
+        "SELECT c.id, c.phone, c.name, c.source_file, c.created_at, c.industry, c.used, c.used_at, c.used_batch, c.status, c.imported_device_id \
+         FROM contact_numbers c \
+         JOIN vcf_batch_numbers m ON c.id = m.number_id{} \
+         ORDER BY c.id ASC LIMIT ? OFFSET ?",
+        where_sql
+    );
+    let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| &**b as &dyn rusqlite::ToSql).collect();
+    all_params.push(&limit);
+    all_params.push(&offset);
+    let mut stmt = conn.prepare(list_sql.as_str())?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(all_params))?;
     let mut items: Vec<ContactNumberDto> = Vec::new();
-    let (sql, params_slice): (&str, Vec<&dyn rusqlite::ToSql>) = match only_used {
-        Some(true) => (
-            "SELECT id, phone, name, source_file, created_at, industry, used, used_at, used_batch, status, imported_device_id FROM contact_numbers WHERE used_batch = ?1 ORDER BY id ASC LIMIT ?2 OFFSET ?3",
-            vec![&batch_id as &dyn rusqlite::ToSql, &limit, &offset],
-        ),
-        Some(false) => (
-            "SELECT id, phone, name, source_file, created_at, industry, used, used_at, used_batch, status, imported_device_id FROM contact_numbers WHERE (used_batch IS NULL OR used_batch != ?1) ORDER BY id ASC LIMIT ?2 OFFSET ?3",
-            vec![&batch_id as &dyn rusqlite::ToSql, &limit, &offset],
-        ),
-        None => (
-            "SELECT id, phone, name, source_file, created_at, industry, used, used_at, used_batch, status, imported_device_id FROM contact_numbers ORDER BY id ASC LIMIT ?1 OFFSET ?2",
-            vec![&limit, &offset],
-        ),
-    };
-
-    let mut stmt = conn.prepare(sql)?;
-    let mut rows = stmt.query(rusqlite::params_from_iter(params_slice))?;
     while let Some(row) = rows.next()? {
         items.push(ContactNumberDto {
             id: row.get(0)?,
@@ -724,47 +807,6 @@ pub fn list_numbers_by_batch(conn: &Connection, batch_id: &str, only_used: Optio
             used_batch: row.get(8).ok(),
             status: row.get(9).ok(),
             imported_device_id: row.get(10).ok(),
-        });
-    }
-    Ok(ContactNumberList { total, items })
-}
-
-/// 指定批次下的号码，支持按行业/状态过滤
-pub fn list_numbers_by_batch_filtered(
-    conn: &Connection,
-    batch_id: &str,
-    industry: Option<String>,
-    status: Option<String>,
-    limit: i64,
-    offset: i64,
-) -> SqlResult<ContactNumberList> {
-    let mut clauses: Vec<String> = vec!["used_batch = ?".to_string()];
-    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(batch_id.to_string())];
-    if let Some(ind) = industry.and_then(|x| { let t = x.trim().to_string(); if t.is_empty() { None } else { Some(t) } }) {
-        if ind == "__UNCLASSIFIED__" || ind == "未分类" { clauses.push("(industry IS NULL OR TRIM(industry) = '')".to_string()); }
-        else { clauses.push("TRIM(industry) = ?".to_string()); params_vec.push(Box::new(ind)); }
-    }
-    if let Some(st) = status.and_then(|x| { let t = x.trim().to_string(); if t.is_empty() { None } else { Some(t) } }) {
-        clauses.push("status = ?".to_string()); params_vec.push(Box::new(st));
-    }
-    let where_sql = format!(" WHERE {}", clauses.join(" AND "));
-    let total_sql = format!("SELECT COUNT(*) FROM contact_numbers{}", where_sql);
-    let total: i64 = conn.query_row(total_sql.as_str(), rusqlite::params_from_iter(params_vec.iter().map(|b| &**b)), |row| row.get(0))?;
-
-    let list_sql = format!(
-        "SELECT id, phone, name, source_file, created_at, industry, used, used_at, used_batch, status, imported_device_id FROM contact_numbers{} ORDER BY id ASC LIMIT ? OFFSET ?",
-        where_sql
-    );
-    let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| &**b as &dyn rusqlite::ToSql).collect();
-    all_params.push(&limit);
-    all_params.push(&offset);
-    let mut stmt = conn.prepare(list_sql.as_str())?;
-    let mut rows = stmt.query(rusqlite::params_from_iter(all_params))?;
-    let mut items: Vec<ContactNumberDto> = Vec::new();
-    while let Some(row) = rows.next()? {
-        items.push(ContactNumberDto {
-            id: row.get(0)?, phone: row.get(1)?, name: row.get(2)?, source_file: row.get(3)?, created_at: row.get(4)?,
-            industry: row.get(5).ok(), used: row.get(6).ok(), used_at: row.get(7).ok(), used_batch: row.get(8).ok(), status: row.get(9).ok(), imported_device_id: row.get(10).ok(),
         });
     }
     Ok(ContactNumberList { total, items })

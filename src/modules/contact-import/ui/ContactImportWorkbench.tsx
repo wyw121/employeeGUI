@@ -7,10 +7,9 @@ import { importNumbersFromFolder, importNumbersFromFolders, importNumbersFromTxt
 import { VcfActions } from './services/vcfActions';
 import { VcfImportService } from '../../../services/VcfImportService';
 import { buildVcfFromNumbers } from '../utils/vcf';
-import { createVcfBatchWithNumbers } from '../../vcf-sessions/services/vcfSessionService';
-import { createImportSessionRecord, finishImportSessionRecord } from './services/contactNumberService';
+import { finishImportSessionRecord } from './services/contactNumberService';
 import { fetchUnclassifiedNumbers } from './services/unclassifiedService';
-import { bindBatchToDevice, markBatchImportedForDevice } from './services/deviceBatchBinding';
+import { markBatchImportedForDevice } from './services/deviceBatchBinding';
 import BatchPreviewModal from './components/BatchPreviewModal';
 import { executeBatches } from './services/batchExecutor';
 // 新的竖向卡片栅格组件，替代表格视图
@@ -27,6 +26,7 @@ import { ImportSessionsModal } from './sessions';
 import { useSourceFolders } from './hooks/useSourceFolders';
 import { SourceFolderAddButton } from './components/SourceFolderAddButton';
 import { SourceFoldersList } from './components/SourceFoldersList';
+import { registerGeneratedBatch } from './services/vcfBatchRegistrationService';
 
 const { Title, Text } = Typography;
 
@@ -167,18 +167,16 @@ export const ContactImportWorkbench: React.FC = () => {
         const content = buildVcfFromNumbers(unclassified as any);
         const filePath = `contacts_${deviceId}_auto_100_${Date.now()}.vcf`;
         await VcfImportService.writeVcfFile(filePath, content);
-        // 记录批次与号码映射；使用最小/最大ID作为来源范围参考
-        let mappingOk = true;
-        try {
-          const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
-          const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
-          await createVcfBatchWithNumbers({ batchId, vcfFilePath: filePath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids });
-          // 绑定到设备：待导入
-          bindBatchToDevice(deviceId, batchId);
-        } catch (e: any) {
-          mappingOk = false;
-          console.warn('记录批次映射失败（不影响VCF生成）：', e);
-        }
+        const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
+        const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
+        const { mappingOk } = await registerGeneratedBatch({
+          deviceId,
+          batchId,
+          vcfFilePath: filePath,
+          numberIds: ids,
+          sourceStartId: ids[0],
+          sourceEndId: ids[ids.length - 1],
+        });
         message.success(`VCF 文件已生成：${filePath}`);
         if (!mappingOk) {
           message.warning('VCF已生成，但批次映射保存失败（后端未记录）。可稍后在会话面板重试。');
@@ -191,16 +189,16 @@ export const ContactImportWorkbench: React.FC = () => {
       const content = buildVcfFromNumbers((batch?.numbers || []) as any);
       const filePath = `contacts_${deviceId}_${start}-${end}.vcf`;
       await VcfImportService.writeVcfFile(filePath, content);
-      let mappingOk = true;
-      try {
-        const batchId = `vcf_${deviceId}_${start}_${end}_${Date.now()}`;
-        const numberIds = (batch?.numbers || []).map(n => n.id);
-        await createVcfBatchWithNumbers({ batchId, vcfFilePath: filePath, sourceStartId: start, sourceEndId: end, numberIds });
-        bindBatchToDevice(deviceId, batchId);
-      } catch (e) {
-        mappingOk = false;
-        console.warn('记录批次映射失败（不影响VCF生成）：', e);
-      }
+      const batchId = `vcf_${deviceId}_${start}_${end}_${Date.now()}`;
+      const numberIds = (batch?.numbers || []).map(n => n.id);
+      const { mappingOk } = await registerGeneratedBatch({
+        deviceId,
+        batchId,
+        vcfFilePath: filePath,
+        numberIds,
+        sourceStartId: start,
+        sourceEndId: end,
+      });
       message.success(`VCF 文件已生成：${filePath}`);
       if (!mappingOk) {
         message.warning('VCF已生成，但批次映射保存失败（后端未记录）。可稍后在会话面板重试。');
@@ -229,23 +227,17 @@ export const ContactImportWorkbench: React.FC = () => {
         // 批次与映射 + 会话
         const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
         const generatedBatchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
-        let mappingOk = true;
-        try {
-          await createVcfBatchWithNumbers({ batchId: generatedBatchId, vcfFilePath: tempPath, sourceStartId: ids[0], sourceEndId: ids[ids.length - 1], numberIds: ids });
-          bindBatchToDevice(deviceId, generatedBatchId);
-        } catch (e) {
-          mappingOk = false;
-          console.warn('记录批次映射失败（不影响导入）：', e);
-        }
-        let sessionId: number | null = null;
-        try {
-          sessionId = await createImportSessionRecord(generatedBatchId, deviceId);
-        } catch (e) {
-          console.warn('创建导入会话失败（不中断导入）：', e);
-        }
+        const { mappingOk, sessionId } = await registerGeneratedBatch({
+          deviceId,
+          batchId: generatedBatchId,
+          vcfFilePath: tempPath,
+          numberIds: ids,
+          sourceStartId: ids[0],
+          sourceEndId: ids[ids.length - 1],
+        });
 
-  const vcfService = ServiceFactory.getVcfImportApplicationService();
-  const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
+        const vcfService = ServiceFactory.getVcfImportApplicationService();
+        const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
 
         try {
           if (sessionId != null) {
@@ -279,23 +271,17 @@ export const ContactImportWorkbench: React.FC = () => {
 
       const generatedBatchId = `vcf_${deviceId}_${start}_${end}_${Date.now()}`;
       const numberIds = (batch?.numbers || []).map(n => n.id);
-      let mappingOk = true;
-      try {
-        await createVcfBatchWithNumbers({ batchId: generatedBatchId, vcfFilePath: tempPath, sourceStartId: start, sourceEndId: end, numberIds });
-        bindBatchToDevice(deviceId, generatedBatchId);
-      } catch (e) {
-        mappingOk = false;
-        console.warn('记录批次映射失败（不影响VCF生成）：', e);
-      }
-      let sessionId: number | null = null;
-      try {
-        sessionId = await createImportSessionRecord(generatedBatchId, deviceId);
-      } catch (e) {
-        console.warn('创建导入会话失败（不中断导入）：', e);
-      }
+      const { mappingOk, sessionId } = await registerGeneratedBatch({
+        deviceId,
+        batchId: generatedBatchId,
+        vcfFilePath: tempPath,
+        numberIds,
+        sourceStartId: start,
+        sourceEndId: end,
+      });
 
-  const vcfService = ServiceFactory.getVcfImportApplicationService();
-  const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
+      const vcfService = ServiceFactory.getVcfImportApplicationService();
+      const outcome = await vcfService.importToDevice(deviceId, tempPath, scriptKey);
 
       try {
         if (sessionId != null) {

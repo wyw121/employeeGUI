@@ -6,10 +6,9 @@ import { getBindings } from '../../services/deviceBatchBinding';
 import { fetchUnclassifiedNumbers } from '../../services/unclassifiedService';
 import { buildVcfFromNumbers } from '../../../utils/vcf';
 import { VcfImportService } from '../../../../../services/VcfImportService';
-import { createVcfBatchWithNumbers } from '../../../../vcf-sessions/services/vcfSessionService';
-import { createImportSessionRecord } from '../../services/contactNumberService';
 import styles from '../DeviceAssignmentGrid.module.css';
 import { normalizeIndustry } from '../../shared/industryOptions';
+import { registerGeneratedBatch } from '../../services/vcfBatchRegistrationService';
 
 const { Text } = Typography;
 
@@ -95,19 +94,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
     const ids = unclassified.map(n => n.id).sort((a, b) => a - b);
     const batchId = `vcf_${deviceId}_${ids[0]}_${ids[ids.length - 1]}_${Date.now()}`;
     
-    try {
-      await createVcfBatchWithNumbers({
-        batchId,
-        vcfFilePath: tempPath,
-        sourceStartId: ids[0],
-        sourceEndId: ids[ids.length - 1],
-        numberIds: ids
-      });
-      await createImportSessionRecord(batchId, deviceId);
-    } catch (e) {
-      console.warn('创建VCF批次或会话记录失败:', e);
+    const { mappingOk } = await registerGeneratedBatch({
+      deviceId,
+      batchId,
+      vcfFilePath: tempPath,
+      numberIds: ids,
+      sourceStartId: ids[0],
+      sourceEndId: ids[ids.length - 1],
+    });
+    if (!mappingOk) {
+      message.warning('VCF文件已生成，但批次映射保存失败（后端未记录）。');
     }
-    
+
     console.log('VCF文件生成完成:', tempPath);
     return tempPath;
   };
@@ -165,7 +163,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = (props) => {
           options={props.industries.map((label) => ({ label, value: label }))}
           tokenSeparators={[',', ' ']}
           maxTagCount={1}
-          onDropdownVisibleChange={(open) => {
+          onOpenChange={(open) => {
             if (open) {
               props.onRequestIndustries?.();
             }

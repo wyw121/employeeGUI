@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import invokeCompat from '../../../../api/core/tauriInvoke';
 import type { ImportStrategy, ImportResult, ImportStrategySelection } from '../types';
 import { ImportErrorHandler, type ImportError } from './ImportErrorHandler';
 
@@ -105,7 +106,7 @@ export class ImportStrategyExecutor {
     console.log(`📤 推送VCF到设备: ${localVcfPath} -> ${devicePath}`);
     
     try {
-      const result = await invoke('safe_adb_push', {
+      const result = await invokeCompat('safe_adb_push', {
         deviceId,
         localPath: localVcfPath,
         remotePath: devicePath
@@ -167,11 +168,11 @@ export class ImportStrategyExecutor {
   ): Promise<boolean> {
     console.log(`🔄 触发VIEW Intent: ${mimeType}`);
     
-    const result = await invoke('adb_start_activity', {
-      device_id: deviceId,
+    const result = await invokeCompat('adb_start_activity', {
+      deviceId: deviceId,
       action: 'android.intent.action.VIEW',
-      data_uri: `file://${vcfPath}`,
-      mime_type: mimeType,
+      dataUri: `file://${vcfPath}`,
+      mimeType: mimeType,
       component: null
     });
 
@@ -189,11 +190,11 @@ export class ImportStrategyExecutor {
   ): Promise<boolean> {
     console.log(`🎯 直接触发Activity: ${component}`);
     
-    const result = await invoke('adb_start_activity', {
-      device_id: deviceId,
+    const result = await invokeCompat('adb_start_activity', {
+      deviceId: deviceId,
       action: 'android.intent.action.VIEW',
-      data_uri: `file://${vcfPath}`,
-      mime_type: mimeType,
+      dataUri: `file://${vcfPath}`,
+      mimeType: mimeType,
       component
     });
 
@@ -223,7 +224,7 @@ export class ImportStrategyExecutor {
 
     for (const phone of verificationPhones) {
       try {
-        const result = await invoke('adb_query_contact_by_phone', {
+        const result = await invokeCompat('adb_query_contact_by_phone', {
           deviceId,
           phoneNumber: phone
         });
@@ -251,7 +252,7 @@ export class ImportStrategyExecutor {
    */
   async cleanup(deviceId: string): Promise<void> {
     try {
-      await invoke('safe_adb_shell_command', {
+      await invokeCompat('safe_adb_shell_command', {
         deviceId,
         shellCommand: 'rm -f /sdcard/temp_import.vcf'
       });

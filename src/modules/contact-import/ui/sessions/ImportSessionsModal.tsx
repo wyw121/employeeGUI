@@ -27,6 +27,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     mode: batchId ? 'by-batch' : deviceId ? 'by-device' : 'all',
     deviceId,
     batchId,
+    onlyUsed: batchId ? true : undefined,
   }));
   
   const debouncedSearch = useDebouncedValue(filter.search, 400);
@@ -62,8 +63,11 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
     setFilter(prev => ({
       ...prev,
       mode: batchId ? 'by-batch' : deviceId ? 'by-device' : prev.mode,
-      deviceId: deviceId || prev.deviceId,
+      deviceId: batchId ? undefined : (deviceId || prev.deviceId),
       batchId: batchId || prev.batchId,
+      onlyUsed: batchId
+        ? (prev.batchId !== batchId ? true : (prev.onlyUsed !== false ? prev.onlyUsed ?? true : false))
+        : prev.onlyUsed,
     }));
   }, [open, deviceId, batchId]);
   
@@ -315,7 +319,7 @@ const ImportSessionsModal: React.FC<Props> = ({ open, onClose, deviceId, batchId
                   selectedRowKeys={selectedSessionKeys}
                   onSelectionChange={(keys) => setSelectedSessionKeys(keys)}
                   onViewBatchNumbers={(bid) => {
-                    setFilter(prev => ({ ...prev, mode: 'by-batch', batchId: bid }));
+                    setFilter(prev => ({ ...prev, mode: 'by-batch', batchId: bid, onlyUsed: true }));
                     setActiveTab('numbers');
                   }}
                   pagination={{

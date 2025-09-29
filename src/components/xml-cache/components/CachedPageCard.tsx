@@ -17,6 +17,7 @@ export interface CachedPageCardProps {
   onCopyPath: (page: CachedXmlPage) => void;
   onReveal: (page: CachedXmlPage) => void;
   enableHoverExpand?: boolean; // allow disabling expand in virtualized mode
+  maxExpandedHeight?: number | string; // pass-through to Thumbnail, default '80vh'
 }
 
 export const CachedPageCard: React.FC<CachedPageCardProps> = ({
@@ -29,6 +30,7 @@ export const CachedPageCard: React.FC<CachedPageCardProps> = ({
   onCopyPath,
   onReveal,
   enableHoverExpand = true,
+  maxExpandedHeight = '80vh',
 }) => {
   const menuItems: MenuProps["items"] = [
     { key: "open-explorer", label: "在文件管理器中打开", onClick: () => onReveal(page) },
@@ -69,7 +71,7 @@ export const CachedPageCard: React.FC<CachedPageCardProps> = ({
           absolutePathForFallback={page.screenshotAbsolutePath}
           expandMode={enableHoverExpand ? 'hover' : 'click'}
           collapsedHeight={320}
-          maxExpandedHeight="80vh"
+          maxExpandedHeight={maxExpandedHeight}
         />
         <span
           style={{

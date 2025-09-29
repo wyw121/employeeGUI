@@ -31,6 +31,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   const [imgSrc, setImgSrc] = React.useState<string | undefined>(undefined);
   const [triedFallback, setTriedFallback] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
+  const hoverTimer = React.useRef<number | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [sourceType, setSourceType] = React.useState<'asset' | 'data' | 'none'>('none');
   const [expanded, setExpanded] = React.useState(false);
@@ -123,8 +124,21 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   return (
     <div
       style={containerStyle}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => {
+        if (expandMode === 'hover') {
+          if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+          hoverTimer.current = window.setTimeout(() => setHovered(true), 120);
+        } else {
+          setHovered(true);
+        }
+      }}
+      onMouseLeave={() => {
+        if (hoverTimer.current) {
+          window.clearTimeout(hoverTimer.current);
+          hoverTimer.current = null;
+        }
+        setHovered(false);
+      }}
       onClick={() => {
         if (expandMode === 'click' && imgSrc) {
           setExpanded((v) => !v);

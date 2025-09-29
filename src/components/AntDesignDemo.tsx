@@ -30,6 +30,7 @@ import {
 import { AppThemeProvider, useTheme } from '../theme';
 import '../styles/theme.css';
 import React, { useState } from 'react';
+import { GlobalAdbProvider } from '../providers';
 import InspectorPage from '../pages/InspectorPage';
 import PermissionTestPage from '../pages/PermissionTestPage';
 import AdbCenterPage from '../pages/adb/AdbCenterPage';
@@ -305,7 +306,9 @@ const DemoInner: React.FC = () => {
 export const AntDesignIntegrationDemo: React.FC = () => {
   return (
     <AppThemeProvider>
-      <DemoInner />
+      <GlobalAdbProvider>
+        <DemoInner />
+      </GlobalAdbProvider>
     </AppThemeProvider>
   );
 };

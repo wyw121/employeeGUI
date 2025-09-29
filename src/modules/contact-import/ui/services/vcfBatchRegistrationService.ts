@@ -1,5 +1,5 @@
-import { createVcfBatchWithNumbers } from '../../vcf-sessions/services/vcfSessionService';
-import { bindBatchToDevice } from '../services/deviceBatchBinding';
+import { createVcfBatchWithNumbers } from '../../../vcf-sessions/services/vcfSessionService';
+import { bindBatchToDevice } from './deviceBatchBinding';
 import { createImportSessionRecord } from './contactNumberService';
 
 export interface RegisterGeneratedBatchParams {

@@ -10,6 +10,18 @@ use serde::{Deserialize, Serialize};
 use anyhow::Result as AnyResult;
 use tracing::{info, warn, error};
 use crate::types::page_analysis::ElementBounds;
+use crate::screenshot_service::ScreenshotService;
+
+#[derive(Debug, Serialize)]
+pub struct UniversalPageCaptureResult {
+    pub xml_content: String,
+    pub xml_file_name: String,
+    pub xml_relative_path: String,
+    pub xml_absolute_path: String,
+    pub screenshot_file_name: Option<String>,
+    pub screenshot_relative_path: Option<String>,
+    pub screenshot_absolute_path: Option<String>,
+}
 
 /// UI元素结构（增强版）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -494,7 +506,7 @@ impl UniversalUIPageAnalyzer {
 #[tauri::command]
 pub async fn analyze_universal_ui_page(
     device_id: String,
-) -> Result<String, String> {
+) -> Result<UniversalPageCaptureResult, String> {
     use crate::xml_judgment_service::XmlJudgmentService;
     use std::fs;
     use chrono::Utc;
@@ -525,17 +537,44 @@ pub async fn analyze_universal_ui_page(
             }
             
             // 保存XML文件
+            let mut xml_absolute_path = filepath.to_string_lossy().to_string();
             match fs::write(&filepath, &xml_content) {
                 Ok(_) => {
                     info!("📄 XML已保存到: {}", filepath.display());
+                    if let Ok(canonical) = filepath.canonicalize() {
+                        xml_absolute_path = canonical.to_string_lossy().to_string();
+                    }
                 },
                 Err(e) => {
                     warn!("保存XML文件失败: {}", e);
                 }
             }
-            
-            // 返回完整的XML内容供前端解析
-            Ok(xml_content)
+
+            // 捕获截图并与XML同步命名
+            let screenshot_filename = format!("ui_dump_{}_{}.png", device_id, timestamp);
+            let screenshot_path = debug_dir.join(&screenshot_filename);
+            let (screenshot_relative_path, screenshot_absolute_path) = match ScreenshotService::capture_screenshot_to_path(&device_id, &screenshot_path) {
+                Ok(path) => {
+                    let relative = screenshot_filename.clone();
+                    (Some(relative), Some(path.to_string_lossy().to_string()))
+                }
+                Err(err) => {
+                    warn!("截图捕获失败，将继续返回XML: {}", err);
+                    (None, None)
+                }
+            };
+
+            let result = UniversalPageCaptureResult {
+                xml_relative_path: filename.clone(),
+                xml_absolute_path,
+                xml_content,
+                xml_file_name: filename,
+                screenshot_file_name: screenshot_relative_path.clone(),
+                screenshot_relative_path,
+                screenshot_absolute_path,
+            };
+
+            Ok(result)
         },
         Err(e) => {
             error!("❌ 获取设备UI XML失败: {}", e);

@@ -41,7 +41,11 @@ use services::contact_storage::commands::{
     get_distinct_industries_cmd,
     set_contact_numbers_industry_by_id_range,
 };
-use services::contact_storage::commands::{update_import_session_industry_cmd, revert_import_session_to_failed_cmd};
+use services::contact_storage::commands::{
+    update_import_session_industry_cmd,
+    revert_import_session_to_failed_cmd,
+    delete_import_session_cmd,
+};
 use services::crash_debugger::*;
 use services::employee_service::EmployeeService;
 use services::log_bridge::LOG_COLLECTOR; // 仅用于设置 app handle
@@ -189,6 +193,7 @@ fn main() {
             tag_numbers_industry_by_vcf_batch_cmd,
             update_import_session_industry_cmd,
             revert_import_session_to_failed_cmd,
+            delete_import_session_cmd,
             list_import_session_events_cmd,
                 allocate_numbers_to_device_cmd,
             // 新增的VCF导入和小红书自动关注功能
@@ -200,6 +205,7 @@ fn main() {
             write_file,
             reveal_in_file_manager,
             delete_file,
+            read_file_as_data_url,
             // 联系人度量
             get_device_contact_count,
             // UI状态读取功能
@@ -275,7 +281,7 @@ fn main() {
             read_xml_cache_file,         // 读取XML缓存文件内容
             get_xml_file_size,           // 获取XML文件大小
             get_xml_file_absolute_path,  // 获取XML文件绝对路径
-            delete_xml_cache_file,       // 删除XML缓存文件
+            delete_xml_cache_artifacts,  // 删除XML及关联截图
             parse_cached_xml_to_elements // 解析缓存XML为UI元素
             ,
             // 设备镜像（scrcpy）

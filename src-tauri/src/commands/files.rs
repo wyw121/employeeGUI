@@ -42,6 +42,34 @@ pub async fn clear_adb_keys() -> Result<(), String> {
     if errs.is_empty() { Ok(()) } else { Err(errs.join("; ")) }
 }
 
+/// 读取本地文件并以 data URL（data:*;base64,xxx）返回。
+/// 用于前端无法通过 asset 协议加载本地图片时的兜底渲染（如 PNG/JPEG）。
+#[tauri::command]
+pub async fn read_file_as_data_url(path: String) -> Result<String, String> {
+    use std::path::Path;
+    use base64::Engine as _;
+    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+
+    // 简单基于扩展名推断 MIME 类型，避免引入额外依赖
+    let mime = Path::new(&path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .map(|ext| match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "bmp" => "image/bmp",
+            _ => "application/octet-stream",
+        })
+        .unwrap_or("application/octet-stream");
+
+    // Base64 编码
+    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
 /// 在系统文件管理器中定位文件/打开目录
 #[tauri::command]
 pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {

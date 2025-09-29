@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { App } from 'antd';
 import type { ImportSessionList } from '../types';
-import { revertImportSessionToFailed, updateImportSessionIndustry, type ImportSessionEventDto } from '../../services/contactNumberService';
+import { revertImportSessionToFailed, updateImportSessionIndustry, deleteImportSession, type ImportSessionEventDto } from '../../services/contactNumberService';
 import { createSessionsTableColumns, type SessionTableColumn } from './table-columns';
 import { ResizableTable, useColumnWidthPersistence } from './resizable-table';
 import { normalizeIndustry, useIndustryOptions } from '../../shared/industryOptions';
@@ -73,6 +73,27 @@ const SessionsTable: React.FC<Props> = ({
     }
   }, [message, onRefresh]);
 
+  const handleDeleteSession = useCallback(async (sessionId: number, action: 'delete' | 'archive') => {
+    try {
+      const result = await deleteImportSession(sessionId, { archiveNumbers: action === 'archive' });
+      setSelectedEventBySession((prev) => {
+        if (!prev[sessionId]) return prev;
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+      if (action === 'archive') {
+        const count = result.archived_number_count;
+        message.success(count > 0 ? `已归档会话，恢复号码 ${count} 个为未导入` : '已归档会话并释放号码');
+      } else {
+        message.success('已删除会话记录');
+      }
+      await onRefresh?.();
+    } catch (e: any) {
+      message.error(`删除会话失败: ${e?.message || e}`);
+    }
+  }, [message, onRefresh]);
+
   // 列宽持久化 
   const [columnWidths, setColumnWidths] = useColumnWidthPersistence('sessions-table-widths', {
     started_at: 140,      // 开始时间
@@ -99,6 +120,7 @@ const SessionsTable: React.FC<Props> = ({
       onRefresh,
       selectedEventBySession,
       onSelectEventForSession: handleSelectEventForSession,
+  onDeleteSession: (id, action, _session) => handleDeleteSession(id, action),
     });
   }, [
     industryLabels,
@@ -110,6 +132,7 @@ const SessionsTable: React.FC<Props> = ({
     onRefresh,
     selectedEventBySession,
     handleSelectEventForSession,
+    handleDeleteSession,
   ]);
 
   return (

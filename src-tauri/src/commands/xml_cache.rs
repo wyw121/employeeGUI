@@ -1,4 +1,4 @@
-use tracing::info;
+use tracing::{info, warn};
 
 #[tauri::command]
 pub async fn list_xml_cache_files() -> Result<Vec<String>, String> {
@@ -56,12 +56,44 @@ pub async fn get_xml_file_absolute_path(file_name: String) -> Result<String, Str
 }
 
 #[tauri::command]
-pub async fn delete_xml_cache_file(file_name: String) -> Result<(), String> {
+pub async fn delete_xml_cache_artifacts(
+    xml_file_name: String,
+    screenshot_file_name: Option<String>,
+) -> Result<(), String> {
     use std::fs;
+
     let debug_dir = get_debug_xml_dir();
-    let file_path = debug_dir.join(&file_name);
-    if !file_path.exists() { return Err(format!("XML缓存文件不存在: {}", file_name)); }
-    fs::remove_file(&file_path).map_err(|e| format!("删除XML缓存文件失败: {} - {}", file_name, e))
+    let xml_path = debug_dir.join(&xml_file_name);
+    if !xml_path.exists() {
+        return Err(format!("XML缓存文件不存在: {}", xml_file_name));
+    }
+
+    fs::remove_file(&xml_path)
+        .map_err(|e| format!("删除XML缓存文件失败: {} - {}", xml_file_name, e))?;
+
+    let screenshot_candidate = screenshot_file_name
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| xml_file_name.replace(".xml", ".png"));
+
+    if screenshot_candidate != xml_file_name {
+        let screenshot_path = debug_dir.join(&screenshot_candidate);
+        if screenshot_path.exists() {
+            if let Err(err) = fs::remove_file(&screenshot_path) {
+                warn!(
+                    "⚠️ 删除截图文件失败: {} - {}",
+                    screenshot_path.display(),
+                    err
+                );
+            } else {
+                info!(
+                    "🗑️ 已删除关联截图: {}",
+                    screenshot_path.display()
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

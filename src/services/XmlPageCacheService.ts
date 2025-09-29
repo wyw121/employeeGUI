@@ -42,6 +42,10 @@ export interface CachedXmlPage {
     /** 输入框数量 */
     inputCount: number;
   };
+  /** 截图文件名（若存在） */
+  screenshotFileName?: string;
+  /** 截图绝对路径（若存在） */
+  screenshotAbsolutePath?: string;
 }
 
 export interface XmlPageContent {
@@ -146,6 +150,14 @@ export class XmlPageCacheService {
       const appPackage = this.detectAppPackage(xmlContent);
       const pageAnalysis = this.analyzePageContent(xmlContent, appPackage);
       const absoluteFilePath: string = await invoke('get_xml_file_absolute_path', { fileName });
+
+      const screenshotFileName = fileName.replace(/\.xml$/, '.png');
+      let screenshotAbsolutePath: string | undefined;
+      try {
+        screenshotAbsolutePath = await invoke('get_xml_file_absolute_path', { fileName: screenshotFileName });
+      } catch (error) {
+        console.info(`ℹ️ 未找到对应截图: ${screenshotFileName}`, error);
+      }
       
       // 生成页面标题
       const pageTitle = this.generatePageTitle(xmlContent, appPackage, fileInfo.timestamp);
@@ -164,7 +176,9 @@ export class XmlPageCacheService {
         fileSize,
         createdAt: this.parseTimestampToDate(fileInfo.timestamp),
         description: pageAnalysis.description,
-        preview: pageAnalysis.preview
+        preview: pageAnalysis.preview,
+        screenshotFileName: screenshotAbsolutePath ? screenshotFileName : undefined,
+        screenshotAbsolutePath
       };
 
       return cachedPage;
@@ -431,9 +445,12 @@ export class XmlPageCacheService {
   /**
    * 删除指定的缓存页面
    */
-  static async deleteCachedPage(fileName: string): Promise<void> {
+  static async deleteCachedPage(fileName: string, screenshotFileName?: string): Promise<void> {
     try {
-      await invoke('delete_xml_cache_file', { fileName });
+      await invoke('delete_xml_cache_artifacts', {
+        xml_file_name: fileName,
+        screenshot_file_name: screenshotFileName ?? null,
+      });
       
       // 更新本地缓存
       if (this.cachedPages) {

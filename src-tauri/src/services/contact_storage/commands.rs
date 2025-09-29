@@ -5,7 +5,7 @@ use rusqlite::Connection;
 
 use super::models::{ContactNumberList, ImportNumbersResult};
 use super::models::{ContactNumberStatsDto, IndustryCountDto};
-use super::models::AllocationResultDto;
+use super::models::{AllocationResultDto, DeleteImportSessionResultDto};
 use super::parser::extract_numbers_from_text;
 use super::repo::{
     fetch_numbers,
@@ -38,6 +38,7 @@ use super::repo::{
     update_import_session_industry,
     revert_import_session_to_failed,
     list_import_session_events,
+    delete_import_session,
 };
 
 #[tauri::command]
@@ -365,6 +366,23 @@ pub async fn revert_import_session_to_failed_cmd(session_id: i64, reason: Option
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
     revert_import_session_to_failed(&conn, session_id, reason.as_deref()).map_err(|e| e.to_string())
+}
+
+/// 删除导入会话，可选归档号码
+#[tauri::command]
+pub async fn delete_import_session_cmd(session_id: i64, archive_numbers: Option<bool>) -> Result<DeleteImportSessionResultDto, String> {
+    let db_path = get_contacts_db_path();
+    let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
+    init_db(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let archive = archive_numbers.unwrap_or(false);
+    let result = delete_import_session(&conn, session_id, archive).map_err(|e| e.to_string())?;
+    Ok(DeleteImportSessionResultDto {
+        session_id: result.session_id,
+        archived_number_count: result.archived_number_count,
+        removed_event_count: result.removed_event_count,
+        removed_batch_link_count: result.removed_batch_link_count,
+        removed_batch_record: result.removed_batch_record,
+    })
 }
 
 /// 列出会话的导入事件时间序列（用于“导入最新时间”下拉）

@@ -315,8 +315,10 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
     setLoading(true);
     try {
       // 首先获取XML内容
-      const xmlContent = await UniversalUIAPI.analyzeUniversalUIPage(device);
-      setCurrentXmlContent(xmlContent);
+  const pageCapture = await UniversalUIAPI.analyzeUniversalUIPage(device);
+  const { xmlContent, screenshotAbsolutePath, screenshotRelativePath, xmlFileName } = pageCapture;
+
+  setCurrentXmlContent(xmlContent);
 
       // 🆕 通知父组件XML内容已更新
       if (onXmlContentUpdated) {
@@ -345,7 +347,7 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
       }
 
       // 生成唯一的XML缓存ID并保存
-      const uniqueCacheId = `xml_${Date.now()}_${device}`;
+  const uniqueCacheId = `xml_${Date.now()}_${device}`;
       setCurrentXmlCacheId(uniqueCacheId);
 
       console.log("📦 生成XML缓存ID:", uniqueCacheId);
@@ -365,6 +367,9 @@ const UniversalPageFinderModal: React.FC<UniversalPageFinderModalProps> = ({
           pageType: "分析页面",
           elementCount: 0, // 会在解析后更新
         },
+        screenshotAbsolutePath,
+        screenshotRelativePath,
+        sourceFileName: xmlFileName,
       };
 
       xmlCacheManager.cacheXmlPage(cacheEntry);

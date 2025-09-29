@@ -24,8 +24,12 @@ export interface XmlCacheEntry {
   };
   /** 解析后的UI元素（缓存） */
   parsedElements?: any[];
-  /** 页面截图（可选） */
-  screenshot?: string;
+  /** 页面截图绝对路径（可选） */
+  screenshotAbsolutePath?: string;
+  /** 页面截图相对路径（可选） */
+  screenshotRelativePath?: string;
+  /** 原始缓存文件名（ui_dump_xxx.xml） */
+  sourceFileName?: string;
 }
 
 export interface StepXmlContext {

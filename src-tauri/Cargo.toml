@@ -42,6 +42,7 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 filetime = "0.2"
 ## Pin transitive windows-core to satisfy iana-time-zone (<=0.62)
 windows-core = "=0.62.0"
+base64 = { version = "0.22", default-features = false, features = ["std"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

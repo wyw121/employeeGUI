@@ -112,3 +112,12 @@ pub struct AllocationResultDto {
     pub number_ids: Vec<i64>,
     pub session_id: i64, // 新建的 pending 会话ID
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeleteImportSessionResultDto {
+    pub session_id: i64,
+    pub archived_number_count: i64,
+    pub removed_event_count: i64,
+    pub removed_batch_link_count: i64,
+    pub removed_batch_record: bool,
+}

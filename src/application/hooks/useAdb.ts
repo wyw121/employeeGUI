@@ -20,6 +20,11 @@ import { ServiceFactory } from '../services/ServiceFactory';
 // 统一策略/字段规范化工具（与网格检查器一致）
 import { toBackendStrategy, normalizeFieldsAndValues, normalizeIncludes, normalizeExcludes } from '../../components/universal-ui/views/grid-view/panels/node-detail';
 
+// 全局初始化状态，防止多个 useAdb Hook 同时初始化
+let isGlobalInitializing = false;
+// 防止重复刷新设备列表
+let isRefreshingDevices = false;
+
 /**
  * 统一的ADB Hook
  * 
@@ -105,10 +110,20 @@ export const useAdb = () => {
   // ===== 设备操作 =====
   
   /**
-   * 刷新设备列表
+   * 刷新设备列表 - 防重复调用版本
    */
   const refreshDevices = useCallback(async () => {
-    return await applicationService.refreshDevices();
+    if (isRefreshingDevices) {
+      console.log('🔄 设备刷新已在进行中，跳过重复调用');
+      return;
+    }
+    
+    isRefreshingDevices = true;
+    try {
+      return await applicationService.refreshDevices();
+    } finally {
+      isRefreshingDevices = false;
+    }
   }, []);
 
   /**
@@ -410,18 +425,22 @@ export const useAdb = () => {
   // ===== 生命周期 =====
   
   /**
-   * 自动初始化 - 优化版，避免循环依赖
+   * 自动初始化 - 防重复调用版本
    */
   useEffect(() => {
     let isMounted = true;
     
-    // 只有在真正需要且没有正在初始化时才触发初始化
-    const shouldInitialize = !isConnected && !isInitializing && !initializeRef.current;
-    
-    if (shouldInitialize) {
+    // 全局单例检查：防止多个组件同时初始化
+    if (!isGlobalInitializing && !isConnected && !isInitializing && !initializeRef.current) {
+      isGlobalInitializing = true;
+      
       initialize().catch(error => {
         if (isMounted) {
           console.error('Auto initialization failed:', error);
+        }
+      }).finally(() => {
+        if (isMounted) {
+          isGlobalInitializing = false;
         }
       });
     }

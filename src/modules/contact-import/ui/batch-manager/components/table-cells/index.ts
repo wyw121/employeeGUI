@@ -8,6 +8,7 @@ export { default as TimeFormatterCell } from './TimeFormatterCell';
 export { default as BatchIdCell } from './BatchIdCell';
 export { default as ThemeAwareCell } from './ThemeAwareCell';
 export { default as LatestImportTimeCell } from './LatestImportTimeCell';
+export { default as IndustryTagCell } from './IndustryTagCell';
 
 // 预设文本组件
 export {
@@ -24,6 +25,7 @@ export {
 export type { default as TimeFormatterCellProps } from './TimeFormatterCell';
 export type { default as BatchIdCellProps } from './BatchIdCell';
 export type { LatestImportTimeCellProps } from './LatestImportTimeCell';
+export type { IndustryTagCellProps } from './IndustryTagCell';
 export type { 
   ThemeAwareCellProps, 
   TextVariant 

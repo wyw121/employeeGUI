@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use tracing::{info, warn};
+use std::fs;
+use std::path::{Path, PathBuf};
+
 use crate::utils::adb_utils::execute_adb_command;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -12,6 +16,52 @@ pub struct ScreenshotResult {
 pub struct ScreenshotService;
 
 impl ScreenshotService {
+    /// 直接通过 `adb exec-out screencap -p` 获取PNG二进制
+    fn capture_png_bytes(device_id: &str) -> Result<Vec<u8>, String> {
+        let output = execute_adb_command(&["-s", device_id, "exec-out", "screencap", "-p"]) 
+            .map_err(|e| format!("执行截图命令失败: {e}"))?;
+
+        if output.status.success() {
+            if output.stdout.is_empty() {
+                return Err("截图输出为空".to_string());
+            }
+            Ok(output.stdout)
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(format!("截图命令返回非零状态: {stderr}"))
+        }
+    }
+
+    fn ensure_parent_dir(path: &Path) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("创建截图目录失败: {e}"))?;
+        }
+        Ok(())
+    }
+
+    /// 将截图保存到指定路径，返回实际写入的绝对路径
+    pub fn capture_screenshot_to_path(device_id: &str, target_path: &Path) -> Result<PathBuf, String> {
+        Self::ensure_parent_dir(target_path)?;
+
+        let png_bytes = Self::capture_png_bytes(device_id)?;
+        fs::write(target_path, &png_bytes)
+            .map_err(|e| format!("写入截图文件失败: {e}"))?;
+
+        let canonical = target_path
+            .canonicalize()
+            .unwrap_or_else(|_| target_path.to_path_buf());
+
+        info!(
+            "📸 截图已保存 device_id={} path={} size={}",
+            device_id,
+            canonical.display(),
+            png_bytes.len()
+        );
+
+        Ok(canonical)
+    }
+
     /// 执行ADB命令的包装器，返回简化的结果
     fn execute_adb_with_result(args: &[&str]) -> (bool, String) {
         match execute_adb_command(args) {
@@ -43,7 +93,7 @@ impl ScreenshotService {
 
         // 创建screenshots目录
         let screenshots_dir = app_data_dir.join("screenshots");
-        if let Err(e) = std::fs::create_dir_all(&screenshots_dir) {
+        if let Err(e) = fs::create_dir_all(&screenshots_dir) {
             return ScreenshotResult {
                 success: false,
                 screenshot_path: None,
@@ -55,46 +105,20 @@ impl ScreenshotService {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
         let screenshot_filename = format!("screenshot_{}_{}.png", device_id, timestamp);
         let local_path = screenshots_dir.join(&screenshot_filename);
-
-        // 在设备上的临时路径
-        let device_temp_path = "/sdcard/temp_screenshot.png";
-
-        // Step 1: 在设备上截图
-        let (success, output) = Self::execute_adb_with_result(&["-s", device_id, "shell", "screencap", "-p", device_temp_path]);
-        if !success {
-            return ScreenshotResult {
-                success: false,
-                screenshot_path: None,
-                error: Some(format!("截图失败: {}", output)),
-            };
-        }
-
-        // Step 2: 将截图从设备拉取到本地
-        let (success, output) = Self::execute_adb_with_result(&["-s", device_id, "pull", device_temp_path, local_path.to_str().unwrap()]);
-        if !success {
-            return ScreenshotResult {
-                success: false,
-                screenshot_path: None,
-                error: Some(format!("拉取截图失败: {}", output)),
-            };
-        }
-
-        // Step 3: 清理设备上的临时文件
-        let _ = Self::execute_adb_with_result(&["-s", device_id, "shell", "rm", device_temp_path]);
-
-        // Step 4: 验证文件是否存在
-        if !local_path.exists() {
-            return ScreenshotResult {
-                success: false,
-                screenshot_path: None,
-                error: Some("截图文件未成功创建".to_string()),
-            };
-        }
-
-        ScreenshotResult {
-            success: true,
-            screenshot_path: Some(local_path.to_string_lossy().to_string()),
-            error: None,
+        match Self::capture_screenshot_to_path(device_id, &local_path) {
+            Ok(path) => ScreenshotResult {
+                success: true,
+                screenshot_path: Some(path.to_string_lossy().to_string()),
+                error: None,
+            },
+            Err(err) => {
+                warn!("❌ 截图失败: {}", err);
+                ScreenshotResult {
+                    success: false,
+                    screenshot_path: None,
+                    error: Some(err),
+                }
+            }
         }
     }
 

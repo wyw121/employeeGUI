@@ -1,10 +1,18 @@
 use chrono::Local;
-use rusqlite::{params, Connection, Result as SqlResult};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
 use super::models::{ContactNumberDto, ContactNumberList};
 use super::models::{VcfBatchDto, VcfBatchList, ImportSessionDto, ImportSessionList};
 use std::fs;
 use std::path::Path;
+
+pub struct DeleteImportSessionResult {
+    pub session_id: i64,
+    pub archived_number_count: i64,
+    pub removed_event_count: i64,
+    pub removed_batch_link_count: i64,
+    pub removed_batch_record: bool,
+}
 
 pub fn get_contacts_db_path() -> String {
     // 确保 data 目录存在
@@ -1050,4 +1058,85 @@ pub fn revert_import_session_to_failed(conn: &Connection, session_id: i64, reaso
     let affected = tx.execute(sql_numbers, params![batch_id, device_id])?;
     tx.commit()?;
     Ok(affected as i64)
+}
+
+/// 删除导入会话；可选地将关联号码归档回未导入状态
+pub fn delete_import_session(conn: &Connection, session_id: i64, archive_numbers: bool) -> SqlResult<DeleteImportSessionResult> {
+    let session_info: Option<(String, String)> = conn
+        .query_row(
+            "SELECT batch_id, device_id FROM import_sessions WHERE id = ?1",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+
+    if session_info.is_none() {
+        return Ok(DeleteImportSessionResult {
+            session_id,
+            archived_number_count: 0,
+            removed_event_count: 0,
+            removed_batch_link_count: 0,
+            removed_batch_record: false,
+        });
+    }
+
+    let (batch_id, _device_id) = session_info.unwrap();
+    let mut archived_number_count: i64 = 0;
+    let mut removed_event_count: i64 = 0;
+    let mut removed_batch_link_count: i64 = 0;
+    let mut removed_batch_record: bool = false;
+
+    let tx = conn.unchecked_transaction()?;
+
+    let other_session_count: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM import_sessions WHERE batch_id = ?1 AND id != ?2",
+        params![&batch_id, &session_id],
+        |row| row.get(0),
+    )?;
+
+    removed_event_count = tx
+        .execute(
+            "DELETE FROM import_session_events WHERE session_id = ?1",
+            params![session_id],
+        )? as i64;
+
+    if archive_numbers {
+        archived_number_count = tx
+            .execute(
+                "UPDATE contact_numbers SET used = 0, used_at = NULL, status = 'not_imported', imported_device_id = NULL WHERE used_batch = ?1",
+                params![&batch_id],
+            )? as i64;
+
+        if other_session_count == 0 {
+            let _ = tx.execute(
+                "UPDATE contact_numbers SET used_batch = NULL WHERE used_batch = ?1",
+                params![&batch_id],
+            )?;
+            removed_batch_link_count = tx
+                .execute(
+                    "DELETE FROM vcf_batch_numbers WHERE batch_id = ?1",
+                    params![&batch_id],
+                )? as i64;
+            removed_batch_record = tx
+                .execute(
+                    "DELETE FROM vcf_batches WHERE batch_id = ?1",
+                    params![&batch_id],
+                )? > 0;
+        }
+    }
+
+    let _ = tx.execute(
+        "DELETE FROM import_sessions WHERE id = ?1",
+        params![session_id],
+    )?;
+
+    tx.commit()?;
+
+    Ok(DeleteImportSessionResult {
+        session_id,
+        archived_number_count,
+        removed_event_count,
+        removed_batch_link_count,
+        removed_batch_record,
+    })
 }

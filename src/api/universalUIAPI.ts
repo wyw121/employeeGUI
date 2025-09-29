@@ -133,6 +133,26 @@ export interface NavigationPresets {
   common_buttons: string[];
 }
 
+interface UniversalPageCaptureResultBackend {
+  xml_content: string;
+  xml_file_name: string;
+  xml_relative_path: string;
+  xml_absolute_path: string;
+  screenshot_file_name?: string | null;
+  screenshot_relative_path?: string | null;
+  screenshot_absolute_path?: string | null;
+}
+
+export interface UniversalPageCaptureResult {
+  xmlContent: string;
+  xmlFileName: string;
+  xmlRelativePath: string;
+  xmlAbsolutePath: string;
+  screenshotFileName?: string;
+  screenshotRelativePath?: string;
+  screenshotAbsolutePath?: string;
+}
+
 /**
  * Universal UI页面分析API类
  */
@@ -141,17 +161,27 @@ export class UniversalUIAPI {
   /**
    * 分析Universal UI页面
    */
-  static async analyzeUniversalUIPage(deviceId: string): Promise<string> {
+  static async analyzeUniversalUIPage(deviceId: string): Promise<UniversalPageCaptureResult> {
     try {
       try {
         // 优先按后端约定使用 snake_case
-        return await invokeCompat<string>('analyze_universal_ui_page', { deviceId }, { forceSnake: true });
+        const result = await invokeCompat<UniversalPageCaptureResultBackend>(
+          'analyze_universal_ui_page',
+          { deviceId },
+          { forceSnake: true }
+        );
+        return UniversalUIAPI.normalizeUniversalPageCaptureResult(result);
       } catch (e) {
         const msg = String(e ?? '');
         // 若后端报缺少 camelCase key（deviceId），则改用 camelCase 再试一次
         if (msg.includes('missing required key deviceId') || msg.includes('invalid args `deviceId`')) {
           console.warn('[UniversalUIAPI] analyze_universal_ui_page: 检测到 camelCase 形参要求，回退 forceCamel 重试…', msg);
-          return await invokeCompat<string>('analyze_universal_ui_page', { deviceId }, { forceCamel: true });
+          const result = await invokeCompat<UniversalPageCaptureResultBackend>(
+            'analyze_universal_ui_page',
+            { deviceId },
+            { forceCamel: true }
+          );
+          return UniversalUIAPI.normalizeUniversalPageCaptureResult(result);
         }
         throw e;
       }
@@ -159,6 +189,18 @@ export class UniversalUIAPI {
       console.error('Failed to analyze universal UI page:', error);
       throw new Error(`Universal UI页面分析失败: ${error}`);
     }
+  }
+
+  private static normalizeUniversalPageCaptureResult(result: UniversalPageCaptureResultBackend): UniversalPageCaptureResult {
+    return {
+      xmlContent: result.xml_content,
+      xmlFileName: result.xml_file_name,
+      xmlRelativePath: result.xml_relative_path,
+      xmlAbsolutePath: result.xml_absolute_path,
+      screenshotFileName: result.screenshot_file_name ?? undefined,
+      screenshotRelativePath: result.screenshot_relative_path ?? undefined,
+      screenshotAbsolutePath: result.screenshot_absolute_path ?? undefined,
+    };
   }
 
   /**

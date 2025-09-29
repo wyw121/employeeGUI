@@ -242,8 +242,27 @@ export interface ImportSessionEventList {
   items: ImportSessionEventDto[];
 }
 
+export interface DeleteImportSessionResult {
+  session_id: number;
+  archived_number_count: number;
+  removed_event_count: number;
+  removed_batch_link_count: number;
+  removed_batch_record: boolean;
+}
+
 export async function listImportSessionEvents(sessionId: number, params: { limit?: number; offset?: number } = {}): Promise<ImportSessionEventList> {
   const { limit, offset } = params;
   const payload = { session_id: sessionId, sessionId, limit, offset } as const;
   return invoke<ImportSessionEventList>('list_import_session_events_cmd', payload as any);
+}
+
+export async function deleteImportSession(sessionId: number, options: { archiveNumbers?: boolean } = {}): Promise<DeleteImportSessionResult> {
+  const { archiveNumbers } = options;
+  const payload = {
+    session_id: sessionId,
+    sessionId,
+    archive_numbers: archiveNumbers,
+    archiveNumbers,
+  } as const;
+  return invoke<DeleteImportSessionResult>('delete_import_session_cmd', payload as any);
 }

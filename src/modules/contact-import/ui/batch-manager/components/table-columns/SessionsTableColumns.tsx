@@ -1,9 +1,10 @@
 import type { ColumnsType } from 'antd/es/table';
-import { Tag, Space, Button, Select, Popconfirm } from 'antd';
+import { Tag, Space, Button, Popconfirm, Modal } from 'antd';
 import React from 'react';
-import { TimeFormatterCell, BatchIdCell, LatestImportTimeCell } from '../table-cells';
+import { TimeFormatterCell, BatchIdCell, LatestImportTimeCell, IndustryTagCell } from '../table-cells';
 import { EnhancedSessionImportButton } from '../enhanced-import/EnhancedSessionImportButton';
 import type { ImportSessionEventDto } from '../../../services/contactNumberService';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 /**
  * 导入会话表格列配置
@@ -43,6 +44,8 @@ export interface CreateSessionsTableColumnsOptions {
   selectedEventBySession?: Record<number, ImportSessionEventDto | null>;
   /** 选择历史事件时触发（建议上层仅做展示覆盖，不写库） */
   onSelectEventForSession?: (sessionId: number, ev: ImportSessionEventDto | null) => void;
+  /** 删除会话（action: delete=仅删除记录，archive=归档号码后删除） */
+  onDeleteSession?: (sessionId: number, action: 'delete' | 'archive', session: SessionTableColumn) => void | Promise<void>;
 }
 
 /**
@@ -60,6 +63,7 @@ export const createSessionsTableColumns = (options: CreateSessionsTableColumnsOp
     onRefresh,
     selectedEventBySession,
     onSelectEventForSession,
+    onDeleteSession,
   } = options;
 
   // 工具函数：根据指定字段判断是否需要更新单元格
@@ -114,45 +118,15 @@ export const createSessionsTableColumns = (options: CreateSessionsTableColumnsOp
       width: 180,
       render: (_, record: SessionTableColumn) => {
         const candidates = [record.industry, industryLabels[record.batch_id]];
-        const current = candidates.find((item) => (item ?? '').trim().length > 0)?.trim() ?? '';
+        const current = candidates.find((item) => (item ?? '').trim().length > 0)?.trim() ?? undefined;
 
         return (
-          <Select
-            size="small"
-            style={{ minWidth: 140 }}
-            showSearch
-            mode="tags"
-            allowClear
-            placeholder="选择或输入分类"
-            value={current ? [current] : []}
-            maxTagCount={1}
-            options={industryOptions.map((label) => ({ label, value: label }))}
-            filterOption={(input, option) =>
-              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-            }
-            onDropdownVisibleChange={(open) => {
-              if (open) {
-                onRequestIndustryOptions?.();
-              }
-            }}
-            onChange={(vals) => {
-              const arr = Array.isArray(vals) ? vals : [];
-              const last = arr.length ? String(arr[arr.length - 1]).trim() : '';
-              if (!last) {
-                if (current) {
-                  onChangeIndustry?.(record.id, undefined);
-                }
-                return;
-              }
-              if (last !== current) {
-                onChangeIndustry?.(record.id, last);
-              }
-            }}
-            onClear={() => {
-              if (current) {
-                onChangeIndustry?.(record.id, undefined);
-              }
-            }}
+          <IndustryTagCell
+            value={current}
+            options={industryOptions}
+            onSave={(next) => onChangeIndustry?.(record.id, next)}
+            onRefreshOptions={onRequestIndustryOptions}
+            disabled={!onChangeIndustry}
           />
         );
       }
@@ -227,32 +201,75 @@ export const createSessionsTableColumns = (options: CreateSessionsTableColumnsOp
     {
       title: '操作',
       key: 'actions',
-      width: 280,
-      render: (_, record: SessionTableColumn) => (
-        <Space size={8}>
-          <Button 
-            size="small" 
-            onClick={() => onViewBatchNumbers?.(record.batch_id)}
-          >
-            查看
-          </Button>
-          <EnhancedSessionImportButton 
-            sessionRow={record} 
-            onRefresh={onRefresh}
-          />
-          {record.status === 'success' && (
-            <Popconfirm
-              title="将该会话标记为失败并回滚号码？"
-              description="相关号码将恢复为未导入，可重新分配/导入。此操作不可逆。"
-              okText="确认回滚"
-              cancelText="取消"
-              onConfirm={() => onRevertSession?.(record.id)}
+      width: 340,
+      render: (_, record: SessionTableColumn) => {
+        const openDeleteConfirm = () => {
+          if (!onDeleteSession) {
+            return;
+          }
+          let modalRef: ReturnType<typeof Modal.confirm>;
+          modalRef = Modal.confirm({
+            title: `删除会话 #${record.id}`,
+            icon: <ExclamationCircleOutlined />,
+            content: (
+              <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+                <p>请选择删除方式：</p>
+                <ul style={{ paddingLeft: 18, marginBottom: 0 }}>
+                  <li><strong>直接删除</strong>：仅移除本条会话记录，保留号码当前状态。</li>
+                  <li><strong>号码归档</strong>：将本批次号码恢复为未导入并释放批次占用。</li>
+                </ul>
+              </div>
+            ),
+            okText: '直接删除',
+            cancelText: '取消',
+            okButtonProps: { danger: true },
+            onOk: () => onDeleteSession?.(record.id, 'delete', record),
+            footer: (_, { OkBtn, CancelBtn }) => (
+              <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                <Button
+                  onClick={() => {
+                    modalRef.destroy();
+                    void onDeleteSession?.(record.id, 'archive', record);
+                  }}
+                >
+                  号码归档
+                </Button>
+                <OkBtn />
+                <CancelBtn />
+              </Space>
+            ),
+          });
+        };
+
+        return (
+          <Space size={8}>
+            <Button 
+              size="small" 
+              onClick={() => onViewBatchNumbers?.(record.batch_id)}
             >
-              <Button size="small" danger>回滚</Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+              查看
+            </Button>
+            <EnhancedSessionImportButton 
+              sessionRow={record} 
+              onRefresh={onRefresh}
+            />
+            {record.status === 'success' && (
+              <Popconfirm
+                title="将该会话标记为失败并回滚号码？"
+                description="相关号码将恢复为未导入，可重新分配/导入。此操作不可逆。"
+                okText="确认回滚"
+                cancelText="取消"
+                onConfirm={() => onRevertSession?.(record.id)}
+              >
+                <Button size="small" danger>回滚</Button>
+              </Popconfirm>
+            )}
+            <Button size="small" danger ghost onClick={openDeleteConfirm} disabled={!onDeleteSession}>
+              删除
+            </Button>
+          </Space>
+        );
+      },
       shouldCellUpdate: shouldUpdateBy(['status', 'imported_count', 'failed_count', 'error_message'])
     },
 
@@ -304,7 +321,7 @@ export const DEFAULT_COLUMN_WIDTHS = {
   import_stats: 100,
   total_count: 80,
   error_message: 200,
-  actions: 280
+  actions: 340
 };
 
 /**
@@ -321,5 +338,5 @@ export const MIN_COLUMN_WIDTHS = {
   import_stats: 80,
   total_count: 60,
   error_message: 120,
-  actions: 200
+  actions: 220
 };

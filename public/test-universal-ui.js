@@ -22,19 +22,21 @@ async function testAnalyzeUniversalUIPage() {
       return { success: false, error: 'TAURI_CORE_UNAVAILABLE' };
     }
     // 测试分析页面
-    const result = await invoke('analyze_universal_ui_page', { 
+    const capture = await invoke('analyze_universal_ui_page', { 
       device_id: 'emulator-5554'
     });
+    const xmlContent = capture.xml_content || capture.xmlContent || '';
     
     console.log('✅ 页面分析成功!');
-    console.log(`📏 XML长度: ${result.length}`);
-    console.log(`🔍 包含XML标记: ${result.includes('<?xml') || result.includes('<hierarchy')}`);
+    console.log(`📏 XML长度: ${xmlContent.length}`);
+    console.log(`🖼️ 截图路径: ${capture.screenshot_absolute_path || capture.screenshotAbsolutePath || '无'}`);
+    console.log(`🔍 包含XML标记: ${xmlContent.includes('<?xml') || xmlContent.includes('<hierarchy')}`);
     
-    if (result.length > 0) {
+    if (xmlContent.length > 0) {
       // 测试元素提取
       console.log('🔍 开始提取页面元素...');
       const elements = await invoke('extract_page_elements', { 
-        xml_content: result 
+        xml_content: xmlContent 
       });
       
       console.log(`✅ 元素提取成功! 共找到 ${elements.length} 个元素`);
@@ -52,7 +54,7 @@ async function testAnalyzeUniversalUIPage() {
       }
     }
     
-    return { success: true, xmlLength: result.length };
+  return { success: true, xmlLength: xmlContent.length };
   } catch (error) {
     console.error('❌ 测试失败:', error);
     return { success: false, error: error.toString() };
